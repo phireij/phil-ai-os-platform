@@ -153,44 +153,98 @@ Issues: 0
 
 Mission Control remains read-only. No broader autonomous execution authority was introduced.
 
+## Phase 1.15 — Production Readiness + Recovery Validation
+
+**Status: COMPLETE — VALIDATED**
+
+Control API `v0.20.0` completed production-readiness and recovery validation while preserving the maximum-safe operating posture.
+
+### Completed
+
+- restart and persistent-state validation
+- durable database row-count verification across container recreation
+- live SQLite backup using the SQLite backup API
+- backup integrity validation
+- isolated restore simulation
+- byte-identical backup/restore hash verification
+- expired approval re-tokenization rejection
+- invalid/stale public approval-link rejection
+- zero-side-effect stale-link validation
+- controlled primary-provider failure simulation
+- successful OpenAI → OpenRouter fallback recovery
+- single-use approval consumption during fallback recovery
+- replay rejection after approval consumption
+- exactly-once provider usage accounting
+- audit-integrity regression testing
+- Mission Control recovered-execution validation
+- reverse-proxy/public-route security review
+- final production-readiness gate
+
+### Recovery Validation Evidence
+
+Controlled provider-failure test:
+
+```text
+Primary: openai / gpt-5.6-terra
+Primary outcome: provider_failed
+Failure mode: simulated_primary_failure
+
+Fallback: openrouter / gpt-5.6-terra
+Fallback outcome: success
+Compatibility pass: true
+
+Usage records created: 1
+Estimated execution cost: $0.00051
+Approval replay: rejected
+Replay response: approval_already_consumed
+```
+
+Backup / restore validation:
+```text
+
+Database integrity: ok
+Backup integrity: ok
+Restore integrity: ok
+Backup SHA-256:
+8f92b908bf5d8d6d36cbe4a02910a73175d326df4a6f18b64f0c79670f9adab0
+```
+
+Final production-readiness gate:
+```text
+
+Control API: healthy
+Audit consistency: CONSISTENT
+Issues: 0
+Audit integrity: PASS
+Unknown approval links: 0
+Multiple successes per approval: 0
+Mission Control unauthenticated: 401
+Invalid approval link: 404
+```
+
+
 ## Current Maximum-Safe Runtime State
 
 PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=false
 PHIL_AI_OS_EXECUTION_KILL_SWITCH=true
+PHIL_AI_OS_EXECUTION_SIMULATE_PRIMARY_FAILURE=false
 PHIL_AI_OS_LIVE_TEST_ENABLED=false
 
 ## Current Risks / Remaining Hardening
 
 1. Wider autonomous execution remains intentionally disabled.
-2. Recovery behavior still needs controlled production-style validation.
-3. Mission Control authentication can later be upgraded beyond Basic Auth.
-4. Backup/restore and disaster-recovery procedures need formal validation.
-5. Operational alerting for safety or consistency degradation should be added.
-6. Normal Hermes traffic must never silently bypass approval policy.
-
-## Next — Phase 1.15
-
-**Production Readiness + Recovery Validation**
-
-Targets:
-
-- controlled failure/recovery testing
-- stale and expired approval-link validation
-- provider-failure recovery validation
-- audit-integrity regression tests
-- restart and persistent-state validation
-- backup/restore readiness
-- reverse-proxy/public-route security review
-- Mission Control failure-state behavior
-- production-readiness checklist and gate
+2. Mission Control authentication can later be upgraded beyond Basic Auth.
+3. Operational alerting for safety or consistency degradation should be added.
+4. Backup procedures should eventually be automated and retention-managed.
+5. Normal Hermes traffic must never silently bypass approval policy.
+6. Production autonomy must remain gated by explicit governance milestones.
 
 ## Program Status
 
 **Phase 0:** 100% COMPLETE
 **Phase 1:** ACTIVE
-**Current checkpoint:** Phase 1.14 COMPLETE
+**Current checkpoint:** Phase 1.15 COMPLETE
 **Control API:** v0.20.0
-**Next:** Phase 1.15
 **Accelerated target:** 2 months — retained
 
-*Last updated: August 22, 2026.*
+*Last updated: August 23, 2026.*
