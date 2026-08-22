@@ -119,58 +119,78 @@ Validated evidence:
 - Approval consumed by: `hermes-explicit`
 - Replay protection: validated
 
+
+## Phase 1.14 — Mission Control + Operational Hardening
+
+**Status: COMPLETE — VALIDATED**
+
+Control API `v0.20.0` established the first operational Mission Control layer.
+
+### Completed
+
+- consolidated Mission Control operational snapshot
+- browser-based read-only Mission Control dashboard
+- dedicated Mission Control authentication
+- unauthenticated and incorrect-password access rejected with `401`
+- global approval counts
+- approval filtering and configurable limits
+- Active Approvals / Approval History separation
+- status badges and compact timestamps
+- clickable approval detail pages
+- approval → execution → usage/cost traceability
+- consumed-approval recovery semantics
+- failed consumed approvals remain permanently single-use
+- retries after execution failure require a new human approval
+- governance-era audit consistency checking
+- legacy validation records preserved rather than rewritten
+
+Final operational validation:
+
+```text
+Audit consistency: CONSISTENT
+Issues: 0
+```
+
+Mission Control remains read-only. No broader autonomous execution authority was introduced.
+
 ## Current Maximum-Safe Runtime State
 
 PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=false
 PHIL_AI_OS_EXECUTION_KILL_SWITCH=true
 PHIL_AI_OS_LIVE_TEST_ENABLED=false
 
-## Binding Decisions
+## Current Risks / Remaining Hardening
 
-1. Hermes remains the agent runtime.
-2. Phil AI OS remains the central routing, policy, budget, approval, and governance layer.
-3. Routed execution defaults to OFF.
-4. Kill switch defaults to ON.
-5. Human approval cannot override the kill switch.
-6. Approval is task-bound and single-use.
-7. Browser approval links expose no Control API bearer credential.
-8. Raw approval-link tokens are not persisted.
-9. Public exposure is limited to the scoped approval path.
-10. Every provider execution must remain auditable back to its approval.
-11. Replay of consumed approvals is rejected.
-12. Accelerated 2-month target remains in force.
-## Current Risks
+1. Wider autonomous execution remains intentionally disabled.
+2. Recovery behavior still needs controlled production-style validation.
+3. Mission Control authentication can later be upgraded beyond Basic Auth.
+4. Backup/restore and disaster-recovery procedures need formal validation.
+5. Operational alerting for safety or consistency degradation should be added.
+6. Normal Hermes traffic must never silently bypass approval policy.
 
-1. Mission Control lacks a consolidated approval dashboard.
-2. Capability review URLs must remain protected from leakage/logging.
-3. Normal Hermes traffic must not be silently redirected into autonomous execution.
-4. Credential mount/ownership correctness must remain monitored.
-5. Recovery procedures for interrupted approved/consumed workflows need formal tests.
-6. Wider autonomy should remain disabled until operational hardening is complete.
+## Next — Phase 1.15
 
-## Next — Phase 1.14
-
-**Mission Control Approval Dashboard + Operational Hardening**
+**Production Readiness + Recovery Validation**
 
 Targets:
 
-- approval dashboard
-- pending / approved / denied / expired / consumed views
-- execution audit linkage
-- cost and usage visibility
-- visible kill-switch state
-- interrupted-workflow recovery
-- consumed-but-provider-failed handling
-- stale-link hardening
-- production-readiness checklist
+- controlled failure/recovery testing
+- stale and expired approval-link validation
+- provider-failure recovery validation
+- audit-integrity regression tests
+- restart and persistent-state validation
+- backup/restore readiness
+- reverse-proxy/public-route security review
+- Mission Control failure-state behavior
+- production-readiness checklist and gate
 
 ## Program Status
 
-**Phase 0:** 100% COMPLETE  
-**Phase 1:** ACTIVE  
-**Current checkpoint:** Phase 1.13C COMPLETE  
-**Control API:** v0.19.0  
-**Next:** Phase 1.14  
+**Phase 0:** 100% COMPLETE
+**Phase 1:** ACTIVE
+**Current checkpoint:** Phase 1.14 COMPLETE
+**Control API:** v0.20.0
+**Next:** Phase 1.15
 **Accelerated target:** 2 months — retained
 
 *Last updated: August 22, 2026.*
