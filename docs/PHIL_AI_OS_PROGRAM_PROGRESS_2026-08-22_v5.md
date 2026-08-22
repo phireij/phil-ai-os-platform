@@ -104,6 +104,7 @@ Audit linked to approval_id
 Usage recorded once
   ↓
 Replay rejected
+```
 Validated evidence:
 
 - Provider: `openai`
