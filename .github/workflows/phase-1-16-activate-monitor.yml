@@ -6,6 +6,7 @@ on:
       - docs/phase-1.16-progress-update
     paths:
       - '.github/phase-1-16-activate-trigger'
+      - '.github/workflows/phase-1-16-activate-monitor.yml'
 
 permissions:
   contents: read
@@ -26,6 +27,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - name: Validate activation trigger
         shell: bash
         run: |
@@ -34,6 +36,7 @@ jobs:
           test -n "$VPS_HOST"
           test -n "$VPS_USER"
           test -n "$VPS_SSH_KEY"
+
       - name: Configure SSH
         shell: bash
         run: |
@@ -45,6 +48,52 @@ jobs:
           PORT="${VPS_PORT:-22}"
           ssh-keyscan -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+
+      - name: Prepare service configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/phil-ai-os-monitor.env <<'EOF'
+          PHIL_AI_OS_CONTROL_API_BASE_URL=http://127.0.0.1:4870
+          PHIL_AI_OS_HEALTH_PATH=/healthz
+          PHIL_AI_OS_READY_PATH=/readyz
+          PHIL_AI_OS_MONITOR_INTERVAL_SECONDS=60
+          PHIL_AI_OS_MONITOR_TIMEOUT_SECONDS=5
+          PHIL_AI_OS_ALERT_COOLDOWN_SECONDS=1800
+          PHIL_AI_OS_MONITOR_STATE_PATH=/var/lib/phil-ai-os-monitor/state.json
+          PHIL_AI_OS_STRICT_SAFETY_SNAPSHOT=false
+          EOF
+          sed -i 's/^          //' /tmp/phil-ai-os-monitor.env
+
+          cat > /tmp/phil-ai-os-monitor.service <<'EOF'
+          [Unit]
+          Description=Phil AI OS Phase 1.16 Operational Safety Monitor
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          EnvironmentFile=/etc/phil-ai-os-monitor.env
+          ExecStart=/usr/bin/python3 /opt/phil-ai-os/phase-1.16/monitor.py
+          Restart=on-failure
+          RestartSec=10
+          User=root
+          NoNewPrivileges=true
+          ProtectHome=true
+          PrivateTmp=true
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+          sed -i 's/^          //' /tmp/phil-ai-os-monitor.service
+
+      - name: Upload service configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" /tmp/phil-ai-os-monitor.env /tmp/phil-ai-os-monitor.service "$VPS_USER@$VPS_HOST:/tmp/"
+
       - name: Activate continuous monitor
         shell: bash
         run: |
@@ -55,37 +104,9 @@ jobs:
             test -f /opt/phil-ai-os/phase-1.16/monitor.py
             curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
             curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
-            cat > /etc/phil-ai-os-monitor.env <<"EOF"
-PHIL_AI_OS_CONTROL_API_BASE_URL=http://127.0.0.1:4870
-PHIL_AI_OS_HEALTH_PATH=/healthz
-PHIL_AI_OS_READY_PATH=/readyz
-PHIL_AI_OS_MONITOR_INTERVAL_SECONDS=60
-PHIL_AI_OS_MONITOR_TIMEOUT_SECONDS=5
-PHIL_AI_OS_ALERT_COOLDOWN_SECONDS=1800
-PHIL_AI_OS_MONITOR_STATE_PATH=/var/lib/phil-ai-os-monitor/state.json
-PHIL_AI_OS_STRICT_SAFETY_SNAPSHOT=false
-EOF
-            chmod 600 /etc/phil-ai-os-monitor.env
-            cat > /etc/systemd/system/phil-ai-os-monitor.service <<"EOF"
-[Unit]
-Description=Phil AI OS Phase 1.16 Operational Safety Monitor
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-EnvironmentFile=/etc/phil-ai-os-monitor.env
-ExecStart=/usr/bin/python3 /opt/phil-ai-os/phase-1.16/monitor.py
-Restart=on-failure
-RestartSec=10
-User=root
-NoNewPrivileges=true
-ProtectHome=true
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-EOF
+            install -m 600 /tmp/phil-ai-os-monitor.env /etc/phil-ai-os-monitor.env
+            install -m 644 /tmp/phil-ai-os-monitor.service /etc/systemd/system/phil-ai-os-monitor.service
+            rm -f /tmp/phil-ai-os-monitor.env /tmp/phil-ai-os-monitor.service
             systemctl daemon-reload
             systemctl enable --now phil-ai-os-monitor.service
             sleep 3
