@@ -1,0 +1,63 @@
+name: VPS Connection Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - docs/phase-1.16-progress-update
+    paths:
+      - .github/vps-connection-trigger
+
+permissions:
+  contents: read
+
+jobs:
+  connection-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" || { echo "Missing VPS_HOST secret"; exit 1; }
+          test -n "$VPS_USER" || { echo "Missing VPS_USER secret"; exit 1; }
+          test -n "$VPS_SSH_KEY" || { echo "Missing VPS_SSH_KEY secret"; exit 1; }
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Read-only VPS connection test
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=10 "$VPS_USER@$VPS_HOST" '
+            set -e
+            echo "PHIL_AI_OS_VPS_CONNECTION_OK"
+            printf "user="; whoami
+            printf "host="; hostname
+            printf "kernel="; uname -sr
+            printf "uptime="; uptime -p || true
+            if command -v docker >/dev/null 2>&1; then
+              echo "docker=available"
+              docker ps --format "{{.Names}} | {{.Status}}" || true
+            else
+              echo "docker=not_found"
+            fi
+          '
