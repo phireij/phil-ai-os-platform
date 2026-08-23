@@ -4,17 +4,17 @@
 **Program start:** August 19, 2026  
 **Overall target:** 2 months (accelerated)  
 **Repository:** `phireij/phil-ai-os-platform`  
-**Current Control API:** `v0.19.0`  
-**Last updated:** August 22, 2026
+**Current Control API:** `v0.20.0`  
+**Last updated:** August 24, 2026
 
 ## Executive Progress
 
 Phase 0 is complete and Phase 1 is actively underway.
 
-Phil AI OS now provides a private control plane for model/provider routing, budget enforcement, authenticated Hermes integration, shadow observation, controlled execution, durable human approvals, secure Telegram-delivered review links, single-use approval consumption, approval-to-execution audit traceability, and replay-resistant approval-gated execution.
+Phil AI OS now provides a private control plane for model/provider routing, budget enforcement, authenticated Hermes integration, shadow observation, controlled execution, durable human approvals, secure Telegram-delivered review links, single-use approval consumption, approval-to-execution audit traceability, replay-resistant approval-gated execution, browser-based Mission Control, production recovery validation, and a live continuous operational monitor deployed through a controlled GitHub Actions → SSH pathway.
 
-**Current milestone:** Phase 1.13C COMPLETE  
-**Next milestone:** Phase 1.14 — Mission Control Approval Dashboard + Operational Hardening.
+**Current milestone:** Phase 1.16 — LIVE DEPLOYED / FINAL ALERT-PATH HARDENING  
+**Next gate:** strict safety-snapshot monitoring + Telegram alert-path validation.
 
 ## Phase 1.13A — Durable Human Approval State Machine
 
@@ -105,6 +105,7 @@ Usage recorded once
   ↓
 Replay rejected
 ```
+
 Validated evidence:
 
 - Provider: `openai`
@@ -118,7 +119,6 @@ Validated evidence:
 - Usage ledger advanced exactly once: `10 → 11`
 - Approval consumed by: `hermes-explicit`
 - Replay protection: validated
-
 
 ## Phase 1.14 — Mission Control + Operational Hardening
 
@@ -200,8 +200,8 @@ Replay response: approval_already_consumed
 ```
 
 Backup / restore validation:
-```text
 
+```text
 Database integrity: ok
 Backup integrity: ok
 Restore integrity: ok
@@ -210,8 +210,8 @@ Backup SHA-256:
 ```
 
 Final production-readiness gate:
-```text
 
+```text
 Control API: healthy
 Audit consistency: CONSISTENT
 Issues: 0
@@ -222,29 +222,72 @@ Mission Control unauthenticated: 401
 Invalid approval link: 404
 ```
 
+## Phase 1.16 — Operational Alerting + Automated Safety Monitoring
+
+**Status: LIVE DEPLOYED — FINAL ALERT-PATH HARDENING PENDING**
+
+Completed and validated so far:
+
+- read-only Control API health and readiness monitor
+- durable local monitor state
+- alert transition deduplication and cooldown logic
+- recovery notification logic
+- optional authenticated safety-snapshot evaluator
+- maximum-safe posture assertions
+- repository unit tests: 5/5 passed
+- GitHub Actions → SSH VPS connectivity
+- controlled deployment workflow
+- VPS-side unit-test validation
+- one-shot live monitor validation
+- post-deployment Control API health/readiness verification
+- dedicated continuous `systemd` monitor service
+- successful continuous-monitor activation workflow
+
+The deployment bridge is now operational:
+
+```text
+ChatGPT / Codex
+  ↓
+GitHub repository
+  ↓
+GitHub Actions
+  ↓
+SSH
+  ↓
+Hostinger VPS
+```
+
+The monitor is intentionally non-authoritative and introduces no new task execution permissions.
+
+Remaining Phase 1.16 closure gates:
+
+1. Confirm the authenticated Control API JSON safety-snapshot endpoint and enable strict safety-snapshot validation.
+2. Validate outbound Telegram alerts using the existing Hermes bot without introducing a second poller/webhook owner.
 
 ## Current Maximum-Safe Runtime State
 
+```text
 PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=false
 PHIL_AI_OS_EXECUTION_KILL_SWITCH=true
 PHIL_AI_OS_EXECUTION_SIMULATE_PRIMARY_FAILURE=false
 PHIL_AI_OS_LIVE_TEST_ENABLED=false
+```
 
 ## Current Risks / Remaining Hardening
 
 1. Wider autonomous execution remains intentionally disabled.
 2. Mission Control authentication can later be upgraded beyond Basic Auth.
-3. Operational alerting for safety or consistency degradation should be added.
+3. Phase 1.16 strict safety-snapshot monitoring and Telegram alert-path validation remain to be closed.
 4. Backup procedures should eventually be automated and retention-managed.
 5. Normal Hermes traffic must never silently bypass approval policy.
 6. Production autonomy must remain gated by explicit governance milestones.
 
 ## Program Status
 
-**Phase 0:** 100% COMPLETE
-**Phase 1:** ACTIVE
-**Current checkpoint:** Phase 1.15 COMPLETE
-**Control API:** v0.20.0
+**Phase 0:** 100% COMPLETE  
+**Phase 1:** ACTIVE  
+**Current checkpoint:** Phase 1.16 LIVE DEPLOYED / FINAL HARDENING  
+**Control API:** v0.20.0  
 **Accelerated target:** 2 months — retained
 
-*Last updated: August 23, 2026.*
+*Last updated: August 24, 2026.*
