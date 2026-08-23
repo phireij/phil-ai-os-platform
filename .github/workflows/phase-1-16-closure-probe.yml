@@ -1,0 +1,94 @@
+name: Phase 1.16 Closure Probe
+
+on:
+  push:
+    branches:
+      - docs/phase-1.16-progress-update
+    paths:
+      - '.github/phase-1-16-closure-probe-trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  closure-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(tr -d '\r\n' < .github/phase-1-16-closure-probe-trigger)" = "PROBE-PHASE-1.16-CLOSURE"
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Probe closure gates safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" '
+            set -euo pipefail
+            echo "=== SERVICE STATE ==="
+            echo "monitor_active=$(systemctl is-active phil-ai-os-monitor.service || true)"
+            echo "monitor_enabled=$(systemctl is-enabled phil-ai-os-monitor.service || true)"
+            curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+            curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
+            echo "control_api_health=ok"
+
+            echo "=== CONTROL API ROUTE DISCOVERY ==="
+            python3 - <<"PY"
+import json, urllib.request
+url="http://127.0.0.1:4870/openapi.json"
+try:
+    with urllib.request.urlopen(url, timeout=5) as r:
+        data=json.load(r)
+    paths=sorted(data.get("paths",{}))
+    candidates=[p for p in paths if any(k in p.lower() for k in ("audit","mission","runtime","snapshot","safety","status","approval"))]
+    print("openapi=available")
+    print("candidate_paths=" + ",".join(candidates[:80]))
+except Exception as e:
+    print("openapi=unavailable:" + type(e).__name__)
+PY
+
+            echo "=== TELEGRAM CREDENTIAL PRESENCE ==="
+            HERMES=$(docker ps --format "{{.Names}}" | grep -m1 "hermes" || true)
+            if [ -n "$HERMES" ]; then
+              echo "hermes_container=found"
+              docker inspect "$HERMES" --format "{{range .Config.Env}}{{println .}}{{end}}" | python3 -c '
+import sys
+names=[]
+for line in sys.stdin:
+    key=line.split("=",1)[0].strip()
+    if "TELEGRAM" in key.upper() or "BOT" in key.upper() or "CHAT" in key.upper():
+        names.append(key)
+print("telegram_related_env_names=" + ",".join(sorted(set(names))))
+print("telegram_related_env_count=" + str(len(set(names))))
+'
+            else
+              echo "hermes_container=not_found"
+            fi
+
+            echo "=== MONITOR LOG HEALTH ==="
+            journalctl -u phil-ai-os-monitor.service -n 20 --no-pager | sed -E "s/[0-9]{6,}:[A-Za-z0-9_-]{20,}/[REDACTED_TOKEN]/g" | tail -n 20
+            echo "PHIL_AI_OS_PHASE_1_16_CLOSURE_PROBE_OK"
+          '
