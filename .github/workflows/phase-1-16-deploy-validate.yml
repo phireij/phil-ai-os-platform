@@ -7,6 +7,11 @@ on:
         description: 'Type DEPLOY-PHASE-1.16 to continue'
         required: true
         type: string
+  push:
+    branches:
+      - docs/phase-1.16-progress-update
+    paths:
+      - .github/phase-1-16-deploy-trigger
 
 permissions:
   contents: read
@@ -17,7 +22,7 @@ concurrency:
 
 jobs:
   deploy-validate:
-    if: ${{ inputs.confirm == 'DEPLOY-PHASE-1.16' }}
+    if: ${{ github.event_name == 'push' || inputs.confirm == 'DEPLOY-PHASE-1.16' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -41,6 +46,11 @@ jobs:
           test -n "$VPS_SSH_KEY" || { echo "Missing VPS_SSH_KEY secret"; exit 1; }
           test -f ops/phase_1_16/monitor.py
           test -f ops/phase_1_16/test_monitor.py
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            test "$(tr -d '\r\n' < .github/phase-1-16-deploy-trigger)" = "DEPLOY-PHASE-1.16" || {
+              echo "Invalid deployment trigger content"; exit 1;
+            }
+          fi
 
       - name: Configure SSH
         shell: bash
