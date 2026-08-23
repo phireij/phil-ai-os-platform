@@ -1,0 +1,162 @@
+name: Phase 1.16 Deploy + Validate
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DEPLOY-PHASE-1.16 to continue'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phil-ai-os-phase-1-16-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-validate:
+    if: ${{ inputs.confirm == 'DEPLOY-PHASE-1.16' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      DEPLOY_DIR: /opt/phil-ai-os/phase-1.16
+      STATE_DIR: /var/lib/phil-ai-os-monitor
+
+    steps:
+      - name: Checkout Phase 1.16 branch
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" || { echo "Missing VPS_HOST secret"; exit 1; }
+          test -n "$VPS_USER" || { echo "Missing VPS_USER secret"; exit 1; }
+          test -n "$VPS_SSH_KEY" || { echo "Missing VPS_SSH_KEY secret"; exit 1; }
+          test -f ops/phase_1_16/monitor.py
+          test -f ops/phase_1_16/test_monitor.py
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Pre-deployment safety check
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" '
+            set -e
+            echo "=== PRE-DEPLOY SAFETY CHECK ==="
+            echo "user=$(whoami)"
+            echo "host=$(hostname)"
+            test "$(whoami)" = "root" || { echo "Expected root deployment account"; exit 1; }
+            command -v python3 >/dev/null
+            command -v curl >/dev/null
+            curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/tmp/phil-ai-os-healthz.json
+            curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/tmp/phil-ai-os-readyz.json
+            echo "healthz=$(cat /tmp/phil-ai-os-healthz.json)"
+            echo "readyz=$(cat /tmp/phil-ai-os-readyz.json)"
+            echo "PHIL_AI_OS_PREDEPLOY_OK"
+          '
+
+      - name: Package monitor
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C ops/phase_1_16 -czf /tmp/phase-1.16-monitor.tgz monitor.py test_monitor.py .env.example README.md
+          sha256sum /tmp/phase-1.16-monitor.tgz
+
+      - name: Upload package
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" /tmp/phase-1.16-monitor.tgz "$VPS_USER@$VPS_HOST:/tmp/phase-1.16-monitor.tgz"
+
+      - name: Deploy with rollback snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" '
+            set -euo pipefail
+            DEPLOY_DIR=/opt/phil-ai-os/phase-1.16
+            STATE_DIR=/var/lib/phil-ai-os-monitor
+            TS=$(date -u +%Y%m%dT%H%M%SZ)
+            if [ -d "$DEPLOY_DIR" ]; then
+              cp -a "$DEPLOY_DIR" "${DEPLOY_DIR}.backup.${TS}"
+              echo "backup=${DEPLOY_DIR}.backup.${TS}"
+            fi
+            mkdir -p "$DEPLOY_DIR" "$STATE_DIR"
+            chmod 750 "$DEPLOY_DIR" "$STATE_DIR"
+            tar -xzf /tmp/phase-1.16-monitor.tgz -C "$DEPLOY_DIR"
+            chmod 750 "$DEPLOY_DIR/monitor.py"
+            rm -f /tmp/phase-1.16-monitor.tgz
+            echo "PHIL_AI_OS_PHASE_1_16_DEPLOYED"
+          '
+
+      - name: Run VPS unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" '
+            set -euo pipefail
+            cd /opt/phil-ai-os/phase-1.16
+            python3 -m unittest -v
+            echo "PHIL_AI_OS_PHASE_1_16_TESTS_OK"
+          '
+
+      - name: Run one-shot live monitor validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" '
+            set -euo pipefail
+            cd /opt/phil-ai-os/phase-1.16
+            export PHIL_AI_OS_CONTROL_API_BASE_URL=http://127.0.0.1:4870
+            export PHIL_AI_OS_HEALTH_PATH=/healthz
+            export PHIL_AI_OS_READY_PATH=/readyz
+            export PHIL_AI_OS_MONITOR_TIMEOUT_SECONDS=5
+            export PHIL_AI_OS_ALERT_COOLDOWN_SECONDS=1800
+            export PHIL_AI_OS_MONITOR_STATE_PATH=/var/lib/phil-ai-os-monitor/state.json
+            export PHIL_AI_OS_STRICT_SAFETY_SNAPSHOT=false
+            unset PHIL_AI_OS_SAFETY_SNAPSHOT_URL || true
+            unset TELEGRAM_BOT_TOKEN || true
+            unset TELEGRAM_CHAT_ID || true
+            python3 monitor.py --print-config
+            python3 monitor.py --once
+            echo "PHIL_AI_OS_PHASE_1_16_LIVE_VALIDATION_OK"
+          '
+
+      - name: Post-deployment health verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" '
+            set -euo pipefail
+            curl -fsS --max-time 5 http://127.0.0.1:4870/healthz
+            echo
+            curl -fsS --max-time 5 http://127.0.0.1:4870/readyz
+            echo
+            test -f /opt/phil-ai-os/phase-1.16/monitor.py
+            test -f /var/lib/phil-ai-os-monitor/state.json
+            echo "PHIL_AI_OS_PHASE_1_16_POSTDEPLOY_OK"
+          '
