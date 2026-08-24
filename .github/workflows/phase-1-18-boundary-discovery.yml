@@ -1,0 +1,71 @@
+name: Phase 1.18 Boundary Discovery
+on:
+  push:
+    branches:
+      - ops/phase-1.18-policy-boundary
+    paths:
+      - '.github/phase-1-18-boundary-discovery-trigger'
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 10 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 2
+          done
+          test -s ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Read-only execution boundary discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo '=== ACTIVE CONTAINERS ==='
+          docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}'
+          echo '=== HERMES PROVIDER-RELATED ENV KEY NAMES ==='
+          HERMES=$(docker ps --format '{{.Names}}' | grep -m1 hermes || true)
+          if [ -n "$HERMES" ]; then
+            docker inspect "$HERMES" --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | grep -Ei 'OPENAI|OPENROUTER|GEMINI|ANTHROPIC|PROVIDER|MODEL|PHIL_AI_OS|CONTROL_API|TOKEN|KEY' | sort -u || true
+          fi
+          echo '=== HERMES MOUNTS ==='
+          if [ -n "$HERMES" ]; then
+            docker inspect "$HERMES" --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}'
+          fi
+          echo '=== CONTROL API EXECUTION ROUTES ==='
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 -E 'control[-_]?api|phil.*control' || true)
+          if [ -n "$CONTROL" ]; then
+            docker exec "$CONTROL" sh -lc "grep -RhoE '/v1/[A-Za-z0-9_./?-]*(execute|execution)[A-Za-z0-9_./?=-]*' /app 2>/dev/null | sort -u | head -n 100" || true
+          fi
+          echo '=== HERMES PROVIDER / CONTROL CALL SITES ==='
+          if [ -n "$HERMES" ]; then
+            docker exec "$HERMES" sh -lc "grep -RInE 'api\.openai\.com|openrouter\.ai|generativelanguage\.googleapis\.com|anthropic\.com|control-api:4870|127\.0\.0\.1:4870|PHIL_AI_OS_CONTROL_API' /opt/hermes /usr/local/bin /opt/data 2>/dev/null | sed -E 's/(sk-[A-Za-z0-9_-]{8})[A-Za-z0-9_-]*/\1***/g' | head -n 200" || true
+          fi
+          echo '=== SAFETY POSTURE ==='
+          if [ -f /etc/phil-ai-os-monitor.env ]; then
+            grep -E '^PHIL_AI_OS_(ROUTED_EXECUTION_ENABLED|EXECUTION_KILL_SWITCH|LIVE_TEST_ENABLED)=' /etc/phil-ai-os-monitor.env || true
+          fi
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          echo PHIL_AI_OS_PHASE_1_18_BOUNDARY_DISCOVERY_OK
+          REMOTE
