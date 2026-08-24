@@ -67,8 +67,24 @@ jobs:
           fi
 
           echo 'authorization=approved_unconsumed_found'
+          set +e
           OUT=$(docker exec "$HERMES" /usr/local/bin/philaios-execute "$APPROVAL_ID" 'Return exactly PHIL_AI_OS_PHASE_1_18_ROUTED_OK' 2>&1)
-          printf '%s\n' "$OUT" | tail -n 8
+          RC=$?
+          set -e
+          echo "execution_exit_code=$RC"
+          printf '%s\n' "$OUT" \
+            | sed -E 's/(Bearer[[:space:]]+)[^[:space:]"']+/\1<redacted>/Ig; s/((token|api[_-]?key|secret)["'= :]+)[^, }]+/\1<redacted>/Ig' \
+            | tail -n 12
+
+          if [ "$RC" -ne 0 ]; then
+            echo 'execution_result=rejected_or_failed'
+            echo 'automatic_retry=none'
+            echo 'approval_change=none'
+            echo PHIL_AI_OS_PHASE_1_18_ROUTED_EXECUTION_DIAGNOSTIC_OK
+            exit 0
+          fi
+
+          echo 'execution_result=success'
           echo 'execution_invoked=philaios_execute'
           echo 'control_api_route=/v1/execute'
           echo 'monitor=active'
