@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Phase 1.16 mount-source probe; read-only and secret-value safe.
 echo '=== SERVICE STATE ==='
 echo "monitor_active=$(systemctl is-active phil-ai-os-monitor.service || true)"
 echo "monitor_enabled=$(systemctl is-enabled phil-ai-os-monitor.service || true)"
