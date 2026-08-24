@@ -72,9 +72,7 @@ jobs:
           RC=$?
           set -e
           echo "execution_exit_code=$RC"
-          printf '%s\n' "$OUT" \
-            | sed -E 's/(Bearer[[:space:]]+)[^[:space:]"']+/\1<redacted>/Ig; s/((token|api[_-]?key|secret)["'= :]+)[^, }]+/\1<redacted>/Ig' \
-            | tail -n 12
+          printf '%s\n' "$OUT" | tail -n 12
 
           if [ "$RC" -ne 0 ]; then
             echo 'execution_result=rejected_or_failed'
