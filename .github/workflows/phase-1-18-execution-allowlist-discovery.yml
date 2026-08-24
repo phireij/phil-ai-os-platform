@@ -1,0 +1,59 @@
+name: Phase 1.18 Execution Allowlist Discovery
+
+on:
+  push:
+    branches: [ops/phase-1.18-policy-boundary]
+    paths: ['.github/workflows/phase-1-18-execution-allowlist-discovery.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+      - name: Discover execution allowlist contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api' || true)
+          test -n "$CONTROL"
+          echo '=== PHASE 1.18 EXECUTION ALLOWLIST DISCOVERY ==='
+          echo "control_container=$CONTROL"
+          echo '--- runtime policy env ---'
+          docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^PHIL_AI_OS_.*(ALLOW|EXECUTION|LIVE_TEST)' | sort || true
+          echo '--- app allowlist refs ---'
+          docker exec "$CONTROL" sh -lc "grep -nEi 'allowlist|allowlisted|execution_not_allowlisted|matched|allowed_task' /app/app.py | head -40" || true
+          echo '--- likely policy files ---'
+          docker exec "$CONTROL" sh -lc "find /app -maxdepth 3 -type f | grep -Ei 'allow|policy|route|execution' | head -20" || true
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo 'monitor=active'
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo 'backup_self_heal_timer=active'
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo 'control_api_health=ok'
+          echo 'provider_call=none'
+          echo 'production_change=none'
+          echo PHIL_AI_OS_PHASE_1_18_EXECUTION_ALLOWLIST_DISCOVERY_OK
+          REMOTE
