@@ -1,0 +1,125 @@
+name: Phase 1.19 Persist Hermes Mission Control Client
+
+on:
+  push:
+    branches: [ops/phase-1.19]
+    paths: ['.github/workflows/phase-1-19-agent-client-persist.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  persist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break; sleep 3; done
+          test -s ~/.ssh/known_hosts
+      - name: Persist Mission Control client and recreate Hermes
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/hermes
+          HOST_CLIENT="$BASE/philaios-mission-control-client.py"
+          COMPOSE_DIR=/docker/hermes-agent-whow
+          OVERRIDE="$COMPOSE_DIR/docker-compose.phil-ai-os.yml"
+          BACKUP="$OVERRIDE.phase119.rollback"
+          SERVICE=hermes-agent
+
+          echo '=== PHASE 1.19 DURABLE AGENT CLIENT ==='
+          test -f "$OVERRIDE"
+          cp -a "$OVERRIDE" "$BACKUP"
+
+          rollback() {
+            rc=$?
+            cp -a "$BACKUP" "$OVERRIDE" || true
+            cd "$COMPOSE_DIR"
+            docker compose -f docker-compose.yml -f docker-compose.phil-ai-os.yml up -d "$SERVICE" >/dev/null 2>&1 || true
+            echo automatic_rollback=performed
+            exit "$rc"
+          }
+          trap rollback ERR
+
+          cat > "$HOST_CLIENT" <<'PY'
+          #!/usr/bin/env python3
+          import json, os, sys, urllib.request
+          token_path=os.getenv('PHIL_AI_OS_CONTROL_API_TOKEN_FILE','/run/philaios/hermes_control_api_token')
+          base=os.getenv('PHIL_AI_OS_CONTROL_API_URL','http://phil-ai-os-core-control-api-1:4870')
+          commands={'snapshot':'/v1/mission-control/snapshot','approvals':'/v1/approvals/recent','executions':'/v1/execution/recent'}
+          if len(sys.argv)!=2 or sys.argv[1] not in commands:
+              print('usage: philaios-mission-control <snapshot|approvals|executions>',file=sys.stderr); sys.exit(2)
+          with open(token_path) as f:
+              token=f.read().strip()
+          req=urllib.request.Request(base+commands[sys.argv[1]],headers={'Authorization':'Bearer '+token})
+          with urllib.request.urlopen(req,timeout=5) as r:
+              print(json.dumps(json.load(r),indent=2,sort_keys=True))
+          PY
+          chmod 755 "$HOST_CLIENT"
+
+          if ! grep -q 'philaios-mission-control-client.py:/usr/local/bin/philaios-mission-control' "$OVERRIDE"; then
+            python3 - "$OVERRIDE" "$HOST_CLIENT" <<'PY'
+          import sys
+          from pathlib import Path
+          p=Path(sys.argv[1]); src=sys.argv[2]
+          text=p.read_text()
+          lines=text.splitlines()
+          out=[]; inserted=False
+          for line in lines:
+              out.append(line)
+              if not inserted and 'philaios-execute-client.py:/usr/local/bin/philaios-execute' in line:
+                  indent=line[:len(line)-len(line.lstrip())]
+                  out.append(f"{indent}- {src}:/usr/local/bin/philaios-mission-control:ro")
+                  inserted=True
+          if not inserted:
+              raise SystemExit('mount_anchor_not_found')
+          p.write_text('\n'.join(out)+'\n')
+          PY
+          fi
+
+          cd "$COMPOSE_DIR"
+          docker compose -f docker-compose.yml -f docker-compose.phil-ai-os.yml config -q
+          docker compose -f docker-compose.yml -f docker-compose.phil-ai-os.yml up -d --force-recreate "$SERVICE"
+
+          for i in $(seq 1 30); do
+            HERMES=$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow' || true)
+            if [ -n "$HERMES" ] && docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control 2>/dev/null; then break; fi
+            sleep 2
+          done
+          HERMES=$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow')
+          test -n "$HERMES"
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control
+          echo host_client=present
+          echo bind_mount=present
+          echo hermes_recreated=yes
+          for cmd in snapshot approvals executions; do
+            docker exec "$HERMES" /usr/local/bin/philaios-mission-control "$cmd" >/dev/null
+            echo "command=$cmd result=ok"
+          done
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-execute && echo execute_client=ready
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo monitor=active
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo backup_self_heal_timer=active
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo control_api_health=ok
+          trap - ERR
+          echo rollback_file="$BACKUP"
+          echo provider_call=none
+          echo production_change=durable_client_bind_mount
+          echo PHIL_AI_OS_PHASE_1_19_DURABLE_AGENT_CLIENT_OK
+          REMOTE
