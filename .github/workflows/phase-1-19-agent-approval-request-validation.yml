@@ -1,0 +1,65 @@
+name: Phase 1.19 Hermes Approval Request Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ops/phase-1.19
+    paths:
+      - .github/workflows/phase-1-19-agent-approval-request-validation.yml
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Validate Hermes approval request pending state
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+          ssh "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES="hermes-agent-whow-hermes-agent-1"
+          echo "=== PHASE 1.19 HERMES APPROVAL REQUEST VALIDATION ==="
+
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control
+          echo "mission_control_client=ready"
+
+          docker exec "$HERMES" /usr/local/bin/philaios-mission-control --help 2>&1 | head -80 || true
+
+          TASK="PHIL_AI_OS_PHASE_1_19_APPROVAL_REQUEST_VALIDATION"
+          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control request "$TASK" 2>&1)" || {
+            printf '%s\n' "$OUT"
+            echo "approval_request_command=failed"
+            exit 1
+          }
+          printf '%s\n' "$OUT"
+          echo "approval_request_command=ok"
+
+          RECENT="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals 2>&1)"
+          printf '%s\n' "$RECENT"
+          printf '%s\n' "$RECENT" | grep -F "$TASK" >/dev/null
+          printf '%s\n' "$RECENT" | grep -Ei 'pending' >/dev/null
+
+          echo "approval_state=pending_verified"
+          echo "provider_call=none"
+          echo "execution_invoked=none"
+          echo "production_change=approval_request_only"
+          echo "PHIL_AI_OS_PHASE_1_19_HERMES_APPROVAL_REQUEST_VALIDATION_OK"
+          REMOTE
