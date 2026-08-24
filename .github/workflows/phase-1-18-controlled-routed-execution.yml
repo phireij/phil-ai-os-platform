@@ -55,20 +55,8 @@ jobs:
 
           DB=$(docker exec "$CONTROL" sh -lc "find /app/state -maxdepth 1 -name 'control-plane.db' -print -quit" 2>/dev/null || true)
           test -n "$DB"
-          APPROVAL_ID=$(docker exec "$CONTROL" python3 -c "import sqlite3,sys; p=sys.argv[1]; c=sqlite3.connect(p); out='';
-for table in ('approvals','approval_requests'):
- cols=[r[1] for r in c.execute('pragma table_info(%s)'%table)] if table else []
- if not cols: continue
- state='state' if 'state' in cols else ('status' if 'status' in cols else None)
- aid='approval_id' if 'approval_id' in cols else ('id' if 'id' in cols else None)
- consumed='consumed_at' if 'consumed_at' in cols else None
- if state and aid:
-  q='select %s from %s where %s=\"approved\"'%(aid,table,state)
-  q += (' and %s is null'%consumed) if consumed else ''
-  q += ' order by rowid desc limit 1'
-  r=c.execute(q).fetchone()
-  if r: out=str(r[0]); break
-print(out)" "$DB")
+          PY_B64='aW1wb3J0IHNxbGl0ZTMsc3lzCnA9c3lzLmFyZ3ZbMV0KYz1zcWxpdGUzLmNvbm5lY3QocCkKb3V0PScnCmZvciB0YWJsZSBpbiAoJ2FwcHJvdmFscycsJ2FwcHJvdmFsX3JlcXVlc3RzJyk6CiAgICB0cnk6CiAgICAgICAgY29scz1bclsxXSBmb3IgciBpbiBjLmV4ZWN1dGUoZidwcmFnbWEgdGFibGVfaW5mbyh7dGFibGV9KScpXQogICAgICAgIGlmIG5vdCBjb2xzOgogICAgICAgICAgICBjb250aW51ZQogICAgICAgIHN0YXRlPSdzdGF0ZScgaWYgJ3N0YXRlJyBpbiBjb2xzIGVsc2UgKCdzdGF0dXMnIGlmICdzdGF0dXMnIGluIGNvbHMgZWxzZSBOb25lKQogICAgICAgIGFpZD0nYXBwcm92YWxfaWQnIGlmICdhcHByb3ZhbF9pZCcgaW4gY29scyBlbHNlICgnaWQnIGlmICdpZCcgaW4gY29scyBlbHNlIE5vbmUpCiAgICAgICAgY29uc3VtZWQ9J2NvbnN1bWVkX2F0JyBpZiAnY29uc3VtZWRfYXQnIGluIGNvbHMgZWxzZSBOb25lCiAgICAgICAgaWYgc3RhdGUgYW5kIGFpZDoKICAgICAgICAgICAgcT1mInNlbGVjdCB7YWlkfSBmcm9tIHt0YWJsZX0gd2hlcmUge3N0YXRlfT0nYXBwcm92ZWQnIgogICAgICAgICAgICBpZiBjb25zdW1lZDoKICAgICAgICAgICAgICAgIHEgKz0gZiIgYW5kIHtjb25zdW1lZH0gaXMgbnVsbCIKICAgICAgICAgICAgcSArPSAnIG9yZGVyIGJ5IHJvd2lkIGRlc2MgbGltaXQgMScKICAgICAgICAgICAgcj1jLmV4ZWN1dGUocSkuZmV0Y2hvbmUoKQogICAgICAgICAgICBpZiByOgogICAgICAgICAgICAgICAgb3V0PXN0cihyWzBdKQogICAgICAgICAgICAgICAgYnJlYWsKICAgIGV4Y2VwdCBzcWxpdGUzLkVycm9yOgogICAgICAgIHBhc3MKcHJpbnQob3V0KQo='
+          APPROVAL_ID=$(docker exec "$CONTROL" python3 -c "import base64,sys; exec(base64.b64decode(sys.argv[1]))" "$PY_B64" "$DB")
 
           if [ -z "$APPROVAL_ID" ]; then
             echo 'authorization=approved_unconsumed_not_found'
