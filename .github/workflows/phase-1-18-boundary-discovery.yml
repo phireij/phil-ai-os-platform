@@ -43,52 +43,28 @@ jobs:
           set -euo pipefail
           TMP=$(mktemp -d /tmp/phil-ai-os-1-18-XXXXXX)
           trap 'rm -rf "$TMP"' EXIT
-
           HERMES=$(docker ps --format '{{.Names}}' | grep -m1 hermes || true)
           CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 -E 'control[-_]?api|phil.*control' || true)
-
-          : > "$TMP/envkeys"
-          : > "$TMP/mounts"
-          : > "$TMP/routes"
-          : > "$TMP/callsites"
-
+          : > "$TMP/envkeys"; : > "$TMP/routes"; : > "$TMP/callsites"
           if [ -n "$HERMES" ]; then
             docker inspect "$HERMES" --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | grep -Ei 'OPENAI|OPENROUTER|GEMINI|ANTHROPIC|PROVIDER|MODEL|PHIL_AI_OS|CONTROL_API|TOKEN|KEY' | sort -u > "$TMP/envkeys" || true
-            docker inspect "$HERMES" --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}' > "$TMP/mounts" || true
-            docker exec "$HERMES" sh -lc "grep -RInE 'api\.openai\.com|openrouter\.ai|generativelanguage\.googleapis\.com|anthropic\.com|control-api:4870|127\.0\.0\.1:4870|PHIL_AI_OS_CONTROL_API' /opt/hermes /usr/local/bin /opt/data 2>/dev/null | sed -E 's/(sk-[A-Za-z0-9_-]{8})[A-Za-z0-9_-]*/\1***/g' | head -n 500" > "$TMP/callsites" || true
+            docker exec "$HERMES" sh -lc "grep -RInE 'api\.openai\.com|openrouter\.ai|generativelanguage\.googleapis\.com|anthropic\.com|control-api:4870|127\.0\.0\.1:4870|PHIL_AI_OS_CONTROL_API' /opt/hermes /usr/local/bin /opt/data 2>/dev/null | head -n 500" > "$TMP/callsites" || true
           fi
-
           if [ -n "$CONTROL" ]; then
             docker exec "$CONTROL" sh -lc "grep -RhoE '/v1/[A-Za-z0-9_./?-]*(execute|execution)[A-Za-z0-9_./?=-]*' /app 2>/dev/null | sort -u | head -n 100" > "$TMP/routes" || true
           fi
-
-          DIRECT_OPENAI=$(grep -Eic 'api\.openai\.com' "$TMP/callsites" || true)
-          DIRECT_OPENROUTER=$(grep -Eic 'openrouter\.ai' "$TMP/callsites" || true)
-          DIRECT_GEMINI=$(grep -Eic 'generativelanguage\.googleapis\.com' "$TMP/callsites" || true)
-          DIRECT_ANTHROPIC=$(grep -Eic 'anthropic\.com' "$TMP/callsites" || true)
-          CONTROL_REFS=$(grep -Eic 'control-api:4870|127\.0\.0\.1:4870|PHIL_AI_OS_CONTROL_API' "$TMP/callsites" || true)
-          PROVIDER_ENV_KEYS=$(wc -l < "$TMP/envkeys" | tr -d ' ')
-          CONTROL_ROUTES=$(wc -l < "$TMP/routes" | tr -d ' ')
-
           echo '=== PHASE 1.18 CTO SUMMARY ==='
-          echo "hermes_container=$([ -n "$HERMES" ] && echo found || echo missing)"
-          echo "control_container=$([ -n "$CONTROL" ] && echo found || echo missing)"
-          echo "provider_related_env_keys=$PROVIDER_ENV_KEYS"
-          echo "control_execution_routes=$CONTROL_ROUTES"
-          echo "control_api_callsite_refs=$CONTROL_REFS"
-          echo "direct_openai_callsites=$DIRECT_OPENAI"
-          echo "direct_openrouter_callsites=$DIRECT_OPENROUTER"
-          echo "direct_gemini_callsites=$DIRECT_GEMINI"
-          echo "direct_anthropic_callsites=$DIRECT_ANTHROPIC"
-          echo '--- provider/control env keys ---'
-          head -n 20 "$TMP/envkeys"
-          echo '--- control execution routes ---'
-          head -n 20 "$TMP/routes"
-          echo '--- Hermes Phil AI OS mounts ---'
-          grep -Ei 'phil-ai-os|philaios|control|secret' "$TMP/mounts" | head -n 20 || true
-          echo '--- representative provider/control call sites ---'
-          grep -Ei 'api\.openai\.com|openrouter\.ai|generativelanguage\.googleapis\.com|anthropic\.com|control-api:4870|PHIL_AI_OS_CONTROL_API' "$TMP/callsites" | head -n 12 || true
-          echo '--- service health ---'
+          echo "hermes=$([ -n "$HERMES" ] && echo found || echo missing)"
+          echo "control_api=$([ -n "$CONTROL" ] && echo found || echo missing)"
+          echo "provider_env_keys=$(wc -l < "$TMP/envkeys" | tr -d ' ')"
+          echo "execution_routes=$(wc -l < "$TMP/routes" | tr -d ' ')"
+          echo "control_api_refs=$(grep -Eic 'control-api:4870|127\.0\.0\.1:4870|PHIL_AI_OS_CONTROL_API' "$TMP/callsites" || true)"
+          echo "direct_openai_refs=$(grep -Eic 'api\.openai\.com' "$TMP/callsites" || true)"
+          echo "direct_openrouter_refs=$(grep -Eic 'openrouter\.ai' "$TMP/callsites" || true)"
+          echo "direct_gemini_refs=$(grep -Eic 'generativelanguage\.googleapis\.com' "$TMP/callsites" || true)"
+          echo "direct_anthropic_refs=$(grep -Eic 'anthropic\.com' "$TMP/callsites" || true)"
+          ROUTES=$(paste -sd, "$TMP/routes" 2>/dev/null || true)
+          echo "routes=${ROUTES:-none}"
           echo "monitor=$(systemctl is-active phil-ai-os-monitor.service || true)"
           echo "backup_timer=$(systemctl is-active phil-ai-os-backup.timer || true)"
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo 'control_api_health=ok'
