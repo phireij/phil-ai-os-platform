@@ -1,0 +1,58 @@
+name: Phase 1.18 Canary Allowlist Discovery
+
+on:
+  push:
+    branches: [ops/phase-1.18-policy-boundary]
+    paths: ['.github/workflows/phase-1-18-canary-allowlist-discovery.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+      - name: Discover canary and allowlist guard order
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api' || true)
+          test -n "$CONTROL"
+          echo '=== PHASE 1.18 CANARY ALLOWLIST DISCOVERY ==='
+          echo '--- execution guard block ---'
+          docker exec "$CONTROL" sh -lc "sed -n '1028,1078p' /app/app.py"
+          echo '--- canary/live-test refs ---'
+          docker exec "$CONTROL" sh -lc "grep -nE 'CANARY|canary|LIVE_TEST|live_test|allowlist' /app/app.py | head -80"
+          echo '--- relevant runtime env ---'
+          docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^PHIL_AI_OS_.*(CANARY|LIVE_TEST|ALLOW|EXECUTION)=' || true
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo 'monitor=active'
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo 'backup_self_heal_timer=active'
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo 'control_api_health=ok'
+          echo 'provider_call=none'
+          echo 'production_change=none'
+          echo PHIL_AI_OS_PHASE_1_18_CANARY_ALLOWLIST_DISCOVERY_OK
+          REMOTE
