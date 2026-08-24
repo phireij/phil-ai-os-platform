@@ -33,7 +33,7 @@ jobs:
             sleep 3
           done
           test -s ~/.ssh/known_hosts
-      - name: Enable routed execution with rollback guard
+      - name: Discover routed execution compose binding
         shell: bash
         run: |
           set -euo pipefail
@@ -42,72 +42,26 @@ jobs:
           set -euo pipefail
           CORE=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core
           COMPOSE="$CORE/compose.yml"
-          SERVICE=control-api
-          BACKUP="$COMPOSE.phase118-routed-enable.rollback"
-
-          echo '=== PHASE 1.18 ROUTED EXECUTION ENABLE ==='
+          echo '=== PHASE 1.18 ROUTED EXECUTION BINDING ==='
           test -f "$COMPOSE"
-          grep -Eq 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=(false|true)' "$COMPOSE"
-          grep -Eq 'PHIL_AI_OS_EXECUTION_KILL_SWITCH=(true|false)' "$COMPOSE"
-          grep -q 'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general' "$COMPOSE"
-
-          CURRENT_ROUTED=$(grep -oE 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=(false|true)' "$COMPOSE" | head -1)
-          CURRENT_KILL=$(grep -oE 'PHIL_AI_OS_EXECUTION_KILL_SWITCH=(true|false)' "$COMPOSE" | head -1)
-          echo "before_$CURRENT_ROUTED"
-          echo "before_$CURRENT_KILL"
-
-          cp -a "$COMPOSE" "$BACKUP"
-          echo "rollback_file=$BACKUP"
-          echo "rollback_sha256=$(sha256sum "$BACKUP" | awk '{print $1}')"
-
-          rollback() {
-            rc=$?
-            cp -a "$BACKUP" "$COMPOSE" || true
-            cd "$CORE"
-            docker compose up -d --no-deps --force-recreate "$SERVICE" >/dev/null 2>&1 || true
-            echo 'automatic_rollback=performed'
-            exit "$rc"
-          }
-          trap rollback ERR
-
-          sed -i -E 's/PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=(false|true)/PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=true/' "$COMPOSE"
-          sed -i -E 's/PHIL_AI_OS_EXECUTION_KILL_SWITCH=(true|false)/PHIL_AI_OS_EXECUTION_KILL_SWITCH=false/' "$COMPOSE"
-
-          grep -q 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=true' "$COMPOSE"
-          grep -q 'PHIL_AI_OS_EXECUTION_KILL_SWITCH=false' "$COMPOSE"
-          grep -q 'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general' "$COMPOSE"
-
-          cd "$CORE"
-          docker compose config -q
-          docker compose up -d --no-deps --force-recreate "$SERVICE"
-
-          for i in $(seq 1 30); do
-            if curl -fsS --max-time 3 http://127.0.0.1:4870/healthz >/dev/null 2>&1; then
-              break
+          echo "compose_sha256=$(sha256sum "$COMPOSE" | awk '{print $1}')"
+          echo '--- compose refs ---'
+          grep -nE 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED|PHIL_AI_OS_EXECUTION_KILL_SWITCH|PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES' "$COMPOSE" || true
+          echo '--- env files ---'
+          for f in "$CORE/.env" "$CORE/env" "$CORE/.env.production"; do
+            if [ -f "$f" ]; then
+              echo "env_file=$f"
+              grep -nE 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED|PHIL_AI_OS_EXECUTION_KILL_SWITCH|PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES' "$f" || true
             fi
-            sleep 2
           done
-          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
-
-          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
-          ROUTED=$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=' | head -1)
-          KILL=$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=' | head -1)
-          ALLOWED=$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=' | head -1)
-          test "$ROUTED" = 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=true'
-          test "$KILL" = 'PHIL_AI_OS_EXECUTION_KILL_SWITCH=false'
-          test "$ALLOWED" = 'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general'
-          systemctl is-active --quiet phil-ai-os-monitor.service
-          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
-
-          trap - ERR
-          echo 'routed_execution_enabled=true'
-          echo 'execution_kill_switch=false'
-          echo 'allowed_task_classes=general'
-          echo 'control_api_recreated=yes'
-          echo 'control_api_health=ok'
-          echo 'monitor=active'
-          echo 'backup_self_heal_timer=active'
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api' || true)
+          test -n "$CONTROL"
+          echo '--- runtime ---'
+          docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^PHIL_AI_OS_(ROUTED_EXECUTION_ENABLED|EXECUTION_KILL_SWITCH|EXECUTION_ALLOWED_TASK_CLASSES)=' || true
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo 'monitor=active'
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo 'backup_self_heal_timer=active'
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo 'control_api_health=ok'
           echo 'provider_call=none'
-          echo 'approval_requirement=unchanged'
-          echo PHIL_AI_OS_PHASE_1_18_ROUTED_EXECUTION_ENABLE_OK
+          echo 'production_change=none'
+          echo PHIL_AI_OS_PHASE_1_18_ROUTED_EXECUTION_BINDING_OK
           REMOTE
