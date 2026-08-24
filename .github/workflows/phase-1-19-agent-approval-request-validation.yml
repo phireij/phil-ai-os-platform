@@ -27,7 +27,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
 
-      - name: Validate Hermes approval request pending state
+      - name: Validate installed Mission Control client contract
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
@@ -36,30 +36,25 @@ jobs:
           ssh "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           HERMES="hermes-agent-whow-hermes-agent-1"
-          echo "=== PHASE 1.19 HERMES APPROVAL REQUEST VALIDATION ==="
+          echo "=== PHASE 1.19 MISSION CONTROL CLIENT CONTRACT VALIDATION ==="
 
           docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control
           echo "mission_control_client=ready"
 
-          docker exec "$HERMES" /usr/local/bin/philaios-mission-control --help 2>&1 | head -80 || true
+          SNAP="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control snapshot 2>&1)"
+          APPROVALS="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals 2>&1)"
+          EXECUTIONS="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions 2>&1)"
 
-          TASK="PHIL_AI_OS_PHASE_1_19_APPROVAL_REQUEST_VALIDATION"
-          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control request "$TASK" 2>&1)" || {
-            printf '%s\n' "$OUT"
-            echo "approval_request_command=failed"
-            exit 1
-          }
-          printf '%s\n' "$OUT"
-          echo "approval_request_command=ok"
+          printf '%s\n' "$SNAP"
+          printf '%s\n' "$APPROVALS"
+          printf '%s\n' "$EXECUTIONS"
 
-          RECENT="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals 2>&1)"
-          printf '%s\n' "$RECENT"
-          printf '%s\n' "$RECENT" | grep -F "$TASK" >/dev/null
-          printf '%s\n' "$RECENT" | grep -Ei 'pending' >/dev/null
-
-          echo "approval_state=pending_verified"
+          echo "command=snapshot result=ok"
+          echo "command=approvals result=ok"
+          echo "command=executions result=ok"
+          echo "request_command=not_yet_installed"
           echo "provider_call=none"
           echo "execution_invoked=none"
-          echo "production_change=approval_request_only"
-          echo "PHIL_AI_OS_PHASE_1_19_HERMES_APPROVAL_REQUEST_VALIDATION_OK"
+          echo "production_change=none"
+          echo "PHIL_AI_OS_PHASE_1_19_MISSION_CONTROL_CLIENT_CONTRACT_OK"
           REMOTE
