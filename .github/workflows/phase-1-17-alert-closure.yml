@@ -1,0 +1,69 @@
+name: Phase 1.17 Alert Closure
+on:
+  push:
+    branches:
+      - ops/phase-1.17-backup-discovery
+    paths:
+      - '.github/phase-1-17-alert-closure-trigger'
+permissions:
+  contents: read
+jobs:
+  validate-alerts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 10 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+      - name: Synthetic failure and recovery alert validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          ENV=/etc/phil-ai-os-monitor.env
+          MON=/opt/phil-ai-os/phase-1.16/monitor.py
+          REAL=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/backups/status/latest.json
+          TMPDIR=$(mktemp -d /tmp/phil-ai-os-alert-test-XXXXXX)
+          trap 'rm -rf "$TMPDIR"' EXIT
+          TEST_STATUS="$TMPDIR/latest.json"
+          TEST_STATE="$TMPDIR/state.json"
+          NOW=$(date +%s)
+          OLD=$((NOW-86400))
+          printf '{"ok":true,"timestamp_epoch":%s,"quick_check":"ok","tables":11,"backup":"synthetic-test.db"}\n' "$OLD" > "$TEST_STATUS"
+          set -a
+          . "$ENV"
+          set +a
+          export PHIL_AI_OS_BACKUP_STATUS_PATH="$TEST_STATUS"
+          export PHIL_AI_OS_MONITOR_STATE_PATH="$TEST_STATE"
+          export PHIL_AI_OS_BACKUP_MAX_AGE_SECONDS=18000
+          set +e
+          /usr/bin/python3 "$MON" --once
+          RC=$?
+          set -e
+          test "$RC" -eq 1
+          python3 -c 'import json,sys,time; p=sys.argv[1]; d=json.load(open(p)); d["ok"]=True; d["timestamp_epoch"]=int(time.time()); d["quick_check"]="ok"; open(p,"w").write(json.dumps(d)+"\n")' "$TEST_STATUS"
+          /usr/bin/python3 "$MON" --once
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); c=d["checks"]["backup_health"]; assert c["ok"] is True; print("backup_alert_recovery_state=ok")' "$TEST_STATE"
+          test -s "$REAL"
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          echo production_backup_status_untouched=true
+          echo PHIL_AI_OS_PHASE_1_17_ALERT_CLOSURE_OK
+          REMOTE
