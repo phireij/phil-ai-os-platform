@@ -1,6 +1,6 @@
 name: Phase 1.18 First Controlled Routed Execution
 
-# Phase 1.18 rerun after routed execution gate enablement.
+# Phase 1.18 exact canary rerun after guard discovery.
 on:
   push:
     branches: [ops/phase-1.18-policy-boundary]
@@ -68,12 +68,13 @@ jobs:
           fi
 
           echo 'authorization=approved_unconsumed_found'
+          echo 'requested_task=PHIL_AI_OS_ROUTED_EXECUTION_OK'
           set +e
-          OUT=$(docker exec "$HERMES" /usr/local/bin/philaios-execute "$APPROVAL_ID" 'Return exactly PHIL_AI_OS_PHASE_1_18_ROUTED_OK' 2>&1)
+          OUT=$(docker exec "$HERMES" /usr/local/bin/philaios-execute "$APPROVAL_ID" 'PHIL_AI_OS_ROUTED_EXECUTION_OK' 2>&1)
           RC=$?
           set -e
           echo "execution_exit_code=$RC"
-          printf '%s\n' "$OUT" | tail -n 12
+          printf '%s\n' "$OUT" | tail -n 16
 
           if [ "$RC" -ne 0 ]; then
             echo 'execution_result=rejected_or_failed'
