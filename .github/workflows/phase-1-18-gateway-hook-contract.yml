@@ -1,0 +1,69 @@
+name: Phase 1.18 Gateway Hook Contract
+on:
+  push:
+    branches:
+      - ops/phase-1.18-policy-boundary
+    paths:
+      - '.github/phase-1-18-gateway-hook-contract-trigger'
+      - '.github/workflows/phase-1-18-gateway-hook-contract.yml'
+permissions:
+  contents: read
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Read-only gateway hook contract classification
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=$(docker ps --format '{{.Names}}' | grep -m1 hermes || true)
+          test -n "$HERMES"
+          docker exec -i "$HERMES" python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/opt/hermes/docker/main-wrapper.sh')
+          text=p.read_text(errors='replace') if p.exists() else ''
+          low=text.lower()
+          env_names=[]
+          import re
+          for m in re.finditer(r'\$\{?([A-Z][A-Z0-9_]{2,})', text):
+              n=m.group(1)
+              if any(k in n for k in ('GATEWAY','PROVIDER','MODEL','HERMES','EXEC','HOOK')):
+                  env_names.append(n)
+          env_names=sorted(set(env_names))[:12]
+          print('=== PHASE 1.18 GATEWAY HOOK CONTRACT ===')
+          print('wrapper_present='+('yes' if p.exists() else 'no'))
+          print('gateway_run_ref='+('yes' if 'gateway run' in low else 'no'))
+          print('gateway_exec_ref='+('yes' if ('exec' in low and 'gateway' in low) else 'no'))
+          print('preexec_hook_signal='+('yes' if any(x in low for x in ('pre_exec','pre-exec','before_exec','before-exec','hook')) else 'no'))
+          print('env_override_signal='+('yes' if len(env_names) else 'no'))
+          print('relevant_env_names='+(','.join(env_names) if env_names else 'none'))
+          PY
+          echo "monitor=$(systemctl is-active phil-ai-os-monitor.service || true)"
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo 'control_api_health=ok'
+          echo PHIL_AI_OS_PHASE_1_18_GATEWAY_HOOK_CONTRACT_OK
+          REMOTE
