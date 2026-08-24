@@ -5,6 +5,7 @@ on:
       - ops/phase-1.18-policy-boundary
     paths:
       - '.github/phase-1-18-runtime-wiring-trigger'
+      - '.github/workflows/phase-1-18-runtime-wiring.yml'
 permissions:
   contents: read
 jobs:
