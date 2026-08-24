@@ -43,7 +43,7 @@ jobs:
           set -euo pipefail
           HERMES=$(docker ps --format '{{.Names}}' | grep -m1 hermes || true)
           test -n "$HERMES"
-          docker exec "$HERMES" python3 - <<'PY'
+          docker exec -i "$HERMES" python3 - <<'PY'
           import pathlib
           p=pathlib.Path('/opt/data/config.yaml')
           text=p.read_text(errors='replace') if p.exists() else ''
