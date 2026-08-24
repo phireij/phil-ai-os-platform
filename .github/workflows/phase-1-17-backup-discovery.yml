@@ -1,0 +1,80 @@
+name: Phase 1.17 Backup Discovery
+on:
+  push:
+    branches:
+      - ops/phase-1.17-backup-discovery
+    paths:
+      - '.github/phase-1-17-backup-discovery-trigger'
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 10 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 2
+          done
+          test -s ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Read-only backup discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo '=== CONTROL API CONTAINER ==='
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 -E 'control[-_]?api|phil.*control' || true)
+          test -n "$CONTROL"
+          echo "control_container=$CONTROL"
+          echo '=== MOUNTS ==='
+          docker inspect "$CONTROL" --format '{{range .Mounts}}{{println .Type "|" .Source "|" .Destination "|" .RW}}{{end}}'
+          echo '=== DATABASE CANDIDATES ==='
+          docker exec "$CONTROL" sh -lc 'find /app /data /state /runtime-state -maxdepth 4 -type f \( -name "*.db" -o -name "*.sqlite" -o -name "*.sqlite3" \) -printf "%p|%s bytes\n" 2>/dev/null | sort' || true
+          echo '=== SQLITE VALIDATION ==='
+          docker exec "$CONTROL" sh -lc 'python3 - <<"PY"
+import sqlite3
+from pathlib import Path
+roots=[Path("/app"),Path("/data"),Path("/state"),Path("/runtime-state")]
+seen=set()
+for root in roots:
+    if not root.exists(): continue
+    for p in root.rglob("*"):
+        if not p.is_file() or p.suffix.lower() not in {".db",".sqlite",".sqlite3"}: continue
+        s=str(p)
+        if s in seen: continue
+        seen.add(s)
+        try:
+            con=sqlite3.connect(f"file:{s}?mode=ro", uri=True)
+            result=con.execute("PRAGMA quick_check").fetchone()[0]
+            tables=con.execute("select count(*) from sqlite_master where type='table'").fetchone()[0]
+            con.close()
+            print(f"{s}|quick_check={result}|tables={tables}|size={p.stat().st_size}")
+        except Exception as e:
+            print(f"{s}|sqlite_error={type(e).__name__}")
+PY' || true
+          echo '=== HOST STORAGE ==='
+          df -hT / /opt /docker 2>/dev/null || true
+          echo '=== INODES ==='
+          df -ih / /opt /docker 2>/dev/null || true
+          echo '=== EXISTING BACKUP-LIKE DIRECTORIES ==='
+          find /opt /docker -maxdepth 4 -type d \( -iname '*backup*' -o -iname '*backups*' -o -iname '*snapshot*' \) -print 2>/dev/null | head -n 100
+          echo PHIL_AI_OS_PHASE_1_17_BACKUP_DISCOVERY_OK
+          REMOTE
