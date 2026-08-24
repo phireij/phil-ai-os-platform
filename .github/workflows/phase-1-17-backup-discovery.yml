@@ -1,0 +1,61 @@
+name: Phase 1.17 Backup Discovery
+on:
+  push:
+    branches:
+      - ops/phase-1.17-backup-discovery
+    paths:
+      - '.github/phase-1-17-backup-discovery-trigger'
+      - '.github/workflows/phase-1-17-backup-discovery.yml'
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 10 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 2
+          done
+          test -s ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Read-only backup discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo '=== CONTROL API CONTAINER ==='
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 -E 'control[-_]?api|phil.*control' || true)
+          test -n "$CONTROL"
+          echo "control_container=$CONTROL"
+          echo '=== MOUNTS ==='
+          docker inspect "$CONTROL" --format '{{range .Mounts}}{{println .Type "|" .Source "|" .Destination "|" .RW}}{{end}}'
+          echo '=== DATABASE CANDIDATES ==='
+          docker exec "$CONTROL" sh -lc 'find /app /data /state /runtime-state -maxdepth 4 -type f \( -name "*.db" -o -name "*.sqlite" -o -name "*.sqlite3" \) -printf "%p|%s bytes\n" 2>/dev/null | sort' || true
+          echo '=== SQLITE VALIDATION ==='
+          docker exec "$CONTROL" python3 -c 'import sqlite3,pathlib; roots=[pathlib.Path(x) for x in ("/app","/data","/state","/runtime-state")]; files=sorted({p for r in roots if r.exists() for p in r.rglob("*") if p.is_file() and p.suffix.lower() in {".db",".sqlite",".sqlite3"}}); [(lambda p: (lambda c: (print(str(p)+"|quick_check="+str(c.execute("PRAGMA quick_check").fetchone()[0])+"|tables="+str(c.execute("select count(*) from sqlite_master where type=\"table\"").fetchone()[0])+"|size="+str(p.stat().st_size)),c.close()))(sqlite3.connect("file:"+str(p)+"?mode=ro",uri=True)))(p) for p in files]' || true
+          echo '=== HOST STORAGE ==='
+          df -hT / /opt /docker 2>/dev/null || true
+          echo '=== INODES ==='
+          df -ih / /opt /docker 2>/dev/null || true
+          echo '=== EXISTING BACKUP-LIKE DIRECTORIES ==='
+          find /opt /docker -maxdepth 4 -type d \( -iname '*backup*' -o -iname '*backups*' -o -iname '*snapshot*' \) -print 2>/dev/null | head -n 100
+          echo PHIL_AI_OS_PHASE_1_17_BACKUP_DISCOVERY_OK
+          REMOTE

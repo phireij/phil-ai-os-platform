@@ -1,0 +1,61 @@
+name: Phase 1.17 Controlled Backup
+on:
+  push:
+    branches:
+      - ops/phase-1.17-backup-discovery
+    paths:
+      - '.github/phase-1-17-controlled-backup-trigger'
+      - '.github/workflows/phase-1-17-controlled-backup.yml'
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 10 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 2
+          done
+          test -s ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Upload backup utility
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" ops/phase_1_17/backup_control_plane.py "$VPS_USER@$VPS_HOST:/tmp/phase-1-17-backup.py"
+      - name: Create and validate one controlled backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 -E 'control[-_]?api|phil.*control')
+          BACKUP_DIR=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/backups/phase-1.17
+          STATUS_DIR=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/backups/status
+          mkdir -p "$BACKUP_DIR" "$STATUS_DIR"
+          install -m 755 /tmp/phase-1-17-backup.py /opt/phil-ai-os-platform/phase-1.17-backup.py
+          rm -f /tmp/phase-1-17-backup.py
+          docker cp "$CONTROL:/app/state/control-plane.db" /tmp/control-plane-live.db
+          python3 /opt/phil-ai-os-platform/phase-1.17-backup.py --source /tmp/control-plane-live.db --backup-dir "$BACKUP_DIR" --status-file "$STATUS_DIR/latest.json" --label controlled-validation
+          rm -f /tmp/control-plane-live.db
+          python3 -c "import json,sqlite3,pathlib; d=json.load(open('$STATUS_DIR/latest.json')); p=pathlib.Path(d['backup']); assert d['ok'] is True and p.is_file() and p.stat().st_size>0; c=sqlite3.connect('file:'+str(p)+'?mode=ro',uri=True); assert c.execute('PRAGMA quick_check').fetchone()[0]=='ok'; print('backup_file='+str(p)); print('backup_size='+str(p.stat().st_size)); print('backup_sha256='+d['sha256']); print('backup_tables='+str(d['tables'])); c.close()"
+          echo PHIL_AI_OS_PHASE_1_17_CONTROLLED_BACKUP_OK
+          REMOTE

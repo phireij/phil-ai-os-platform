@@ -1,0 +1,71 @@
+name: Phase 1.17 Restore Validation
+on:
+  push:
+    branches:
+      - ops/phase-1.17-backup-discovery
+    paths:
+      - '.github/phase-1-17-restore-validation-trigger'
+      - '.github/workflows/phase-1-17-restore-validation.yml'
+permissions:
+  contents: read
+jobs:
+  restore-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 10 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 2
+          done
+          test -s ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Isolated restore validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          STATUS=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/backups/status/latest.json
+          test -s "$STATUS"
+          BACKUP=$(python3 -c 'import json;print(json.load(open("/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/backups/status/latest.json"))["backup"])')
+          test -s "$BACKUP"
+          TMPDIR=$(mktemp -d /tmp/phil-ai-os-restore-XXXXXX)
+          trap 'rm -rf "$TMPDIR"' EXIT
+          RESTORED="$TMPDIR/restored.db"
+          python3 -c 'import sqlite3,sys; s=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()' "$BACKUP" "$RESTORED"
+          python3 -c 'import hashlib,sqlite3,sys; p=sys.argv[1]; c=sqlite3.connect("file:"+p+"?mode=ro",uri=True); q=c.execute("PRAGMA quick_check").fetchone()[0]; t=c.execute("select count(*) from sqlite_master where type=\"table\"").fetchone()[0]; schema="\n".join((r[0] or "") for r in c.execute("select sql from sqlite_master where sql is not null order by type,name")); print(q,t,hashlib.sha256(schema.encode()).hexdigest()); c.close()' "$BACKUP" > "$TMPDIR/source.meta"
+          python3 -c 'import hashlib,sqlite3,sys; p=sys.argv[1]; c=sqlite3.connect("file:"+p+"?mode=ro",uri=True); q=c.execute("PRAGMA quick_check").fetchone()[0]; t=c.execute("select count(*) from sqlite_master where type=\"table\"").fetchone()[0]; schema="\n".join((r[0] or "") for r in c.execute("select sql from sqlite_master where sql is not null order by type,name")); print(q,t,hashlib.sha256(schema.encode()).hexdigest()); c.close()' "$RESTORED" > "$TMPDIR/restored.meta"
+          cmp -s "$TMPDIR/source.meta" "$TMPDIR/restored.meta"
+          python3 -c 'import sqlite3,sys,json; c=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); names=[r[0] for r in c.execute("select name from sqlite_master where type=\"table\" and name not like \"sqlite_%\" order by name")]; print(json.dumps({n:c.execute("select count(*) from \""+n.replace(chr(34),chr(34)*2)+"\"").fetchone()[0] for n in names},sort_keys=True)); c.close()' "$BACKUP" > "$TMPDIR/source.counts"
+          python3 -c 'import sqlite3,sys,json; c=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); names=[r[0] for r in c.execute("select name from sqlite_master where type=\"table\" and name not like \"sqlite_%\" order by name")]; print(json.dumps({n:c.execute("select count(*) from \""+n.replace(chr(34),chr(34)*2)+"\"").fetchone()[0] for n in names},sort_keys=True)); c.close()' "$RESTORED" > "$TMPDIR/restored.counts"
+          cmp -s "$TMPDIR/source.counts" "$TMPDIR/restored.counts"
+          read -r QUICK TABLES SCHEMA < "$TMPDIR/restored.meta"
+          test "$QUICK" = ok
+          echo source_quick_check=ok
+          echo restored_quick_check="$QUICK"
+          echo tables="$TABLES"
+          echo schema_sha256="$SCHEMA"
+          echo row_counts_match=true
+          echo restored_size=$(stat -c %s "$RESTORED")
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          echo control_api_health=ok
+          echo PHIL_AI_OS_PHASE_1_17_ISOLATED_RESTORE_OK
+          REMOTE
