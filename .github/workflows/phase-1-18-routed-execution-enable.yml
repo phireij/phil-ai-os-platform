@@ -47,9 +47,15 @@ jobs:
 
           echo '=== PHASE 1.18 ROUTED EXECUTION ENABLE ==='
           test -f "$COMPOSE"
-          grep -q 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=false' "$COMPOSE"
-          grep -q 'PHIL_AI_OS_EXECUTION_KILL_SWITCH=true' "$COMPOSE"
+          grep -Eq 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=(false|true)' "$COMPOSE"
+          grep -Eq 'PHIL_AI_OS_EXECUTION_KILL_SWITCH=(true|false)' "$COMPOSE"
           grep -q 'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general' "$COMPOSE"
+
+          CURRENT_ROUTED=$(grep -oE 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=(false|true)' "$COMPOSE" | head -1)
+          CURRENT_KILL=$(grep -oE 'PHIL_AI_OS_EXECUTION_KILL_SWITCH=(true|false)' "$COMPOSE" | head -1)
+          echo "before_$CURRENT_ROUTED"
+          echo "before_$CURRENT_KILL"
+
           cp -a "$COMPOSE" "$BACKUP"
           echo "rollback_file=$BACKUP"
           echo "rollback_sha256=$(sha256sum "$BACKUP" | awk '{print $1}')"
@@ -64,8 +70,8 @@ jobs:
           }
           trap rollback ERR
 
-          sed -i 's/PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=false/PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=true/' "$COMPOSE"
-          sed -i 's/PHIL_AI_OS_EXECUTION_KILL_SWITCH=true/PHIL_AI_OS_EXECUTION_KILL_SWITCH=false/' "$COMPOSE"
+          sed -i -E 's/PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=(false|true)/PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=true/' "$COMPOSE"
+          sed -i -E 's/PHIL_AI_OS_EXECUTION_KILL_SWITCH=(true|false)/PHIL_AI_OS_EXECUTION_KILL_SWITCH=false/' "$COMPOSE"
 
           grep -q 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=true' "$COMPOSE"
           grep -q 'PHIL_AI_OS_EXECUTION_KILL_SWITCH=false' "$COMPOSE"
