@@ -5,6 +5,7 @@ on:
       - ops/phase-1.17-backup-discovery
     paths:
       - '.github/phase-1-17-restore-validation-trigger'
+      - '.github/workflows/phase-1-17-restore-validation.yml'
 permissions:
   contents: read
 jobs:
@@ -47,31 +48,21 @@ jobs:
           TMPDIR=$(mktemp -d /tmp/phil-ai-os-restore-XXXXXX)
           trap 'rm -rf "$TMPDIR"' EXIT
           RESTORED="$TMPDIR/restored.db"
-          python3 - "$BACKUP" "$RESTORED" <<'PY'
-import hashlib, sqlite3, sys
-from pathlib import Path
-src=Path(sys.argv[1]); dst=Path(sys.argv[2])
-with sqlite3.connect(f'file:{src}?mode=ro',uri=True) as s, sqlite3.connect(dst) as d:
-    s.backup(d)
-def qc(p):
-    with sqlite3.connect(f'file:{p}?mode=ro',uri=True) as c:
-        quick=c.execute('PRAGMA quick_check').fetchone()[0]
-        tables=c.execute("select count(*) from sqlite_master where type='table'").fetchone()[0]
-        schema='\n'.join(r[0] or '' for r in c.execute("select sql from sqlite_master where sql is not null order by type,name"))
-        counts={r[0]:c.execute('select count(*) from "'+r[0].replace('"','""')+'"').fetchone()[0] for r in c.execute("select name from sqlite_master where type='table' and name not like 'sqlite_%' order by name")}
-        return quick,tables,hashlib.sha256(schema.encode()).hexdigest(),counts
-s=qc(src); r=qc(dst)
-assert s[0]=='ok' and r[0]=='ok'
-assert s[1]==r[1]
-assert s[2]==r[2]
-assert s[3]==r[3]
-print('source_quick_check='+s[0])
-print('restored_quick_check='+r[0])
-print('tables='+str(r[1]))
-print('schema_sha256='+r[2])
-print('row_counts_match=true')
-print('restored_size='+str(dst.stat().st_size))
-PY
+          python3 -c 'import sqlite3,sys; s=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()' "$BACKUP" "$RESTORED"
+          python3 -c 'import hashlib,sqlite3,sys; p=sys.argv[1]; c=sqlite3.connect("file:"+p+"?mode=ro",uri=True); q=c.execute("PRAGMA quick_check").fetchone()[0]; t=c.execute("select count(*) from sqlite_master where type=\"table\"").fetchone()[0]; schema="\n".join((r[0] or "") for r in c.execute("select sql from sqlite_master where sql is not null order by type,name")); print(q,t,hashlib.sha256(schema.encode()).hexdigest()); c.close()' "$BACKUP" > "$TMPDIR/source.meta"
+          python3 -c 'import hashlib,sqlite3,sys; p=sys.argv[1]; c=sqlite3.connect("file:"+p+"?mode=ro",uri=True); q=c.execute("PRAGMA quick_check").fetchone()[0]; t=c.execute("select count(*) from sqlite_master where type=\"table\"").fetchone()[0]; schema="\n".join((r[0] or "") for r in c.execute("select sql from sqlite_master where sql is not null order by type,name")); print(q,t,hashlib.sha256(schema.encode()).hexdigest()); c.close()' "$RESTORED" > "$TMPDIR/restored.meta"
+          cmp -s "$TMPDIR/source.meta" "$TMPDIR/restored.meta"
+          python3 -c 'import sqlite3,sys,json; c=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); names=[r[0] for r in c.execute("select name from sqlite_master where type=\"table\" and name not like \"sqlite_%\" order by name")]; print(json.dumps({n:c.execute("select count(*) from \""+n.replace(chr(34),chr(34)*2)+"\"").fetchone()[0] for n in names},sort_keys=True)); c.close()' "$BACKUP" > "$TMPDIR/source.counts"
+          python3 -c 'import sqlite3,sys,json; c=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); names=[r[0] for r in c.execute("select name from sqlite_master where type=\"table\" and name not like \"sqlite_%\" order by name")]; print(json.dumps({n:c.execute("select count(*) from \""+n.replace(chr(34),chr(34)*2)+"\"").fetchone()[0] for n in names},sort_keys=True)); c.close()' "$RESTORED" > "$TMPDIR/restored.counts"
+          cmp -s "$TMPDIR/source.counts" "$TMPDIR/restored.counts"
+          read -r QUICK TABLES SCHEMA < "$TMPDIR/restored.meta"
+          test "$QUICK" = ok
+          echo source_quick_check=ok
+          echo restored_quick_check="$QUICK"
+          echo tables="$TABLES"
+          echo schema_sha256="$SCHEMA"
+          echo row_counts_match=true
+          echo restored_size=$(stat -c %s "$RESTORED")
           systemctl is-active --quiet phil-ai-os-backup.timer
           systemctl is-active --quiet phil-ai-os-monitor.service
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
