@@ -1,0 +1,78 @@
+name: Phase 1.18 Completion Gate
+
+on:
+  push:
+    branches: [ops/phase-1.18-policy-boundary]
+    paths: ['.github/workflows/phase-1-18-completion-gate.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+      - name: Verify Phase 1.18 completion gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api' || true)
+          HERMES=$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow' || true)
+          test -n "$CONTROL"
+          test -n "$HERMES"
+          echo '=== PHASE 1.18 COMPLETION GATE ==='
+          grep -qx 'PHIL_AI_OS_CONTROLLED_ENFORCEMENT=true' /etc/phil-ai-os/phase-1.18-enforcement.env
+          echo 'controlled_enforcement=enabled'
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-execute
+          docker exec "$HERMES" test -s /run/philaios/hermes_control_api_token
+          echo 'execution_client=ready'
+          RUNTIME=$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          printf '%s\n' "$RUNTIME" | grep -qx 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=true'
+          printf '%s\n' "$RUNTIME" | grep -qx 'PHIL_AI_OS_EXECUTION_KILL_SWITCH=false'
+          printf '%s\n' "$RUNTIME" | grep -qx 'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general'
+          echo 'routed_execution_enabled=true'
+          echo 'execution_kill_switch=false'
+          echo 'allowed_task_classes=general'
+          AUDIT=$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); r=c.execute(\"select source,task_class,provider_id,model_id,route_path,response_id,compatibility_pass,execution_mode,outcome,approval_id from execution_audit where outcome='success' order by id desc limit 1\").fetchone(); print('|'.join(str(x) for x in r) if r else '')")
+          test -n "$AUDIT"
+          echo "latest_success_audit=$AUDIT"
+          printf '%s\n' "$AUDIT" | grep -q 'hermes-explicit|general|openai|gpt-5.6-terra|primary|'
+          printf '%s\n' "$AUDIT" | grep -q '|1|controlled|success|apr_'
+          echo 'durable_execution_audit=verified'
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          echo 'monitor=active'
+          echo 'backup_timer=active'
+          echo 'backup_self_heal_timer=active'
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          echo 'control_api_health=ok'
+          echo 'phase_1_18_status=complete'
+          echo 'provider_call=none'
+          echo 'production_change=none'
+          echo PHIL_AI_OS_PHASE_1_18_COMPLETION_GATE_OK
+          REMOTE
