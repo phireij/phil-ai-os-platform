@@ -5,6 +5,7 @@ on:
       - ops/phase-1.17-backup-discovery
     paths:
       - '.github/phase-1-17-alert-closure-trigger'
+      - '.github/workflows/phase-1-17-alert-closure.yml'
 permissions:
   contents: read
 jobs:
@@ -27,7 +28,11 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           PORT="${VPS_PORT:-22}"
-          ssh-keyscan -T 10 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 10 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 2
+          done
+          test -s ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
       - name: Synthetic failure and recovery alert validation
         shell: bash
@@ -43,13 +48,13 @@ jobs:
           trap 'rm -rf "$TMPDIR"' EXIT
           TEST_STATUS="$TMPDIR/latest.json"
           TEST_STATE="$TMPDIR/state.json"
-          NOW=$(date +%s)
-          OLD=$((NOW-86400))
-          printf '{"ok":true,"timestamp_epoch":%s,"quick_check":"ok","tables":11,"backup":"synthetic-test.db"}\n' "$OLD" > "$TEST_STATUS"
+          OLD_TS=$(date -u -d '1 day ago' +%Y%m%dT%H%M%SZ)
+          NOW_TS=$(date -u +%Y%m%dT%H%M%SZ)
+          printf '{"ok":true,"timestamp":"%s","quick_check":"ok","tables":11,"backup":"synthetic-test.db"}\n' "$OLD_TS" > "$TEST_STATUS"
           set -a
           . "$ENV"
           set +a
-          export PHIL_AI_OS_BACKUP_STATUS_PATH="$TEST_STATUS"
+          export PHIL_AI_OS_BACKUP_STATUS_FILE="$TEST_STATUS"
           export PHIL_AI_OS_MONITOR_STATE_PATH="$TEST_STATE"
           export PHIL_AI_OS_BACKUP_MAX_AGE_SECONDS=18000
           set +e
@@ -57,9 +62,9 @@ jobs:
           RC=$?
           set -e
           test "$RC" -eq 1
-          python3 -c 'import json,sys,time; p=sys.argv[1]; d=json.load(open(p)); d["ok"]=True; d["timestamp_epoch"]=int(time.time()); d["quick_check"]="ok"; open(p,"w").write(json.dumps(d)+"\n")' "$TEST_STATUS"
+          python3 -c 'import json,sys; p=sys.argv[1]; ts=sys.argv[2]; d=json.load(open(p)); d["ok"]=True; d["timestamp"]=ts; d["quick_check"]="ok"; open(p,"w").write(json.dumps(d)+"\n")' "$TEST_STATUS" "$NOW_TS"
           /usr/bin/python3 "$MON" --once
-          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); c=d["checks"]["backup_health"]; assert c["ok"] is True; print("backup_alert_recovery_state=ok")' "$TEST_STATE"
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); c=d["checks"]["backup_status"]; assert c["ok"] is True; print("backup_alert_recovery_state=ok")' "$TEST_STATE"
           test -s "$REAL"
           systemctl is-active --quiet phil-ai-os-backup.timer
           systemctl is-active --quiet phil-ai-os-monitor.service
