@@ -1,0 +1,76 @@
+name: Phase 1.16 Final Integration
+on:
+  push:
+    branches: [docs/phase-1.16-progress-update]
+    paths:
+      - '.github/phase-1-16-final-trigger'
+      - '.github/workflows/phase-1-16-final-integration.yml'
+permissions:
+  contents: read
+concurrency:
+  group: phil-ai-os-phase-1-16-final
+  cancel-in-progress: false
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 10 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 2
+          done
+          test -s ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Upload monitor
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" ops/phase_1_16/monitor.py "$VPS_USER@$VPS_HOST:/tmp/phase-1-16-monitor.py"
+      - name: Integrate snapshot and Telegram then validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          TOKEN=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/hermes/secrets/hermes_control_api_token
+          HERMES_ENV=/docker/hermes-agent-whow/data/.env
+          test -s "$TOKEN"
+          test -s "$HERMES_ENV"
+          install -m 755 /tmp/phase-1-16-monitor.py /opt/phil-ai-os/phase-1.16/monitor.py
+          rm -f /tmp/phase-1-16-monitor.py
+          cp -a /etc/phil-ai-os-monitor.env /etc/phil-ai-os-monitor.env.pre-final-integration
+          printf '%s\n' \
+            'PHIL_AI_OS_SAFETY_SNAPSHOT_URL=http://127.0.0.1:4870/v1/mission-control/snapshot' \
+            "PHIL_AI_OS_CONTROL_API_TOKEN_FILE=$TOKEN" \
+            "PHIL_AI_OS_HERMES_ENV_FILE=$HERMES_ENV" \
+            'PHIL_AI_OS_STRICT_SAFETY_SNAPSHOT=true' \
+            >> /etc/phil-ai-os-monitor.env
+          chmod 600 /etc/phil-ai-os-monitor.env
+          systemctl restart phil-ai-os-monitor.service
+          sleep 3
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          set -a
+          . /etc/phil-ai-os-monitor.env
+          set +a
+          /usr/bin/python3 /opt/phil-ai-os/phase-1.16/monitor.py --print-config | grep -q '"auth_token": "\*\*\*"'
+          /usr/bin/python3 /opt/phil-ai-os/phase-1.16/monitor.py --once
+          /usr/bin/python3 /opt/phil-ai-os/phase-1.16/monitor.py --test-alert
+          echo PHIL_AI_OS_PHASE_1_16_FINAL_INTEGRATION_OK
+          REMOTE

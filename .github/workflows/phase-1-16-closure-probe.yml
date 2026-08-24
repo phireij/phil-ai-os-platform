@@ -1,0 +1,72 @@
+name: Phase 1.16 Closure Probe
+
+on:
+  push:
+    branches:
+      - docs/phase-1.16-progress-update
+    paths:
+      - '.github/phase-1-16-closure-probe-trigger'
+      - '.github/workflows/phase-1-16-closure-probe.yml'
+      - 'ops/phase_1_16/closure_probe.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  closure-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate trigger and probe source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(tr -d '\r\n' < .github/phase-1-16-closure-probe-trigger)" = "PROBE-PHASE-1.16-CLOSURE"
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          test -f ops/phase_1_16/closure_probe.sh
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5; do
+            if timeout 10 ssh-keyscan -T 5 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/tmp/ssh-keyscan.err && test -s ~/.ssh/known_hosts; then
+              echo "SSH host key captured on attempt $attempt"
+              break
+            fi
+            echo "ssh-keyscan attempt $attempt failed; retrying..."
+            sleep 2
+          done
+          test -s ~/.ssh/known_hosts || { cat /tmp/ssh-keyscan.err || true; echo "Unable to capture VPS SSH host key"; exit 1; }
+          chmod 600 ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=10 "$VPS_USER@$VPS_HOST" 'echo PHIL_AI_OS_CLOSURE_PROBE_SSH_OK' >/dev/null
+
+      - name: Upload closure probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -o ConnectTimeout=10 ops/phase_1_16/closure_probe.sh "$VPS_USER@$VPS_HOST:/tmp/phil-ai-os-phase-1-16-closure-probe.sh"
+
+      - name: Probe closure gates safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=10 "$VPS_USER@$VPS_HOST" 'chmod 700 /tmp/phil-ai-os-phase-1-16-closure-probe.sh && /tmp/phil-ai-os-phase-1-16-closure-probe.sh; rc=$?; rm -f /tmp/phil-ai-os-phase-1-16-closure-probe.sh; exit $rc'
