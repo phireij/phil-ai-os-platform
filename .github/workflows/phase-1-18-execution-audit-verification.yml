@@ -44,14 +44,15 @@ jobs:
           test -n "$CONTROL"
           echo '=== PHASE 1.18 ROUTED EXECUTION AUDIT VERIFICATION ==='
           docker exec "$CONTROL" test -s /app/state/control-plane.db
-          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print('tables='+','.join(r[0] for r in c.execute(\"select name from sqlite_master where type='table' order by name\")));" | tail -1
-          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db');
-for t in ('execution_audit','execution_audit_log','execution_events','audit_log'):
- try:
-  cols=[r[1] for r in c.execute(f'pragma table_info({t})')]
-  if cols:
-   print('audit_table='+t); print('audit_columns='+','.join(cols)); rows=c.execute(f'select * from {t} order by rowid desc limit 3').fetchall(); print('audit_recent_count='+str(len(rows))); [print('audit_row='+repr(r)[:700]) for r in rows]; break
- except Exception: pass" || true
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print('tables='+','.join(r[0] for r in c.execute(\"select name from sqlite_master where type='table' order by name\")))"
+          FOUND=0
+          for T in execution_audit execution_audit_log execution_events audit_log; do
+            if docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); cols=[r[1] for r in c.execute('pragma table_info($T)')]; assert cols; print('audit_table=$T'); print('audit_columns='+','.join(cols)); rows=c.execute('select * from $T order by rowid desc limit 3').fetchall(); print('audit_recent_count='+str(len(rows))); print('audit_latest='+repr(rows[0])[:700] if rows else 'audit_latest=none')" 2>/dev/null; then
+              FOUND=1
+              break
+            fi
+          done
+          echo "audit_table_found=$FOUND"
           echo "runtime_routed=$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=' | head -1)"
           echo "runtime_kill_switch=$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=' | head -1)"
           systemctl is-active --quiet phil-ai-os-monitor.service && echo 'monitor=active'
