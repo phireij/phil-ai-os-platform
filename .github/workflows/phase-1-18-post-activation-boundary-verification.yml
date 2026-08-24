@@ -1,0 +1,74 @@
+name: Phase 1.18 Post-Activation Boundary Verification
+
+on:
+  push:
+    branches: [ops/phase-1.18-policy-boundary]
+    paths: ['.github/workflows/phase-1-18-post-activation-boundary-verification.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+      - name: Verify activated execution boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow' || true)
+          test -n "$HERMES"
+          STATE=/etc/phil-ai-os/phase-1.18-enforcement.env
+          echo '=== PHASE 1.18 POST-ACTIVATION BOUNDARY VERIFICATION ==='
+          test -s "$STATE"
+          grep -qx 'PHIL_AI_OS_CONTROLLED_ENFORCEMENT=true' "$STATE"
+          echo 'controlled_enforcement=enabled'
+          grep -qx 'PHIL_AI_OS_ENFORCEMENT_SCOPE=philaios_execute_only' "$STATE"
+          echo 'enforcement_scope=philaios_execute_only'
+          grep -qx 'PHIL_AI_OS_DIRECT_PROVIDER_MIGRATION=false' "$STATE"
+          echo 'direct_provider_migration=false'
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-execute
+          if docker exec "$HERMES" grep -q '/v1/execute' /usr/local/bin/philaios-execute; then
+            echo 'execution_client_route=/v1/execute'
+          else
+            echo 'execution_client_route=unverified'
+            exit 1
+          fi
+          docker exec "$HERMES" test -s /run/philaios/hermes_control_api_token
+          echo 'control_token_mount=ready'
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          echo 'monitor=active'
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          echo 'backup_timer=active'
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          echo 'backup_self_heal_timer=active'
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          echo 'control_api_health=ok'
+          echo 'provider_call=none'
+          echo 'production_change=none'
+          echo PHIL_AI_OS_PHASE_1_18_POST_ACTIVATION_BOUNDARY_VERIFICATION_OK
+          REMOTE
