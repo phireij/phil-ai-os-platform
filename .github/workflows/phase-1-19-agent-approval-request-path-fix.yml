@@ -1,0 +1,57 @@
+name: "fix: reconcile Phase 1.19 Mission Control client path"
+on:
+  push:
+    paths:
+      - '.github/workflows/phase-1-19-agent-approval-request-path-fix.yml'
+  workflow_dispatch:
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Discover durable Mission Control client path
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+          ssh "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo '=== PHASE 1.19 AGENT APPROVAL REQUEST PATH RECONCILIATION ==='
+          HERMES=hermes-agent-whow-hermes-agent-1
+          echo '--- container mount ---'
+          docker inspect "$HERMES" --format '{{range .Mounts}}{{if eq .Destination "/usr/local/bin/philaios-mission-control"}}{{.Source}} -> {{.Destination}}{{println}}{{end}}{{end}}'
+          echo '--- compose refs ---'
+          grep -n -C 2 'philaios-mission-control' /docker/hermes-agent-whow/docker-compose*.yml || true
+          echo '--- host candidates ---'
+          find /opt /docker -type f \( -name 'philaios-mission-control*' -o -name '*mission-control*client*.py' \) 2>/dev/null | head -30 || true
+          SRC=$(docker inspect "$HERMES" --format '{{range .Mounts}}{{if eq .Destination "/usr/local/bin/philaios-mission-control"}}{{.Source}}{{end}}{{end}}')
+          if [ -n "$SRC" ] && [ -f "$SRC" ]; then
+            echo "durable_client_source=$SRC"
+            echo 'durable_client_source_status=present'
+          else
+            echo "durable_client_source=${SRC:-not_resolved}"
+            echo 'durable_client_source_status=missing'
+            exit 1
+          fi
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control
+          echo 'container_client=ready'
+          echo 'production_change=none'
+          echo 'provider_call=none'
+          echo 'PHIL_AI_OS_PHASE_1_19_AGENT_APPROVAL_REQUEST_PATH_RECONCILIATION_OK'
+          REMOTE
