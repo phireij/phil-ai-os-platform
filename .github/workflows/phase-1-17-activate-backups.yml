@@ -1,0 +1,90 @@
+name: Phase 1.17 Activate Backups
+on:
+  push:
+    branches:
+      - ops/phase-1.17-backup-discovery
+    paths:
+      - '.github/phase-1-17-activate-backups-trigger'
+      - '.github/workflows/phase-1-17-activate-backups.yml'
+permissions:
+  contents: read
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 10 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 2
+          done
+          test -s ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Upload backup components
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" ops/phase_1_17/backup_control_plane.py ops/phase_1_17/run_backup.sh "$VPS_USER@$VPS_HOST:/tmp/"
+      - name: Install timer and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          install -m 755 /tmp/backup_control_plane.py /opt/phil-ai-os-platform/phase-1.17-backup.py
+          install -m 755 /tmp/run_backup.sh /opt/phil-ai-os-platform/phase-1.17-run-backup.sh
+          rm -f /tmp/backup_control_plane.py /tmp/run_backup.sh
+          cat > /etc/systemd/system/phil-ai-os-backup.service <<'EOF'
+          [Unit]
+          Description=Phil AI OS Control Plane Backup
+          After=docker.service
+          Requires=docker.service
+
+          [Service]
+          Type=oneshot
+          Environment=PHIL_AI_OS_BACKUP_KEEP=14
+          ExecStart=/opt/phil-ai-os-platform/phase-1.17-run-backup.sh
+          User=root
+          NoNewPrivileges=true
+          PrivateTmp=true
+          EOF
+          sed -i 's/^          //' /etc/systemd/system/phil-ai-os-backup.service
+          cat > /etc/systemd/system/phil-ai-os-backup.timer <<'EOF'
+          [Unit]
+          Description=Daily Phil AI OS Control Plane Backup
+
+          [Timer]
+          OnCalendar=*-*-* 03:15:00
+          Persistent=true
+          RandomizedDelaySec=15m
+          Unit=phil-ai-os-backup.service
+
+          [Install]
+          WantedBy=timers.target
+          EOF
+          sed -i 's/^          //' /etc/systemd/system/phil-ai-os-backup.timer
+          systemctl daemon-reload
+          systemctl enable --now phil-ai-os-backup.timer
+          systemctl start phil-ai-os-backup.service
+          systemctl is-enabled phil-ai-os-backup.timer
+          systemctl is-active phil-ai-os-backup.timer
+          systemctl --no-pager list-timers phil-ai-os-backup.timer
+          python3 -c 'import json, pathlib; p=pathlib.Path("/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/backups/status/latest.json"); d=json.loads(p.read_text()); assert d["ok"] is True; print("backup_status_ok=true"); print("backup="+d["backup"]); print("quick_check="+d["quick_check"]); print("tables="+str(d["tables"])); print("size_bytes="+str(d["size_bytes"]))'
+          echo PHIL_AI_OS_PHASE_1_17_BACKUP_TIMER_ACTIVE
+          REMOTE
