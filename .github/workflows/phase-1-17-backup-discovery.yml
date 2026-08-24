@@ -5,6 +5,7 @@ on:
       - ops/phase-1.17-backup-discovery
     paths:
       - '.github/phase-1-17-backup-discovery-trigger'
+      - '.github/workflows/phase-1-17-backup-discovery.yml'
 permissions:
   contents: read
 jobs:
@@ -49,27 +50,7 @@ jobs:
           echo '=== DATABASE CANDIDATES ==='
           docker exec "$CONTROL" sh -lc 'find /app /data /state /runtime-state -maxdepth 4 -type f \( -name "*.db" -o -name "*.sqlite" -o -name "*.sqlite3" \) -printf "%p|%s bytes\n" 2>/dev/null | sort' || true
           echo '=== SQLITE VALIDATION ==='
-          docker exec "$CONTROL" sh -lc 'python3 - <<"PY"
-import sqlite3
-from pathlib import Path
-roots=[Path("/app"),Path("/data"),Path("/state"),Path("/runtime-state")]
-seen=set()
-for root in roots:
-    if not root.exists(): continue
-    for p in root.rglob("*"):
-        if not p.is_file() or p.suffix.lower() not in {".db",".sqlite",".sqlite3"}: continue
-        s=str(p)
-        if s in seen: continue
-        seen.add(s)
-        try:
-            con=sqlite3.connect(f"file:{s}?mode=ro", uri=True)
-            result=con.execute("PRAGMA quick_check").fetchone()[0]
-            tables=con.execute("select count(*) from sqlite_master where type='table'").fetchone()[0]
-            con.close()
-            print(f"{s}|quick_check={result}|tables={tables}|size={p.stat().st_size}")
-        except Exception as e:
-            print(f"{s}|sqlite_error={type(e).__name__}")
-PY' || true
+          docker exec "$CONTROL" python3 -c 'import sqlite3,pathlib; roots=[pathlib.Path(x) for x in ("/app","/data","/state","/runtime-state")]; files=sorted({p for r in roots if r.exists() for p in r.rglob("*") if p.is_file() and p.suffix.lower() in {".db",".sqlite",".sqlite3"}}); [(lambda p: (lambda c: (print(str(p)+"|quick_check="+str(c.execute("PRAGMA quick_check").fetchone()[0])+"|tables="+str(c.execute("select count(*) from sqlite_master where type=\"table\"").fetchone()[0])+"|size="+str(p.stat().st_size)),c.close()))(sqlite3.connect("file:"+str(p)+"?mode=ro",uri=True)))(p) for p in files]' || true
           echo '=== HOST STORAGE ==='
           df -hT / /opt /docker 2>/dev/null || true
           echo '=== INODES ==='
