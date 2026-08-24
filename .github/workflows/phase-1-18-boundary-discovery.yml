@@ -28,18 +28,33 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           PORT="${VPS_PORT:-22}"
-          for i in 1 2 3 4 5; do
-            ssh-keyscan -T 10 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
-            sleep 2
+          : > ~/.ssh/known_hosts
+          for i in $(seq 1 12); do
+            if ssh-keyscan -T 8 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+              break
+            fi
+            echo "ssh-keyscan attempt $i failed; retrying..."
+            sleep 5
           done
           test -s ~/.ssh/known_hosts
+          sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+          for i in $(seq 1 6); do
+            if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=10 "$VPS_USER@$VPS_HOST" 'true'; then
+              echo 'ssh_connectivity=ok'
+              exit 0
+            fi
+            echo "ssh connectivity attempt $i failed; retrying..."
+            sleep 5
+          done
+          echo 'ssh_connectivity=failed'
+          exit 1
       - name: Read-only execution boundary discovery
         shell: bash
         run: |
           set -euo pipefail
           PORT="${VPS_PORT:-22}"
-          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           TMP=$(mktemp -d /tmp/phil-ai-os-1-18-XXXXXX)
           trap 'rm -rf "$TMP"' EXIT
