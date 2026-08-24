@@ -41,97 +41,102 @@ jobs:
           TASK="PHIL_AI_OS_PHASE_1_19_APPROVAL_REQUEST_VALIDATION"
 
           echo "=== PHASE 1.19 AGENT APPROVAL REQUEST ACTIVATION ==="
-
           test -f "$CLIENT"
           cp -a "$CLIENT" "$ROLLBACK"
           echo "rollback_file=$ROLLBACK"
 
-          cat > "$CLIENT" <<'PY'
-#!/usr/bin/env python3
-import json, os, sys, urllib.request, urllib.error
+          python3 - "$CLIENT" <<'PY'
+          from pathlib import Path
+          import sys
 
-TOKEN_FILE = os.getenv("PHIL_AI_OS_CONTROL_API_TOKEN_FILE", "/run/philaios/hermes_control_api_token")
-BASE_URL = os.getenv("PHIL_AI_OS_CONTROL_API_URL", "http://phil-ai-os-core-control-api-1:4870")
-READ_COMMANDS = {
-    "snapshot": "/v1/mission-control/snapshot",
-    "approvals": "/v1/approvals/recent",
-    "executions": "/v1/execution/recent",
-}
+          path = Path(sys.argv[1])
+          path.write_text('''#!/usr/bin/env python3
+          import json, os, sys, urllib.request, urllib.error
 
-def token():
-    with open(TOKEN_FILE, "r", encoding="utf-8") as f:
-        return f.read().strip()
+          TOKEN_FILE = os.getenv("PHIL_AI_OS_CONTROL_API_TOKEN_FILE", "/run/philaios/hermes_control_api_token")
+          BASE_URL = os.getenv("PHIL_AI_OS_CONTROL_API_URL", "http://phil-ai-os-core-control-api-1:4870")
+          READ_COMMANDS = {
+              "snapshot": "/v1/mission-control/snapshot",
+              "approvals": "/v1/approvals/recent",
+              "executions": "/v1/execution/recent",
+          }
 
-def call(path, method="GET", payload=None):
-    data = None
-    headers = {"Authorization": "Bearer " + token()}
-    if payload is not None:
-        data = json.dumps(payload).encode("utf-8")
-        headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(BASE_URL + path, data=data, headers=headers, method=method)
-    with urllib.request.urlopen(req, timeout=10) as r:
-        body = r.read().decode("utf-8")
-        try:
-            return json.loads(body)
-        except json.JSONDecodeError:
-            return {"raw": body, "http_status": r.status}
+          def token():
+              with open(TOKEN_FILE, "r", encoding="utf-8") as f:
+                  return f.read().strip()
 
-def main():
-    if len(sys.argv) < 2:
-        print("usage: philaios-mission-control <snapshot|approvals|executions|request> [task text]", file=sys.stderr)
-        return 2
-    cmd = sys.argv[1]
-    if cmd in READ_COMMANDS and len(sys.argv) == 2:
-        print(json.dumps(call(READ_COMMANDS[cmd]), indent=2, sort_keys=True))
-        return 0
-    if cmd == "request" and len(sys.argv) >= 3:
-        task_text = " ".join(sys.argv[2:]).strip()
-        if not task_text:
-            print("task text is required", file=sys.stderr)
-            return 2
-        payload = {
-            "task_text": task_text,
-            "source": "hermes",
-            "requester": "hermes-mission-control-client",
-            "requested_by": "hermes",
-        }
-        print(json.dumps(call("/v1/approvals/request", method="POST", payload=payload), indent=2, sort_keys=True))
-        return 0
-    print("usage: philaios-mission-control <snapshot|approvals|executions|request> [task text]", file=sys.stderr)
-    return 2
+          def call(path, method="GET", payload=None):
+              data = None
+              headers = {"Authorization": "Bearer " + token()}
+              if payload is not None:
+                  data = json.dumps(payload).encode("utf-8")
+                  headers["Content-Type"] = "application/json"
+              req = urllib.request.Request(BASE_URL + path, data=data, headers=headers, method=method)
+              with urllib.request.urlopen(req, timeout=10) as r:
+                  body = r.read().decode("utf-8")
+                  try:
+                      return json.loads(body)
+                  except json.JSONDecodeError:
+                      return {"raw": body, "http_status": r.status}
 
-if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except urllib.error.HTTPError as e:
-        print(e.read().decode("utf-8", errors="replace"), file=sys.stderr)
-        raise SystemExit(1)
-PY
+          def main():
+              if len(sys.argv) < 2:
+                  print("usage: philaios-mission-control <snapshot|approvals|executions|request> [task text]", file=sys.stderr)
+                  return 2
+              cmd = sys.argv[1]
+              if cmd in READ_COMMANDS and len(sys.argv) == 2:
+                  print(json.dumps(call(READ_COMMANDS[cmd]), indent=2, sort_keys=True))
+                  return 0
+              if cmd == "request" and len(sys.argv) >= 3:
+                  task_text = " ".join(sys.argv[2:]).strip()
+                  if not task_text:
+                      print("task text is required", file=sys.stderr)
+                      return 2
+                  payload = {
+                      "task_text": task_text,
+                      "source": "hermes",
+                      "requester": "hermes-mission-control-client",
+                      "requested_by": "hermes",
+                  }
+                  print(json.dumps(call("/v1/approvals/request", method="POST", payload=payload), indent=2, sort_keys=True))
+                  return 0
+              print("usage: philaios-mission-control <snapshot|approvals|executions|request> [task text]", file=sys.stderr)
+              return 2
+
+          if __name__ == "__main__":
+              try:
+                  raise SystemExit(main())
+              except urllib.error.HTTPError as e:
+                  print(e.read().decode("utf-8", errors="replace"), file=sys.stderr)
+                  raise SystemExit(1)
+          '''.replace('\n          ', '\n'), encoding='utf-8')
+          PY
           chmod 755 "$CLIENT"
 
           docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control
           echo "client_update=installed"
 
           BEFORE_EXEC="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions | sha256sum | awk '{print $1}')"
-          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control request "$TASK")" || {
+          if ! OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control request "$TASK" 2>&1)"; then
+            printf '%s\n' "$OUT"
             cp -a "$ROLLBACK" "$CLIENT"
             echo "automatic_rollback=performed"
             exit 1
-          }
+          fi
           printf '%s\n' "$OUT"
           echo "request_command=ok"
 
           APPROVALS="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals)"
-          printf '%s\n' "$APPROVALS" | grep -F "$TASK" >/dev/null || {
+          if ! printf '%s\n' "$APPROVALS" | grep -F "$TASK" >/dev/null; then
             cp -a "$ROLLBACK" "$CLIENT"
             echo "automatic_rollback=performed"
             exit 1
-          }
-          printf '%s\n' "$APPROVALS" | grep -Ei 'pending' >/dev/null || {
+          fi
+          if ! printf '%s\n' "$APPROVALS" | grep -Ei 'pending' >/dev/null; then
             cp -a "$ROLLBACK" "$CLIENT"
             echo "automatic_rollback=performed"
             exit 1
-          }
+          fi
 
           AFTER_EXEC="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions | sha256sum | awk '{print $1}')"
           if [ "$BEFORE_EXEC" != "$AFTER_EXEC" ]; then
