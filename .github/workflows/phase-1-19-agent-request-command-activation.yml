@@ -1,0 +1,151 @@
+name: Phase 1.19 Hermes Approval Request Command Activation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ops/phase-1.19
+    paths:
+      - .github/workflows/phase-1-19-agent-request-command-activation.yml
+
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Activate durable request command and validate pending state
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+          ssh "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES="hermes-agent-whow-hermes-agent-1"
+          CLIENT="/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/hermes/philaios-mission-control-client.py"
+          ROLLBACK="${CLIENT}.phase119-request.rollback"
+          TASK="PHIL_AI_OS_PHASE_1_19_APPROVAL_REQUEST_VALIDATION"
+
+          echo "=== PHASE 1.19 AGENT APPROVAL REQUEST ACTIVATION ==="
+
+          test -f "$CLIENT"
+          cp -a "$CLIENT" "$ROLLBACK"
+          echo "rollback_file=$ROLLBACK"
+
+          cat > "$CLIENT" <<'PY'
+#!/usr/bin/env python3
+import json, os, sys, urllib.request, urllib.error
+
+TOKEN_FILE = os.getenv("PHIL_AI_OS_CONTROL_API_TOKEN_FILE", "/run/philaios/hermes_control_api_token")
+BASE_URL = os.getenv("PHIL_AI_OS_CONTROL_API_URL", "http://phil-ai-os-core-control-api-1:4870")
+READ_COMMANDS = {
+    "snapshot": "/v1/mission-control/snapshot",
+    "approvals": "/v1/approvals/recent",
+    "executions": "/v1/execution/recent",
+}
+
+def token():
+    with open(TOKEN_FILE, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+def call(path, method="GET", payload=None):
+    data = None
+    headers = {"Authorization": "Bearer " + token()}
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(BASE_URL + path, data=data, headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=10) as r:
+        body = r.read().decode("utf-8")
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError:
+            return {"raw": body, "http_status": r.status}
+
+def main():
+    if len(sys.argv) < 2:
+        print("usage: philaios-mission-control <snapshot|approvals|executions|request> [task text]", file=sys.stderr)
+        return 2
+    cmd = sys.argv[1]
+    if cmd in READ_COMMANDS and len(sys.argv) == 2:
+        print(json.dumps(call(READ_COMMANDS[cmd]), indent=2, sort_keys=True))
+        return 0
+    if cmd == "request" and len(sys.argv) >= 3:
+        task_text = " ".join(sys.argv[2:]).strip()
+        if not task_text:
+            print("task text is required", file=sys.stderr)
+            return 2
+        payload = {
+            "task_text": task_text,
+            "source": "hermes",
+            "requester": "hermes-mission-control-client",
+            "requested_by": "hermes",
+        }
+        print(json.dumps(call("/v1/approvals/request", method="POST", payload=payload), indent=2, sort_keys=True))
+        return 0
+    print("usage: philaios-mission-control <snapshot|approvals|executions|request> [task text]", file=sys.stderr)
+    return 2
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except urllib.error.HTTPError as e:
+        print(e.read().decode("utf-8", errors="replace"), file=sys.stderr)
+        raise SystemExit(1)
+PY
+          chmod 755 "$CLIENT"
+
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control
+          echo "client_update=installed"
+
+          BEFORE_EXEC="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions | sha256sum | awk '{print $1}')"
+          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control request "$TASK")" || {
+            cp -a "$ROLLBACK" "$CLIENT"
+            echo "automatic_rollback=performed"
+            exit 1
+          }
+          printf '%s\n' "$OUT"
+          echo "request_command=ok"
+
+          APPROVALS="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals)"
+          printf '%s\n' "$APPROVALS" | grep -F "$TASK" >/dev/null || {
+            cp -a "$ROLLBACK" "$CLIENT"
+            echo "automatic_rollback=performed"
+            exit 1
+          }
+          printf '%s\n' "$APPROVALS" | grep -Ei 'pending' >/dev/null || {
+            cp -a "$ROLLBACK" "$CLIENT"
+            echo "automatic_rollback=performed"
+            exit 1
+          }
+
+          AFTER_EXEC="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions | sha256sum | awk '{print $1}')"
+          if [ "$BEFORE_EXEC" != "$AFTER_EXEC" ]; then
+            cp -a "$ROLLBACK" "$CLIENT"
+            echo "execution_history_changed=unexpected"
+            echo "automatic_rollback=performed"
+            exit 1
+          fi
+
+          echo "approval_state=pending_verified"
+          echo "execution_history_unchanged=yes"
+          echo "self_approval_capability=absent"
+          echo "provider_call=none"
+          echo "execution_invoked=none"
+          echo "production_change=mission_control_request_command"
+          echo "PHIL_AI_OS_PHASE_1_19_AGENT_APPROVAL_REQUEST_ACTIVATION_OK"
+          REMOTE
