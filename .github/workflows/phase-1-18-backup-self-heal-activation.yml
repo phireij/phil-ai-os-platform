@@ -1,0 +1,138 @@
+name: Phase 1.18 Backup Self-Heal Activation
+
+on:
+  push:
+    branches: [ops/phase-1.18-policy-boundary]
+    paths: ['.github/workflows/phase-1-18-backup-self-heal-activation.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+      - name: Install safe backup self-healing
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo '=== PHASE 1.18 BACKUP SELF-HEAL ACTIVATION ==='
+
+          ENV=/etc/phil-ai-os-monitor.env
+          test -f "$ENV"
+          cp -a "$ENV" /etc/phil-ai-os-monitor.env.phase118.rollback
+
+          # Reduce repeat-notification noise while preserving first alert and recovery.
+          if grep -q '^PHIL_AI_OS_ALERT_COOLDOWN_SECONDS=' "$ENV"; then
+            sed -i 's/^PHIL_AI_OS_ALERT_COOLDOWN_SECONDS=.*/PHIL_AI_OS_ALERT_COOLDOWN_SECONDS=21600/' "$ENV"
+          else
+            echo 'PHIL_AI_OS_ALERT_COOLDOWN_SECONDS=21600' >> "$ENV"
+          fi
+          echo 'alert_cooldown_seconds=21600'
+
+          cat > /usr/local/sbin/philaios-backup-self-heal <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          ENV=/etc/phil-ai-os-monitor.env
+          [ -f "$ENV" ] && set -a && . "$ENV" && set +a
+          STATUS="${PHIL_AI_OS_BACKUP_STATUS_FILE:-}"
+          MAX_AGE="${PHIL_AI_OS_BACKUP_MAX_AGE_SECONDS:-18000}"
+          [ -n "$STATUS" ] && [ -f "$STATUS" ] || exit 0
+
+          read -r AGE OK <<<"$(python3 - "$STATUS" <<'PY'
+          import json,sys
+          try:
+              d=json.load(open(sys.argv[1]))
+              print(int(d.get('age_seconds',0)), str(bool(d.get('ok',False))).lower())
+          except Exception:
+              print(0,'false')
+          PY
+          )"
+
+          if [ "$OK" = true ] && [ "$AGE" -le "$MAX_AGE" ]; then
+            exit 0
+          fi
+
+          systemctl start phil-ai-os-backup.service
+          sleep 2
+          systemctl is-failed --quiet phil-ai-os-backup.service && exit 1 || true
+
+          read -r AGE2 OK2 <<<"$(python3 - "$STATUS" <<'PY'
+          import json,sys
+          try:
+              d=json.load(open(sys.argv[1]))
+              print(int(d.get('age_seconds',999999999)), str(bool(d.get('ok',False))).lower())
+          except Exception:
+              print(999999999,'false')
+          PY
+          )"
+          [ "$OK2" = true ] && [ "$AGE2" -le "$MAX_AGE" ]
+          SCRIPT
+          chmod 750 /usr/local/sbin/philaios-backup-self-heal
+
+          cat > /etc/systemd/system/phil-ai-os-backup-self-heal.service <<'EOF'
+          [Unit]
+          Description=Phil AI OS Backup Self-Heal
+          After=phil-ai-os-backup.service
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/sbin/philaios-backup-self-heal
+          EOF
+
+          cat > /etc/systemd/system/phil-ai-os-backup-self-heal.timer <<'EOF'
+          [Unit]
+          Description=Phil AI OS Backup Self-Heal Timer
+          [Timer]
+          OnBootSec=5min
+          OnUnitActiveSec=15min
+          AccuracySec=1min
+          Persistent=true
+          [Install]
+          WantedBy=timers.target
+          EOF
+
+          systemctl daemon-reload
+          systemctl enable --now phil-ai-os-backup-self-heal.timer
+          systemctl restart phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+
+          # Run once now to heal any currently stale backup condition.
+          systemctl start phil-ai-os-backup-self-heal.service
+          sleep 2
+          SELF_HEAL_RESULT=$(systemctl show -p Result --value phil-ai-os-backup-self-heal.service)
+
+          echo 'self_heal_timer=active'
+          echo "self_heal_result=$SELF_HEAL_RESULT"
+          echo 'monitor=active'
+          echo 'backup_timer=active'
+          echo 'control_api_health=ok'
+          echo 'rollback_env=/etc/phil-ai-os-monitor.env.phase118.rollback'
+          echo PHIL_AI_OS_PHASE_1_18_BACKUP_SELF_HEAL_ACTIVATION_OK
+          REMOTE
