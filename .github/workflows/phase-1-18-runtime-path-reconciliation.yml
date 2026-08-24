@@ -1,0 +1,55 @@
+name: Phase 1.18 Runtime Path Reconciliation
+
+on:
+  push:
+    branches:
+      - ops/phase-1.18-policy-boundary
+    paths:
+      - '.github/workflows/phase-1-18-runtime-path-reconciliation.yml'
+  workflow_dispatch:
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          printf 'Host target\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/id_ed25519\n  ConnectTimeout 15\n  ServerAliveInterval 10\n  ServerAliveCountMax 3\n' "$VPS_HOST" "$VPS_USER" > ~/.ssh/config
+          ssh target 'true'
+
+      - name: Reconcile Hermes runtime paths
+        run: |
+          set -euo pipefail
+          ssh target 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow' || true)
+          echo '=== PHASE 1.18 RUNTIME PATH RECONCILIATION ==='
+          if [ -z "$HERMES" ]; then
+            echo 'hermes=missing'
+            echo 'philaios_execute=unknown'
+            echo 'control_token_mount=unknown'
+            echo 'wrapper=unknown'
+            echo 'config=unknown'
+          else
+            echo "hermes=$HERMES"
+            docker exec "$HERMES" test -x /usr/local/bin/philaios-execute && echo 'philaios_execute=/usr/local/bin/philaios-execute' || echo 'philaios_execute=missing'
+            docker exec "$HERMES" test -s /run/philaios/hermes_control_api_token && echo 'control_token_mount=/run/philaios/hermes_control_api_token' || echo 'control_token_mount=missing'
+            docker exec "$HERMES" test -f /opt/hermes/docker/main-wrapper.sh && echo 'wrapper=/opt/hermes/docker/main-wrapper.sh' || echo 'wrapper=missing'
+            docker exec "$HERMES" test -f /opt/data/config.yaml && echo 'config=/opt/data/config.yaml' || echo 'config=missing'
+          fi
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo 'monitor=active' || echo 'monitor=inactive'
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null && echo 'control_api_health=ok' || echo 'control_api_health=failed'
+          echo 'production_change=none'
+          echo 'PHIL_AI_OS_PHASE_1_18_RUNTIME_PATH_RECONCILIATION_OK'
+          REMOTE
