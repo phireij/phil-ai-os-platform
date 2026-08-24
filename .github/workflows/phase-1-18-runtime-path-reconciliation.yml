@@ -24,7 +24,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          install -m 700 -d ~/.ssh
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           PORT="${VPS_PORT:-22}"
@@ -34,16 +35,15 @@ jobs:
           done
           test -s ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
-          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" 'true'
 
       - name: Reconcile Hermes runtime paths
         shell: bash
         run: |
           set -euo pipefail
           PORT="${VPS_PORT:-22}"
-          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
-          HERMES=$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow' || true)
+          HERMES=$(docker ps --format '{{.Names}}' | grep -m1 hermes || true)
           echo '=== PHASE 1.18 RUNTIME PATH RECONCILIATION ==='
           if [ -z "$HERMES" ]; then
             echo 'hermes=missing'
