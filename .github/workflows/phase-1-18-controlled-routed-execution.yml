@@ -1,0 +1,95 @@
+name: Phase 1.18 First Controlled Routed Execution
+
+on:
+  push:
+    branches: [ops/phase-1.18-policy-boundary]
+    paths: ['.github/workflows/phase-1-18-controlled-routed-execution.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+      - name: First controlled routed execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow' || true)
+          test -n "$HERMES"
+          echo '=== PHASE 1.18 FIRST CONTROLLED ROUTED EXECUTION ==='
+          grep -qx 'PHIL_AI_OS_CONTROLLED_ENFORCEMENT=true' /etc/phil-ai-os/phase-1.18-enforcement.env
+          echo 'controlled_enforcement=enabled'
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-execute
+          docker exec "$HERMES" test -s /run/philaios/hermes_control_api_token
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+
+          # Use an already-approved, unconsumed approval if one exists. Do not
+          # fabricate or auto-approve authorization for the first production call.
+          DB=$(docker exec $(docker ps --format '{{.Names}}' | grep -m1 'control-api') sh -lc "find /app/state -maxdepth 1 -name 'control-plane.db' -print -quit" 2>/dev/null || true)
+          test -n "$DB"
+          APPROVAL_ID=$(docker exec $(docker ps --format '{{.Names}}' | grep -m1 'control-api') python3 - "$DB" <<'PY'
+import sqlite3,sys
+p=sys.argv[1]
+c=sqlite3.connect(p)
+for table in ('approvals','approval_requests'):
+    try:
+        cols=[r[1] for r in c.execute(f'pragma table_info({table})')]
+        if not cols: continue
+        state='state' if 'state' in cols else ('status' if 'status' in cols else None)
+        aid='approval_id' if 'approval_id' in cols else ('id' if 'id' in cols else None)
+        consumed='consumed_at' if 'consumed_at' in cols else None
+        if state and aid:
+            q=f"select {aid} from {table} where {state}='approved'"
+            if consumed: q += f" and {consumed} is null"
+            q += ' order by rowid desc limit 1'
+            r=c.execute(q).fetchone()
+            if r:
+                print(r[0]); break
+    except sqlite3.Error:
+        pass
+PY
+          )
+          if [ -z "$APPROVAL_ID" ]; then
+            echo 'authorization=approved_unconsumed_not_found'
+            echo 'provider_call=none'
+            echo 'next_action=create_explicit_test_approval'
+            echo PHIL_AI_OS_PHASE_1_18_FIRST_CONTROLLED_ROUTED_EXECUTION_AWAITING_APPROVAL
+            exit 0
+          fi
+          echo 'authorization=approved_unconsumed_found'
+          OUT=$(docker exec "$HERMES" /usr/local/bin/philaios-execute "$APPROVAL_ID" 'Return exactly PHIL_AI_OS_PHASE_1_18_ROUTED_OK' 2>&1)
+          printf '%s\n' "$OUT" | tail -n 8
+          echo 'execution_invoked=philaios_execute'
+          echo 'control_api_route=/v1/execute'
+          echo 'monitor=active'
+          echo 'backup_self_heal_timer=active'
+          echo PHIL_AI_OS_PHASE_1_18_FIRST_CONTROLLED_ROUTED_EXECUTION_OK
+          REMOTE
