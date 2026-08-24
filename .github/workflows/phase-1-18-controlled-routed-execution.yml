@@ -1,5 +1,6 @@
 name: Phase 1.18 First Controlled Routed Execution
 
+# Phase 1.18 rerun after routed execution gate enablement.
 on:
   push:
     branches: [ops/phase-1.18-policy-boundary]
