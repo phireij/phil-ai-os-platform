@@ -1,6 +1,10 @@
 name: Phase 1.20 Post-Canary Rollout Decision Gate
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-20-post-canary-rollout-decision-gate.yml'
   workflow_dispatch:
 
 permissions:
@@ -51,7 +55,7 @@ jobs:
           echo operational_health=ok
 
           docker exec "$CONTROL" python - <<'PY'
-          import sqlite3, sys
+          import sqlite3
           db='/app/state/control-plane.db'
           con=sqlite3.connect(db)
           con.row_factory=sqlite3.Row
@@ -61,7 +65,8 @@ jobs:
               raise SystemExit('no approved successful execution evidence')
           latest=successes[0]
           a=con.execute("select approval_id,state,task_text,consumed_at,consumed_by from approval_requests where approval_id=?",(latest['approval_id'],)).fetchone()
-          if not a: raise SystemExit('approval evidence missing')
+          if not a:
+              raise SystemExit('approval evidence missing')
           assert a['state']=='approved'
           assert a['task_text']=='PHIL_AI_OS_ROUTED_EXECUTION_OK'
           assert a['consumed_at'] is not None
@@ -73,7 +78,6 @@ jobs:
           print('execution_audit=verified')
           PY
 
-          # This gate is deliberately read-only: no policy expansion is performed here.
           echo rollout_decision=HOLD_RESTRICTED_SCOPE
           echo rationale=single_request_canary_validated_but_broader_agent_scope_requires_separate_policy_hardening
           echo human_approval_required_for_sensitive_execution=yes
