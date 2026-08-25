@@ -20,7 +20,7 @@ jobs:
       VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
     steps:
       - uses: actions/checkout@v4
-      - name: Configure SSH
+      - name: Configure SSH with retry
         shell: bash
         run: |
           set -euo pipefail
@@ -28,13 +28,24 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           PORT="${VPS_PORT:-22}"
-          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3; do
+            echo "ssh_preflight_attempt=$attempt"
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && \
+               ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true; then
+              echo ssh_preflight=ok
+              exit 0
+            fi
+            sleep $((attempt*5))
+          done
+          echo ssh_preflight=failed
+          exit 1
       - name: Validate Phase 1.21 closed state
         shell: bash
         run: |
           set -euo pipefail
           PORT="${VPS_PORT:-22}"
-          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
           MARKER=/etc/phil-ai-os/phase-1-21-routine-canary.env
