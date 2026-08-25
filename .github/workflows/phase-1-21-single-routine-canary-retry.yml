@@ -44,15 +44,17 @@ jobs:
           CONTROL=phil-ai-os-core-control-api-1
           APPROVAL_ID='apr_8e246f5927254dfbb4234b21ef10602c'
           TASK='Return exactly PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK'
-          echo '=== PHASE 1.21 SINGLE ROUTINE CANARY RETRY ==='
+          MARKER=/etc/phil-ai-os/phase-1-21-routine-canary.env
+          echo '=== PHASE 1.21 SINGLE ROUTINE CANARY RETRY V2 ==='
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
-          test -s /etc/phil-ai-os/phase-1-21-routine-canary.env
-          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$' /etc/phil-ai-os/phase-1-21-routine-canary.env
-          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_SCOPE=one-request-only$' /etc/phil-ai-os/phase-1-21-routine-canary.env
-          grep -q '^PHIL_AI_OS_PHASE_1_21_DIRECT_PROVIDER_BYPASS=false$' /etc/phil-ai-os/phase-1-21-routine-canary.env
-          grep -q '^PHIL_AI_OS_PHASE_1_21_AUTONOMOUS_EXPANSION=false$' /etc/phil-ai-os/phase-1-21-routine-canary.env
+          test -s "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_SCOPE=one-request-only$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_DIRECT_PROVIDER_BYPASS=false$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_AUTONOMOUS_EXPANSION=false$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_ALLOWLIST_ACTIVE=true$' "$MARKER"
           ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
-          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general,routine$' <<<"$ENV"
           grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
 
           docker exec -e APPROVAL_ID="$APPROVAL_ID" "$CONTROL" python - <<'PY'
@@ -64,12 +66,14 @@ jobs:
           assert r['task_class']=='routine', dict(r)
           assert r['consumed_at'] is None, dict(r)
           assert 'PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK' in r['task_text'], dict(r)
+          exp=datetime.datetime.fromisoformat(r['expires_at'])
+          assert exp > datetime.datetime.now(datetime.timezone.utc), 'approval expired'
           print('approval_state=approved')
           print('approval_task_class=routine')
           print('approval_consumed_before=no')
+          print('narrow_allowlist=active')
           PY
 
-          # The corrected client receives task text as argv[2]; all later values are metadata.
           set +e
           OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-execute "$APPROVAL_ID" "$TASK" --task-class routine --max-output-tokens 64 2>&1)"
           RC=$?
@@ -87,9 +91,11 @@ jobs:
           assert r['consumed_at'] is not None, dict(r)
           print('approval_consumed_after=yes')
           PY
+          sed -i 's/^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$/PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=false/' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_CONSUMED=true$' "$MARKER" || printf '%s\n' 'PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_CONSUMED=true' >> "$MARKER"
           echo canary_result=PASS
           echo canary_scope=one_request_only
           echo autonomous_expansion=disabled
-          echo next_action=PHASE_1_21_ROUTINE_CANARY_RESULT_VERIFICATION
+          echo next_action=PHASE_1_21_ROUTINE_CANARY_RESULT_VERIFICATION_AND_ALLOWLIST_RESTORE
           echo PHIL_AI_OS_PHASE_1_21_SINGLE_ROUTINE_CANARY_RETRY_OK
           REMOTE
