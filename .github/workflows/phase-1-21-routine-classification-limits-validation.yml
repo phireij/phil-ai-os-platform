@@ -1,0 +1,81 @@
+name: Phase 1.21 Routine Classification and Limits Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-routine-classification-limits-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Validate routine classification and limits readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          echo '=== PHASE 1.21 ROUTINE CLASSIFICATION AND LIMITS VALIDATION ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=true$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_LIVE_TEST_ENABLED=false$' <<<"$ENV"
+          echo current_production_scope=general_only_verified
+
+          # Inspect deployed control-plane code/config for routine classification and bounded execution signals.
+          docker exec "$CONTROL" sh -lc "grep -Rni --exclude='*.pyc' -E 'routine|request_too_large|hard_max_output_tokens|ALLOWED_TASK_CLASSES|EXECUTION_ALLOWED_TASK_CLASSES' /app 2>/dev/null | head -n 120" > /tmp/phase121-signals.txt || true
+          test -s /tmp/phase121-signals.txt
+          grep -qi 'routine' /tmp/phase121-signals.txt
+          grep -Eqi 'request_too_large|hard_max_output_tokens|ALLOWED_TASK_CLASSES|EXECUTION_ALLOWED_TASK_CLASSES' /tmp/phase121-signals.txt
+          echo routine_classification_signal=present
+          echo bounded_execution_signal=present
+
+          # Existing audit evidence must include a blocked routine request from the canary-only boundary.
+          docker exec "$CONTROL" python - <<'PY'
+          import sqlite3
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          r=con.execute("select id,outcome,task_class,detail from execution_audit where task_class='routine' order by id desc limit 1").fetchone()
+          assert r is not None, 'routine audit evidence missing'
+          assert r['outcome'] in ('canary_not_allowlisted','kill_switch_blocked','request_too_large'), dict(r)
+          print('routine_deny_by_default_evidence=verified')
+          print('routine_last_outcome='+r['outcome'])
+          PY
+
+          echo routine_activation=not_performed
+          echo deny_by_default=verified
+          echo human_approval_required=yes
+          echo provider_call=none
+          echo execution_invoked=none
+          echo production_policy_change=none
+          echo validation_decision=PASS
+          echo next_action=PHASE_1_21_ROUTINE_NEGATIVE_PATH_ROLLBACK_VALIDATION
+          echo PHIL_AI_OS_PHASE_1_21_ROUTINE_CLASSIFICATION_LIMITS_VALIDATION_OK
+          REMOTE
