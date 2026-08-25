@@ -1,0 +1,96 @@
+name: Phase 1.21 Classifier Interface Fix
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-classifier-interface-fix.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  fix-and-validate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Patch Hermes execution client and run regression checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=hermes-agent-whow-hermes-agent-1
+          CLIENT=/usr/local/bin/philaios-execute
+          BACKUP=/etc/phil-ai-os/phase-1-21-philaios-execute.pre-classifier-fix
+          echo '=== PHASE 1.21 CLASSIFIER INTERFACE FIX ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          docker exec "$HERMES" test -x "$CLIENT"
+          install -d -m 0755 /etc/phil-ai-os
+          docker cp "$HERMES:$CLIENT" "$BACKUP"
+          chmod 0755 "$BACKUP"
+
+          # Inspect the deployed client first. The fix is intentionally narrow:
+          # classification input must be the task text only, never CLI metadata such
+          # as --task-class, --approval-id, or --max-output-tokens.
+          docker exec "$HERMES" cat "$CLIENT" > /tmp/philaios-execute
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/philaios-execute')
+          s=p.read_text()
+          old=s
+          # Known unsafe argv-join patterns. Replace only when present.
+          replacements={
+              '" ".join(sys.argv[1:])':'args.task',
+              "' '.join(sys.argv[1:])":'args.task',
+              '" ".join(argv)':'args.task',
+              "' '.join(argv)":'args.task',
+          }
+          for a,b in replacements.items():
+              s=s.replace(a,b)
+          if s==old:
+              # Do not guess a production patch if the deployed implementation differs.
+              # Emit the relevant lines so a follow-up can target the real interface.
+              print('automatic_patch_pattern=not_found')
+              for i,line in enumerate(s.splitlines(),1):
+                  if any(k in line.lower() for k in ('classif','sys.argv','argv','task_class','task-class')):
+                      print(f'{i}:{line}')
+              raise SystemExit(42)
+          p.write_text(s)
+          print('classifier_input_patch=task_text_only')
+          PY
+          docker cp /tmp/philaios-execute "$HERMES:$CLIENT"
+          docker exec "$HERMES" chmod 0755 "$CLIENT"
+
+          # Static regression: metadata flags must not be concatenated into classifier input.
+          docker exec "$HERMES" sh -lc "! grep -E '[Jj]oin\(.*argv|sys\.argv\[1:' '$CLIENT'"
+          echo metadata_leak_static_regression=pass
+
+          # Preserve current safety posture; do not execute a provider request here.
+          ENV="$(docker inspect phil-ai-os-core-control-api-1 --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+          echo persistent_production_scope=general_only
+          echo provider_call=none
+          echo canary_consumed=none
+          echo rollback_artifact="$BACKUP"
+          echo next_action=PHASE_1_21_CLASSIFIER_REGRESSION_VALIDATION
+          echo PHIL_AI_OS_PHASE_1_21_CLASSIFIER_INTERFACE_FIX_OK
+          REMOTE
