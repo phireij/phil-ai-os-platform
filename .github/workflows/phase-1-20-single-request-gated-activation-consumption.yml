@@ -1,0 +1,108 @@
+name: Phase 1.20 Single-Request Gated Activation Consumption
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  consume-once:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for i in 1 2 3 4 5; do
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+              break
+            fi
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+
+      - name: Consume exactly one approved activation request
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          HERMES=hermes-agent-whow-hermes-agent-1
+          TASK='PHIL_AI_OS_PHASE_1_20_SINGLE_REQUEST_GATED_ACTIVATION'
+
+          echo '=== PHASE 1.20 SINGLE-REQUEST GATED ACTIVATION CONSUMPTION ==='
+
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-execute
+          echo safety_boundary=ready
+
+          ROW="$(docker exec "$CONTROL" python -c "import sqlite3,datetime; c=sqlite3.connect('/app/state/control-plane.db'); r=c.execute(\"select approval_id,state,expires_at,consumed_at from approval_requests where task_text=? order by created_at desc limit 1\",('$TASK',)).fetchone(); print('|'.join('' if x is None else str(x) for x in r) if r else '')")"
+          test -n "$ROW" || { echo approval=missing; exit 1; }
+
+          APPROVAL_ID="${ROW%%|*}"
+          REST="${ROW#*|}"
+          STATE="${REST%%|*}"
+          REST="${REST#*|}"
+          EXPIRES_AT="${REST%%|*}"
+          CONSUMED_AT="${REST#*|}"
+
+          test "$STATE" = approved || { echo approval_state="$STATE"; exit 1; }
+          test -z "$CONSUMED_AT" || { echo approval_already_consumed=yes; exit 1; }
+
+          docker exec "$CONTROL" python -c "import datetime; e=datetime.datetime.fromisoformat('$EXPIRES_AT'); n=datetime.datetime.now(datetime.timezone.utc); assert e>n, 'approval expired'"
+          echo approval_state=approved_unconsumed_verified
+          echo approval_id="$APPROVAL_ID"
+
+          SUCCESS_BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute(\"select count(*) from execution_audit where outcome='success'\").fetchone()[0])")"
+
+          set +e
+          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-execute "$APPROVAL_ID" "$TASK" 2>&1)"
+          RC=$?
+          set -e
+          printf '%s\n' "$OUT"
+          test "$RC" -eq 0 || { echo execution_result=blocked_or_failed; exit "$RC"; }
+          echo execution_result=success
+
+          docker exec "$CONTROL" python -c "import sqlite3; a='$APPROVAL_ID'; c=sqlite3.connect('/app/state/control-plane.db'); r=c.execute(\"select state,consumed_at,consumed_by from approval_requests where approval_id=?\",(a,)).fetchone(); assert r and r[0]=='approved' and r[1] is not None and r[2] is not None; x=c.execute(\"select outcome,compatibility_pass,approval_id from execution_audit where approval_id=? order by id desc limit 1\",(a,)).fetchone(); assert x and x[0]=='success' and int(x[1])==1 and x[2]==a"
+          echo durable_consumption_and_audit=verified
+
+          SUCCESS_AFTER="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute(\"select count(*) from execution_audit where outcome='success'\").fetchone()[0])")"
+          test "$SUCCESS_AFTER" -eq $((SUCCESS_BEFORE + 1))
+          echo exactly_one_successful_execution=yes
+
+          set +e
+          REPLAY_OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-execute "$APPROVAL_ID" "$TASK" 2>&1)"
+          REPLAY_RC=$?
+          set -e
+          test "$REPLAY_RC" -ne 0
+          SUCCESS_REPLAY="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute(\"select count(*) from execution_audit where outcome='success'\").fetchone()[0])")"
+          test "$SUCCESS_REPLAY" = "$SUCCESS_AFTER"
+          echo replay=rejected_verified
+
+          echo monitor=active
+          echo backup_self_heal_timer=active
+          echo control_api_health=ok
+          echo production_policy_change=none
+          echo phase_1_20_single_request_consumption=complete
+          echo PHIL_AI_OS_PHASE_1_20_SINGLE_REQUEST_GATED_ACTIVATION_CONSUMPTION_OK
+          REMOTE
