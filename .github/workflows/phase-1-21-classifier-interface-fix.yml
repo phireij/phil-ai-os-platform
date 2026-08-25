@@ -30,7 +30,7 @@ jobs:
           PORT="${VPS_PORT:-22}"
           ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
-      - name: Patch actual positional Hermes execution interface
+      - name: Patch host source of Hermes execution bind mount
         shell: bash
         run: |
           set -euo pipefail
@@ -38,40 +38,44 @@ jobs:
           ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           HERMES=hermes-agent-whow-hermes-agent-1
-          CLIENT=/usr/local/bin/philaios-execute
-          BACKUP=/etc/phil-ai-os/phase-1-21-philaios-execute.pre-classifier-fix
-          echo '=== PHASE 1.21 CLASSIFIER INTERFACE FIX V2 ==='
+          DEST=/usr/local/bin/philaios-execute
+          BACKUP=/etc/phil-ai-os/phase-1-21-philaios-execute.host-source.pre-classifier-fix
+          echo '=== PHASE 1.21 CLASSIFIER INTERFACE FIX V3 ==='
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
-          docker exec "$HERMES" test -x "$CLIENT"
+          docker exec "$HERMES" test -x "$DEST"
           install -d -m 0755 /etc/phil-ai-os
-          test -s "$BACKUP" || docker cp "$HERMES:$CLIENT" "$BACKUP"
-          chmod 0755 "$BACKUP"
-          docker exec "$HERMES" cat "$CLIENT" > /tmp/philaios-execute
 
-          python3 - <<'PY'
+          SOURCE="$(docker inspect "$HERMES" --format '{{range .Mounts}}{{if eq .Destination "/usr/local/bin/philaios-execute"}}{{println .Source}}{{end}}{{end}}')"
+          test -n "$SOURCE"
+          test -f "$SOURCE"
+          echo "bind_mount_source=$SOURCE"
+          test -s "$BACKUP" || cp -a "$SOURCE" "$BACKUP"
+          chmod 0755 "$BACKUP"
+
+          python3 - "$SOURCE" <<'PY'
           from pathlib import Path
-          p=Path('/tmp/philaios-execute')
+          import sys
+          p=Path(sys.argv[1])
           s=p.read_text()
           target='text = " ".join(sys.argv[2:]).strip()'
           replacement='text = sys.argv[2].strip()'
-          if target not in s:
-              if replacement in s:
-                  print('classifier_input_patch=already_applied')
-              else:
-                  raise SystemExit('unexpected deployed client interface; refusing guessed patch')
+          if target in s:
+              p.write_text(s.replace(target,replacement,1))
+              print('classifier_input_patch=host_source_task_text_only')
+          elif replacement in s:
+              print('classifier_input_patch=already_applied')
           else:
-              s=s.replace(target,replacement,1)
-              p.write_text(s)
-              print('classifier_input_patch=positional_task_text_only')
+              raise SystemExit('unexpected host source interface; refusing guessed patch')
           PY
+          chmod 0755 "$SOURCE"
 
-          docker cp /tmp/philaios-execute "$HERMES:$CLIENT"
-          docker exec "$HERMES" chmod 0755 "$CLIENT"
+          # Bind mount reflects an in-place host edit without replacing the mounted inode.
           docker exec "$HERMES" python - <<'PY'
           from pathlib import Path
           s=Path('/usr/local/bin/philaios-execute').read_text()
           assert 'text = sys.argv[2].strip()' in s
           assert 'text = " ".join(sys.argv[2:]).strip()' not in s
+          print('container_mount_reflects_fix=yes')
           print('metadata_leak_static_regression=pass')
           PY
 
