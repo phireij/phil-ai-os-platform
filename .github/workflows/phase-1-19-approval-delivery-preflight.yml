@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Configure SSH
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -25,13 +26,21 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           PORT="${VPS_PORT:-22}"
-          : > ~/.ssh/known_hosts
+
+          ok=0
           for i in 1 2 3 4 5; do
-            ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
-            sleep 3
+            if ssh -p "$PORT" \
+              -o BatchMode=yes \
+              -o ConnectTimeout=15 \
+              -o StrictHostKeyChecking=accept-new \
+              "$VPS_USER@$VPS_HOST" true; then
+              ok=1
+              break
+            fi
+            sleep 5
           done
-          test -s ~/.ssh/known_hosts
-          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+          test "$ok" -eq 1
+
       - name: Discover approval delivery contract
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -40,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           PORT="${VPS_PORT:-22}"
-          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
           HERMES=$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow')
