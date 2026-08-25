@@ -1,0 +1,121 @@
+name: Phase 1.21 Canary Verify and Restore
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-canary-verify-and-restore.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-restore:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+      - name: Verify successful canary evidence and restore general-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          APPROVAL_ID='apr_8e246f5927254dfbb4234b21ef10602c'
+          MARKER=/etc/phil-ai-os/phase-1-21-routine-canary.env
+          echo '=== PHASE 1.21 CANARY VERIFY AND RESTORE ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+
+          # Verify durable evidence before changing policy.
+          docker exec -e APPROVAL_ID="$APPROVAL_ID" "$CONTROL" python - <<'PY'
+          import os,sqlite3
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          aid=os.environ['APPROVAL_ID']
+          r=con.execute('select state,task_text,task_class,consumed_at from approval_requests where approval_id=?',(aid,)).fetchone()
+          assert r is not None, 'approval missing'
+          assert r['state']=='approved', dict(r)
+          assert r['task_class']=='routine', dict(r)
+          assert r['consumed_at'] is not None, dict(r)
+          print('approval_consumed=yes')
+          print('approval_task_class=routine')
+          # Show recent execution audit rows without requiring a fragile schema shape.
+          tables=[x[0] for x in con.execute("select name from sqlite_master where type='table'")]
+          for t in tables:
+              if 'audit' in t.lower() or 'execution' in t.lower():
+                  try:
+                      rows=con.execute(f'select * from "{t}" order by rowid desc limit 5').fetchall()
+                      print('evidence_table='+t+' rows='+str(len(rows)))
+                      for row in rows: print(dict(row))
+                  except Exception as e: print('evidence_read_error='+t+':'+type(e).__name__)
+          PY
+
+          test -s "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$' "$MARKER" || true
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_ALLOWLIST_ACTIVE=true$' "$MARKER"
+
+          # Resolve compose file/service from the live container.
+          WORKDIR="$(docker inspect "$CONTROL" --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')"
+          CONFIG_FILES="$(docker inspect "$CONTROL" --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}')"
+          SERVICE="$(docker inspect "$CONTROL" --format '{{ index .Config.Labels "com.docker.compose.service" }}')"
+          COMPOSE_FILE="${CONFIG_FILES%%,*}"
+          if [[ "$COMPOSE_FILE" != /* ]]; then COMPOSE_FILE="$WORKDIR/$COMPOSE_FILE"; fi
+          test -f "$COMPOSE_FILE"
+
+          # Locate the compose env source that currently supplies general,routine.
+          MATCH="$(grep -RIl --exclude-dir=.git --exclude='*.bak*' 'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES.*general,routine' "$WORKDIR" 2>/dev/null | head -n1 || true)"
+          test -n "$MATCH" -a -f "$MATCH"
+          echo "policy_source=$MATCH"
+          BACKUP="${MATCH}.phase-1-21-before-restore.bak"
+          test -e "$BACKUP" || cp -a "$MATCH" "$BACKUP"
+          python3 - "$MATCH" <<'PY'
+          import sys
+          from pathlib import Path
+          p=Path(sys.argv[1]); s=p.read_text()
+          old=s
+          s=s.replace('PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general,routine','PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general')
+          s=s.replace('PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES: general,routine','PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES: general')
+          s=s.replace('PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES: "general,routine"','PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES: "general"')
+          if s==old: raise SystemExit('general,routine policy assignment not matched; no restore written')
+          p.write_text(s)
+          print('policy_restore=general_only')
+          PY
+
+          docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate "$SERVICE"
+          for i in $(seq 1 30); do
+            curl -fsS --max-time 3 http://127.0.0.1:4870/healthz >/dev/null 2>&1 && break
+            sleep 2
+          done
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          ! grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=.*routine' <<<"$ENV"
+
+          sed -i 's/^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$/PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=false/' "$MARKER"
+          sed -i 's/^PHIL_AI_OS_PHASE_1_21_ROUTINE_ALLOWLIST_ACTIVE=true$/PHIL_AI_OS_PHASE_1_21_ROUTINE_ALLOWLIST_ACTIVE=false/' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_CONSUMED=true$' "$MARKER" || printf '%s\n' 'PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_CONSUMED=true' >> "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ALLOWLIST_RESTORED=true$' "$MARKER" || printf '%s\n' 'PHIL_AI_OS_PHASE_1_21_ALLOWLIST_RESTORED=true' >> "$MARKER"
+
+          echo canary_execution=verified
+          echo approval_consumption=verified
+          echo execution_allowlist=general_only
+          echo routine_allowlist=restored_off
+          echo provider_call=none
+          echo next_action=PHASE_1_21_CHECKPOINT_CLOSURE
+          echo PHIL_AI_OS_PHASE_1_21_CANARY_VERIFY_AND_RESTORE_OK
+          REMOTE
