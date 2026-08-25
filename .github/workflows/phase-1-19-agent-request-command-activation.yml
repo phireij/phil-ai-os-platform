@@ -48,7 +48,6 @@ jobs:
           LOCAL_CLIENT="ops/phase-1.19/philaios-mission-control-client.py"
           REMOTE_CLIENT="/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/hermes/philaios-mission-control-client.py"
           REMOTE_ROLLBACK="${REMOTE_CLIENT}.phase119-request.rollback"
-          TASK="PHIL_AI_OS_PHASE_1_19_APPROVAL_REQUEST_VALIDATION"
 
           test -f "$LOCAL_CLIENT"
           python3 -m py_compile "$LOCAL_CLIENT"
@@ -58,7 +57,7 @@ jobs:
 
           scp -P "$PORT" -q "$LOCAL_CLIENT" "$VPS_USER@$VPS_HOST:${REMOTE_CLIENT}.new"
           ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
-            "chmod 755 '${REMOTE_CLIENT}.new' && python3 -m py_compile '${REMOTE_CLIENT}.new' && mv '${REMOTE_CLIENT}.new' '$REMOTE_CLIENT'"
+            "python3 -m py_compile '${REMOTE_CLIENT}.new' && cat '${REMOTE_CLIENT}.new' > '$REMOTE_CLIENT' && chmod 755 '$REMOTE_CLIENT' && rm -f '${REMOTE_CLIENT}.new'"
 
           ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
@@ -69,7 +68,7 @@ jobs:
 
           rollback() {
             if [ -f "$ROLLBACK" ]; then
-              cp -a "$ROLLBACK" "$CLIENT"
+              cat "$ROLLBACK" > "$CLIENT"
               chmod 755 "$CLIENT"
             fi
             echo "automatic_rollback=performed"
@@ -77,6 +76,7 @@ jobs:
 
           echo "=== PHASE 1.19 AGENT APPROVAL REQUEST ACTIVATION ==="
           echo "rollback_file=$ROLLBACK"
+          python3 -m py_compile "$CLIENT"
           docker exec "$HERMES" python3 -m py_compile /usr/local/bin/philaios-mission-control
           echo "client_update=installed"
 
