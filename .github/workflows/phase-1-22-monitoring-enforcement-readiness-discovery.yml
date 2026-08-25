@@ -1,0 +1,96 @@
+name: Phase 1.22 Monitoring and Enforcement Readiness Discovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-22-monitoring-enforcement-readiness-discovery.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3; do
+            echo "ssh_preflight_attempt=$attempt"
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true; then
+              echo ssh_preflight=ok
+              exit 0
+            fi
+            sleep $((attempt*5))
+          done
+          exit 1
+      - name: Discover monitoring and enforcement surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          echo '=== PHASE 1.22 MONITORING AND ENFORCEMENT READINESS DISCOVERY ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          echo control_api_health=ok
+
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          ! grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=.*routine' <<<"$ENV"
+          echo production_allowlist=general_only
+
+          echo '--- monitoring units ---'
+          systemctl list-unit-files --no-pager | grep -Ei 'phil-ai-os|control-api|backup|monitor|health' || true
+          echo '--- active relevant timers ---'
+          systemctl list-timers --all --no-pager | grep -Ei 'phil-ai-os|backup|monitor|health' || true
+          echo '--- relevant scripts/config ---'
+          find /etc/phil-ai-os /usr/local/bin /opt -maxdepth 4 -type f 2>/dev/null | grep -Ei 'phil-ai-os|monitor|health|backup|execution|budget|approval' | head -n 250 || true
+
+          echo '--- execution enforcement env ---'
+          printf '%s\n' "$ENV" | grep -E '^(PHIL_AI_OS_EXECUTION_|PHIL_AI_OS_LIVE_|PHIL_AI_OS_ROUTED_|PHIL_AI_OS_PROVIDER|PHIL_AI_OS_MODEL|PHIL_AI_OS_BUDGET|PHIL_AI_OS_COST|PHIL_AI_OS_APPROVAL|PHIL_AI_OS_CONCURRENCY)' | sort || true
+
+          echo '--- control api enforcement source signals ---'
+          docker exec "$CONTROL" sh -lc 'grep -RniE "budget|cost|approval|consum|concurr|semaphore|lock|kill_switch|allowed_task|audit|execution" /app 2>/dev/null | head -n 350' || true
+
+          echo '--- durable schema and recent evidence ---'
+          docker exec "$CONTROL" python - <<'PY'
+          import sqlite3
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          tables=[r[0] for r in con.execute("select name from sqlite_master where type='table' order by name")]
+          print('tables='+','.join(tables))
+          for t in tables:
+              if any(k in t.lower() for k in ('approval','audit','execution','budget','cost')):
+                  cols=[r[1] for r in con.execute(f'pragma table_info("{t}")')]
+                  print('schema='+t+':'+','.join(cols))
+                  try:
+                      rows=con.execute(f'select * from "{t}" order by rowid desc limit 5').fetchall()
+                      for r in rows: print('sample='+t+':'+str(dict(r)))
+                  except Exception as e: print('sample_error='+t+':'+type(e).__name__)
+          PY
+
+          echo '--- negative-path interface discovery only ---'
+          docker exec "$CONTROL" sh -lc 'grep -RniE "execution_not_allowlisted|approval_required|approval.*expired|approval.*consumed|budget.*exceed|kill.switch|request.*chars|max.output|replay" /app 2>/dev/null | head -n 250' || true
+
+          echo provider_call=none
+          echo production_change=none
+          echo routine_activation=false
+          echo discovery_mode=read_only
+          echo next_action=PHASE_1_22_READINESS_GAP_ANALYSIS
+          echo PHIL_AI_OS_PHASE_1_22_MONITORING_ENFORCEMENT_READINESS_DISCOVERY_OK
+          REMOTE
