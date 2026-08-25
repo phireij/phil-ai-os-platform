@@ -45,7 +45,7 @@ jobs:
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
           HERMES=hermes-agent-whow-hermes-agent-1
-          TASK='PHIL_AI_OS_PHASE_1_20_SINGLE_REQUEST_GATED_ACTIVATION'
+          TASK='PHIL_AI_OS_ROUTED_EXECUTION_OK'
 
           echo '=== PHASE 1.20 SINGLE-REQUEST GATED ACTIVATION CONSUMPTION ==='
 
@@ -56,7 +56,7 @@ jobs:
           docker exec "$HERMES" test -x /usr/local/bin/philaios-execute
           echo safety_boundary=ready
 
-          ROW="$(docker exec "$CONTROL" python -c "import sqlite3,datetime; c=sqlite3.connect('/app/state/control-plane.db'); r=c.execute(\"select approval_id,state,expires_at,consumed_at from approval_requests where task_text=? order by created_at desc limit 1\",('$TASK',)).fetchone(); print('|'.join('' if x is None else str(x) for x in r) if r else '')")"
+          ROW="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); r=c.execute(\"select approval_id,state,expires_at,consumed_at from approval_requests where task_text=? order by created_at desc limit 1\",('$TASK',)).fetchone(); print('|'.join('' if x is None else str(x) for x in r) if r else '')")"
           test -n "$ROW" || { echo approval=missing; exit 1; }
 
           APPROVAL_ID="${ROW%%|*}"
@@ -68,10 +68,10 @@ jobs:
 
           test "$STATE" = approved || { echo approval_state="$STATE"; exit 1; }
           test -z "$CONSUMED_AT" || { echo approval_already_consumed=yes; exit 1; }
-
           docker exec "$CONTROL" python -c "import datetime; e=datetime.datetime.fromisoformat('$EXPIRES_AT'); n=datetime.datetime.now(datetime.timezone.utc); assert e>n, 'approval expired'"
           echo approval_state=approved_unconsumed_verified
           echo approval_id="$APPROVAL_ID"
+          echo canary_contract=PHIL_AI_OS_ROUTED_EXECUTION_OK
 
           SUCCESS_BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute(\"select count(*) from execution_audit where outcome='success'\").fetchone()[0])")"
 
