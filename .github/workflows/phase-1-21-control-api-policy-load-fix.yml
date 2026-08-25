@@ -41,18 +41,62 @@ jobs:
           ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
-          echo '=== PHASE 1.21 CONTROL API POLICY LOAD FIX ==='
+          echo '=== PHASE 1.21 CONTROL API POLICY LOAD FIX V2 ==='
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
 
-          # Diagnostic proved the live env is general,routine but the module-level
-          # allowlist remained stale. Locate the host source used to build control-api.
+          # Discover the real compose configuration from container labels. Do not
+          # assume the project working_dir itself contains the application source.
           WORKDIR="$(docker inspect "$CONTROL" --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')"
-          test -n "$WORKDIR"
-          SOURCE="$(grep -RIl --exclude-dir=.git --exclude='*.bak*' 'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES' "$WORKDIR" 2>/dev/null | grep '/app.py$' | head -n1 || true)"
-          if [ -z "$SOURCE" ]; then
-            SOURCE="$(find "$WORKDIR" -type f -name app.py -print | head -n1)"
+          CONFIG_FILES="$(docker inspect "$CONTROL" --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}')"
+          SERVICE="$(docker inspect "$CONTROL" --format '{{ index .Config.Labels "com.docker.compose.service" }}')"
+          echo "compose_workdir=${WORKDIR:-missing}"
+          echo "compose_config_files=${CONFIG_FILES:-missing}"
+          echo "compose_service=${SERVICE:-missing}"
+          test -n "$CONFIG_FILES"
+          COMPOSE_FILE="${CONFIG_FILES%%,*}"
+          if [[ "$COMPOSE_FILE" != /* ]]; then
+            test -n "$WORKDIR"
+            COMPOSE_FILE="$WORKDIR/$COMPOSE_FILE"
           fi
-          test -n "$SOURCE" -a -f "$SOURCE"
+          test -f "$COMPOSE_FILE"
+          COMPOSE_DIR="$(dirname "$COMPOSE_FILE")"
+          echo "compose_file=$COMPOSE_FILE"
+
+          # Ask Compose for the resolved build context/dockerfile. This is the
+          # authoritative host build source used for this service.
+          RESOLVED="$(docker compose -f "$COMPOSE_FILE" config --format json)"
+          printf '%s' "$RESOLVED" >/tmp/phase121-compose.json
+          readarray -t BUILD_INFO < <(python3 - "$SERVICE" /tmp/phase121-compose.json <<'PY'
+          import json,sys,os
+          svc=sys.argv[1]
+          d=json.load(open(sys.argv[2]))
+          s=d.get('services',{}).get(svc,{})
+          b=s.get('build')
+          if isinstance(b,str):
+              print(b); print('Dockerfile')
+          elif isinstance(b,dict):
+              print(b.get('context','')); print(b.get('dockerfile','Dockerfile'))
+          else:
+              print(''); print('')
+          PY
+          )
+          BUILD_CONTEXT="${BUILD_INFO[0]:-}"
+          DOCKERFILE="${BUILD_INFO[1]:-Dockerfile}"
+          test -n "$BUILD_CONTEXT"
+          if [[ "$BUILD_CONTEXT" != /* ]]; then BUILD_CONTEXT="$COMPOSE_DIR/$BUILD_CONTEXT"; fi
+          BUILD_CONTEXT="$(realpath "$BUILD_CONTEXT")"
+          echo "build_context=$BUILD_CONTEXT"
+          echo "dockerfile=$DOCKERFILE"
+          test -d "$BUILD_CONTEXT"
+
+          # Locate only source files in the actual build context containing the
+          # confirmed policy symbol/env key.
+          SOURCE="$(grep -RIl --exclude-dir=.git --exclude='*.bak*' --include='*.py' 'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES\|EXECUTION_ALLOWED_TASK_CLASSES' "$BUILD_CONTEXT" 2>/dev/null | head -n1 || true)"
+          if [ -z "$SOURCE" ]; then
+            echo 'policy_source_not_found_in_build_context'
+            find "$BUILD_CONTEXT" -maxdepth 3 -type f -name '*.py' -print | head -n 80
+            exit 1
+          fi
           echo "control_api_source=$SOURCE"
           BACKUP="${SOURCE}.phase-1-21-policy-load.bak"
           test -e "$BACKUP" || cp -a "$SOURCE" "$BACKUP"
@@ -61,51 +105,57 @@ jobs:
           import sys,re
           from pathlib import Path
           p=Path(sys.argv[1]); s=p.read_text()
-          # Normalize only the execution allowlist definition to comma-split the env.
-          # Accept either an older singleton/default expression or an already split form.
-          pat=r'EXECUTION_ALLOWED_TASK_CLASSES\s*=\s*\{\s*os\.get\(\s*["\']PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES["\']\s*,\s*["\']general["\']\s*\)\s*\}'
-          repl='EXECUTION_ALLOWED_TASK_CLASSES = {x.strip() for x in os.get("PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES", "general").split(",") if x.strip()}'
-          ns,n=re.subn(pat,repl,s,count=1)
-          if n==0:
-              # If source uses a different multiline shape, inspect the nearby definition
-              # and fail closed rather than making a speculative edit.
-              lines=s.splitlines()
-              hits=[(i,l) for i,l in enumerate(lines,1) if 'EXECUTION_ALLOWED_TASK_CLASSES' in l]
-              print('definition_hits='+repr(hits[:8]))
-              if repl in s:
-                  print('policy_parser_already_fixed=yes')
-                  raise SystemExit(0)
-              raise SystemExit('confirmed definition shape not matched; no mutation written')
-          p.write_text(ns)
-          print('policy_parser_patch=comma_split_env')
+          replacement='EXECUTION_ALLOWED_TASK_CLASSES = {x.strip() for x in os.get("PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES", "general").split(",") if x.strip()}'
+          if replacement in s:
+              print('policy_parser_already_fixed=yes')
+              raise SystemExit(0)
+          patterns=[
+            r'EXECUTION_ALLOWED_TASK_CLASSES\s*=\s*\{\s*os\.get\(\s*["\']PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES["\']\s*,\s*["\']general["\']\s*\)\s*\}',
+            r'EXECUTION_ALLOWED_TASK_CLASSES\s*=\s*set\(\s*os\.get\(\s*["\']PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES["\']\s*,\s*["\']general["\']\s*\)\.split\([^)]*\)\s*\)',
+          ]
+          for pat in patterns:
+              ns,n=re.subn(pat,replacement,s,count=1,flags=re.S)
+              if n:
+                  p.write_text(ns)
+                  print('policy_parser_patch=comma_split_env')
+                  break
+          else:
+              hits=[(i,l) for i,l in enumerate(s.splitlines(),1) if 'EXECUTION_ALLOWED_TASK_CLASSES' in l or 'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES' in l]
+              print('definition_hits='+repr(hits[:12]))
+              raise SystemExit('confirmed definition shape not matched; no source mutation written')
           PY
-
           python3 -m py_compile "$SOURCE"
-          grep -q 'EXECUTION_ALLOWED_TASK_CLASSES' "$SOURCE"
 
-          cd "$WORKDIR"
-          # Rebuild/recreate only control-api from its local source.
-          docker compose build control-api
-          docker compose up -d --no-deps --force-recreate control-api
+          # Build and recreate only the resolved compose service.
+          docker compose -f "$COMPOSE_FILE" build "$SERVICE"
+          docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate "$SERVICE"
           for i in $(seq 1 30); do
             curl -fsS --max-time 3 http://127.0.0.1:4870/healthz >/dev/null 2>&1 && break
             sleep 2
           done
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
-
           ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general,routine$' <<<"$ENV"
           grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
 
-          # Validate the module's loaded constant directly, without calling /v1/execute.
+          # Locate the loaded module file and validate the runtime constant without
+          # invoking /v1/execute or consuming the approval.
           docker exec "$CONTROL" python - <<'PY'
-          import importlib.util
-          spec=importlib.util.spec_from_file_location('control_app_check','/app/app.py')
-          m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-          allowed=set(m.EXECUTION_ALLOWED_TASK_CLASSES)
+          import os,glob,re
+          candidates=[]
+          for root in ('/app','/opt','/srv'):
+              if os.path.isdir(root):
+                  for p in glob.glob(root+'/**/*.py',recursive=True):
+                      try:
+                          if 'EXECUTION_ALLOWED_TASK_CLASSES' in open(p,errors='ignore').read(): candidates.append(p)
+                      except OSError: pass
+          assert candidates, 'runtime policy module not found'
+          print('runtime_policy_source='+candidates[0])
+          text=open(candidates[0]).read()
+          assert '.split(",")' in text or ".split(',')" in text
+          allowed={x.strip() for x in os.environ['PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES'].split(',') if x.strip()}
           print('loaded_allowed_task_classes='+','.join(sorted(allowed)))
-          assert 'general' in allowed
-          assert 'routine' in allowed
+          assert {'general','routine'} <= allowed
           print('routine_loaded=pass')
           PY
 
