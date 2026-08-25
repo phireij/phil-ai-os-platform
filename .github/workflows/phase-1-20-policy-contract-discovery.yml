@@ -1,0 +1,59 @@
+name: Phase 1.20 Policy Contract Discovery
+
+on:
+  push:
+    branches: [ops/phase-1.20]
+    paths:
+      - '.github/workflows/phase-1-20-policy-contract-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Discover concise execution policy contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          echo '=== PHASE 1.20 POLICY CONTRACT DISCOVERY ==='
+          docker exec "$CONTROL" python - <<'PY'
+          from pathlib import Path
+          p=Path('/app/app.py')
+          lines=p.read_text().splitlines()
+          needles=['ROUTED_EXECUTION_CANARY','EXECUTION_ALLOWED_TASK_CLASSES','approval_consume','execution_audit_write','def classify_task','def evaluate_route','/v1/execute']
+          for n in needles:
+              hits=[f'{i+1}:{line.strip()}' for i,line in enumerate(lines) if n in line]
+              print(n+'='+(' | '.join(hits[:4]) if hits else 'absent'))
+          PY
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo monitor=active
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo backup_self_heal_timer=active
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo control_api_health=ok
+          echo provider_call=none
+          echo execution_invoked=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_1_20_POLICY_CONTRACT_DISCOVERY_OK
+          REMOTE
