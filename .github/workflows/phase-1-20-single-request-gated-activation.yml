@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
           HERMES=hermes-agent-whow-hermes-agent-1
-          TASK='PHIL_AI_OS_PHASE_1_20_SINGLE_REQUEST_GATED_ACTIVATION'
+          TASK='PHIL_AI_OS_ROUTED_EXECUTION_OK'
           echo '=== PHASE 1.20 SINGLE-REQUEST GATED ACTIVATION PREPARE ==='
 
           ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
@@ -71,6 +71,7 @@ jobs:
           echo execution_invoked=none
           echo provider_call=none
           echo production_policy_change=none
+          echo canary_contract=PHIL_AI_OS_ROUTED_EXECUTION_OK
           echo next_action=HUMAN_APPROVAL_REQUIRED_THEN_SEPARATE_SINGLE_CONSUMPTION
           echo PHIL_AI_OS_PHASE_1_20_SINGLE_REQUEST_GATED_ACTIVATION_PREPARE_OK
           REMOTE
