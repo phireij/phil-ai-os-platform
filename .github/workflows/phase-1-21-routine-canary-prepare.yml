@@ -39,18 +39,22 @@ jobs:
           set -euo pipefail
           HERMES=hermes-agent-whow-hermes-agent-1
           CONTROL=phil-ai-os-core-control-api-1
+          REQUEST=/usr/local/bin/philaios-approval-request
+          NOTIFY=/usr/local/bin/philaios-approval-notify
           echo '=== PHASE 1.21 ROUTINE CANARY PREPARE ==='
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
           ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
           grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+          docker exec "$HERMES" test -x "$REQUEST"
+          docker exec "$HERMES" test -x "$NOTIFY"
 
           TASK='PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVATION: authorize one narrowly scoped routine canary activation only; Control API route required; no direct provider bypass; no autonomous expansion; approval is single-use.'
-          OUT="$(docker exec -e TASK="$TASK" "$HERMES" sh -lc 'philaios-approval-request --task "$TASK" --source github-actions --requester phase-1-21 --requested-by cto')"
+          OUT="$(docker exec -e TASK="$TASK" "$HERMES" sh -lc 'exec /usr/local/bin/philaios-approval-request --task "$TASK" --source github-actions --requester phase-1-21 --requested-by cto')"
           printf '%s\n' "$OUT"
           APPROVAL_ID="$(printf '%s\n' "$OUT" | python3 -c 'import sys,json; print(json.load(sys.stdin)["approval_id"])')"
           test -n "$APPROVAL_ID"
-          docker exec -e APPROVAL_ID="$APPROVAL_ID" "$HERMES" sh -lc 'philaios-approval-notify "$APPROVAL_ID"'
+          docker exec -e APPROVAL_ID="$APPROVAL_ID" "$HERMES" sh -lc 'exec /usr/local/bin/philaios-approval-notify "$APPROVAL_ID"'
           echo "approval_id=$APPROVAL_ID"
           echo routine_canary_activation=not_performed
           echo provider_call=none
