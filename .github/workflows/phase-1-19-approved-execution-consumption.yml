@@ -1,0 +1,60 @@
+name: Phase 1.19 Approved Execution Consumption
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PHIL_AI_OS_VPS_SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.PHIL_AI_OS_VPS_HOST }}
+          SSH_USER: ${{ secrets.PHIL_AI_OS_VPS_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+      - name: Consume approved authorization through controlled execution
+        env:
+          SSH_HOST: ${{ secrets.PHIL_AI_OS_VPS_HOST }}
+          SSH_USER: ${{ secrets.PHIL_AI_OS_VPS_USER }}
+        run: |
+          set -euo pipefail
+          ssh "$SSH_USER@$SSH_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=hermes-agent-whow-hermes-agent-1
+          APPROVAL_ID=apr_ccfab3bc84c846d7b20a6d9c6b4e76d7
+          TASK=PHIL_AI_OS_PHASE_1_19_HUMAN_APPROVAL_VALIDATION
+          echo '=== PHASE 1.19 APPROVED EXECUTION CONSUMPTION ==='
+          docker exec "$HERMES" philaios-mission-control approvals >/dev/null
+          echo mission_control_client=ready
+          BEFORE=$(docker exec "$HERMES" philaios-mission-control approvals)
+          printf '%s\n' "$BEFORE" | grep -q "$APPROVAL_ID"
+          printf '%s\n' "$BEFORE" | grep -q 'approved'
+          echo approval_state_before=approved_verified
+          set +e
+          OUT=$(docker exec "$HERMES" philaios-execute "$TASK" 2>&1)
+          RC=$?
+          set -e
+          printf '%s\n' "$OUT"
+          echo execution_exit_code=$RC
+          if [ "$RC" -ne 0 ]; then
+            echo execution_result=failed
+            exit 1
+          fi
+          AFTER=$(docker exec "$HERMES" philaios-mission-control approvals)
+          printf '%s\n' "$AFTER" | grep -q "$APPROVAL_ID"
+          printf '%s\n' "$AFTER" | grep -q 'consumed'
+          echo approval_state_after=consumed_verified
+          EXEC=$(docker exec "$HERMES" philaios-mission-control executions)
+          printf '%s\n' "$EXEC" | grep -q "$APPROVAL_ID"
+          printf '%s\n' "$EXEC" | grep -q 'success'
+          echo execution_audit=success_verified
+          echo automatic_retry=none
+          echo PHIL_AI_OS_PHASE_1_19_APPROVED_EXECUTION_CONSUMPTION_OK
+          REMOTE
