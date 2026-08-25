@@ -1,0 +1,23 @@
+name: Phase 1.20 Narrow Activation Preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preflight contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s docs/PHASE_1_20_NARROW_EXPANSION_POLICY_CONTRACT.md
+          echo activation=not_performed
+          echo production_policy_change=none
+          echo human_approval_required=yes
+          echo next_action=RUN_ONLY_AFTER_NEGATIVE_PATH_ROLLBACK_VALIDATION_OK
+          echo PHIL_AI_OS_PHASE_1_20_NARROW_ACTIVATION_PREFLIGHT_STAGED
