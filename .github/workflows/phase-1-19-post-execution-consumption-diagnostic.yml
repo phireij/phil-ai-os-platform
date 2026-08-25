@@ -1,4 +1,4 @@
-name: Phase 1.19 Post Execution Consumption Diagnostic
+name: Phase 1.19 Final Controlled Execution Verification
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  diagnose:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -33,38 +33,57 @@ jobs:
           PORT="${VPS_PORT:-22}"
           : > ~/.ssh/known_hosts
           for i in 1 2 3 4 5; do
-            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
-              break
-            fi
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then break; fi
             sleep 3
           done
           test -s ~/.ssh/known_hosts
           ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
 
-      - name: Diagnose post-execution approval and audit state
+      - name: Verify durable approval consumption and execution audit
         shell: bash
         run: |
           set -euo pipefail
           PORT="${VPS_PORT:-22}"
           ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
-          HERMES="hermes-agent-whow-hermes-agent-1"
           CONTROL="phil-ai-os-core-control-api-1"
           APPROVAL_ID="apr_8fd8b8d9b504486a8c7cffe6f9bb1fc0"
 
-          echo '=== PHASE 1.19 POST EXECUTION CONSUMPTION DIAGNOSTIC ==='
-          echo '--- approvals client output ---'
-          docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals || true
-          echo '--- executions client output ---'
-          docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions || true
-          echo '--- durable database approval and audit rows ---'
-          docker exec "$CONTROL" python -c "import sqlite3; a='$APPROVAL_ID'; con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row; r=con.execute('select approval_id,state,task_text,decision_at,consumed_at,consumed_by from approval_requests where approval_id=?',(a,)).fetchone(); print(dict(r) if r else 'approval_row=missing'); rows=con.execute('select id,occurred_at,source,task_class,provider_id,model_id,route_path,response_id,compatibility_pass,execution_mode,outcome,detail,approval_id from execution_audit where approval_id=? order by id desc limit 5',(a,)).fetchall(); print('audit_rows='+str(len(rows)); [print(dict(row)) for row in rows]" || true
+          echo '=== PHASE 1.19 FINAL CONTROLLED EXECUTION VERIFICATION ==='
 
+          DB_OUT="$(docker exec "$CONTROL" python -c "import sqlite3; a='$APPROVAL_ID'; c=sqlite3.connect('/app/state/control-plane.db'); r=c.execute('select state,consumed_at,consumed_by,task_text from approval_requests where approval_id=?',(a,)).fetchone(); x=c.execute('select outcome,provider_id,model_id,route_path,compatibility_pass,response_id from execution_audit where approval_id=? order by id desc limit 1',(a,)).fetchone(); print('|'.join([str(v or '') for v in r])); print('|'.join([str(v or '') for v in x]))")"
+
+          APPROVAL_ROW="$(printf '%s\n' "$DB_OUT" | sed -n '1p')"
+          AUDIT_ROW="$(printf '%s\n' "$DB_OUT" | sed -n '2p')"
+
+          IFS='|' read -r STATE CONSUMED_AT CONSUMED_BY TASK <<< "$APPROVAL_ROW"
+          IFS='|' read -r OUTCOME PROVIDER MODEL ROUTE COMPAT RESPONSE_ID <<< "$AUDIT_ROW"
+
+          test "$STATE" = "approved"
+          test -n "$CONSUMED_AT"
+          test "$CONSUMED_BY" = "hermes-explicit"
+          test "$TASK" = "PHIL_AI_OS_ROUTED_EXECUTION_OK"
+          test "$OUTCOME" = "success"
+          test "$PROVIDER" = "openai"
+          test "$MODEL" = "gpt-5.6-terra"
+          test "$ROUTE" = "primary"
+          test "$COMPAT" = "1"
+          test -n "$RESPONSE_ID"
+
+          echo approval_record=approved_and_consumed
+          echo consumed_by=hermes-explicit
+          echo task=PHIL_AI_OS_ROUTED_EXECUTION_OK
+          echo execution_audit=success
+          echo provider=openai
+          echo model=gpt-5.6-terra
+          echo route=primary
+          echo compatibility_pass=true
           systemctl is-active --quiet phil-ai-os-monitor.service && echo monitor=active
           systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo backup_self_heal_timer=active
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo control_api_health=ok
           echo provider_call=none
           echo execution_invoked=none
           echo production_change=none
-          echo PHIL_AI_OS_PHASE_1_19_POST_EXECUTION_CONSUMPTION_DIAGNOSTIC_OK
+          echo phase_1_19_status=complete
+          echo PHIL_AI_OS_PHASE_1_19_FINAL_CONTROLLED_EXECUTION_VERIFICATION_OK
           REMOTE
