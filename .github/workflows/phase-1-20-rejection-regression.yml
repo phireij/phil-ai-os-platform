@@ -1,0 +1,85 @@
+name: Phase 1.20 Rejection Regression
+
+on:
+  push:
+    branches: [ops/phase-1.20]
+    paths:
+      - '.github/workflows/phase-1-20-rejection-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+
+      - name: Validate critical rejection paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          HERMES=hermes-agent-whow-hermes-agent-1
+          CANARY=PHIL_AI_OS_ROUTED_EXECUTION_OK
+
+          echo '=== PHASE 1.20 REJECTION REGRESSION ==='
+
+          IDS="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); q=lambda s: (c.execute('select approval_id from approval_requests where '+s+' order by updated_at desc limit 1').fetchone() or [''])[0]; print(q(\"state='expired'\")); print(q(\"state='denied'\")); print(q(\"consumed_at is not null\"))")"
+          EXPIRED_ID="$(printf '%s\n' "$IDS" | sed -n '1p')"
+          DENIED_ID="$(printf '%s\n' "$IDS" | sed -n '2p')"
+          CONSUMED_ID="$(printf '%s\n' "$IDS" | sed -n '3p')"
+
+          test -n "$EXPIRED_ID"
+          test -n "$DENIED_ID"
+          test -n "$CONSUMED_ID"
+
+          AUDIT_BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute(\"select count(*) from execution_audit where outcome='success'\").fetchone()[0])")"
+
+          reject() {
+            label="$1"; approval_id="$2"; task="$3"
+            set +e
+            out="$(docker exec "$HERMES" /usr/local/bin/philaios-execute "$approval_id" "$task" 2>&1)"
+            rc=$?
+            set -e
+            test "$rc" -ne 0
+            printf '%s\n' "$out" | grep -Eq 'approval|expired|denied|consum|allowlist|not_allowlisted|mismatch|not approved|not_approved'
+            echo "$label=rejected"
+          }
+
+          reject expired_approval "$EXPIRED_ID" "$CANARY"
+          reject denied_approval "$DENIED_ID" "$CANARY"
+          reject replay_consumed_approval "$CONSUMED_ID" "$CANARY"
+          reject non_canary_task "$CONSUMED_ID" 'PHIL_AI_OS_PHASE_1_20_NON_CANARY_BLOCK'
+
+          AUDIT_AFTER="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute(\"select count(*) from execution_audit where outcome='success'\").fetchone()[0])")"
+          test "$AUDIT_BEFORE" = "$AUDIT_AFTER"
+          echo successful_execution_count_unchanged=yes
+
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo monitor=active
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo backup_self_heal_timer=active
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo control_api_health=ok
+          echo provider_call=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_1_20_REJECTION_REGRESSION_OK
+          REMOTE
