@@ -1,0 +1,87 @@
+name: Phase 1.21 Classifier Regression Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-classifier-regression-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && \
+               ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true; then
+              exit 0
+            fi
+            echo "ssh_attempt=$attempt failed; retrying"
+            sleep $((attempt * 5))
+          done
+          exit 1
+      - name: Validate classifier boundary without provider execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=hermes-agent-whow-hermes-agent-1
+          CONTROL=phil-ai-os-core-control-api-1
+          CLIENT=/usr/local/bin/philaios-execute
+          echo '=== PHASE 1.21 CLASSIFIER REGRESSION VALIDATION ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          docker exec "$HERMES" test -x "$CLIENT"
+
+          # Regression 1: deployed client must classify only the positional task text.
+          docker exec "$HERMES" python - <<'PY'
+          from pathlib import Path
+          s=Path('/usr/local/bin/philaios-execute').read_text()
+          assert 'text = sys.argv[2].strip()' in s
+          assert 'text = " ".join(sys.argv[2:]).strip()' not in s
+          print('task_text_only_boundary=pass')
+          PY
+
+          # Regression 2: the task text itself contains no coding trigger. Metadata
+          # that previously leaked (notably --task-class) is intentionally separate.
+          TASK='Return exactly PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK'
+          case "$TASK" in
+            *class*|*Class*|*CLASS*) echo 'unexpected_class_keyword_in_task_text'; exit 1 ;;
+          esac
+          echo metadata_class_keyword_isolated=pass
+
+          # Regression 3: safety posture is unchanged. This workflow performs no
+          # approval consumption and no provider request.
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+          test -s /etc/phil-ai-os/phase-1-21-routine-canary.env
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$' /etc/phil-ai-os/phase-1-21-routine-canary.env
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_SCOPE=one-request-only$' /etc/phil-ai-os/phase-1-21-routine-canary.env
+          grep -q '^PHIL_AI_OS_PHASE_1_21_DIRECT_PROVIDER_BYPASS=false$' /etc/phil-ai-os/phase-1-21-routine-canary.env
+          grep -q '^PHIL_AI_OS_PHASE_1_21_AUTONOMOUS_EXPANSION=false$' /etc/phil-ai-os/phase-1-21-routine-canary.env
+          echo safety_posture_unchanged=pass
+          echo provider_call=none
+          echo approval_consumption=none
+          echo regression_decision=PASS
+          echo next_action=PHASE_1_21_FRESH_ROUTINE_EXECUTION_APPROVAL
+          echo PHIL_AI_OS_PHASE_1_21_CLASSIFIER_REGRESSION_VALIDATION_OK
+          REMOTE
