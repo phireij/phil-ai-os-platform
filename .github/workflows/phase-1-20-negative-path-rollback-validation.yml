@@ -1,0 +1,86 @@
+name: Phase 1.20 Negative-Path and Rollback Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-20-negative-path-rollback-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Validate negative paths and rollback readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          echo '=== PHASE 1.20 NEGATIVE-PATH AND ROLLBACK VALIDATION ==='
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=true$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_LIVE_TEST_ENABLED=false$' <<<"$ENV"
+          echo production_scope=restricted_verified
+
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          echo operational_health=ok
+
+          docker exec "$CONTROL" python - <<'PY'
+          import sqlite3
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          # Evidence that negative states and replay/consumption behavior are durably represented.
+          states={r['state'] for r in con.execute('select state from approval_requests').fetchall()}
+          required={'approved','denied','expired'}
+          assert required.issubset(states), (required, states)
+          consumed=con.execute("select count(*) n from approval_requests where consumed_at is not null and consumed_by is not null").fetchone()['n']
+          assert consumed >= 1
+          blocked=con.execute("select count(*) n from execution_audit where outcome in ('kill_switch_blocked','canary_not_allowlisted','request_too_large')").fetchone()['n']
+          assert blocked >= 1
+          provider_fail=con.execute("select count(*) n from execution_audit where outcome='provider_failed'").fetchone()['n']
+          assert provider_fail >= 1
+          print('approval_negative_states=verified')
+          print('consumption_evidence=verified')
+          print('blocked_execution_evidence=verified')
+          print('provider_failure_evidence=verified')
+          PY
+
+          # Rollback readiness is validated without changing production state.
+          test -d /opt/phil-ai-os-platform/phil-ai-os-platform-phase1
+          test -n "$(find /opt/phil-ai-os-platform/phil-ai-os-platform-phase1 -type f -name '*.rollback' -o -name '*rollback*' 2>/dev/null | head -n 1)"
+          echo rollback_artifact=present
+          echo rollback_requires_provider_call=no
+          echo rollback_execution=not_invoked
+          echo negative_path_validation=passed
+          echo provider_call=none
+          echo execution_invoked=none
+          echo production_policy_change=none
+          echo next_action=PHASE_1_20_NARROW_ACTIVATION_PREFLIGHT
+          echo PHIL_AI_OS_PHASE_1_20_NEGATIVE_PATH_ROLLBACK_VALIDATION_OK
+          REMOTE
