@@ -45,7 +45,7 @@ jobs:
           APPROVAL_ID='apr_8e246f5927254dfbb4234b21ef10602c'
           TASK='Return exactly PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK'
           MARKER=/etc/phil-ai-os/phase-1-21-routine-canary.env
-          echo '=== PHASE 1.21 SINGLE ROUTINE CANARY RETRY V2 ==='
+          echo '=== PHASE 1.21 SINGLE ROUTINE CANARY RETRY V3 ==='
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
           test -s "$MARKER"
           grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$' "$MARKER"
