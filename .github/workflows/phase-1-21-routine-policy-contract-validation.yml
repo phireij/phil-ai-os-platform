@@ -1,0 +1,40 @@
+name: Phase 1.21 Routine Policy Contract Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-routine-policy-contract-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate routine policy contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          F=docs/PHASE_1_21_ROUTINE_TASK_CLASS_POLICY_CONTRACT.md
+          test -s "$F"
+          grep -q 'deny-by-default' "$F"
+          grep -q 'Human approval remains mandatory' "$F"
+          grep -q 'Control API routing is mandatory' "$F"
+          grep -q 'Direct provider bypass is prohibited' "$F"
+          grep -q 'Unrestricted autonomous execution remains disabled' "$F"
+          grep -q 'replay rejection' "$F"
+          grep -q 'rollback readiness' "$F"
+          grep -q 'single controlled canary' "$F"
+          grep -q 'does not authorize production expansion' "$F"
+          grep -q 'PHIL_AI_OS_PHASE_1_21_ROUTINE_POLICY_CONTRACT_DEFINED' "$F"
+          echo contract=validated
+          echo routine_activation=not_performed
+          echo provider_call=none
+          echo execution_invoked=none
+          echo production_policy_change=none
+          echo next_action=PHASE_1_21_ROUTINE_CLASSIFICATION_AND_LIMITS_VALIDATION
+          echo PHIL_AI_OS_PHASE_1_21_ROUTINE_POLICY_CONTRACT_VALIDATION_OK
