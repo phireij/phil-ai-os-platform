@@ -1,0 +1,76 @@
+name: Phase 1.20 Single-Request Gated Activation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activation-prepare:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Prepare exactly one gated activation request
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          HERMES=hermes-agent-whow-hermes-agent-1
+          TASK='PHIL_AI_OS_PHASE_1_20_SINGLE_REQUEST_GATED_ACTIVATION'
+          echo '=== PHASE 1.20 SINGLE-REQUEST GATED ACTIVATION PREPARE ==='
+
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=true$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_LIVE_TEST_ENABLED=false$' <<<"$ENV"
+          echo policy=restricted_verified
+
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test -f /docker/hermes-agent-whow/docker-compose.phil-ai-os.yml.phase119.rollback
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-execute
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-telegram-approval-notifier
+          echo safety_boundary=ready
+
+          BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from execution_audit').fetchone()[0])")"
+          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control request "$TASK")"
+          APPROVAL_ID="$(printf '%s' "$OUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['approval']['approval_id'])")"
+          STATE="$(printf '%s' "$OUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['approval']['state'])")"
+          test "$STATE" = pending
+          docker exec "$HERMES" /usr/local/bin/philaios-telegram-approval-notifier "$APPROVAL_ID" >/tmp/phase120-notifier.json
+          AFTER="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from execution_audit').fetchone()[0])")"
+          test "$BEFORE" = "$AFTER"
+
+          echo approval_id="$APPROVAL_ID"
+          echo approval_state=pending_verified
+          echo telegram_delivery=attempted_and_command_succeeded
+          echo execution_history_unchanged=yes
+          echo execution_invoked=none
+          echo provider_call=none
+          echo production_policy_change=none
+          echo next_action=HUMAN_APPROVAL_REQUIRED_THEN_SEPARATE_SINGLE_CONSUMPTION
+          echo PHIL_AI_OS_PHASE_1_20_SINGLE_REQUEST_GATED_ACTIVATION_PREPARE_OK
+          REMOTE
