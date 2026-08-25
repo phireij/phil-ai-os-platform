@@ -30,7 +30,7 @@ jobs:
           PORT="${VPS_PORT:-22}"
           ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
-      - name: Patch Hermes execution client and run regression checks
+      - name: Patch actual positional Hermes execution interface
         shell: bash
         run: |
           set -euo pipefail
@@ -40,50 +40,41 @@ jobs:
           HERMES=hermes-agent-whow-hermes-agent-1
           CLIENT=/usr/local/bin/philaios-execute
           BACKUP=/etc/phil-ai-os/phase-1-21-philaios-execute.pre-classifier-fix
-          echo '=== PHASE 1.21 CLASSIFIER INTERFACE FIX ==='
+          echo '=== PHASE 1.21 CLASSIFIER INTERFACE FIX V2 ==='
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
           docker exec "$HERMES" test -x "$CLIENT"
           install -d -m 0755 /etc/phil-ai-os
-          docker cp "$HERMES:$CLIENT" "$BACKUP"
+          test -s "$BACKUP" || docker cp "$HERMES:$CLIENT" "$BACKUP"
           chmod 0755 "$BACKUP"
-
-          # Inspect the deployed client first. The fix is intentionally narrow:
-          # classification input must be the task text only, never CLI metadata such
-          # as --task-class, --approval-id, or --max-output-tokens.
           docker exec "$HERMES" cat "$CLIENT" > /tmp/philaios-execute
+
           python3 - <<'PY'
           from pathlib import Path
           p=Path('/tmp/philaios-execute')
           s=p.read_text()
-          old=s
-          # Known unsafe argv-join patterns. Replace only when present.
-          replacements={
-              '" ".join(sys.argv[1:])':'args.task',
-              "' '.join(sys.argv[1:])":'args.task',
-              '" ".join(argv)':'args.task',
-              "' '.join(argv)":'args.task',
-          }
-          for a,b in replacements.items():
-              s=s.replace(a,b)
-          if s==old:
-              # Do not guess a production patch if the deployed implementation differs.
-              # Emit the relevant lines so a follow-up can target the real interface.
-              print('automatic_patch_pattern=not_found')
-              for i,line in enumerate(s.splitlines(),1):
-                  if any(k in line.lower() for k in ('classif','sys.argv','argv','task_class','task-class')):
-                      print(f'{i}:{line}')
-              raise SystemExit(42)
-          p.write_text(s)
-          print('classifier_input_patch=task_text_only')
+          target='text = " ".join(sys.argv[2:]).strip()'
+          replacement='text = sys.argv[2].strip()'
+          if target not in s:
+              if replacement in s:
+                  print('classifier_input_patch=already_applied')
+              else:
+                  raise SystemExit('unexpected deployed client interface; refusing guessed patch')
+          else:
+              s=s.replace(target,replacement,1)
+              p.write_text(s)
+              print('classifier_input_patch=positional_task_text_only')
           PY
+
           docker cp /tmp/philaios-execute "$HERMES:$CLIENT"
           docker exec "$HERMES" chmod 0755 "$CLIENT"
+          docker exec "$HERMES" python - <<'PY'
+          from pathlib import Path
+          s=Path('/usr/local/bin/philaios-execute').read_text()
+          assert 'text = sys.argv[2].strip()' in s
+          assert 'text = " ".join(sys.argv[2:]).strip()' not in s
+          print('metadata_leak_static_regression=pass')
+          PY
 
-          # Static regression: metadata flags must not be concatenated into classifier input.
-          docker exec "$HERMES" sh -lc "! grep -E '[Jj]oin\(.*argv|sys\.argv\[1:' '$CLIENT'"
-          echo metadata_leak_static_regression=pass
-
-          # Preserve current safety posture; do not execute a provider request here.
           ENV="$(docker inspect phil-ai-os-core-control-api-1 --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
           grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
