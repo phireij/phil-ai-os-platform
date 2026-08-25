@@ -1,0 +1,104 @@
+name: Phase 1.21 Single Routine Canary Execution via Hermes
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-single-routine-canary-execution-via-hermes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Execute exactly one approved routine canary through Hermes
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=hermes-agent-whow-hermes-agent-1
+          CONTROL=phil-ai-os-core-control-api-1
+          MARKER=/etc/phil-ai-os/phase-1-21-routine-canary.env
+          APPROVAL_ID=apr_ea60184021c944779ec29bd73762d74d
+          TASK='Return exactly PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK'
+          echo '=== PHASE 1.21 SINGLE ROUTINE CANARY EXECUTION VIA HERMES ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          test -s "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_SCOPE=one-request-only$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_DIRECT_PROVIDER_BYPASS=false$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_AUTONOMOUS_EXPANSION=false$' "$MARKER"
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-execute
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+
+          docker exec -e APPROVAL_ID="$APPROVAL_ID" "$CONTROL" python - <<'PY'
+          import os,sqlite3,datetime
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          r=con.execute('select state,task_class,task_text,expires_at,consumed_at from approval_requests where approval_id=?',(os.environ['APPROVAL_ID'],)).fetchone()
+          assert r is not None, 'approval missing'
+          assert r['state']=='approved', dict(r)
+          assert r['task_class']=='routine', dict(r)
+          assert 'PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK' in r['task_text'], dict(r)
+          assert r['consumed_at'] is None, 'approval already consumed'
+          exp=datetime.datetime.fromisoformat(r['expires_at'])
+          assert exp > datetime.datetime.now(datetime.timezone.utc), 'approval expired'
+          print('execution_approval=approved_unconsumed_unexpired')
+          PY
+
+          BEFORE="$(docker exec "$CONTROL" python - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('/app/state/control-plane.db')
+          print(c.execute("select count(*) from execution_audit where task_class='routine' and outcome='provider_succeeded'").fetchone()[0])
+          PY
+          )"
+
+          set +e
+          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-execute --approval-id "$APPROVAL_ID" --task "$TASK" --task-class routine --max-output-tokens 32 2>&1)"
+          RC=$?
+          set -e
+          printf '%s\n' "$OUT"
+          test "$RC" -eq 0
+          grep -q 'PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK' <<<"$OUT"
+
+          AFTER="$(docker exec "$CONTROL" python - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('/app/state/control-plane.db')
+          print(c.execute("select count(*) from execution_audit where task_class='routine' and outcome='provider_succeeded'").fetchone()[0])
+          PY
+          )"
+          test "$AFTER" -eq "$((BEFORE+1))"
+
+          sed -i 's/^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$/PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=false/' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_CONSUMED=true$' "$MARKER" || printf '%s\n' 'PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_CONSUMED=true' >> "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=false$' "$MARKER"
+          echo routine_canary_execution=success
+          echo routine_success_delta=1
+          echo canary_replayable=no
+          echo persistent_production_scope=general_only
+          echo direct_provider_bypass=false
+          echo autonomous_expansion=false
+          echo next_action=PHASE_1_21_ROUTINE_CANARY_RESULT_VERIFICATION
+          echo PHIL_AI_OS_PHASE_1_21_SINGLE_ROUTINE_CANARY_EXECUTION_VIA_HERMES_OK
+          REMOTE
