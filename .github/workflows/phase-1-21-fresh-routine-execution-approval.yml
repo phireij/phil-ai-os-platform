@@ -1,0 +1,84 @@
+name: Phase 1.21 Fresh Routine Execution Approval
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-fresh-routine-execution-approval.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+      - name: Create fresh single-use routine execution approval and notify Telegram
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=hermes-agent-whow-hermes-agent-1
+          CONTROL=phil-ai-os-core-control-api-1
+          TASK='Return exactly PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK'
+          echo '=== PHASE 1.21 FRESH ROUTINE EXECUTION APPROVAL ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-telegram-approval-notifier
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-execute
+          test -s /etc/phil-ai-os/phase-1-21-routine-canary.env
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$' /etc/phil-ai-os/phase-1-21-routine-canary.env
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+
+          # Create a new approval through the proven Mission Control boundary.
+          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control create-approval --task "$TASK" --task-class routine --ttl-seconds 3600)"
+          printf '%s\n' "$OUT"
+          APPROVAL_ID="$(printf '%s\n' "$OUT" | grep -Eo 'apr_[A-Za-z0-9]+' | head -n1)"
+          test -n "$APPROVAL_ID"
+
+          docker exec "$HERMES" /usr/local/bin/philaios-telegram-approval-notifier "$APPROVAL_ID"
+
+          docker exec -e APPROVAL_ID="$APPROVAL_ID" "$CONTROL" python - <<'PY'
+          import os,sqlite3
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          r=con.execute('select state,task_text,task_class,consumed_at from approval_requests where approval_id=?',(os.environ['APPROVAL_ID'],)).fetchone()
+          assert r is not None
+          assert r['state']=='pending', dict(r)
+          assert r['task_class']=='routine', dict(r)
+          assert 'PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK' in r['task_text'], dict(r)
+          assert r['consumed_at'] is None, dict(r)
+          print('approval_state=pending')
+          print('approval_task_class=routine')
+          print('approval_consumed=no')
+          PY
+          echo "fresh_approval_id=$APPROVAL_ID"
+          echo telegram_notification=sent
+          echo provider_call=none
+          echo production_scope=general_only_unchanged
+          echo next_action=USER_APPROVAL_THEN_PHASE_1_21_SINGLE_ROUTINE_CANARY_RETRY
+          echo PHIL_AI_OS_PHASE_1_21_FRESH_ROUTINE_EXECUTION_APPROVAL_OK
+          REMOTE
