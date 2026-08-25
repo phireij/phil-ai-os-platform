@@ -45,7 +45,7 @@ jobs:
           APPROVAL_ID='apr_8e246f5927254dfbb4234b21ef10602c'
           TASK='Return exactly PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK'
           MARKER=/etc/phil-ai-os/phase-1-21-routine-canary.env
-          echo '=== PHASE 1.21 SINGLE ROUTINE CANARY RETRY V3 ==='
+          echo '=== PHASE 1.21 SINGLE ROUTINE CANARY RETRY V4 ==='
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
           test -s "$MARKER"
           grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$' "$MARKER"
@@ -53,6 +53,7 @@ jobs:
           grep -q '^PHIL_AI_OS_PHASE_1_21_DIRECT_PROVIDER_BYPASS=false$' "$MARKER"
           grep -q '^PHIL_AI_OS_PHASE_1_21_AUTONOMOUS_EXPANSION=false$' "$MARKER"
           grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_ALLOWLIST_ACTIVE=true$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_CANARY_GATE_EXPANDED=true$' "$MARKER"
           ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general,routine$' <<<"$ENV"
           grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
@@ -72,6 +73,7 @@ jobs:
           print('approval_task_class=routine')
           print('approval_consumed_before=no')
           print('narrow_allowlist=active')
+          print('narrow_gate_expansion=active')
           PY
 
           set +e
