@@ -1,0 +1,61 @@
+name: Phase 1.20 Narrow Activation Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-20-narrow-activation-gate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-human-approval:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Create narrow activation approval request
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo '=== PHASE 1.20 NARROW ACTIVATION HUMAN GATE ==='
+          CLIENT=/usr/local/bin/philaios-mission-control-client
+          NOTIFIER=/usr/local/bin/philaios-telegram-approval-notifier
+          test -x "$CLIENT"
+          test -x "$NOTIFIER"
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          OUT="$($CLIENT request 'PHIL_AI_OS_PHASE_1_20_NARROW_ACTIVATION' --source hermes --requester phase1-20-narrow-activation --requested-by hermes)"
+          printf '%s\n' "$OUT"
+          APPROVAL_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["approval"]["approval_id"])' <<<"$OUT")"
+          test -n "$APPROVAL_ID"
+          "$NOTIFIER" "$APPROVAL_ID"
+          echo approval_id="$APPROVAL_ID"
+          echo activation_performed=no
+          echo provider_call=none
+          echo execution_invoked=none
+          echo production_policy_change=none
+          echo human_decision_required=yes
+          echo next_action=APPROVE_OR_DENY_VIA_TELEGRAM
+          echo PHIL_AI_OS_PHASE_1_20_NARROW_ACTIVATION_HUMAN_GATE_PREPARED
+          REMOTE
