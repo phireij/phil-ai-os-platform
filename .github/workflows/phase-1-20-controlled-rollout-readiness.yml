@@ -56,11 +56,15 @@ jobs:
           docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); assert c.execute(\"select count(*) from execution_audit where outcome='success' and approval_id is not null\").fetchone()[0] >= 1; assert c.execute(\"select count(*) from approval_requests where consumed_at is not null\").fetchone()[0] >= 1"
           echo durable_approval_and_audit=verified
 
-          SRC="$(docker exec "$CONTROL" sh -c 'cat /app/route_admin.py')"
-          grep -q 'ROUTED_EXECUTION_CANARY' <<<"$SRC"
-          grep -q 'approval_consume' <<<"$SRC"
-          grep -q 'EXECUTION_ALLOWED_TASK_CLASSES' <<<"$SRC"
-          grep -q 'execution_audit_write' <<<"$SRC"
+          SRC=/app/route_admin.py
+          for SIGNAL in ROUTED_EXECUTION_CANARY approval_consume EXECUTION_ALLOWED_TASK_CLASSES execution_audit_write; do
+            if docker exec "$CONTROL" grep -q "$SIGNAL" "$SRC"; then
+              echo "contract_signal_${SIGNAL}=present"
+            else
+              echo "contract_signal_${SIGNAL}=MISSING"
+              exit 1
+            fi
+          done
           echo enforcement_contract=verified
 
           systemctl is-active --quiet phil-ai-os-monitor.service
