@@ -88,12 +88,15 @@ jobs:
             echo "automatic_rollback=performed"
           }
 
+          execution_fingerprint() {
+            docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions | \
+              python3 -c 'import json,sys,hashlib; d=json.load(sys.stdin); x=d.get("executions", d if isinstance(d,list) else []); s=json.dumps(x,sort_keys=True,separators=(",",":")); print(hashlib.sha256(s.encode()).hexdigest())'
+          }
+
           echo "=== PHASE 1.19 AGENT APPROVAL REQUEST ACTIVATION ==="
           echo "rollback_file=$ROLLBACK"
           python3 -m py_compile "$CLIENT"
 
-          # A prior deployment replaced the bind-mounted source inode. Recreate Hermes once
-          # so /usr/local/bin/philaios-mission-control is remounted from the current host path.
           recreate_hermes || { rollback; exit 1; }
           echo "hermes_recreated=yes"
 
@@ -103,7 +106,7 @@ jobs:
           fi
           echo "client_update=installed"
 
-          BEFORE_EXEC="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions | sha256sum | awk '{print $1}')"
+          BEFORE_EXEC="$(execution_fingerprint)"
           if ! OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control request "$TASK" 2>&1)"; then
             printf '%s\n' "$OUT"
             rollback
@@ -122,7 +125,7 @@ jobs:
             exit 1
           fi
 
-          AFTER_EXEC="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions | sha256sum | awk '{print $1}')"
+          AFTER_EXEC="$(execution_fingerprint)"
           if [ "$BEFORE_EXEC" != "$AFTER_EXEC" ]; then
             echo "execution_history_changed=unexpected"
             rollback
