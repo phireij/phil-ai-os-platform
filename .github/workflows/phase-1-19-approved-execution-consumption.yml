@@ -44,8 +44,8 @@ jobs:
           ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           HERMES="hermes-agent-whow-hermes-agent-1"
-          APPROVAL_ID="apr_ccfab3bc84c846d7b20a6d9c6b4e76d7"
-          TASK="PHIL_AI_OS_PHASE_1_19_HUMAN_APPROVAL_VALIDATION"
+          APPROVAL_ID="apr_8fd8b8d9b504486a8c7cffe6f9bb1fc0"
+          TASK="PHIL_AI_OS_ROUTED_EXECUTION_OK"
 
           echo '=== PHASE 1.19 APPROVED EXECUTION CONSUMPTION ==='
           docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control
