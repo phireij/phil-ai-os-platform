@@ -13,8 +13,8 @@ Phase 0 is complete and Phase 1 is actively underway.
 
 The platform now has a private control plane with model/provider routing, budget enforcement, authenticated Hermes integration, durable human approvals, secure Telegram-delivered approval links, approval consumption, approval-to-execution traceability, controlled routed execution, fallback recovery, operational monitoring, automated backup/self-heal operations, and browser-based Mission Control.
 
-**Current checkpoint:** Phase 1.19 — COMPLETE / VALIDATED  
-**Next milestone:** Phase 1.20 — Controlled Execution Rollout & Policy Hardening
+**Current checkpoint:** Phase 1.20 — SINGLE-REQUEST GATED EXECUTION VALIDATED  
+**Next milestone:** Phase 1.20 — Post-Canary Rollout Decision Gate
 
 ## Recently Completed
 
@@ -30,40 +30,35 @@ Authoritative marker: `PHIL_AI_OS_PHASE_1_18_COMPLETION_GATE_OK`
 
 ### Phase 1.19 — Human Approval → Controlled Execution
 
-Completed end-to-end validation of:
-
-- secure human approval link flow;
-- Telegram approval delivery;
-- durable approval state;
-- single approved-request consumption by Hermes;
-- controlled routed execution after approval;
-- durable approval-linked execution audit;
-- successful OpenAI / `gpt-5.6-terra` primary route;
-- live monitor, backup self-heal timer, and Control API health.
-
-Final verification GitHub Actions run: `32802471247` — SUCCESS.
+Completed end-to-end validation of secure human approval, Telegram delivery, durable approval state, single consumption by Hermes, controlled execution after approval, approval-linked audit, and operational safeguards.
 
 Authoritative marker: `PHIL_AI_OS_PHASE_1_19_FINAL_CONTROLLED_EXECUTION_VERIFICATION_OK`
 
 ## Phase 1.20 — Controlled Execution Rollout & Policy Hardening
 
-**Status: STARTING**
+**Status: IN PROGRESS — SINGLE-REQUEST GATED EXECUTION VALIDATED**
 
-Primary goals:
+Validated on GitHub Actions run `32841413030`:
 
-1. formalize explicit execution policy rules by task class and risk level;
-2. preserve human approval for sensitive or non-routine execution;
-3. strengthen approval/task/provider binding and replay protection;
-4. add concise Mission Control operator status for mobile use;
-5. validate denial, expiry, mismatch, duplicate-consume, kill-switch, provider-failure, and fallback paths as one regression gate;
-6. keep durable auditability for every execution attempt;
-7. retain conservative production limits while widening only validated execution paths.
+- approved, unconsumed request verified before execution;
+- exactly one controlled execution succeeded;
+- OpenAI / `gpt-5.6-terra` returned `PHIL_AI_OS_ROUTED_EXECUTION_OK`;
+- durable approval consumption and execution audit verified;
+- replay of the consumed approval was rejected;
+- monitor, backup timer/self-heal, and Control API remained healthy;
+- no production policy expansion occurred.
+
+Authoritative marker: `PHIL_AI_OS_PHASE_1_20_SINGLE_REQUEST_GATED_ACTIVATION_CONSUMPTION_OK`
+
+### Next Gate — Post-Canary Rollout Decision
+
+Before widening real-agent execution, Phase 1.20 will evaluate the canary evidence and explicitly decide whether to retain the current single-request scope or expand only a narrowly defined validated execution class. Human approval, replay protection, durable audit, kill-switch protection, and operational health checks remain mandatory safeguards.
 
 ## Program Status
 
 **Phase 0:** 100% COMPLETE  
 **Phase 1:** ACTIVE  
-**Completed checkpoint:** Phase 1.19  
-**Current milestone:** Phase 1.20 STARTING  
+**Completed checkpoint:** Phase 1.20 single-request gated execution  
+**Current milestone:** Phase 1.20 Post-Canary Rollout Decision Gate  
 **Control API:** v0.20.0  
 **Accelerated target:** 2 months — retained
