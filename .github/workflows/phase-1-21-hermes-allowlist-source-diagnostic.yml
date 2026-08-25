@@ -1,0 +1,98 @@
+name: Phase 1.21 Hermes Allowlist Source Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-hermes-allowlist-source-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            echo "ssh_attempt=$attempt failed"
+            sleep $((attempt*5))
+          done
+          exit 1
+
+      - name: Inspect Hermes execution allowlist path without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=hermes-agent-whow-hermes-agent-1
+          CONTROL=phil-ai-os-core-control-api-1
+          CLIENT=/usr/local/bin/philaios-execute
+          APPROVAL_ID='apr_8e246f5927254dfbb4234b21ef10602c'
+          echo '=== PHASE 1.21 HERMES ALLOWLIST SOURCE DIAGNOSTIC ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          docker exec "$HERMES" test -f "$CLIENT"
+
+          echo '--- CONTROL API LIVE ALLOWLIST ---'
+          docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=' || true
+
+          echo '--- HERMES LIVE ENV ALLOWLIST / EXECUTION POLICY ---'
+          docker inspect "$HERMES" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^(PHIL_AI_OS_.*(ALLOW|TASK_CLASS|EXECUTION|POLICY)|.*ALLOWLIST.*)=' || true
+
+          echo '--- CLIENT POLICY REFERENCES ---'
+          docker exec "$HERMES" python - <<'PY'
+          from pathlib import Path
+          p=Path('/usr/local/bin/philaios-execute')
+          lines=p.read_text().splitlines()
+          needles=('allowlist','allowlisted','allowed_task','task_class','execution_not_allowlisted','4870','control')
+          for i,line in enumerate(lines,1):
+              if any(n.lower() in line.lower() for n in needles):
+                  lo=max(1,i-2); hi=min(len(lines),i+2)
+                  print(f'context_lines={lo}-{hi}')
+                  for j in range(lo,hi+1): print(f'{j}: {lines[j-1]}')
+          PY
+
+          echo '--- HERMES MOUNTS ---'
+          docker inspect "$HERMES" --format '{{range .Mounts}}{{println .Source " -> " .Destination}}{{end}}'
+
+          echo '--- HOST SOURCE SEARCH ---'
+          SOURCE="$(docker inspect "$HERMES" --format '{{range .Mounts}}{{if eq .Destination "/usr/local/bin/philaios-execute"}}{{println .Source}}{{end}}{{end}}')"
+          test -n "$SOURCE"
+          echo "client_host_source=$SOURCE"
+          ROOT="$(dirname "$SOURCE")"
+          grep -RInE --exclude-dir='.git' --exclude='*.bak*' 'execution_not_allowlisted|EXECUTION_ALLOWED_TASK_CLASSES|allowed_task_classes|allowlist|allowlisted' "$ROOT" 2>/dev/null | head -n 120 || true
+
+          echo '--- APPROVAL SAFETY STATE ---'
+          docker exec -e APPROVAL_ID="$APPROVAL_ID" "$CONTROL" python - <<'PY'
+          import os,sqlite3
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          r=con.execute('select state,task_class,consumed_at from approval_requests where approval_id=?',(os.environ['APPROVAL_ID'],)).fetchone()
+          print('approval_present=' + ('yes' if r else 'no'))
+          if r:
+              print('approval_state='+str(r['state']))
+              print('approval_task_class='+str(r['task_class']))
+              print('approval_consumed='+('yes' if r['consumed_at'] else 'no'))
+          PY
+
+          echo mutation=none
+          echo provider_call=none
+          echo next_action=PATCH_CONFIRMED_HERMES_ALLOWLIST_SOURCE_ONLY
+          echo PHIL_AI_OS_PHASE_1_21_HERMES_ALLOWLIST_SOURCE_DIAGNOSTIC_COMPLETE
+          REMOTE
