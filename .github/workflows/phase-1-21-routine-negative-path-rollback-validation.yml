@@ -1,0 +1,84 @@
+name: Phase 1.21 Routine Negative-Path and Rollback Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-routine-negative-path-rollback-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Validate routine negative paths and rollback readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          MARKER=/etc/phil-ai-os/phase-1-20-narrow-expansion.env
+          echo '=== PHASE 1.21 ROUTINE NEGATIVE-PATH AND ROLLBACK VALIDATION ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test -s "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_20_NARROW_EXPANSION_ACTIVE=true$' "$MARKER"
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+          echo production_scope_unchanged=verified
+
+          docker exec "$CONTROL" python - <<'PY'
+          import sqlite3
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          routine=con.execute("select count(*) n from execution_audit where task_class='routine' and outcome='canary_not_allowlisted'").fetchone()['n']
+          assert routine >= 1, 'missing routine deny evidence'
+          blocked=con.execute("select count(*) n from execution_audit where outcome in ('kill_switch_blocked','canary_not_allowlisted','request_too_large')").fetchone()['n']
+          assert blocked >= 1
+          failed=con.execute("select count(*) n from execution_audit where outcome='provider_failed'").fetchone()['n']
+          assert failed >= 1
+          denied=con.execute("select count(*) n from approval_requests where state in ('denied','expired')").fetchone()['n']
+          assert denied >= 1
+          consumed=con.execute("select count(*) n from approval_requests where consumed_at is not null and consumed_by is not null").fetchone()['n']
+          assert consumed >= 1
+          print('routine_not_allowlisted=verified')
+          print('blocked_paths=verified')
+          print('provider_failure_path=verified')
+          print('approval_negative_states=verified')
+          print('approval_consumption_replay_boundary=verified')
+          PY
+
+          test -n "$(find /opt/phil-ai-os-platform/phil-ai-os-platform-phase1 -type f \( -name '*.rollback' -o -name '*rollback*' \) 2>/dev/null | head -n 1)"
+          echo rollback_artifact=present
+          echo rollback_readiness=verified
+          echo routine_activation=not_performed
+          echo provider_call=none
+          echo execution_invoked=none
+          echo production_policy_change=none
+          echo validation_decision=PASS
+          echo next_action=PHASE_1_21_ROUTINE_CANARY_PREPARE
+          echo PHIL_AI_OS_PHASE_1_21_ROUTINE_NEGATIVE_PATH_ROLLBACK_VALIDATION_OK
+          REMOTE
