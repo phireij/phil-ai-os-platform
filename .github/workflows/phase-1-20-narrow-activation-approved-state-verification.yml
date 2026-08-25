@@ -1,0 +1,66 @@
+name: Phase 1.20 Narrow Activation Approved State Verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-20-narrow-activation-approved-state-verification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Verify exact approved activation request
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          APPROVAL_ID=apr_8e28ac1a72dd4b3fa02b7da053f664e4
+          echo '=== PHASE 1.20 NARROW ACTIVATION APPROVED STATE VERIFICATION ==='
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          docker exec -e APPROVAL_ID="$APPROVAL_ID" "$CONTROL" python - <<'PY'
+          import os,sqlite3
+          a=os.environ['APPROVAL_ID']
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          r=con.execute('select approval_id,state,task_text,expires_at,consumed_at,consumed_by,decision_by,decision_at from approval_requests where approval_id=?',(a,)).fetchone()
+          assert r is not None, 'approval missing'
+          assert r['state']=='approved', dict(r)
+          assert r['consumed_at'] is None and r['consumed_by'] is None, dict(r)
+          assert r['task_text'].startswith('PHIL_AI_OS_PHASE_1_20_NARROW_ACTIVATION'), dict(r)
+          print('approval_id='+r['approval_id'])
+          print('approval_state=approved_verified')
+          print('approval_unconsumed=yes')
+          print('approval_task_match=yes')
+          PY
+          echo activation_performed=no
+          echo provider_call=none
+          echo execution_invoked=none
+          echo production_policy_change=none
+          echo next_action=PHASE_1_20_NARROW_ACTIVATION_CONSUMPTION
+          echo PHIL_AI_OS_PHASE_1_20_NARROW_ACTIVATION_APPROVED_STATE_VERIFICATION_OK
+          REMOTE
