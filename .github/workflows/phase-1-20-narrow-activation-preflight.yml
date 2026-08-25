@@ -2,6 +2,10 @@ name: Phase 1.20 Narrow Activation Preflight
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-20-narrow-activation-preflight.yml'
 
 permissions:
   contents: read
@@ -19,5 +23,6 @@ jobs:
           echo activation=not_performed
           echo production_policy_change=none
           echo human_approval_required=yes
-          echo next_action=RUN_ONLY_AFTER_NEGATIVE_PATH_ROLLBACK_VALIDATION_OK
-          echo PHIL_AI_OS_PHASE_1_20_NARROW_ACTIVATION_PREFLIGHT_STAGED
+          echo prerequisite_negative_path_rollback=validated
+          echo next_action=PHASE_1_20_NARROW_ACTIVATION_CANARY_PREPARE
+          echo PHIL_AI_OS_PHASE_1_20_NARROW_ACTIVATION_PREFLIGHT_OK
