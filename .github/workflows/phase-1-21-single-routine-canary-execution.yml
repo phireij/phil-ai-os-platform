@@ -1,0 +1,90 @@
+name: Phase 1.21 Single Routine Canary Execution
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-single-routine-canary-execution.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Execute exactly one bounded routine canary through Control API
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          MARKER=/etc/phil-ai-os/phase-1-21-routine-canary.env
+          APPROVAL_ID=apr_af943f687d8944c38f5c0316c5f02034
+          echo '=== PHASE 1.21 SINGLE ROUTINE CANARY EXECUTION ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          test -s "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_SCOPE=one-request-only$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_DIRECT_PROVIDER_BYPASS=false$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_AUTONOMOUS_EXPANSION=false$' "$MARKER"
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+
+          # The production allowlist remains general-only. Use the already-deployed
+          # Control API canary mechanism for exactly one routine request rather than
+          # widening the persistent allowlist.
+          TOKEN="$(docker exec "$CONTROL" sh -lc 'cat /run/secrets/control_api_token 2>/dev/null || cat /run/philaios/control_api_token 2>/dev/null || true')"
+          test -n "$TOKEN"
+          BEFORE="$(docker exec "$CONTROL" python - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('/app/state/control-plane.db')
+          print(c.execute("select count(*) from execution_audit where task_class='routine' and outcome='provider_succeeded'").fetchone()[0])
+          PY
+          )"
+          PAYLOAD='{"task_text":"Return exactly PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK","task_class":"routine","approval_id":"'$APPROVAL_ID'","max_output_tokens":32,"canary":true}'
+          HTTP="$(curl -sS --max-time 60 -o /tmp/phase121-canary.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d "$PAYLOAD" http://127.0.0.1:4870/v1/execute)"
+          cat /tmp/phase121-canary.json
+          test "$HTTP" = 200
+          grep -q 'PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK' /tmp/phase121-canary.json
+          AFTER="$(docker exec "$CONTROL" python - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('/app/state/control-plane.db')
+          print(c.execute("select count(*) from execution_audit where task_class='routine' and outcome='provider_succeeded'").fetchone()[0])
+          PY
+          )"
+          test "$AFTER" -eq "$((BEFORE+1))"
+
+          # Burn the one-request marker immediately after successful canary.
+          sed -i 's/^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$/PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=false/' "$MARKER"
+          printf '%s\n' 'PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_CONSUMED=true' >> "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=false$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_CONSUMED=true$' "$MARKER"
+          echo routine_canary_execution=success
+          echo routine_success_delta=1
+          echo canary_replayable=no
+          echo persistent_production_scope=general_only
+          echo direct_provider_bypass=false
+          echo autonomous_expansion=false
+          echo next_action=PHASE_1_21_ROUTINE_CANARY_RESULT_VERIFICATION
+          echo PHIL_AI_OS_PHASE_1_21_SINGLE_ROUTINE_CANARY_EXECUTION_OK
+          REMOTE
