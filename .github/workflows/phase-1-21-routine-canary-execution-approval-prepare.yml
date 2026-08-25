@@ -1,0 +1,70 @@
+name: Phase 1.21 Routine Canary Execution Approval Prepare
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-routine-canary-execution-approval-prepare.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Prepare fresh execution approval
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=hermes-agent-whow-hermes-agent-1
+          CONTROL=phil-ai-os-core-control-api-1
+          MARKER=/etc/phil-ai-os/phase-1-21-routine-canary.env
+          echo '=== PHASE 1.21 ROUTINE CANARY EXECUTION APPROVAL PREPARE ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          test -s "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_SCOPE=one-request-only$' "$MARKER"
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-telegram-approval-notifier
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-execute
+
+          TASK='Return exactly PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK'
+          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control request "$TASK" --source hermes --requester phase1-21-routine-canary-execution --requested-by hermes)"
+          printf '%s\n' "$OUT"
+          APPROVAL_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["approval"]["approval_id"])' <<<"$OUT")"
+          TASK_CLASS="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["approval"]["task_class"])' <<<"$OUT")"
+          test -n "$APPROVAL_ID"
+          test "$TASK_CLASS" = routine
+          docker exec "$HERMES" /usr/local/bin/philaios-telegram-approval-notifier "$APPROVAL_ID"
+          echo approval_id="$APPROVAL_ID"
+          echo task_class="$TASK_CLASS"
+          echo execution_interface=/usr/local/bin/philaios-execute
+          echo provider_call=none
+          echo execution_invoked=none
+          echo production_policy_change=none
+          echo next_action=APPROVE_THEN_SINGLE_ROUTINE_CANARY_EXECUTION_VIA_HERMES
+          echo PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_EXECUTION_APPROVAL_PREPARE_OK
+          REMOTE
