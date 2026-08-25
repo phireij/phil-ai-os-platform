@@ -1,0 +1,75 @@
+name: Phase 1.21 Routine Canary Execution Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-routine-canary-execution-gate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Verify routine canary execution readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          MARKER=/etc/phil-ai-os/phase-1-21-routine-canary.env
+          APPROVAL_ID=apr_af943f687d8944c38f5c0316c5f02034
+          echo '=== PHASE 1.21 ROUTINE CANARY EXECUTION GATE ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test -s "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_SCOPE=one-request-only$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_DIRECT_PROVIDER_BYPASS=false$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_AUTONOMOUS_EXPANSION=false$' "$MARKER"
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+          docker exec -e APPROVAL_ID="$APPROVAL_ID" "$CONTROL" python - <<'PY'
+          import os,sqlite3
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          r=con.execute('select state,task_class,consumed_at,consumed_by from approval_requests where approval_id=?',(os.environ['APPROVAL_ID'],)).fetchone()
+          assert r and r['state']=='approved' and r['task_class']=='routine'
+          assert r['consumed_at'] and r['consumed_by']=='phase1-21-routine-canary-activation'
+          print('canary_authorization=consumed_verified')
+          PY
+          echo routine_canary_execution_ready=yes
+          echo execution_scope=one_request_only
+          echo production_allowed_task_classes=general_unchanged
+          echo human_governance=preserved
+          echo direct_provider_bypass=false
+          echo autonomous_expansion=false
+          echo provider_call=none
+          echo execution_invoked=none
+          echo gate_decision=PASS
+          echo next_action=PHASE_1_21_SINGLE_ROUTINE_CANARY_EXECUTION
+          echo PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_EXECUTION_GATE_OK
+          REMOTE
