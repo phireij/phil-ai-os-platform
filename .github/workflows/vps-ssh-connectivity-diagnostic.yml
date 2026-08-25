@@ -1,0 +1,131 @@
+name: VPS SSH Connectivity Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vps-ssh-connectivity-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Validate secret presence without exposing values
+        shell: bash
+        run: |
+          set -u
+          fail=0
+          for name in VPS_HOST VPS_USER VPS_SSH_KEY; do
+            if [ -n "${!name:-}" ]; then
+              echo "$name=present"
+            else
+              echo "$name=MISSING"
+              fail=1
+            fi
+          done
+          if [ -n "${VPS_PORT:-}" ]; then echo 'VPS_PORT=present'; else echo 'VPS_PORT=unset_using_22'; fi
+          exit "$fail"
+
+      - name: Resolve host and test TCP SSH port
+        shell: bash
+        run: |
+          set +e
+          PORT="${VPS_PORT:-22}"
+          echo '=== DNS / HOST RESOLUTION ==='
+          getent ahostsv4 "$VPS_HOST" | awk '{print $1}' | sort -u | sed 's/^/resolved_ipv4=/'
+          RESOLVE_RC=${PIPESTATUS[0]}
+          echo "resolution_rc=$RESOLVE_RC"
+          echo '=== TCP PORT TEST ==='
+          timeout 12 bash -c "</dev/tcp/$VPS_HOST/$PORT" 2>/tmp/tcp.err
+          TCP_RC=$?
+          echo "tcp_port=$PORT"
+          echo "tcp_connect_rc=$TCP_RC"
+          if [ -s /tmp/tcp.err ]; then sed 's/^/tcp_error=/' /tmp/tcp.err; fi
+          exit 0
+
+      - name: Probe SSH banner and host key
+        shell: bash
+        run: |
+          set +e
+          PORT="${VPS_PORT:-22}"
+          echo '=== SSH-KEYSCAN ==='
+          timeout 20 ssh-keyscan -v -T 10 -p "$PORT" "$VPS_HOST" > /tmp/keyscan.out 2>/tmp/keyscan.err
+          RC=$?
+          echo "ssh_keyscan_rc=$RC"
+          if [ -s /tmp/keyscan.out ]; then
+            echo "ssh_host_key_received=yes"
+            awk '{print "host_key_type=" $2}' /tmp/keyscan.out | sort -u
+          else
+            echo "ssh_host_key_received=no"
+          fi
+          if [ -s /tmp/keyscan.err ]; then
+            grep -E 'Connection|connect|timeout|timed out|refused|reset|banner|No route|resolve' /tmp/keyscan.err | tail -n 20 | sed 's/^/keyscan_diag=/' || true
+          fi
+          exit 0
+
+      - name: Validate private key format locally
+        shell: bash
+        run: |
+          set +e
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > /tmp/public.key 2>/tmp/key.err
+          RC=$?
+          echo "private_key_parse_rc=$RC"
+          if [ "$RC" -eq 0 ]; then
+            echo 'private_key_format=valid'
+            ssh-keygen -lf /tmp/public.key | awk '{$2="<fingerprint-redacted>"; print "key_summary=" $0}'
+          else
+            echo 'private_key_format=invalid'
+            sed 's/^/key_error=/' /tmp/key.err
+          fi
+          exit 0
+
+      - name: Attempt SSH authentication with diagnostics
+        shell: bash
+        run: |
+          set +e
+          PORT="${VPS_PORT:-22}"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          timeout 25 ssh -vv \
+            -p "$PORT" \
+            -i ~/.ssh/id_ed25519 \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=12 \
+            "$VPS_USER@$VPS_HOST" 'printf "PHIL_AI_OS_VPS_SSH_DIAGNOSTIC_OK\\n"' \
+            > /tmp/ssh.out 2>/tmp/ssh.err
+          RC=$?
+          echo "ssh_auth_rc=$RC"
+          if grep -q 'PHIL_AI_OS_VPS_SSH_DIAGNOSTIC_OK' /tmp/ssh.out; then
+            echo 'ssh_connectivity=PASS'
+          else
+            echo 'ssh_connectivity=FAIL'
+          fi
+          grep -E 'Connecting to|Connection established|Connection timed out|Connection refused|No route|Could not resolve|Remote protocol|Authentications that can continue|Offering public key|Server accepts key|Permission denied|kex_exchange|banner exchange|Connection reset|Connection closed' /tmp/ssh.err \
+            | sed -E 's/(SHA256:)[A-Za-z0-9+\/=.-]+/\1<redacted>/g' \
+            | tail -n 40 \
+            | sed 's/^/ssh_diag=/' || true
+          exit 0
+
+      - name: Diagnostic summary
+        shell: bash
+        run: |
+          echo 'Diagnostic completed without modifying the VPS.'
+          echo 'No provider call was made.'
+          echo 'No Phase 1.21 canary state was consumed.'
+          echo 'PHIL_AI_OS_VPS_SSH_CONNECTIVITY_DIAGNOSTIC_COMPLETE'
