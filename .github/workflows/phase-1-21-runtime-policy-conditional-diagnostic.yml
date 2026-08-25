@@ -1,0 +1,115 @@
+name: Phase 1.21 Runtime Policy Conditional Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-runtime-policy-conditional-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+      - name: Inspect live runtime allowlist and rejection conditional
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          APPROVAL_ID='apr_8e246f5927254dfbb4234b21ef10602c'
+          echo '=== PHASE 1.21 RUNTIME POLICY CONDITIONAL DIAGNOSTIC ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+
+          echo '--- LIVE PROCESS ENVIRONMENT ---'
+          PID="$(docker inspect "$CONTROL" --format '{{.State.Pid}}')"
+          test "$PID" -gt 0
+          tr '\0' '\n' < "/proc/$PID/environ" | grep -E '^PHIL_AI_OS_EXECUTION_(ALLOWED_TASK_CLASSES|KILL_SWITCH)=' || true
+
+          echo '--- LIVE APP SOURCE: POLICY DEFINITIONS AND REJECTION ---'
+          docker exec "$CONTROL" python - <<'PY'
+          from pathlib import Path
+          p=Path('/app/app.py')
+          s=p.read_text(); lines=s.splitlines()
+          needles=('EXECUTION_ALLOWED_TASK_CLASSES','execution_not_allowlisted','task_class not in','not in EXECUTION','allowed_task_classes')
+          selected=set()
+          for i,line in enumerate(lines,1):
+              if any(n.lower() in line.lower() for n in needles):
+                  selected.update(range(max(1,i-6),min(len(lines),i+8)+1))
+          for i in sorted(selected): print(f'{i}: {lines[i-1]}')
+          PY
+
+          echo '--- IMPORTED MODULE RUNTIME VALUE ---'
+          # Import the exact deployed module in an isolated Python process using the
+          # same container environment. This does not call an endpoint/provider.
+          docker exec "$CONTROL" sh -lc 'cd /app && python - <<"PY"
+          import app,os
+          print("env_raw="+repr(os.getenv("PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES")))
+          print("constant_type="+type(app.EXECUTION_ALLOWED_TASK_CLASSES).__name__)
+          print("constant_repr="+repr(app.EXECUTION_ALLOWED_TASK_CLASSES))
+          print("routine_membership="+str("routine" in app.EXECUTION_ALLOWED_TASK_CLASSES).lower())
+          print("general_membership="+str("general" in app.EXECUTION_ALLOWED_TASK_CLASSES).lower())
+          PY'
+
+          echo '--- ROUTE FUNCTION GLOBAL BINDING ---'
+          docker exec "$CONTROL" sh -lc 'cd /app && python - <<"PY"
+          import app,inspect
+          funcs=[]
+          for name,obj in vars(app).items():
+              if callable(obj):
+                  try: src=inspect.getsource(obj)
+                  except Exception: continue
+                  if "execution_not_allowlisted" in src or "EXECUTION_ALLOWED_TASK_CLASSES" in src:
+                      funcs.append((name,obj,src))
+          print("matching_functions="+str([x[0] for x in funcs]))
+          for name,obj,src in funcs:
+              print("function="+name)
+              print(src)
+              g=getattr(obj,"__globals__",{})
+              if "EXECUTION_ALLOWED_TASK_CLASSES" in g:
+                  print("function_global_allowlist_repr="+repr(g["EXECUTION_ALLOWED_TASK_CLASSES"]))
+                  print("function_global_routine_membership="+str("routine" in g["EXECUTION_ALLOWED_TASK_CLASSES"]).lower())
+          PY'
+
+          echo '--- APPROVAL SAFETY STATE ---'
+          docker exec -e APPROVAL_ID="$APPROVAL_ID" "$CONTROL" python - <<'PY'
+          import os,sqlite3
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          r=con.execute('select state,task_class,consumed_at from approval_requests where approval_id=?',(os.environ['APPROVAL_ID'],)).fetchone()
+          assert r is not None
+          print('approval_state='+str(r['state']))
+          print('approval_task_class='+str(r['task_class']))
+          print('approval_consumed='+('yes' if r['consumed_at'] else 'no'))
+          PY
+
+          echo mutation=none
+          echo provider_call=none
+          echo endpoint_execute_call=none
+          echo approval_consumption=none
+          echo next_action=PATCH_EXACT_CONFIRMED_RUNTIME_REJECTION_CONDITION
+          echo PHIL_AI_OS_PHASE_1_21_RUNTIME_POLICY_CONDITIONAL_DIAGNOSTIC_COMPLETE
+          REMOTE
