@@ -1,0 +1,58 @@
+name: Phase 1.19 Hermes Control API Network Path
+
+on:
+  push:
+    branches: [ops/phase-1.19]
+    paths: ['.github/workflows/phase-1-19-network-path-discovery.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break; sleep 3; done
+          test -s ~/.ssh/known_hosts
+      - name: Compact network path discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow')
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
+          echo '=== PHASE 1.19 HERMES CONTROL API NETWORK PATH ==='
+          echo "host_alias=$(docker exec "$HERMES" getent hosts host.docker.internal 2>/dev/null | awk '{print $1}' | head -1 || true)"
+          echo "hermes_gateway=$(docker exec "$HERMES" sh -lc "ip route 2>/dev/null | awk '/default/{print \\$3; exit}'" || true)"
+          echo "control_ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTROL")"
+          echo "shared_networks=$(comm -12 <(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' "$HERMES" | sort) <(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' "$CONTROL" | sort) | paste -sd, -)"
+          for target in host.docker.internal:4870 172.17.0.1:4870; do
+            code=$(docker exec "$HERMES" sh -lc "curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://$target/healthz" 2>/dev/null || true)
+            echo "health_target=$target http=${code:-000}"
+          done
+          CIP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTROL")
+          code=$(docker exec "$HERMES" sh -lc "curl -sS -o /dev/null -w '%{http_code}' --max-time 3 http://$CIP:4870/healthz" 2>/dev/null || true)
+          echo "health_target=control_ip http=${code:-000}"
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo monitor=active
+          echo provider_call=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_1_19_HERMES_CONTROL_API_NETWORK_PATH_OK
+          REMOTE

@@ -1,0 +1,119 @@
+name: Phase 1.18 Routed Execution Enable
+
+on:
+  push:
+    branches: [ops/phase-1.18-policy-boundary]
+    paths: ['.github/workflows/phase-1-18-routed-execution-enable.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+      - name: Enable routed execution via compose interpolation env
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CORE=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core
+          COMPOSE="$CORE/compose.yml"
+          ENV_FILE="$CORE/.env"
+          ENV_BACKUP="$CORE/.env.phase118-routed-enable.rollback"
+          SERVICE=control-api
+
+          echo '=== PHASE 1.18 ROUTED EXECUTION ENABLE ==='
+          test -f "$COMPOSE"
+          grep -q 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED: ${PHIL_AI_OS_ROUTED_EXECUTION_ENABLED:-false}' "$COMPOSE"
+          grep -q 'PHIL_AI_OS_EXECUTION_KILL_SWITCH: ${PHIL_AI_OS_EXECUTION_KILL_SWITCH:-true}' "$COMPOSE"
+          grep -q 'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES: ${PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES:-general}' "$COMPOSE"
+
+          if [ -f "$ENV_FILE" ]; then
+            cp -a "$ENV_FILE" "$ENV_BACKUP"
+            echo 'rollback_env=existing_env_saved'
+          else
+            : > "$ENV_BACKUP"
+            echo 'rollback_env=empty_baseline_saved'
+          fi
+
+          rollback() {
+            rc=$?
+            cp -a "$ENV_BACKUP" "$ENV_FILE" || true
+            cd "$CORE"
+            docker compose up -d --no-deps --force-recreate "$SERVICE" >/dev/null 2>&1 || true
+            echo 'automatic_rollback=performed'
+            exit "$rc"
+          }
+          trap rollback ERR
+
+          touch "$ENV_FILE"
+          PY_B64='aW1wb3J0IHN5cwpmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKcCA9IFBhdGgoc3lzLmFyZ3ZbMl0pCnVwZGF0ZXMgPSB7CiAgICAnUEhJTF9BSV9PU19ST1VURURfRVhFQ1VUSU9OX0VOQUJMRUQnOiAndHJ1ZScsCiAgICAnUEhJTF9BSV9PU19FWEVDVVRJT05fS0lMTF9TV0lUQ0gnOiAnZmFsc2UnLAogICAgJ1BISUxfQUlfT1NfRVhFQ1VUSU9OX0FMTE9XRURfVEFTS19DTEFTU0VTJzogJ2dlbmVyYWwnLAp9CmxpbmVzID0gcC5yZWFkX3RleHQoKS5zcGxpdGxpbmVzKCkgaWYgcC5leGlzdHMoKSBlbHNlIFtdCm91dCA9IFtdCnNlZW4gPSBzZXQoKQpmb3IgbGluZSBpbiBsaW5lczoKICAgIHN0cmlwcGVkID0gbGluZS5zdHJpcCgpCiAgICBpZiBub3Qgc3RyaXBwZWQgb3Igc3RyaXBwZWQuc3RhcnRzd2l0aCgnIycpIG9yICc9JyBub3QgaW4gbGluZToKICAgICAgICBvdXQuYXBwZW5kKGxpbmUpCiAgICAgICAgY29udGludWUKICAgIGtleSA9IGxpbmUuc3BsaXQoJz0nLCAxKVswXS5zdHJpcCgpCiAgICBpZiBrZXkgaW4gdXBkYXRlczoKICAgICAgICBpZiBrZXkgbm90IGluIHNlZW46CiAgICAgICAgICAgIG91dC5hcHBlbmQoZid7a2V5fT17dXBkYXRlc1trZXldfScpCiAgICAgICAgICAgIHNlZW4uYWRkKGtleSkKICAgIGVsc2U6CiAgICAgICAgb3V0LmFwcGVuZChsaW5lKQpmb3Iga2V5LCB2YWx1ZSBpbiB1cGRhdGVzLml0ZW1zKCk6CiAgICBpZiBrZXkgbm90IGluIHNlZW46CiAgICAgICAgb3V0LmFwcGVuZChmJ3trZXl9PXt2YWx1ZX0nKQpwLndyaXRlX3RleHQoJ1xuJy5qb2luKG91dCkgKyAnXG4nKQo='
+          python3 -c "import base64,sys; exec(base64.b64decode(sys.argv[1]))" "$PY_B64" "$ENV_FILE"
+          chmod 600 "$ENV_FILE"
+
+          grep -qx 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=true' "$ENV_FILE"
+          grep -qx 'PHIL_AI_OS_EXECUTION_KILL_SWITCH=false' "$ENV_FILE"
+          grep -qx 'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general' "$ENV_FILE"
+
+          cd "$CORE"
+          docker compose config -q
+          RESOLVED=$(docker compose config)
+          printf '%s\n' "$RESOLVED" | grep -q 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED: "true"'
+          printf '%s\n' "$RESOLVED" | grep -q 'PHIL_AI_OS_EXECUTION_KILL_SWITCH: "false"'
+
+          docker compose up -d --no-deps --force-recreate "$SERVICE"
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 3 http://127.0.0.1:4870/healthz >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
+          ROUTED=$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=' | head -1)
+          KILL=$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=' | head -1)
+          ALLOWED=$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=' | head -1)
+          test "$ROUTED" = 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=true'
+          test "$KILL" = 'PHIL_AI_OS_EXECUTION_KILL_SWITCH=false'
+          test "$ALLOWED" = 'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general'
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+
+          trap - ERR
+          echo 'binding_source=.env'
+          echo 'routed_execution_enabled=true'
+          echo 'execution_kill_switch=false'
+          echo 'allowed_task_classes=general'
+          echo 'control_api_recreated=yes'
+          echo 'control_api_health=ok'
+          echo 'monitor=active'
+          echo 'backup_self_heal_timer=active'
+          echo 'provider_call=none'
+          echo 'approval_requirement=unchanged'
+          echo PHIL_AI_OS_PHASE_1_18_ROUTED_EXECUTION_ENABLE_OK
+          REMOTE

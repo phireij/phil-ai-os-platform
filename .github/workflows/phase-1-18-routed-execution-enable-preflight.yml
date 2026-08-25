@@ -1,0 +1,77 @@
+name: Phase 1.18 Routed Execution Enable Preflight
+
+on:
+  push:
+    branches: [ops/phase-1.18-policy-boundary]
+    paths: ['.github/workflows/phase-1-18-routed-execution-enable-preflight.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+      - name: Discover exact compose source and rollback surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api' || true)
+          test -n "$CONTROL"
+          echo '=== PHASE 1.18 ROUTED EXECUTION ENABLE PREFLIGHT ==='
+          PROJECT=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$CONTROL")
+          WORKDIR=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$CONTROL")
+          CONFIG_FILES=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$CONTROL")
+          SERVICE=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.service" }}' "$CONTROL")
+          echo "compose_project=$PROJECT"
+          echo "compose_workdir=$WORKDIR"
+          echo "compose_service=$SERVICE"
+          echo "compose_config_files=$CONFIG_FILES"
+          CURRENT=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$CONTROL" | grep '^PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=' | head -1 || true)
+          echo "current_gate=${CURRENT:-not_set}"
+          KS=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$CONTROL" | grep '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=' | head -1 || true)
+          echo "kill_switch=${KS:-not_set}"
+          ALLOWED=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$CONTROL" | grep '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=' | head -1 || true)
+          echo "allowed_task_classes=${ALLOWED:-not_set}"
+          if [ -n "$WORKDIR" ] && [ -n "$CONFIG_FILES" ]; then
+            IFS=',' read -r FIRST_CONFIG _ <<< "$CONFIG_FILES"
+            case "$FIRST_CONFIG" in
+              /*) CFG="$FIRST_CONFIG" ;;
+              *) CFG="$WORKDIR/$FIRST_CONFIG" ;;
+            esac
+            echo "primary_compose=$CFG"
+            test -f "$CFG"
+            echo "primary_compose_sha256=$(sha256sum "$CFG" | awk '{print $1}')"
+            echo "gate_refs_in_compose=$(grep -c 'PHIL_AI_OS_ROUTED_EXECUTION_ENABLED' "$CFG" || true)"
+          fi
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo 'monitor=active'
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo 'backup_self_heal_timer=active'
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo 'control_api_health=ok'
+          echo 'provider_call=none'
+          echo 'production_change=none'
+          echo PHIL_AI_OS_PHASE_1_18_ROUTED_EXECUTION_ENABLE_PREFLIGHT_OK
+          REMOTE

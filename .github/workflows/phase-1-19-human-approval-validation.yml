@@ -1,0 +1,57 @@
+name: Phase 1.19 Human Approval Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ops/phase-1.19
+    paths:
+      - .github/workflows/phase-1-19-human-approval-validation.yml
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for i in 1 2 3 4 5; do
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then break; fi
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+      - name: Create fresh approval and send Telegram review link
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES="hermes-agent-whow-hermes-agent-1"
+          TASK="PHIL_AI_OS_PHASE_1_19_HUMAN_APPROVAL_VALIDATION"
+          echo "=== PHASE 1.19 HUMAN APPROVAL VALIDATION PREPARE ==="
+          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control request "$TASK")"
+          printf '%s\n' "$OUT"
+          APPROVAL_ID="$(printf '%s\n' "$OUT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["approval"]["approval_id"])')"
+          echo "approval_id=$APPROVAL_ID"
+          docker exec "$HERMES" /usr/local/bin/philaios-telegram-approval-notifier "$APPROVAL_ID"
+          echo "telegram_delivery=ok"
+          echo "expected_state=pending"
+          echo "execution_invoked=none"
+          echo "provider_call=none"
+          echo "PHIL_AI_OS_PHASE_1_19_HUMAN_APPROVAL_VALIDATION_PREPARE_OK"
+          REMOTE

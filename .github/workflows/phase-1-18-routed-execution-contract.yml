@@ -1,0 +1,60 @@
+name: Phase 1.18 Routed Execution Contract
+
+on:
+  push:
+    branches: [ops/phase-1.18-policy-boundary]
+    paths: ['.github/workflows/phase-1-18-routed-execution-contract.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+      - name: Read execution client contract without provider call
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow' || true)
+          test -n "$HERMES"
+          echo '=== PHASE 1.18 ROUTED EXECUTION CONTRACT ==='
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-execute
+          HELP=$(docker exec "$HERMES" sh -lc '/usr/local/bin/philaios-execute --help 2>&1 || /usr/local/bin/philaios-execute 2>&1 || true')
+          if printf '%s\n' "$HELP" | grep -q -- '--task'; then echo 'arg_task=yes'; else echo 'arg_task=no'; fi
+          if printf '%s\n' "$HELP" | grep -q -- '--task-class'; then echo 'arg_task_class=yes'; else echo 'arg_task_class=no'; fi
+          if printf '%s\n' "$HELP" | grep -q -- '--approval'; then echo 'arg_approval=yes'; else echo 'arg_approval=no'; fi
+          if printf '%s\n' "$HELP" | grep -q -- '--dry-run'; then echo 'arg_dry_run=yes'; else echo 'arg_dry_run=no'; fi
+          if printf '%s\n' "$HELP" | grep -Eq 'usage:|Usage:'; then echo 'usage_banner=present'; else echo 'usage_banner=missing'; fi
+          docker exec "$HERMES" grep -q '/v1/execute' /usr/local/bin/philaios-execute && echo 'route=/v1/execute'
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo 'monitor=active'
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo 'backup_self_heal_timer=active'
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo 'control_api_health=ok'
+          echo 'provider_call=none'
+          echo 'production_change=none'
+          echo PHIL_AI_OS_PHASE_1_18_ROUTED_EXECUTION_CONTRACT_OK
+          REMOTE

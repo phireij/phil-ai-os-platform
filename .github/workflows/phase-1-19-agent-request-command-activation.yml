@@ -1,0 +1,145 @@
+name: Phase 1.19 Hermes Approval Request Command Activation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ops/phase-1.19
+    paths:
+      - .github/workflows/phase-1-19-agent-request-command-activation.yml
+      - ops/phase-1.19/philaios-mission-control-client.py
+
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for i in 1 2 3 4 5; do
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+              break
+            fi
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+
+      - name: Activate durable request command and validate pending state
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          LOCAL_CLIENT="ops/phase-1.19/philaios-mission-control-client.py"
+          REMOTE_CLIENT="/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/hermes/philaios-mission-control-client.py"
+          REMOTE_ROLLBACK="${REMOTE_CLIENT}.phase119-request.rollback"
+
+          test -f "$LOCAL_CLIENT"
+          python3 -m py_compile "$LOCAL_CLIENT"
+
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
+            "test -f '$REMOTE_CLIENT' && cp -a '$REMOTE_CLIENT' '$REMOTE_ROLLBACK'"
+
+          scp -P "$PORT" -q "$LOCAL_CLIENT" "$VPS_USER@$VPS_HOST:${REMOTE_CLIENT}.new"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
+            "python3 -m py_compile '${REMOTE_CLIENT}.new' && cat '${REMOTE_CLIENT}.new' > '$REMOTE_CLIENT' && chmod 755 '$REMOTE_CLIENT' && rm -f '${REMOTE_CLIENT}.new'"
+
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES="hermes-agent-whow-hermes-agent-1"
+          CLIENT="/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/hermes/philaios-mission-control-client.py"
+          ROLLBACK="${CLIENT}.phase119-request.rollback"
+          COMPOSE_DIR="/docker/hermes-agent-whow"
+          TASK="PHIL_AI_OS_PHASE_1_19_APPROVAL_REQUEST_VALIDATION"
+
+          recreate_hermes() {
+            cd "$COMPOSE_DIR"
+            docker compose -f docker-compose.yml -f docker-compose.phil-ai-os.yml up -d --no-deps --force-recreate hermes-agent
+            for i in $(seq 1 30); do
+              if docker ps --format '{{.Names}}' | grep -qx "$HERMES"; then
+                return 0
+              fi
+              sleep 2
+            done
+            return 1
+          }
+
+          rollback() {
+            if [ -f "$ROLLBACK" ]; then
+              cat "$ROLLBACK" > "$CLIENT"
+              chmod 755 "$CLIENT"
+              recreate_hermes || true
+            fi
+            echo "automatic_rollback=performed"
+          }
+
+          execution_fingerprint() {
+            docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions | \
+              python3 -c 'import json,sys,hashlib; d=json.load(sys.stdin); x=d.get("executions", d if isinstance(d,list) else []); s=json.dumps(x,sort_keys=True,separators=(",",":")); print(hashlib.sha256(s.encode()).hexdigest())'
+          }
+
+          echo "=== PHASE 1.19 AGENT APPROVAL REQUEST ACTIVATION ==="
+          echo "rollback_file=$ROLLBACK"
+          python3 -m py_compile "$CLIENT"
+
+          recreate_hermes || { rollback; exit 1; }
+          echo "hermes_recreated=yes"
+
+          if ! docker exec "$HERMES" python3 -m py_compile /usr/local/bin/philaios-mission-control; then
+            rollback
+            exit 1
+          fi
+          echo "client_update=installed"
+
+          BEFORE_EXEC="$(execution_fingerprint)"
+          if ! OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control request "$TASK" 2>&1)"; then
+            printf '%s\n' "$OUT"
+            rollback
+            exit 1
+          fi
+          printf '%s\n' "$OUT"
+          echo "request_command=ok"
+
+          APPROVALS="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals)"
+          if ! printf '%s\n' "$APPROVALS" | grep -F "$TASK" >/dev/null; then
+            rollback
+            exit 1
+          fi
+          if ! printf '%s\n' "$APPROVALS" | grep -Ei 'pending' >/dev/null; then
+            rollback
+            exit 1
+          fi
+
+          AFTER_EXEC="$(execution_fingerprint)"
+          if [ "$BEFORE_EXEC" != "$AFTER_EXEC" ]; then
+            echo "execution_history_changed=unexpected"
+            rollback
+            exit 1
+          fi
+
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo "monitor=active"
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo "backup_self_heal_timer=active"
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo "control_api_health=ok"
+          echo "approval_state=pending_verified"
+          echo "execution_history_unchanged=yes"
+          echo "self_approval_capability=absent"
+          echo "provider_call=none"
+          echo "execution_invoked=none"
+          echo "production_change=mission_control_request_command_and_hermes_remount"
+          echo "PHIL_AI_OS_PHASE_1_19_AGENT_APPROVAL_REQUEST_ACTIVATION_OK"
+          REMOTE
