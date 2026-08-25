@@ -1,0 +1,76 @@
+name: Phase 1.19 Post Execution Consumption Diagnostic
+
+on:
+  push:
+    branches:
+      - ops/phase-1.19
+    paths:
+      - '.github/workflows/phase-1-19-post-execution-consumption-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for i in 1 2 3 4 5; do
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then break; fi
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+
+      - name: Diagnose post-execution approval and audit state
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES="hermes-agent-whow-hermes-agent-1"
+          APPROVAL_ID="apr_8fd8b8d9b504486a8c7cffe6f9bb1fc0"
+          echo '=== PHASE 1.19 POST EXECUTION CONSUMPTION DIAGNOSTIC ==='
+          echo '--- approvals client output ---'
+          docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals || true
+          echo '--- executions client output ---'
+          docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions || true
+          echo '--- durable database approval row ---'
+          CONTROL=phil-ai-os-core-control-api-1
+          docker exec "$CONTROL" python - "$APPROVAL_ID" <<'PY'
+import sqlite3,sys
+p='/app/state/control-plane.db'
+a=sys.argv[1]
+con=sqlite3.connect(p)
+con.row_factory=sqlite3.Row
+r=con.execute('select approval_id,state,task_text,decision_at,consumed_at,consumed_by from approval_requests where approval_id=?',(a,)).fetchone()
+print(dict(r) if r else 'approval_row=missing')
+rows=con.execute('select id,occurred_at,source,task_class,provider_id,model_id,route_path,response_id,compatibility_pass,execution_mode,outcome,detail,approval_id from execution_audit where approval_id=? order by id desc limit 5',(a,)).fetchall()
+print('audit_rows='+str(len(rows)))
+for row in rows: print(dict(row))
+PY
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo monitor=active
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo backup_self_heal_timer=active
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo control_api_health=ok
+          echo provider_call=none
+          echo execution_invoked=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_1_19_POST_EXECUTION_CONSUMPTION_DIAGNOSTIC_OK
+          REMOTE
