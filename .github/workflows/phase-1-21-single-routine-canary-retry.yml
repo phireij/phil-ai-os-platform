@@ -1,0 +1,95 @@
+name: Phase 1.21 Single Routine Canary Retry
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-single-routine-canary-retry.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+      - name: Execute exactly one approved routine canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES=hermes-agent-whow-hermes-agent-1
+          CONTROL=phil-ai-os-core-control-api-1
+          APPROVAL_ID='apr_8e246f5927254dfbb4234b21ef10602c'
+          TASK='Return exactly PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK'
+          echo '=== PHASE 1.21 SINGLE ROUTINE CANARY RETRY ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          test -s /etc/phil-ai-os/phase-1-21-routine-canary.env
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$' /etc/phil-ai-os/phase-1-21-routine-canary.env
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_SCOPE=one-request-only$' /etc/phil-ai-os/phase-1-21-routine-canary.env
+          grep -q '^PHIL_AI_OS_PHASE_1_21_DIRECT_PROVIDER_BYPASS=false$' /etc/phil-ai-os/phase-1-21-routine-canary.env
+          grep -q '^PHIL_AI_OS_PHASE_1_21_AUTONOMOUS_EXPANSION=false$' /etc/phil-ai-os/phase-1-21-routine-canary.env
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+
+          docker exec -e APPROVAL_ID="$APPROVAL_ID" "$CONTROL" python - <<'PY'
+          import os,sqlite3,datetime
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          r=con.execute('select state,task_text,task_class,consumed_at,expires_at from approval_requests where approval_id=?',(os.environ['APPROVAL_ID'],)).fetchone()
+          assert r is not None, 'approval missing'
+          assert r['state']=='approved', dict(r)
+          assert r['task_class']=='routine', dict(r)
+          assert r['consumed_at'] is None, dict(r)
+          assert 'PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK' in r['task_text'], dict(r)
+          print('approval_state=approved')
+          print('approval_task_class=routine')
+          print('approval_consumed_before=no')
+          PY
+
+          # The corrected client receives task text as argv[2]; all later values are metadata.
+          set +e
+          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-execute "$APPROVAL_ID" "$TASK" --task-class routine --max-output-tokens 64 2>&1)"
+          RC=$?
+          set -e
+          printf '%s\n' "$OUT"
+          echo "execution_rc=$RC"
+          test "$RC" -eq 0
+          grep -q 'PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_OK' <<<"$OUT"
+
+          docker exec -e APPROVAL_ID="$APPROVAL_ID" "$CONTROL" python - <<'PY'
+          import os,sqlite3
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          r=con.execute('select state,consumed_at from approval_requests where approval_id=?',(os.environ['APPROVAL_ID'],)).fetchone()
+          assert r is not None
+          assert r['consumed_at'] is not None, dict(r)
+          print('approval_consumed_after=yes')
+          PY
+          echo canary_result=PASS
+          echo canary_scope=one_request_only
+          echo autonomous_expansion=disabled
+          echo next_action=PHASE_1_21_ROUTINE_CANARY_RESULT_VERIFICATION
+          echo PHIL_AI_OS_PHASE_1_21_SINGLE_ROUTINE_CANARY_RETRY_OK
+          REMOTE
