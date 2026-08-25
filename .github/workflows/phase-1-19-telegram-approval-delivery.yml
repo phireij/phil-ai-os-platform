@@ -1,0 +1,87 @@
+name: Phase 1.19 Hermes Approval Telegram Delivery
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ops/phase-1.19
+    paths:
+      - .github/workflows/phase-1-19-telegram-approval-delivery.yml
+
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for i in 1 2 3 4 5; do
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+              break
+            fi
+            sleep 3
+          done
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+
+      - name: Create fresh approval and deliver Telegram notification
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HERMES="hermes-agent-whow-hermes-agent-1"
+          TASK="PHIL_AI_OS_PHASE_1_19_TELEGRAM_APPROVAL_DELIVERY_VALIDATION"
+
+          echo "=== PHASE 1.19 TELEGRAM APPROVAL DELIVERY ==="
+
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-telegram-approval-notifier
+          echo "mission_control_client=ready"
+          echo "notifier=ready"
+
+          REQUEST_JSON="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control request "$TASK")"
+          printf '%s\n' "$REQUEST_JSON"
+          APPROVAL_ID="$(printf '%s\n' "$REQUEST_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["approval"]["approval_id"])')"
+          test -n "$APPROVAL_ID"
+          echo "approval_id=$APPROVAL_ID"
+
+          STATE="$(printf '%s\n' "$REQUEST_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["approval"]["state"])')"
+          test "$STATE" = "pending"
+          echo "approval_state_before_delivery=pending"
+
+          NOTIFY_JSON="$(docker exec "$HERMES" /usr/local/bin/philaios-telegram-approval-notifier "$APPROVAL_ID")"
+          printf '%s\n' "$NOTIFY_JSON"
+          TELEGRAM_OK="$(printf '%s\n' "$NOTIFY_JSON" | python3 -c 'import json,sys; print(str(json.load(sys.stdin).get("telegram_ok", False)).lower())')"
+          test "$TELEGRAM_OK" = "true"
+          echo "telegram_delivery=ok"
+
+          APPROVALS_JSON="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals)"
+          printf '%s\n' "$APPROVALS_JSON" | grep -F "$APPROVAL_ID" >/dev/null
+          printf '%s\n' "$APPROVALS_JSON" | grep -Ei 'pending' >/dev/null
+          echo "approval_state_after_delivery=pending_verified"
+
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo "monitor=active"
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo "backup_self_heal_timer=active"
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo "control_api_health=ok"
+          echo "provider_call=none"
+          echo "execution_invoked=none"
+          echo "production_change=approval_request_and_telegram_notification"
+          echo "PHIL_AI_OS_PHASE_1_19_TELEGRAM_APPROVAL_DELIVERY_OK"
+          REMOTE
