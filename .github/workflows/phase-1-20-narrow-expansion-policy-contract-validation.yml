@@ -1,0 +1,37 @@
+name: Phase 1.20 Narrow Expansion Policy Contract Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-20-narrow-expansion-policy-contract-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          F=docs/PHASE_1_20_NARROW_EXPANSION_POLICY_CONTRACT.md
+          test -s "$F"
+          grep -q 'deny-by-default' "$F"
+          grep -q 'human approval' "$F"
+          grep -q 'replay rejection' "$F"
+          grep -q 'execution kill switch' "$F"
+          grep -q 'durable approval and execution audit linkage' "$F"
+          grep -q 'Direct provider bypass is prohibited' "$F"
+          grep -q 'No production scope expansion is authorized by this document alone' "$F"
+          grep -q 'NARROW_EXPANSION_POLICY_CONTRACT_DEFINED' "$F"
+          echo contract=validated
+          echo production_policy_change=none
+          echo provider_call=none
+          echo execution_invoked=none
+          echo next_action=NEGATIVE_PATH_AND_ROLLBACK_VALIDATION
+          echo PHIL_AI_OS_PHASE_1_20_NARROW_EXPANSION_POLICY_CONTRACT_VALIDATION_OK
