@@ -1,0 +1,84 @@
+name: Phase 1.20 Approval Task Binding
+
+on:
+  push:
+    branches: [ops/phase-1.20]
+    paths:
+      - '.github/workflows/phase-1-20-approval-task-binding.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  binding:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true
+      - name: Validate approval-to-task and execution identity binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          HERMES=hermes-agent-whow-hermes-agent-1
+          CANARY=PHIL_AI_OS_ROUTED_EXECUTION_OK
+          echo '=== PHASE 1.20 APPROVAL TASK BINDING ==='
+
+          ROW="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); r=c.execute(\"select approval_id,task_text,consumed_by from approval_requests where consumed_at is not null and task_text=? order by updated_at desc limit 1\",('$CANARY',)).fetchone(); print('|'.join(str(x or '') for x in r) if r else '')")"
+          test -n "$ROW"
+          APPROVAL_ID="${ROW%%|*}"
+          REST="${ROW#*|}"
+          APPROVED_TASK="${REST%%|*}"
+          CONSUMED_BY="${REST#*|}"
+          test "$APPROVED_TASK" = "$CANARY"
+          test -n "$CONSUMED_BY"
+          echo durable_binding_record=verified
+
+          SUCCESS_BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute(\"select count(*) from execution_audit where outcome='success'\").fetchone()[0])")"
+
+          set +e
+          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-execute "$APPROVAL_ID" 'PHIL_AI_OS_PHASE_1_20_TASK_MISMATCH' 2>&1)"
+          RC=$?
+          set -e
+          test "$RC" -ne 0
+          printf '%s\n' "$OUT" | grep -Eqi 'approval|consum|mismatch|allowlist|not_allowlisted|task'
+          echo altered_task_with_bound_approval=rejected
+
+          set +e
+          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-execute 'apr_phase120_invalid_identity' "$CANARY" 2>&1)"
+          RC=$?
+          set -e
+          test "$RC" -ne 0
+          printf '%s\n' "$OUT" | grep -Eqi 'approval|not found|invalid|missing|unauthor|not approved|not_approved'
+          echo invalid_approval_identity=rejected
+
+          SUCCESS_AFTER="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute(\"select count(*) from execution_audit where outcome='success'\").fetchone()[0])")"
+          test "$SUCCESS_BEFORE" = "$SUCCESS_AFTER"
+          echo successful_execution_count_unchanged=yes
+
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo monitor=active
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo backup_self_heal_timer=active
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null && echo control_api_health=ok
+          echo provider_call=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_1_20_APPROVAL_TASK_BINDING_OK
+          REMOTE
