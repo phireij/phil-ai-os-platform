@@ -1,0 +1,108 @@
+name: Phase 1.21 Narrow Routine Allowlist Activation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-21-narrow-routine-allowlist-activation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+      - name: Activate routine only for approved one-request canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          APPROVAL_ID='apr_8e246f5927254dfbb4234b21ef10602c'
+          MARKER=/etc/phil-ai-os/phase-1-21-routine-canary.env
+          echo '=== PHASE 1.21 NARROW ROUTINE ALLOWLIST ACTIVATION ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          test -s "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_ACTIVE=true$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_CANARY_SCOPE=one-request-only$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_DIRECT_PROVIDER_BYPASS=false$' "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_AUTONOMOUS_EXPANSION=false$' "$MARKER"
+
+          docker exec -e APPROVAL_ID="$APPROVAL_ID" "$CONTROL" python - <<'PY'
+          import os,sqlite3
+          con=sqlite3.connect('/app/state/control-plane.db'); con.row_factory=sqlite3.Row
+          r=con.execute('select state,task_class,consumed_at from approval_requests where approval_id=?',(os.environ['APPROVAL_ID'],)).fetchone()
+          assert r is not None, 'approval missing'
+          assert r['state']=='approved', dict(r)
+          assert r['task_class']=='routine', dict(r)
+          assert r['consumed_at'] is None, dict(r)
+          print('approved_routine_canary=verified')
+          PY
+
+          # Persist the narrow runtime configuration at the compose source rather than
+          # mutating only the live container. Discover the compose project working dir.
+          WORKDIR="$(docker inspect "$CONTROL" --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')"
+          CONFIG_FILES="$(docker inspect "$CONTROL" --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}')"
+          test -n "$WORKDIR"
+          test -n "$CONFIG_FILES"
+          echo "compose_workdir=$WORKDIR"
+          echo "compose_config_files=$CONFIG_FILES"
+
+          # Find the env source that currently defines the allowlist.
+          SOURCE="$(grep -RIl --exclude='*.bak*' --exclude-dir='.git' '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' "$WORKDIR" 2>/dev/null | head -n1 || true)"
+          test -n "$SOURCE"
+          echo "allowlist_source=$SOURCE"
+          BACKUP="${SOURCE}.phase-1-21-pre-routine.bak"
+          test -e "$BACKUP" || cp -a "$SOURCE" "$BACKUP"
+          sed -i 's/^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$/PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general,routine/' "$SOURCE"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general,routine$' "$SOURCE"
+
+          cd "$WORKDIR"
+          # Recreate only control-api so the new environment is loaded; dependencies stay untouched.
+          docker compose up -d --no-deps --force-recreate control-api
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 3 http://127.0.0.1:4870/healthz >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general,routine$' <<<"$ENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$ENV"
+
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ALLOWLIST_BACKUP=' "$MARKER" || printf '%s\n' "PHIL_AI_OS_PHASE_1_21_ALLOWLIST_BACKUP=$BACKUP" >> "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ALLOWLIST_SOURCE=' "$MARKER" || printf '%s\n' "PHIL_AI_OS_PHASE_1_21_ALLOWLIST_SOURCE=$SOURCE" >> "$MARKER"
+          grep -q '^PHIL_AI_OS_PHASE_1_21_ROUTINE_ALLOWLIST_ACTIVE=true$' "$MARKER" || printf '%s\n' 'PHIL_AI_OS_PHASE_1_21_ROUTINE_ALLOWLIST_ACTIVE=true' >> "$MARKER"
+
+          echo allowlist=general,routine
+          echo scope=one-approved-request-only
+          echo direct_provider_bypass=false
+          echo autonomous_expansion=false
+          echo provider_call=none
+          echo approval_consumed=no
+          echo rollback_backup="$BACKUP"
+          echo next_action=PHASE_1_21_SINGLE_ROUTINE_CANARY_RETRY
+          echo PHIL_AI_OS_PHASE_1_21_NARROW_ROUTINE_ALLOWLIST_ACTIVATION_OK
+          REMOTE
