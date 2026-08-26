@@ -1,0 +1,72 @@
+name: Phase 2.1D Read Source Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1d-read-source-discovery.yml'
+      - '.github/phase-2-1d-read-source-discovery-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Discover authoritative read sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          HERMES="$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow')"
+          test -n "$CONTROL"; test -n "$HERMES"
+          echo '--- governance env (non-secret only) ---'
+          docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' \
+            | grep -E '^PHIL_AI_OS_(EXECUTION|APPROVAL|ROUTING|LIVE_TEST|PRODUCTION|KILL)' \
+            | grep -Evi '(TOKEN|SECRET|KEY|PASSWORD|AUTH)' || true
+          echo '--- snapshot top-level and governance-like keys ---'
+          docker exec "$HERMES" /usr/local/bin/philaios-mission-control snapshot | python3 -c 'import json,sys; d=json.load(sys.stdin); print("snapshot_top_keys="+",".join(sorted(d.keys()))); import re; out=[]; 
+for k,v in d.items():
+ s=(k+" "+str(v)).lower();
+ if any(x in s for x in ("enforcement","scope","kill","allow","execution")): out.append(k)
+print("snapshot_governance_keys="+",".join(sorted(set(out))))'
+          echo '--- approval/execution record keys ---'
+          docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals | python3 -c 'import json,sys; d=json.load(sys.stdin); rows=d if isinstance(d,list) else d.get("approvals",[]); print("approval_count="+str(len(rows))); print("approval_keys="+(",".join(sorted(rows[0].keys())) if rows else "none"))'
+          docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions | python3 -c 'import json,sys; d=json.load(sys.stdin); rows=d if isinstance(d,list) else d.get("executions",[]); print("execution_count="+str(len(rows))); print("execution_keys="+(",".join(sorted(rows[0].keys())) if rows else "none"))'
+          echo production_change=none
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1D_READ_SOURCE_DISCOVERY_OK
+          REMOTE
