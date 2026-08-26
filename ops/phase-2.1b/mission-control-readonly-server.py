@@ -19,12 +19,12 @@ body{font-family:system-ui,-apple-system,sans-serif;margin:0;background:#f5f7fa;
 header{padding:20px 24px;background:#111827;color:#fff;display:flex;justify-content:space-between;align-items:center}
 main{padding:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
 .card{background:#fff;border:1px solid #dbe2ea;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-h2{font-size:16px;margin:0 0 12px}.kv{display:grid;grid-template-columns:1fr auto;gap:8px;margin:6px 0}.muted{color:#667085}.badge{padding:3px 8px;border-radius:999px;background:#eef2f6;font-size:12px}.warn{color:#9a6700}.err{color:#b42318}.ok{color:#067647}ul{padding-left:18px}button{display:none}
+h2{font-size:16px;margin:0 0 12px}.kv{display:grid;grid-template-columns:1fr auto;gap:8px;margin:6px 0}.muted{color:#667085}.badge{padding:3px 8px;border-radius:999px;background:#eef2f6;font-size:12px}.warn{color:#9a6700}.err{color:#b42318}.ok{color:#067647}ul{padding-left:18px}button{display:none}.meta{font-size:12px;color:#667085;margin-left:6px}
 footer{padding:0 20px 20px;color:#667085;font-size:12px}
 </style>
 </head>
 <body>
-<header><strong>Phil AI OS Mission Control</strong><span class="badge">READ ONLY · Phase 2.1B</span></header>
+<header><strong>Phil AI OS Mission Control</strong><span class="badge">READ ONLY · Phase 2.1D</span></header>
 <main>
 <section class="card"><h2>System Health</h2><div id="health">Loading…</div></section>
 <section class="card"><h2>Governance</h2><div id="governance">Loading…</div></section>
@@ -37,12 +37,14 @@ footer{padding:0 20px 20px;color:#667085;font-size:12px}
 <script>
 const esc=x=>String(x??'unknown').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const kv=(k,v)=>`<div class="kv"><span class="muted">${esc(k)}</span><strong>${esc(v)}</strong></div>`;
+const src=(p,k)=>p?.[k]?` <span class="meta">(${esc(p[k])})</span>`:'';
 fetch('api/read-model',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(d=>{
- document.getElementById('health').innerHTML=kv('Overall',d.overall_state)+kv('Control API',d.platform?.control_api_health)+kv('Readiness',d.platform?.control_api_readiness)+kv('Monitoring',d.platform?.monitoring_state)+kv('Generated',d.generated_at);
- document.getElementById('governance').innerHTML=kv('Allowed classes',(d.governance?.execution_allowed_task_classes||[]).join(', '))+kv('Enforcement',d.governance?.execution_enforcement_mode)+kv('Scope',d.governance?.execution_enforcement_scope)+kv('Kill switch',d.governance?.kill_switch_state)+kv('Authority expansion',d.governance?.authority_expansion_state);
- document.getElementById('agents').innerHTML='<ul>'+(d.agents||[]).map(a=>`<li><strong>${esc(a.display_name)}</strong> — ${esc(a.role)} / ${esc(a.authority_level)} / ${esc(a.status)}</li>`).join('')+'</ul>';
- document.getElementById('approvals').innerHTML=kv('Canonical tasks',(d.tasks||[]).length)+kv('Recent approvals',(d.approvals||[]).length)+kv('Correlation',d.data_quality?.correlation_quality);
- document.getElementById('executions').innerHTML=kv('Recent executions',(d.executions||[]).length)+kv('Direct provider bypass',d.governance?.direct_provider_bypass_allowed);
+ const g=d.governance||{}, gp=g.provenance||{};
+ document.getElementById('health').innerHTML=kv('Overall',d.overall_state)+kv('Control API',d.platform?.control_api_health)+kv('Readiness',d.platform?.control_api_readiness)+kv('Monitoring',d.platform?.monitoring_state)+kv('Generated',d.generated_at)+kv('Schema',d.schema_version);
+ document.getElementById('governance').innerHTML=kv('Allowed classes',(g.execution_allowed_task_classes||[]).join(', ')+src(gp,'execution_allowed_task_classes'))+kv('Enforcement',g.execution_enforcement_mode+src(gp,'execution_enforcement_mode'))+kv('Scope',g.execution_enforcement_scope+src(gp,'execution_enforcement_scope'))+kv('Kill switch',g.kill_switch_state+src(gp,'kill_switch_state'))+kv('Authority expansion',g.authority_expansion_state)+kv('Direct provider bypass',g.direct_provider_bypass_allowed);
+ document.getElementById('agents').innerHTML='<ul>'+(d.agents||[]).map(a=>`<li><strong>${esc(a.display_name)}</strong> — ${esc(a.role)} / ${esc(a.authority_level)} / ${esc(a.status)}<br><span class="meta">lifecycle=${esc(a.lifecycle_state)} · task=${esc(a.current_task_id??'none')}</span></li>`).join('')+'</ul>';
+ document.getElementById('approvals').innerHTML=kv('Canonical tasks',(d.tasks||[]).length)+kv('Recent approvals',(d.approvals||[]).length)+kv('Correlation',d.data_quality?.correlation_quality)+kv('Proven unavailable',(d.data_quality?.proven_unavailable||[]).join(', ')||'none');
+ document.getElementById('executions').innerHTML=kv('Recent executions',(d.executions||[]).length)+kv('Direct provider bypass',g.direct_provider_bypass_allowed);
  document.getElementById('recovery').innerHTML=kv('Backup timer',d.recovery?.backup_timer_state)+kv('Self-heal',d.recovery?.backup_self_heal_state)+kv('Restore validation',d.recovery?.restore_validation_status)+kv('Freshness',d.data_quality?.freshness)+'<ul class="warn">'+(d.data_quality?.warnings||[]).map(w=>`<li>${esc(w)}</li>`).join('')+'</ul>';
 }).catch(e=>{document.querySelectorAll('main .card div').forEach(x=>x.innerHTML='<span class="err">Unavailable: '+esc(e.message)+'</span>')});
 </script>
@@ -68,7 +70,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 data = json.loads(p.stdout)
             except Exception:
-                data = {'schema_version':'2.1a.v1','overall_state':'unknown','data_quality':{'partial':True,'warnings':['read model unavailable']}}
+                data = {'schema_version':'2.1d.v1','overall_state':'unknown','data_quality':{'partial':True,'warnings':['read model unavailable']}}
                 p = type('P', (), {'returncode':1})()
             code = 200 if p.returncode == 0 else 503
             self._send(code, json.dumps(data, sort_keys=True), 'application/json; charset=utf-8')
@@ -87,5 +89,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f'PHIL_AI_OS_PHASE_2_1B_READ_ONLY_DASHBOARD_LISTENING host={HOST} port={PORT}', flush=True)
+    print(f'PHIL_AI_OS_PHASE_2_1D_READ_ONLY_DASHBOARD_LISTENING host={HOST} port={PORT}', flush=True)
     server.serve_forever()
