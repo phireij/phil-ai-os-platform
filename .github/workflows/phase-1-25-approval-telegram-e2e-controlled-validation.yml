@@ -54,25 +54,53 @@ jobs:
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
           BASE=http://127.0.0.1:4870
-          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V3 ==='
+          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V4 ==='
           curl -fsS "$BASE/healthz" >/dev/null
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
           echo production_allowlist=general_only
 
+          # Resolve the exact credential already used by the live monitor, without printing it.
           TOKEN=''
-          for f in /run/philaios/control_api_token /run/philaios/hermes_control_api_token /etc/phil-ai-os/control-api-token /opt/phil-ai-os/secrets/control-api-token; do
-            if [ -r "$f" ]; then
-              TOKEN="$(cat "$f")"
-              break
+          TOKEN_FILE=''
+          if [ -r /etc/phil-ai-os-monitor.env ]; then
+            set -a
+            . /etc/phil-ai-os-monitor.env
+            set +a
+            TOKEN="${PHIL_AI_OS_CONTROL_API_TOKEN:-}"
+            TOKEN_FILE="${PHIL_AI_OS_CONTROL_API_TOKEN_FILE:-}"
+          fi
+          if [ -z "$TOKEN" ] && [ -n "$TOKEN_FILE" ] && [ -r "$TOKEN_FILE" ]; then
+            TOKEN="$(cat "$TOKEN_FILE")"
+          fi
+
+          # Fallback: inspect the running monitor process environment (values never echoed).
+          if [ -z "$TOKEN" ]; then
+            MPID="$(systemctl show phil-ai-os-monitor.service -p MainPID --value)"
+            if [ -n "$MPID" ] && [ "$MPID" != 0 ] && [ -r "/proc/$MPID/environ" ]; then
+              PROC_ENV="$(tr '\0' '\n' < "/proc/$MPID/environ")"
+              TOKEN="$(printf '%s\n' "$PROC_ENV" | sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN=//p' | tail -n1)"
+              if [ -z "$TOKEN" ]; then
+                TOKEN_FILE="$(printf '%s\n' "$PROC_ENV" | sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN_FILE=//p' | tail -n1)"
+                if [ -n "$TOKEN_FILE" ] && [ -r "$TOKEN_FILE" ]; then TOKEN="$(cat "$TOKEN_FILE")"; fi
+              fi
             fi
-          done
-          if [ -z "$TOKEN" ] && [ -r /etc/phil-ai-os-monitor.env ]; then
-            TOKEN_FILE="$(sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN_FILE=//p' /etc/phil-ai-os-monitor.env | tail -n1)"
-            if [ -n "$TOKEN_FILE" ] && [ -r "$TOKEN_FILE" ]; then TOKEN="$(cat "$TOKEN_FILE")"; fi
-            if [ -z "$TOKEN" ]; then TOKEN="$(sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN=//p' /etc/phil-ai-os-monitor.env | tail -n1)"; fi
+          fi
+
+          # Final fallback: known mounted credential files on host and inside the Hermes container.
+          if [ -z "$TOKEN" ]; then
+            for f in /run/philaios/control_api_token /run/philaios/hermes_control_api_token /etc/phil-ai-os/control-api-token /opt/phil-ai-os/secrets/control-api-token; do
+              if [ -r "$f" ]; then TOKEN="$(cat "$f")"; break; fi
+            done
+          fi
+          if [ -z "$TOKEN" ]; then
+            HERMES="$(docker ps --format '{{.Names}}' | grep -E '^hermes-agent-whow|hermes' | head -n1 || true)"
+            if [ -n "$HERMES" ]; then
+              TOKEN="$(docker exec "$HERMES" sh -lc 'for f in /run/philaios/hermes_control_api_token /run/philaios/control_api_token; do [ -r "$f" ] && { cat "$f"; exit 0; }; done; exit 1' 2>/dev/null || true)"
+            fi
           fi
           [ -n "$TOKEN" ]
+          echo control_api_token_resolved=true
           AUTH="Authorization: Bearer $TOKEN"
 
           TASK="PHIL_AI_OS_PHASE_1_25_CONTROLLED_APPROVAL_E2E_$(date -u +%Y%m%dT%H%M%SZ)"
