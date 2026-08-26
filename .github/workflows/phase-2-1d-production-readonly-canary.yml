@@ -1,0 +1,166 @@
+name: Phase 2.1D Production Read-Only Canary
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1d-production-readonly-canary.yml'
+      - '.github/phase-2-1d-production-readonly-canary-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      MC_HOSTNAME: hermes-agent-whow.srv1833510.hstgr.cloud
+      MC_PATH: /phil-ai-os/operator/
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"
+            sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Stage Phase 2.1D read-only files
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q \
+            ops/phase-2.1a/philaios-mission-control-read-model.py \
+            ops/phase-2.1b/mission-control-readonly-server.py \
+            "$VPS_USER@$VPS_HOST:/tmp/"
+
+      - name: Atomic read-only canary deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HOSTNAME='hermes-agent-whow.srv1833510.hstgr.cloud'
+          OP_PATH='/phil-ai-os/operator/'
+          SERVICE='phil-ai-os-mission-control-operator.service'
+          INSTALL_DIR='/opt/phil-ai-os/mission-control'
+          BACKUP_DIR="$(mktemp -d /tmp/philaios-phase-2-1d-rollback.XXXXXX)"
+          success=0
+
+          rollback() {
+            echo rollback=started
+            if test -f "$BACKUP_DIR/read-model.py"; then install -m 755 "$BACKUP_DIR/read-model.py" "$INSTALL_DIR/read-model.py"; fi
+            if test -f "$BACKUP_DIR/server.py"; then install -m 755 "$BACKUP_DIR/server.py" "$INSTALL_DIR/server.py"; fi
+            systemctl restart "$SERVICE" >/dev/null 2>&1 || true
+            echo rollback=completed
+          }
+          cleanup() {
+            rc=$?
+            rm -f /tmp/philaios-mission-control-read-model.py /tmp/mission-control-readonly-server.py
+            if [ "$rc" -ne 0 ] && [ "$success" -ne 1 ]; then rollback; fi
+            rm -rf "$BACKUP_DIR"
+          }
+          trap cleanup EXIT
+
+          echo '=== PHASE 2.1D PRODUCTION READ-ONLY CANARY ==='
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          HERMES="$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow')"
+          test -n "$CONTROL"; test -n "$HERMES"
+          systemctl is-active --quiet "$SERVICE"
+          test -f "$INSTALL_DIR/read-model.py"
+          test -f "$INSTALL_DIR/server.py"
+          cp "$INSTALL_DIR/read-model.py" "$BACKUP_DIR/read-model.py"
+          cp "$INSTALL_DIR/server.py" "$BACKUP_DIR/server.py"
+
+          BEFORE_A="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d if isinstance(d,list) else d.get("approvals",[]); print(len(r))')"
+          BEFORE_E="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d if isinstance(d,list) else d.get("executions",[]); print(len(r))')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+
+          APPROVAL_URL="https://$HOSTNAME/phil-ai-os/approval/"
+          MC_URL="https://$HOSTNAME/phil-ai-os/mission-control"
+          APPROVAL_BEFORE="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$APPROVAL_URL" || true)"
+          MC_BEFORE="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$MC_URL" || true)"
+
+          install -m 755 /tmp/philaios-mission-control-read-model.py "$INSTALL_DIR/read-model.py"
+          install -m 755 /tmp/mission-control-readonly-server.py "$INSTALL_DIR/server.py"
+          systemctl restart "$SERVICE"
+
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 5 http://127.0.0.1:4881/ | grep -q 'READ ONLY · Phase 2.1D'; then break; fi
+            sleep 2
+          done
+          curl -fsS --max-time 5 http://127.0.0.1:4881/ | grep -q 'READ ONLY · Phase 2.1D'
+          MODEL="$(curl -fsS --max-time 10 http://127.0.0.1:4881/api/read-model)"
+          printf '%s' "$MODEL" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["schema_version"]=="2.1d.v1"; assert d["overall_state"]=="healthy"; g=d["governance"]; assert g["execution_allowed_task_classes"]==["general"]; assert g["kill_switch_state"]=="disabled"; assert g["execution_enforcement_mode"]=="unavailable"; assert g["execution_enforcement_scope"]=="unavailable"; assert g["direct_provider_bypass_allowed"] is False; assert g["authority_expansion_state"]=="blocked"; q=d["data_quality"]; assert "execution_enforcement_mode" in q["proven_unavailable"]; assert "execution_enforcement_scope" in q["proven_unavailable"]; assert all("lifecycle_state" in a and "current_task_id" in a for a in d["agents"])'
+
+          for method in POST PUT PATCH DELETE; do
+            CODE="$(curl -s -o /dev/null -w '%{http_code}' -X "$method" --max-time 5 http://127.0.0.1:4881/)"
+            test "$CODE" = '405'
+          done
+          ss -ltnp | grep -F '127.0.0.1:4881' >/dev/null
+          ! ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'
+
+          OP_URL="https://$HOSTNAME$OP_PATH"
+          UNAUTH="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$OP_URL" || true)"
+          test "$UNAUTH" = '401'
+          UNAUTH_API="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "${OP_URL}api/read-model" || true)"
+          test "$UNAUTH_API" = '401'
+
+          APPROVAL_AFTER="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$APPROVAL_URL" || true)"
+          MC_AFTER="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$MC_URL" || true)"
+          test "$APPROVAL_BEFORE" = "$APPROVAL_AFTER"
+          test "$MC_BEFORE" = "$MC_AFTER"
+
+          AFTER_A="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d if isinstance(d,list) else d.get("approvals",[]); print(len(r))')"
+          AFTER_E="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d if isinstance(d,list) else d.get("executions",[]); print(len(r))')"
+          test "$BEFORE_A" = "$AFTER_A"
+          test "$BEFORE_E" = "$AFTER_E"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+
+          success=1
+          echo schema_version=2.1d.v1
+          echo dashboard_phase=2.1D
+          echo operator_auth_boundary=preserved_401_unauthenticated
+          echo browser_mutation_methods=405
+          echo approval_count_unchanged=true
+          echo execution_count_unchanged=true
+          echo existing_approval_route=preserved
+          echo existing_mission_control_route=preserved
+          echo production_allowlist=general_only
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1D_PRODUCTION_READ_ONLY_CANARY_OK
+          REMOTE
