@@ -1,0 +1,81 @@
+name: Phase 2.1C Existing Mission Control Router Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1c-existing-mission-control-router-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Inspect existing Phil AI OS routers without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, subprocess
+          wanted={'philaios-approval','philaios-mission-control'}
+          names=subprocess.check_output(['docker','ps','--format','{{.Names}}'], text=True).splitlines()
+          for name in names:
+              obj=json.loads(subprocess.check_output(['docker','inspect',name], text=True))[0]
+              labels=(obj.get('Config') or {}).get('Labels') or {}
+              for router in sorted(wanted):
+                  prefix=f'traefik.http.routers.{router}.'
+                  matches={k[len(prefix):]:v for k,v in labels.items() if k.startswith(prefix)}
+                  if matches:
+                      print(f'router={router} container={name}')
+                      for key in ['rule','entrypoints','service','middlewares','tls','tls.certresolver']:
+                          if key in matches:
+                              print(f'{router}.{key}={matches[key]}')
+              for service in ['philaios-approval','philaios-mission-control']:
+                  prefix=f'traefik.http.services.{service}.'
+                  for k,v in labels.items():
+                      if k.startswith(prefix):
+                          suffix=k[len(prefix):]
+                          if suffix in {'loadbalancer.server.port','loadbalancer.server.scheme'}:
+                              print(f'{service}.{suffix}={v}')
+          PY
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          echo production_allowlist=general_only
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1C_EXISTING_ROUTER_DISCOVERY_OK
+          REMOTE
