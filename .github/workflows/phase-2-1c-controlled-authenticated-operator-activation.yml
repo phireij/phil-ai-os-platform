@@ -1,0 +1,281 @@
+name: Phase 2.1C Controlled Authenticated Operator Activation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1c-controlled-authenticated-operator-activation.yml'
+      - '.github/phase-2-1c-activation-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      MC_BASIC_AUTH_HASH: ${{ secrets.MC_BASIC_AUTH_HASH }}
+      MC_HOSTNAME: hermes-agent-whow.srv1833510.hstgr.cloud
+      MC_PATH: /phil-ai-os/operator/
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate protected activation material
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$MC_BASIC_AUTH_HASH"
+          case "$MC_BASIC_AUTH_HASH" in
+            *:*) ;;
+            *) echo invalid_basic_auth_material; exit 1 ;;
+          esac
+          echo mission_control_auth_material=present
+          echo secret_values_emitted=false
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Stage read-only operator components
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          AUTH_FILE="$(mktemp)"
+          trap 'rm -f "$AUTH_FILE"' EXIT
+          printf '%s' "$MC_BASIC_AUTH_HASH" > "$AUTH_FILE"
+          chmod 600 "$AUTH_FILE"
+          scp -P "$PORT" -q \
+            ops/phase-2.1a/philaios-mission-control-read-model.py \
+            ops/phase-2.1b/mission-control-readonly-server.py \
+            ops/phase-2.1c/mission-control-gateway-proxy.py \
+            "$VPS_USER@$VPS_HOST:/tmp/"
+          scp -P "$PORT" -q "$AUTH_FILE" "$VPS_USER@$VPS_HOST:/tmp/philaios-mc-basic-auth-hash"
+
+      - name: Atomic preflight and authenticated activation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HOSTNAME='hermes-agent-whow.srv1833510.hstgr.cloud'
+          OP_PATH='/phil-ai-os/operator/'
+          SERVICE='phil-ai-os-mission-control-operator.service'
+          PROXY='philaios-operator-proxy'
+          INSTALL_DIR='/opt/phil-ai-os/mission-control'
+          AUTH_FILE='/tmp/philaios-mc-basic-auth-hash'
+          success=0
+
+          rollback() {
+            echo rollback=started
+            docker rm -f "$PROXY" >/dev/null 2>&1 || true
+            systemctl disable --now "$SERVICE" >/dev/null 2>&1 || true
+            rm -f "/etc/systemd/system/$SERVICE"
+            systemctl daemon-reload >/dev/null 2>&1 || true
+            rm -rf "$INSTALL_DIR"
+            echo rollback=completed
+          }
+          cleanup() {
+            rc=$?
+            rm -f "$AUTH_FILE" \
+              /tmp/philaios-mission-control-read-model.py \
+              /tmp/mission-control-readonly-server.py \
+              /tmp/mission-control-gateway-proxy.py
+            if [ "$rc" -ne 0 ] && [ "$success" -ne 1 ]; then rollback; fi
+          }
+          trap cleanup EXIT
+
+          echo '=== PHASE 2.1C CONTROLLED AUTHENTICATED OPERATOR ACTIVATION ==='
+          test -s "$AUTH_FILE"
+          chmod 600 "$AUTH_FILE"
+          AUTH_HASH="$(cat "$AUTH_FILE")"
+
+          TRAEFIK="$(docker ps --format '{{.Names}}' | grep -m1 'traefik')"
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test -n "$TRAEFIK"
+          test -n "$CONTROL"
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
+
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+
+          python3 - "$CONTROL" <<'PY'
+          import json, subprocess, sys
+          control=sys.argv[1]
+          obj=json.loads(subprocess.check_output(['docker','inspect',control],text=True))[0]
+          labels=(obj.get('Config') or {}).get('Labels') or {}
+          expected={
+            'traefik.http.routers.philaios-approval.rule':'Host(`hermes-agent-whow.srv1833510.hstgr.cloud`) && PathPrefix(`/phil-ai-os/approval/`)',
+            'traefik.http.routers.philaios-mission-control.rule':'Host(`hermes-agent-whow.srv1833510.hstgr.cloud`) && PathPrefix(`/phil-ai-os/mission-control`)',
+          }
+          for key,val in expected.items():
+              if labels.get(key)!=val:
+                  raise SystemExit('existing_route_contract_mismatch:'+key)
+          PY
+
+          if docker ps -a --format '{{.Names}}' | grep -Fxq "$PROXY"; then
+            echo operator_proxy=already_present
+            exit 1
+          fi
+          if test -e "/etc/systemd/system/$SERVICE"; then
+            echo operator_service=already_present
+            exit 1
+          fi
+          if docker ps -q | xargs -r docker inspect --format '{{range $k,$v := .Config.Labels}}{{println $k}}{{end}}' | grep -Fxq 'traefik.http.routers.philaios-operator.rule'; then
+            echo operator_route=already_present
+            exit 1
+          fi
+          if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'; then
+            echo public_4881_listener=present
+            exit 1
+          fi
+
+          TRAEFIK_NET="$(docker inspect "$TRAEFIK" --format '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n1)"
+          test -n "$TRAEFIK_NET"
+          GATEWAY="$(docker network inspect "$TRAEFIK_NET" --format '{{(index .IPAM.Config 0).Gateway}}')"
+          test -n "$GATEWAY"
+          BASE_IMAGE="$(docker inspect "$CONTROL" --format '{{.Config.Image}}')"
+          test -n "$BASE_IMAGE"
+          docker run --rm --entrypoint python3 "$BASE_IMAGE" --version >/dev/null
+
+          APPROVAL_URL="https://$HOSTNAME/phil-ai-os/approval/"
+          MC_URL="https://$HOSTNAME/phil-ai-os/mission-control"
+          APPROVAL_BEFORE="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$APPROVAL_URL" || true)"
+          MC_BEFORE="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$MC_URL" || true)"
+
+          install -d -m 755 "$INSTALL_DIR"
+          install -m 755 /tmp/philaios-mission-control-read-model.py "$INSTALL_DIR/read-model.py"
+          install -m 755 /tmp/mission-control-readonly-server.py "$INSTALL_DIR/server.py"
+          install -m 755 /tmp/mission-control-gateway-proxy.py "$INSTALL_DIR/proxy.py"
+
+          cat > "/etc/systemd/system/$SERVICE" <<EOF
+          [Unit]
+          Description=Phil AI OS Mission Control Operator Read-Only Backend
+          After=docker.service network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          User=root
+          Environment=PHIL_AI_OS_MC_HOST=$GATEWAY
+          Environment=PHIL_AI_OS_MC_PORT=4881
+          Environment=PHIL_AI_OS_MC_READ_MODEL=$INSTALL_DIR/read-model.py
+          ExecStart=/usr/bin/python3 $INSTALL_DIR/server.py
+          Restart=on-failure
+          RestartSec=3
+          NoNewPrivileges=true
+          PrivateTmp=true
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+          systemctl daemon-reload
+          systemctl enable --now "$SERVICE"
+
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 5 "http://$GATEWAY:4881/" | grep -q 'Phil AI OS Mission Control'; then break; fi
+            sleep 2
+          done
+          curl -fsS --max-time 5 "http://$GATEWAY:4881/" | grep -q 'Phil AI OS Mission Control'
+          DIRECT_POST="$(curl -s -o /dev/null -w '%{http_code}' -X POST --max-time 5 "http://$GATEWAY:4881/")"
+          test "$DIRECT_POST" = '405'
+
+          docker run -d \
+            --name "$PROXY" \
+            --restart unless-stopped \
+            --network "$TRAEFIK_NET" \
+            -e "PHIL_AI_OS_MC_UPSTREAM=http://$GATEWAY:4881" \
+            -v "$INSTALL_DIR/proxy.py:/app/proxy.py:ro" \
+            --entrypoint python3 \
+            --label 'traefik.enable=true' \
+            --label "traefik.http.routers.philaios-operator.rule=Host(\`$HOSTNAME\`) && PathPrefix(\`$OP_PATH\`)" \
+            --label 'traefik.http.routers.philaios-operator.entrypoints=websecure' \
+            --label 'traefik.http.routers.philaios-operator.tls.certresolver=letsencrypt' \
+            --label 'traefik.http.routers.philaios-operator.service=philaios-operator' \
+            --label 'traefik.http.routers.philaios-operator.middlewares=philaios-operator-auth,philaios-operator-strip' \
+            --label "traefik.http.middlewares.philaios-operator-auth.basicauth.users=$AUTH_HASH" \
+            --label 'traefik.http.middlewares.philaios-operator-strip.stripprefix.prefixes=/phil-ai-os/operator' \
+            --label 'traefik.http.services.philaios-operator.loadbalancer.server.port=8080' \
+            "$BASE_IMAGE" /app/proxy.py >/dev/null
+
+          for i in 1 2 3 4 5 6; do
+            if docker exec "$PROXY" python3 -c "import urllib.request; d=urllib.request.urlopen('http://127.0.0.1:8080/',timeout=5).read(); assert b'Phil AI OS Mission Control' in d" 2>/dev/null; then break; fi
+            sleep 2
+          done
+          docker exec "$PROXY" python3 -c "import urllib.request; d=urllib.request.urlopen('http://127.0.0.1:8080/',timeout=5).read(); assert b'Phil AI OS Mission Control' in d"
+
+          sleep 4
+          OP_URL="https://$HOSTNAME$OP_PATH"
+          UNAUTH="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$OP_URL" || true)"
+          test "$UNAUTH" = '401'
+          UNAUTH_API="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "${OP_URL}api/read-model" || true)"
+          test "$UNAUTH_API" = '401'
+
+          APPROVAL_AFTER="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$APPROVAL_URL" || true)"
+          MC_AFTER="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$MC_URL" || true)"
+          test "$APPROVAL_BEFORE" = "$APPROVAL_AFTER"
+          test "$MC_BEFORE" = "$MC_AFTER"
+
+          systemctl is-active --quiet "$SERVICE"
+          docker ps --format '{{.Names}}' | grep -Fxq "$PROXY"
+          if docker port "$PROXY" | grep -q .; then
+            echo operator_proxy_published_port=unexpected
+            exit 1
+          fi
+          if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'; then
+            echo public_4881_listener=unexpected
+            exit 1
+          fi
+          ss -ltnp | grep -F "$GATEWAY:4881" >/dev/null
+
+          # Re-check preserved controls after activation.
+          CENV_AFTER="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV_AFTER"
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+
+          success=1
+          echo auth_boundary=basic_auth_required
+          echo operator_route=https://$HOSTNAME$OP_PATH
+          echo backend_binding=$GATEWAY:4881
+          echo operator_proxy_published_port=none
+          echo mutation_methods=application_405
+          echo existing_approval_route=preserved
+          echo existing_mission_control_route=preserved
+          echo production_allowlist=general_only
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1C_CONTROLLED_AUTHENTICATED_OPERATOR_ACTIVATION_OK
+          REMOTE
