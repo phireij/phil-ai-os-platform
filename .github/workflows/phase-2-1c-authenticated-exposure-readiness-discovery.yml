@@ -1,0 +1,118 @@
+name: Phase 2.1C Authenticated Exposure Readiness Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1c-authenticated-exposure-readiness-discovery.yml'
+      - 'docs/PHASE_2_1C_AUTHENTICATED_MISSION_CONTROL_EXPOSURE_READINESS.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Discover ingress and authentication readiness without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+
+          echo '=== PHASE 2.1C AUTHENTICATED EXPOSURE READINESS DISCOVERY ==='
+
+          # Existing Traefik stack and listeners.
+          test -d /docker/traefik-fhxl
+          test -f /docker/traefik-fhxl/docker-compose.yml
+          echo traefik_stack=present
+
+          TRAEFIK=$(docker ps --format '{{.Names}}' | grep -m1 'traefik')
+          test -n "$TRAEFIK"
+          echo traefik_container=running
+
+          docker inspect "$TRAEFIK" --format '{{range .NetworkSettings.Networks}}{{println .NetworkID}}{{end}}' | sed '/^$/d' >/tmp/p21c-traefik-networks
+          test -s /tmp/p21c-traefik-networks
+          echo traefik_networks=present
+
+          # Static configuration characteristics only; redact values that can contain credentials.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/docker/traefik-fhxl/docker-compose.yml')
+          s=p.read_text(errors='replace')
+          low=s.lower()
+          print('tls_config_present=' + str(('certresolver' in low or 'letsencrypt' in low or 'acme' in low)).lower())
+          print('http_to_https_signal=' + str(('redirect' in low and 'https' in low)).lower())
+          print('docker_provider_signal=' + str(('docker' in low)).lower())
+          print('dashboard_exposure_signal=' + str(('api.insecure=true' in low or 'dashboard=true' in low)).lower())
+          PY
+
+          # Discover reusable middleware/auth patterns from container labels and compose files,
+          # outputting only key names/presence, never secret values.
+          LABEL_KEYS=$(docker inspect "$TRAEFIK" --format '{{range $k,$v := .Config.Labels}}{{println $k}}{{end}}' | sort -u)
+          printf '%s\n' "$LABEL_KEYS" | grep -Ei 'traefik\.(http\.)?middlewares|auth|basic|forward' || true
+
+          AUTH_SIGNAL=false
+          if grep -RIlE 'basicAuth|forwardAuth|middlewares=.*auth|oauth|authelia|authentik' /docker/traefik-fhxl 2>/dev/null | grep -q .; then AUTH_SIGNAL=true; fi
+          echo reusable_auth_middleware_signal=$AUTH_SIGNAL
+
+          # Current Mission Control prototype must remain absent from public listeners.
+          if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'; then
+            echo mission_control_public_listener=unexpected
+            exit 1
+          fi
+          echo mission_control_public_listener=absent
+
+          # Existing platform safety controls must remain intact.
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          echo production_allowlist=general_only
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+
+          # TLS ports should already be owned by the reverse proxy path.
+          ss -ltn | grep -Eq '(:80[[:space:]]|:443[[:space:]])'
+          echo reverse_proxy_ports=present
+
+          rm -f /tmp/p21c-traefik-networks
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1C_EXPOSURE_READINESS_DISCOVERY_OK
+          REMOTE
