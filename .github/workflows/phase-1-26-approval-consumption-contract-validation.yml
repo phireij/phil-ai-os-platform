@@ -50,18 +50,43 @@ jobs:
           DB=/app/state/control-plane.db
           APPROVAL_ID=apr_6ee5a19331794c159e4d99070d63d08e
           TASK_TEXT=PHIL_AI_OS_PHASE_1_25_CONTROLLED_APPROVAL_E2E_20260826T072555Z
+          BASE=http://127.0.0.1:4870
 
-          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS "$BASE/healthz" >/dev/null
           systemctl is-active --quiet phil-ai-os-monitor.service
 
-          # Use python -c because docker exec cannot receive the outer SSH heredoc stdin safely.
           CHECK="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); c.row_factory=sqlite3.Row; r=c.execute('select state,consumed_at,consumed_by from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); assert r is not None, 'approval missing'; assert r['state']=='approved', dict(r); assert r['consumed_at'], dict(r); assert r['consumed_by']=='hermes', dict(r); a=c.execute(\"select count(*) from execution_audit where approval_id=? and outcome='success'\",('$APPROVAL_ID',)).fetchone()[0]; assert a >= 1, 'successful execution audit missing'; print('durable_consumption=ok'); print('execution_audit_link=ok')")"
           printf '%s\n' "$CHECK"
           grep -q '^durable_consumption=ok$' <<<"$CHECK"
           grep -q '^execution_audit_link=ok$' <<<"$CHECK"
 
+          TOKEN=''
+          if [ -r /etc/phil-ai-os-monitor.env ]; then
+            set -a; . /etc/phil-ai-os-monitor.env; set +a
+            TOKEN="${PHIL_AI_OS_CONTROL_API_TOKEN:-}"
+            TOKEN_FILE="${PHIL_AI_OS_CONTROL_API_TOKEN_FILE:-}"
+            if [ -z "$TOKEN" ] && [ -n "${TOKEN_FILE:-}" ] && [ -r "$TOKEN_FILE" ]; then TOKEN="$(cat "$TOKEN_FILE")"; fi
+          fi
+          if [ -z "$TOKEN" ]; then
+            MPID="$(systemctl show phil-ai-os-monitor.service -p MainPID --value)"
+            if [ -n "$MPID" ] && [ "$MPID" != 0 ] && [ -r "/proc/$MPID/environ" ]; then
+              PROC_ENV="$(tr '\0' '\n' < "/proc/$MPID/environ")"
+              TOKEN="$(printf '%s\n' "$PROC_ENV" | sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN=//p' | tail -n1)"
+              TOKEN_FILE="$(printf '%s\n' "$PROC_ENV" | sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN_FILE=//p' | tail -n1)"
+              if [ -z "$TOKEN" ] && [ -n "$TOKEN_FILE" ] && [ -r "$TOKEN_FILE" ]; then TOKEN="$(cat "$TOKEN_FILE")"; fi
+            fi
+          fi
+          if [ -z "$TOKEN" ]; then
+            for f in /run/philaios/control_api_token /run/philaios/hermes_control_api_token /etc/phil-ai-os/control-api-token /opt/phil-ai-os/secrets/control-api-token; do
+              if [ -r "$f" ]; then TOKEN="$(cat "$f")"; break; fi
+            done
+          fi
+          [ -n "$TOKEN" ]
+          echo control_api_token_resolved=true
+          AUTH="Authorization: Bearer $TOKEN"
+
           BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from execution_audit where approval_id=?',('$APPROVAL_ID',)).fetchone()[0])")"
-          code="$(curl -sS -o /tmp/replay.json -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data "{\"text\":\"$TASK_TEXT\",\"source\":\"hermes\",\"approval_id\":\"$APPROVAL_ID\"}" http://127.0.0.1:4870/v1/execute)"
+          code="$(curl -sS -o /tmp/replay.json -w '%{http_code}' -X POST -H "$AUTH" -H 'Content-Type: application/json' --data "{\"text\":\"$TASK_TEXT\",\"source\":\"hermes\",\"approval_id\":\"$APPROVAL_ID\"}" "$BASE/v1/execute")"
           echo replay_http_code="$code"
           test "$code" = 409
           python3 -c "import json; d=json.load(open('/tmp/replay.json')); assert d.get('status')=='execution_approval_rejected', d; a=d.get('approval') or {}; assert a.get('status')=='approval_already_consumed', d; print('replay_protection=ok')"
