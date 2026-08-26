@@ -1,0 +1,92 @@
+name: Phase 1.24 General Execution Governance Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-24-general-execution-governance-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Validate governed execution boundary read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          echo '=== PHASE 1.24 GENERAL EXECUTION GOVERNANCE VALIDATION ==='
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$CENV"
+          echo production_allowlist=general_only
+
+          # Inspect deployed source for mandatory governance controls without executing a provider request.
+          docker exec "$CONTROL" python - <<'PY'
+          from pathlib import Path
+          s=Path('/app/app.py').read_text()
+          required={
+            'execute_route':'/v1/execute',
+            'task_allowlist':'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES',
+            'kill_switch':'PHIL_AI_OS_EXECUTION_KILL_SWITCH',
+            'routed_execute':'routed_execute',
+            'provider_boundary':'_provider_execute',
+            'routine_single_flight':'PHIL_AI_OS_PHASE_1_22_ROUTINE_SINGLE_FLIGHT_GUARD',
+          }
+          missing=[k for k,v in required.items() if v not in s]
+          assert not missing, f'missing governance controls: {missing}'
+          for k in required: print(f'{k}=present')
+          PY
+
+          # Verify monitoring is clean and backup timers remain active.
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          RECENT="$(journalctl -u phil-ai-os-monitor.service --since '3 minutes ago' --no-pager -n 20)"
+          ! grep -q '"ok": false' <<<"$RECENT"
+          echo monitor_clean=true
+          echo backup_timer_active=true
+          echo backup_self_heal_active=true
+
+          # General is the only production class; routine remains blocked until explicit later activation gate.
+          ! grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=.*routine' <<<"$CENV"
+          echo routine_activation=false
+          echo provider_call=none
+          echo production_change=none
+          echo governed_execution_boundary=validated
+          echo next_action=PHASE_1_25_APPROVAL_TELEGRAM_END_TO_END_VALIDATION
+          echo PHIL_AI_OS_PHASE_1_24_GENERAL_EXECUTION_GOVERNANCE_VALIDATION_OK
+          REMOTE
