@@ -36,7 +36,8 @@ jobs:
               sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
               if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
             fi
-            rm -f "$TMP"; sleep $((attempt*10))
+            rm -f "$TMP"
+            sleep $((attempt*10))
           done
           exit 1
 
@@ -49,20 +50,15 @@ jobs:
           set -euo pipefail
           CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
           HERMES="$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow')"
-          test -n "$CONTROL"; test -n "$HERMES"
+          test -n "$CONTROL"
+          test -n "$HERMES"
           echo '--- governance env (non-secret only) ---'
-          docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' \
-            | grep -E '^PHIL_AI_OS_(EXECUTION|APPROVAL|ROUTING|LIVE_TEST|PRODUCTION|KILL)' \
-            | grep -Evi '(TOKEN|SECRET|KEY|PASSWORD|AUTH)' || true
-          echo '--- snapshot top-level and governance-like keys ---'
-          docker exec "$HERMES" /usr/local/bin/philaios-mission-control snapshot | python3 -c 'import json,sys; d=json.load(sys.stdin); print("snapshot_top_keys="+",".join(sorted(d.keys()))); import re; out=[]; 
-for k,v in d.items():
- s=(k+" "+str(v)).lower();
- if any(x in s for x in ("enforcement","scope","kill","allow","execution")): out.append(k)
-print("snapshot_governance_keys="+",".join(sorted(set(out))))'
+          docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^PHIL_AI_OS_(EXECUTION|APPROVAL|ROUTING|LIVE_TEST|PRODUCTION|KILL)' | grep -Evi '(TOKEN|SECRET|KEY|PASSWORD|AUTH)' || true
+          echo '--- snapshot keys ---'
+          docker exec "$HERMES" /usr/local/bin/philaios-mission-control snapshot | python3 -c 'import json,sys; d=json.load(sys.stdin); print("snapshot_top_keys="+",".join(sorted(d.keys())))'
           echo '--- approval/execution record keys ---'
-          docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals | python3 -c 'import json,sys; d=json.load(sys.stdin); rows=d if isinstance(d,list) else d.get("approvals",[]); print("approval_count="+str(len(rows))); print("approval_keys="+(",".join(sorted(rows[0].keys())) if rows else "none"))'
-          docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions | python3 -c 'import json,sys; d=json.load(sys.stdin); rows=d if isinstance(d,list) else d.get("executions",[]); print("execution_count="+str(len(rows))); print("execution_keys="+(",".join(sorted(rows[0].keys())) if rows else "none"))'
+          docker exec "$HERMES" /usr/local/bin/philaios-mission-control approvals | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d if isinstance(d,list) else d.get("approvals",[]); print("approval_count="+str(len(r))); print("approval_keys="+(",".join(sorted(r[0].keys())) if r else "none"))'
+          docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d if isinstance(d,list) else d.get("executions",[]); print("execution_count="+str(len(r))); print("execution_keys="+(",".join(sorted(r[0].keys())) if r else "none"))'
           echo production_change=none
           echo provider_call=none
           echo execution_call=none
