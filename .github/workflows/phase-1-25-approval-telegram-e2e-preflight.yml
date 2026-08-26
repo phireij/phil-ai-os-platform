@@ -47,7 +47,7 @@ jobs:
           ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
-          echo '=== PHASE 1.25 APPROVAL AND TELEGRAM E2E PREFLIGHT ==='
+          echo '=== PHASE 1.25 APPROVAL AND TELEGRAM E2E PREFLIGHT V2 ==='
           curl -fsS http://127.0.0.1:4870/healthz >/dev/null
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
@@ -64,7 +64,9 @@ jobs:
           docker exec "$CONTROL" sh -lc 'grep -RniE "approval_requests|approval_id|/v1/approval|/v1/approvals|approve|reject|consume" /app 2>/dev/null | head -n 350' || true
 
           echo '--- notifier and telegram implementation ---'
-          find /opt/phil-ai-os /usr/local/bin /etc/systemd/system -maxdepth 5 -type f 2>/dev/null | grep -Ei 'approval|telegram|notifier|notify' | sort | head -n 300
+          # Discovery pipelines are informational. With pipefail, head may close early and make
+          # upstream find/grep return SIGPIPE (141); that must not fail the safety preflight.
+          find /opt/phil-ai-os /usr/local/bin /etc/systemd/system -maxdepth 5 -type f 2>/dev/null | grep -Ei 'approval|telegram|notifier|notify' | sort | head -n 300 || true
           grep -RniE 'api.telegram.org|sendMessage|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID|TELEGRAM_HOME_CHANNEL|approval.*notify|notify.*approval' /opt/phil-ai-os /usr/local/bin /etc/systemd/system 2>/dev/null | head -n 400 || true
 
           echo '--- recent successful approval/telegram evidence ---'
