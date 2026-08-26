@@ -5,7 +5,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 UPSTREAM = os.environ['PHIL_AI_OS_MC_UPSTREAM'].rstrip('/')
-HOST = os.getenv('PHIL_AI_OS_MC_PROXY_HOST', '0.0.0.0')
+HOST = os.getenv('PHIL_AI_OS_MC_PROXY_HOST', '127.0.0.1')
 PORT = int(os.getenv('PHIL_AI_OS_MC_PROXY_PORT', '8080'))
 
 class Handler(BaseHTTPRequestHandler):
