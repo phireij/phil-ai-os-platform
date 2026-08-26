@@ -18,8 +18,22 @@ jobs:
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_PORT: ${{ secrets.VPS_PORT }}
       VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      MC_BASIC_AUTH_HASH: ${{ secrets.MC_BASIC_AUTH_HASH }}
+      MC_HOSTNAME: hermes-agent-whow.srv1833510.hstgr.cloud
+      MC_PATH: /phil-ai-os/operator/
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate Mission Control auth preflight material
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$MC_BASIC_AUTH_HASH"
+          echo mission_control_hostname=$MC_HOSTNAME
+          echo mission_control_path=$MC_PATH
+          echo mission_control_auth_material=present
+          echo secret_values_emitted=false
+
       - name: Configure SSH
         shell: bash
         run: |
@@ -39,6 +53,7 @@ jobs:
             rm -f "$TMP"; sleep $((attempt*10))
           done
           exit 1
+
       - name: Inspect existing Phil AI OS routers without mutation
         shell: bash
         run: |
@@ -72,10 +87,28 @@ jobs:
           CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          LABELS="$(docker inspect "$CONTROL" --format '{{range $k,$v := .Config.Labels}}{{println $k "=" $v}}{{end}}')"
+          grep -F 'traefik.http.routers.philaios-approval.rule=Host(`hermes-agent-whow.srv1833510.hstgr.cloud`) && PathPrefix(`/phil-ai-os/approval/`)' <<<"$LABELS"
+          grep -F 'traefik.http.routers.philaios-mission-control.rule=Host(`hermes-agent-whow.srv1833510.hstgr.cloud`) && PathPrefix(`/phil-ai-os/mission-control`)' <<<"$LABELS"
+          if grep -F 'traefik.http.routers.philaios-operator.' <<<"$LABELS" >/dev/null; then
+            echo operator_route=already_present
+            exit 1
+          fi
+          if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'; then exit 1; fi
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
           echo production_allowlist=general_only
+          echo existing_approval_route=preserved
+          echo existing_mission_control_route=preserved
+          echo operator_route=absent_ready_for_additive_activation
+          echo mission_control_public_listener=absent
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
           echo provider_call=none
           echo execution_call=none
           echo approval_mutation=none
           echo production_change=none
-          echo PHIL_AI_OS_PHASE_2_1C_EXISTING_ROUTER_DISCOVERY_OK
+          echo PHIL_AI_OS_PHASE_2_1C_AUTHENTICATED_EXPOSURE_PREFLIGHT_OK
           REMOTE
