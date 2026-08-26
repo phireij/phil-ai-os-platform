@@ -28,7 +28,17 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           PORT="${VPS_PORT:-22}"
-          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
       - name: Validate durable consumption and replay protection
         shell: bash
         run: |
@@ -44,35 +54,20 @@ jobs:
           curl -fsS http://127.0.0.1:4870/healthz >/dev/null
           systemctl is-active --quiet phil-ai-os-monitor.service
 
-          docker exec "$CONTROL" python - "$APPROVAL_ID" "$DB" <<'PY'
-          import sqlite3,sys
-          approval_id,db_path=sys.argv[1],sys.argv[2]
-          c=sqlite3.connect(db_path); c.row_factory=sqlite3.Row
-          r=c.execute('select state,consumed_at,consumed_by from approval_requests where approval_id=?',(approval_id,)).fetchone()
-          assert r is not None, 'approval missing'
-          assert r['state']=='approved', dict(r)
-          assert r['consumed_at'], dict(r)
-          assert r['consumed_by']=='hermes', dict(r)
-          a=c.execute("select count(*) from execution_audit where approval_id=? and outcome='success'",(approval_id,)).fetchone()[0]
-          assert a >= 1, 'successful execution audit missing'
-          print('durable_consumption=ok')
-          print('execution_audit_link=ok')
-          PY
+          # Use python -c because docker exec cannot receive the outer SSH heredoc stdin safely.
+          CHECK="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); c.row_factory=sqlite3.Row; r=c.execute('select state,consumed_at,consumed_by from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); assert r is not None, 'approval missing'; assert r['state']=='approved', dict(r); assert r['consumed_at'], dict(r); assert r['consumed_by']=='hermes', dict(r); a=c.execute(\"select count(*) from execution_audit where approval_id=? and outcome='success'\",('$APPROVAL_ID',)).fetchone()[0]; assert a >= 1, 'successful execution audit missing'; print('durable_consumption=ok'); print('execution_audit_link=ok')")"
+          printf '%s\n' "$CHECK"
+          grep -q '^durable_consumption=ok$' <<<"$CHECK"
+          grep -q '^execution_audit_link=ok$' <<<"$CHECK"
 
-          code="$(curl -sS -o /tmp/replay.json -w '%{http_code}' -X POST \
-            -H 'Content-Type: application/json' \
-            --data "{\"text\":\"$TASK_TEXT\",\"source\":\"hermes\",\"approval_id\":\"$APPROVAL_ID\"}" \
-            http://127.0.0.1:4870/v1/execute)"
+          BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from execution_audit where approval_id=?',('$APPROVAL_ID',)).fetchone()[0])")"
+          code="$(curl -sS -o /tmp/replay.json -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data "{\"text\":\"$TASK_TEXT\",\"source\":\"hermes\",\"approval_id\":\"$APPROVAL_ID\"}" http://127.0.0.1:4870/v1/execute)"
+          echo replay_http_code="$code"
           test "$code" = 409
-          python3 - <<'PY'
-          import json
-          d=json.load(open('/tmp/replay.json'))
-          assert d.get('status')=='execution_approval_rejected', d
-          approval=d.get('approval') or {}
-          assert approval.get('status')=='approval_already_consumed', d
-          print('replay_protection=ok')
-          PY
-
+          python3 -c "import json; d=json.load(open('/tmp/replay.json')); assert d.get('status')=='execution_approval_rejected', d; a=d.get('approval') or {}; assert a.get('status')=='approval_already_consumed', d; print('replay_protection=ok')"
+          AFTER="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from execution_audit where approval_id=?',('$APPROVAL_ID',)).fetchone()[0])")"
+          test "$BEFORE" = "$AFTER"
+          echo replay_execution_audit_unchanged=true
           echo provider_replay_call=blocked_before_provider
           echo PHIL_AI_OS_PHASE_1_26_APPROVAL_CONSUMPTION_CONTRACT_VALIDATION_OK
           REMOTE
