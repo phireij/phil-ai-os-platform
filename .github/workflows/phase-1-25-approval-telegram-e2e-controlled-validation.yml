@@ -3,9 +3,10 @@ name: Phase 1.25 Approval Telegram E2E Controlled Validation
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
-      - '.github/workflows/phase-1-25-approval-telegram-e2e-controlled-validation.yml'
+      - .github/workflows/phase-1-25-approval-telegram-e2e-controlled-validation.yml
 
 permissions:
   contents: read
@@ -33,10 +34,15 @@ jobs:
           for attempt in 1 2 3 4 5 6; do
             TMP="$(mktemp)"
             if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
-              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
-              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true; then
+                rm -f "$TMP"
+                exit 0
+              fi
             fi
-            rm -f "$TMP"; sleep $((attempt*10))
+            rm -f "$TMP"
+            sleep $((attempt*10))
           done
           exit 1
       - name: Run controlled approval and Telegram E2E validation
@@ -48,7 +54,7 @@ jobs:
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
           BASE=http://127.0.0.1:4870
-          echo '=== PHASE 1.25 CONTROLLED APPROVAL + TELEGRAM E2E VALIDATION V2 ==='
+          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V3 ==='
           curl -fsS "$BASE/healthz" >/dev/null
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
@@ -56,7 +62,10 @@ jobs:
 
           TOKEN=''
           for f in /run/philaios/control_api_token /run/philaios/hermes_control_api_token /etc/phil-ai-os/control-api-token /opt/phil-ai-os/secrets/control-api-token; do
-            if [ -r "$f" ]; then TOKEN="$(cat "$f")"; break; fi
+            if [ -r "$f" ]; then
+              TOKEN="$(cat "$f")"
+              break
+            fi
           done
           if [ -z "$TOKEN" ] && [ -r /etc/phil-ai-os-monitor.env ]; then
             TOKEN_FILE="$(sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN_FILE=//p' /etc/phil-ai-os-monitor.env | tail -n1)"
@@ -67,19 +76,15 @@ jobs:
           AUTH="Authorization: Bearer $TOKEN"
 
           TASK="PHIL_AI_OS_PHASE_1_25_CONTROLLED_APPROVAL_E2E_$(date -u +%Y%m%dT%H%M%SZ)"
-          REQ="$(TASK_VALUE="$TASK" python3 - <<'PY'
-import json, os
-print(json.dumps({"task_text": os.environ["TASK_VALUE"], "task_class": "general", "source": "phase-1.25-controlled-validation"}))
-PY
-)"
+          REQ="$(printf '%s' "$TASK" | python3 -c 'import json,sys; print(json.dumps(dict(task_text=sys.stdin.read(), task_class="general", source="phase-1.25-controlled-validation")))')"
           RESP="$(curl -fsS -H "$AUTH" -H 'Content-Type: application/json' -d "$REQ" "$BASE/v1/approvals/request")"
-          APPROVAL_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("approval_id", ""))' <<<"$RESP")"
+          APPROVAL_ID="$(printf '%s' "$RESP" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("approval_id", ""))')"
           [ -n "$APPROVAL_ID" ]
           echo approval_request_created=true
           echo approval_id="$APPROVAL_ID"
 
           LINK_RESP="$(curl -fsS -H "$AUTH" "$BASE/v1/approvals/link?approval_id=$APPROVAL_ID")"
-          LINK="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("url") or d.get("link") or d.get("approval_url") or "")' <<<"$LINK_RESP")"
+          LINK="$(printf '%s' "$LINK_RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("url") or d.get("link") or d.get("approval_url") or "")')"
           [ -n "$LINK" ]
           echo approval_link_issued=true
 
@@ -92,17 +97,13 @@ PY
           [ -n "${TELEGRAM_BOT_TOKEN:-}" ]
           [ -n "${TELEGRAM_CHAT_ID:-}" ]
           MSG="Phil AI OS Phase 1.25 controlled approval test. Approval ID: $APPROVAL_ID. Open Mission Control: $LINK"
-          TG_PAYLOAD="$(TELEGRAM_CHAT_ID_VALUE="$TELEGRAM_CHAT_ID" MSG_VALUE="$MSG" python3 - <<'PY'
-import json, os
-print(json.dumps({"chat_id": os.environ["TELEGRAM_CHAT_ID_VALUE"], "text": os.environ["MSG_VALUE"], "disable_web_page_preview": True}))
-PY
-)"
+          TG_PAYLOAD="$(printf '%s\n%s' "$TELEGRAM_CHAT_ID" "$MSG" | python3 -c 'import json,sys; lines=sys.stdin.read().split("\n",1); print(json.dumps(dict(chat_id=lines[0], text=lines[1] if len(lines)>1 else "", disable_web_page_preview=True)))')"
           TG_RESP="$(curl -fsS -H 'Content-Type: application/json' -d "$TG_PAYLOAD" "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage")"
-          python3 -c 'import json,sys; assert json.load(sys.stdin).get("ok") is True' <<<"$TG_RESP"
+          printf '%s' "$TG_RESP" | python3 -c 'import json,sys; assert json.load(sys.stdin).get("ok") is True'
           echo telegram_message_sent=true
 
           GET_RESP="$(curl -fsS -H "$AUTH" "$BASE/v1/approvals/get?approval_id=$APPROVAL_ID")"
-          STATE="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("approval") or d).get("state", ""))' <<<"$GET_RESP")"
+          STATE="$(printf '%s' "$GET_RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("approval") or d).get("state", ""))')"
           [ "$STATE" = pending ]
           echo approval_state=pending
           echo approval_decision=none
