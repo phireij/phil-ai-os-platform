@@ -50,7 +50,7 @@ jobs:
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
           BASE=http://127.0.0.1:4870
-          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V7 ==='
+          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V8 ==='
           curl -fsS "$BASE/healthz" >/dev/null
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
@@ -101,26 +101,33 @@ jobs:
           echo approval_link_issued=true
           echo review_path_contract=valid
 
-          # Prefer the configured public Mission Control origin; otherwise use the proven public host.
           PUBLIC_ORIGIN="${PHIL_AI_OS_MISSION_CONTROL_ORIGIN:-}"
           if [ -z "$PUBLIC_ORIGIN" ] && [ -r /etc/phil-ai-os-monitor.env ]; then
             PUBLIC_ORIGIN="$(sed -n 's/^PHIL_AI_OS_MISSION_CONTROL_ORIGIN=//p' /etc/phil-ai-os-monitor.env | tail -n1)"
-          fi
-          if [ -z "$PUBLIC_ORIGIN" ]; then
-            PUBLIC_ORIGIN="https://${VPS_HOST:-}"
           fi
           [ -n "$PUBLIC_ORIGIN" ]
           PUBLIC_ORIGIN="${PUBLIC_ORIGIN%/}"
           LINK="$PUBLIC_ORIGIN$REVIEW_PATH"
           echo mission_control_url_constructed=true
 
-          set -a
-          [ -r /etc/phil-ai-os-monitor.env ] && . /etc/phil-ai-os-monitor.env
-          set +a
+          # Resolve the live Telegram notifier destination without assuming one variable name.
+          TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
+          TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-}"
+          TELEGRAM_HOME_CHANNEL="${TELEGRAM_HOME_CHANNEL:-}"
+          if [ -r /etc/phil-ai-os-monitor.env ]; then
+            set -a; . /etc/phil-ai-os-monitor.env; set +a
+            TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
+            TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-}"
+            TELEGRAM_HOME_CHANNEL="${TELEGRAM_HOME_CHANNEL:-}"
+          fi
           HERMES_ENV=/opt/hermes-agent-whow/.env
-          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] && [ -r "$HERMES_ENV" ]; then TELEGRAM_BOT_TOKEN="$(sed -n 's/^TELEGRAM_BOT_TOKEN=//p' "$HERMES_ENV" | tail -n1)"; fi
-          if [ -z "${TELEGRAM_CHAT_ID:-}" ] && [ -r "$HERMES_ENV" ]; then TELEGRAM_CHAT_ID="$(sed -n 's/^TELEGRAM_HOME_CHANNEL=//p' "$HERMES_ENV" | tail -n1)"; fi
-          [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] && [ -r "$HERMES_ENV" ]; then TELEGRAM_BOT_TOKEN="$(sed -n 's/^TELEGRAM_BOT_TOKEN=//p' "$HERMES_ENV" | tail -n1)"; fi
+          if [ -z "$TELEGRAM_CHAT_ID" ] && [ -r "$HERMES_ENV" ]; then TELEGRAM_CHAT_ID="$(sed -n 's/^TELEGRAM_CHAT_ID=//p' "$HERMES_ENV" | tail -n1)"; fi
+          if [ -z "$TELEGRAM_HOME_CHANNEL" ] && [ -r "$HERMES_ENV" ]; then TELEGRAM_HOME_CHANNEL="$(sed -n 's/^TELEGRAM_HOME_CHANNEL=//p' "$HERMES_ENV" | tail -n1)"; fi
+          if [ -z "$TELEGRAM_CHAT_ID" ]; then TELEGRAM_CHAT_ID="$TELEGRAM_HOME_CHANNEL"; fi
+          [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]
+          echo telegram_destination_resolved=true
+
           MSG="Phil AI OS Phase 1.25 controlled approval test. Approval ID: $APPROVAL_ID. Open Mission Control: $LINK"
           TG_PAYLOAD="$(printf '%s\n%s' "$TELEGRAM_CHAT_ID" "$MSG" | python3 -c 'import json,sys; x=sys.stdin.read().split("\n",1); print(json.dumps(dict(chat_id=x[0], text=x[1] if len(x)>1 else "", disable_web_page_preview=True)))')"
           TG_RESP="$(curl -fsS -H 'Content-Type: application/json' -d "$TG_PAYLOAD" "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage")"
