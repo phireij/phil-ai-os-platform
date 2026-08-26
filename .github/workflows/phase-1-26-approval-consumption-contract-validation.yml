@@ -85,14 +85,15 @@ jobs:
           echo control_api_token_resolved=true
           AUTH="Authorization: Bearer $TOKEN"
 
-          BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from execution_audit where approval_id=?',('$APPROVAL_ID',)).fetchone()[0])")"
+          SUCCESS_BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute(\"select count(*) from execution_audit where approval_id=? and outcome='success'\",('$APPROVAL_ID',)).fetchone()[0])")"
           code="$(curl -sS -o /tmp/replay.json -w '%{http_code}' -X POST -H "$AUTH" -H 'Content-Type: application/json' --data "{\"text\":\"$TASK_TEXT\",\"source\":\"hermes\",\"approval_id\":\"$APPROVAL_ID\"}" "$BASE/v1/execute")"
           echo replay_http_code="$code"
           test "$code" = 409
           python3 -c "import json; d=json.load(open('/tmp/replay.json')); assert d.get('status')=='execution_approval_rejected', d; a=d.get('approval') or {}; assert a.get('status')=='approval_already_consumed', d; print('replay_protection=ok')"
-          AFTER="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from execution_audit where approval_id=?',('$APPROVAL_ID',)).fetchone()[0])")"
-          test "$BEFORE" = "$AFTER"
-          echo replay_execution_audit_unchanged=true
+          SUCCESS_AFTER="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute(\"select count(*) from execution_audit where approval_id=? and outcome='success'\",('$APPROVAL_ID',)).fetchone()[0])")"
+          test "$SUCCESS_BEFORE" = "$SUCCESS_AFTER"
+          echo successful_execution_count_unchanged=true
+          echo rejected_replay_may_be_audited=true
           echo provider_replay_call=blocked_before_provider
           echo PHIL_AI_OS_PHASE_1_26_APPROVAL_CONSUMPTION_CONTRACT_VALIDATION_OK
           REMOTE
