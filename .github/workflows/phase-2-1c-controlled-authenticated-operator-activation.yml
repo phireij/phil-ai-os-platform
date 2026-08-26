@@ -116,6 +116,9 @@ jobs:
           CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
           test -n "$TRAEFIK"
           test -n "$CONTROL"
+          test "$(docker inspect "$TRAEFIK" --format '{{.HostConfig.NetworkMode}}')" = 'host'
+          TRAEFIK_CMD="$(docker inspect "$TRAEFIK" --format '{{json .Config.Cmd}}')"
+          grep -q -- '--providers.docker=true' <<<"$TRAEFIK_CMD"
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
           curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
 
@@ -151,15 +154,15 @@ jobs:
             echo operator_route=already_present
             exit 1
           fi
-          if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'; then
-            echo public_4881_listener=present
+          if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):(4881|8080)'; then
+            echo public_operator_listener=present
+            exit 1
+          fi
+          if ss -ltnp | grep -Eq '127\.0\.0\.1:(4881|8080)'; then
+            echo loopback_operator_listener=already_present
             exit 1
           fi
 
-          TRAEFIK_NET="$(docker inspect "$TRAEFIK" --format '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n1)"
-          test -n "$TRAEFIK_NET"
-          GATEWAY="$(docker network inspect "$TRAEFIK_NET" --format '{{(index .IPAM.Config 0).Gateway}}')"
-          test -n "$GATEWAY"
           BASE_IMAGE="$(docker inspect "$CONTROL" --format '{{.Config.Image}}')"
           test -n "$BASE_IMAGE"
           docker run --rm --entrypoint python3 "$BASE_IMAGE" --version >/dev/null
@@ -183,7 +186,7 @@ jobs:
           [Service]
           Type=simple
           User=root
-          Environment=PHIL_AI_OS_MC_HOST=$GATEWAY
+          Environment=PHIL_AI_OS_MC_HOST=127.0.0.1
           Environment=PHIL_AI_OS_MC_PORT=4881
           Environment=PHIL_AI_OS_MC_READ_MODEL=$INSTALL_DIR/read-model.py
           ExecStart=/usr/bin/python3 $INSTALL_DIR/server.py
@@ -199,18 +202,22 @@ jobs:
           systemctl enable --now "$SERVICE"
 
           for i in 1 2 3 4 5 6; do
-            if curl -fsS --max-time 5 "http://$GATEWAY:4881/" | grep -q 'Phil AI OS Mission Control'; then break; fi
+            if curl -fsS --max-time 5 http://127.0.0.1:4881/ | grep -q 'Phil AI OS Mission Control'; then break; fi
             sleep 2
           done
-          curl -fsS --max-time 5 "http://$GATEWAY:4881/" | grep -q 'Phil AI OS Mission Control'
-          DIRECT_POST="$(curl -s -o /dev/null -w '%{http_code}' -X POST --max-time 5 "http://$GATEWAY:4881/")"
+          curl -fsS --max-time 5 http://127.0.0.1:4881/ | grep -q 'Phil AI OS Mission Control'
+          DIRECT_POST="$(curl -s -o /dev/null -w '%{http_code}' -X POST --max-time 5 http://127.0.0.1:4881/)"
           test "$DIRECT_POST" = '405'
+          ss -ltnp | grep -F '127.0.0.1:4881' >/dev/null
+          ! ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'
 
           docker run -d \
             --name "$PROXY" \
             --restart unless-stopped \
-            --network "$TRAEFIK_NET" \
-            -e "PHIL_AI_OS_MC_UPSTREAM=http://$GATEWAY:4881" \
+            --network host \
+            -e 'PHIL_AI_OS_MC_UPSTREAM=http://127.0.0.1:4881' \
+            -e 'PHIL_AI_OS_MC_PROXY_HOST=127.0.0.1' \
+            -e 'PHIL_AI_OS_MC_PROXY_PORT=8080' \
             -v "$INSTALL_DIR/proxy.py:/app/proxy.py:ro" \
             --entrypoint python3 \
             --label 'traefik.enable=true' \
@@ -225,12 +232,14 @@ jobs:
             "$BASE_IMAGE" /app/proxy.py >/dev/null
 
           for i in 1 2 3 4 5 6; do
-            if docker exec "$PROXY" python3 -c "import urllib.request; d=urllib.request.urlopen('http://127.0.0.1:8080/',timeout=5).read(); assert b'Phil AI OS Mission Control' in d" 2>/dev/null; then break; fi
+            if curl -fsS --max-time 5 http://127.0.0.1:8080/ | grep -q 'Phil AI OS Mission Control'; then break; fi
             sleep 2
           done
-          docker exec "$PROXY" python3 -c "import urllib.request; d=urllib.request.urlopen('http://127.0.0.1:8080/',timeout=5).read(); assert b'Phil AI OS Mission Control' in d"
+          curl -fsS --max-time 5 http://127.0.0.1:8080/ | grep -q 'Phil AI OS Mission Control'
+          ss -ltnp | grep -F '127.0.0.1:8080' >/dev/null
+          ! ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):8080'
 
-          sleep 4
+          sleep 5
           OP_URL="https://$HOSTNAME$OP_PATH"
           UNAUTH="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$OP_URL" || true)"
           test "$UNAUTH" = '401'
@@ -248,13 +257,7 @@ jobs:
             echo operator_proxy_published_port=unexpected
             exit 1
           fi
-          if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'; then
-            echo public_4881_listener=unexpected
-            exit 1
-          fi
-          ss -ltnp | grep -F "$GATEWAY:4881" >/dev/null
 
-          # Re-check preserved controls after activation.
           CENV_AFTER="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV_AFTER"
           systemctl is-active --quiet phil-ai-os-monitor.service
@@ -264,7 +267,8 @@ jobs:
           success=1
           echo auth_boundary=basic_auth_required
           echo operator_route=https://$HOSTNAME$OP_PATH
-          echo backend_binding=$GATEWAY:4881
+          echo backend_binding=127.0.0.1:4881
+          echo proxy_binding=127.0.0.1:8080
           echo operator_proxy_published_port=none
           echo mutation_methods=application_405
           echo existing_approval_route=preserved
