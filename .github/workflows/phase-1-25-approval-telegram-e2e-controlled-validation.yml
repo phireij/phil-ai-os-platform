@@ -110,7 +110,6 @@ jobs:
           echo mission_control_origin_resolved=true
           echo mission_control_url_constructed=true
 
-          # Discovery proved Hermes uses TELEGRAM_BOT_TOKEN in /opt/hermes-agent-whow/.env.
           HERMES_ENV=/opt/hermes-agent-whow/.env
           [ -r "$HERMES_ENV" ]
           TELEGRAM_BOT_TOKEN="$(sed -n 's/^TELEGRAM_BOT_TOKEN=//p' "$HERMES_ENV" | tail -n1 | sed 's/^['"'"']\(.*\)['"'"']$/\1/; s/^"\(.*\)"$/\1/; s/[[:space:]]*$//')"
@@ -120,7 +119,6 @@ jobs:
           python3 -c 'import json; assert json.load(open("/tmp/phase125-getme.json")).get("ok") is True'
           echo telegram_bot_token_validated=true
 
-          # Resolve the destination from live config if present, otherwise from the latest update known to the validated bot.
           TELEGRAM_CHAT_ID="$(sed -n -E 's/^(TELEGRAM_CHAT_ID|TELEGRAM_HOME_CHANNEL|TELEGRAM_CHANNEL_ID)=(.*)$/\2/p' "$HERMES_ENV" | tail -n1 | sed 's/^['"'"']\(.*\)['"'"']$/\1/; s/^"\(.*\)"$/\1/; s/[[:space:]]*$//')"
           if [ -z "$TELEGRAM_CHAT_ID" ]; then
             UPDATES="$(curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?limit=50")"
