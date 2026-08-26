@@ -1,0 +1,86 @@
+name: Phase 1.26 Approved Request Consumption Discovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/phase-1-26-approved-request-consumption-discovery.yml
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Discover approved-request consumption contract read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          DB=/app/state/control-plane.db
+          APPROVAL_ID=apr_6ee5a19331794c159e4d99070d63d08e
+          echo '=== PHASE 1.26 APPROVED REQUEST CONSUMPTION DISCOVERY ==='
+          echo discovery_mode=read_only
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+
+          STATE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); r=c.execute('select state from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); print(r[0] if r else '')")"
+          [ "$STATE" = approved ]
+          echo approved_fixture_present=true
+
+          echo '--- approval/consume/execute route references ---'
+          docker exec "$CONTROL" sh -lc "grep -n -B 25 -A 90 -E '/v1/(approvals|execute)|consume|consumed|approval_id' /app/app.py | head -n 500" || true
+
+          echo '--- execution and approval table schemas ---'
+          docker exec "$CONTROL" python -c 'import sqlite3; c=sqlite3.connect("/app/state/control-plane.db");
+for n in ("approval_requests","execution_requests","execution_history","executions"):
+ r=c.execute("select sql from sqlite_master where type=\"table\" and name=?",(n,)).fetchone();
+ print(n, r[0] if r else "MISSING")' || true
+
+          echo '--- recent approved row metadata keys only ---'
+          docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); c.row_factory=sqlite3.Row; r=c.execute('select * from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); print(','.join(r.keys()) if r else '')"
+
+          echo '--- execution client references ---'
+          grep -RniE 'approval_id|consume|consumed|/v1/execute|/v1/approvals' /usr/local/bin/philaios-execute /opt/hermes-agent-whow /opt/phil-ai-os 2>/dev/null | head -n 500 || true
+
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          echo production_allowlist=general_only
+          echo approval_mutation=none
+          echo provider_call=none
+          echo execution_call=none
+          echo production_change=none
+          echo next_action=PHASE_1_26_CONTROLLED_APPROVED_REQUEST_CONSUMPTION_VALIDATION
+          echo PHIL_AI_OS_PHASE_1_26_APPROVED_REQUEST_CONSUMPTION_DISCOVERY_OK
+          REMOTE
