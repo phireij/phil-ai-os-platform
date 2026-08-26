@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/phase-2-1c-traefik-provider-discovery.yml'
+      - '.github/phase-2-1c-traefik-provider-discovery-trigger'
 
 permissions:
   contents: read
