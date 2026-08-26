@@ -1,0 +1,145 @@
+name: Phase 1.26 Controlled Approved Request Consumption Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/phase-1-26-controlled-approved-request-consumption-validation.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"
+            sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Validate approved request is consumed exactly once
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          BASE=http://127.0.0.1:4870
+          DB=/app/state/control-plane.db
+          APPROVAL_ID=apr_6ee5a19331794c159e4d99070d63d08e
+          echo '=== PHASE 1.26 CONTROLLED APPROVED REQUEST CONSUMPTION VALIDATION ==='
+
+          curl -fsS "$BASE/healthz" >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          echo production_allowlist=general_only
+
+          # Resolve Control API token without printing it.
+          TOKEN=''
+          if [ -r /etc/phil-ai-os-monitor.env ]; then
+            set -a; . /etc/phil-ai-os-monitor.env; set +a
+            TOKEN="${PHIL_AI_OS_CONTROL_API_TOKEN:-}"
+            TOKEN_FILE="${PHIL_AI_OS_CONTROL_API_TOKEN_FILE:-}"
+            if [ -z "$TOKEN" ] && [ -n "${TOKEN_FILE:-}" ] && [ -r "$TOKEN_FILE" ]; then TOKEN="$(cat "$TOKEN_FILE")"; fi
+          fi
+          if [ -z "$TOKEN" ]; then
+            for f in /run/philaios/control_api_token /run/philaios/hermes_control_api_token /etc/phil-ai-os/control-api-token /opt/phil-ai-os/secrets/control-api-token; do
+              if [ -r "$f" ]; then TOKEN="$(cat "$f")"; break; fi
+            done
+          fi
+          [ -n "$TOKEN" ]
+          AUTH="Authorization: Bearer $TOKEN"
+          echo control_api_token_resolved=true
+
+          FIXTURE="$(docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); c.row_factory=sqlite3.Row; r=c.execute('select approval_id,state,task_text,task_class,consumed_at,consumed_by from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); print(json.dumps(dict(r)) if r else '')")"
+          [ -n "$FIXTURE" ]
+          STATE="$(printf '%s' "$FIXTURE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("state", ""))')"
+          CLASS="$(printf '%s' "$FIXTURE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("task_class", ""))')"
+          CONSUMED_BEFORE="$(printf '%s' "$FIXTURE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("consumed_at") or "")')"
+          TASK_TEXT="$(printf '%s' "$FIXTURE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("task_text") or "")')"
+          [ "$STATE" = approved ]
+          [ "$CLASS" = general ]
+          [ -z "$CONSUMED_BEFORE" ]
+          [ -n "$TASK_TEXT" ]
+          echo approved_unconsumed_fixture_verified=true
+
+          AUDIT_BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from execution_audit where approval_id=?',('$APPROVAL_ID',)).fetchone()[0])")"
+          USAGE_BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from usage_ledger').fetchone()[0])")"
+
+          PAYLOAD="$(printf '%s' "$TASK_TEXT" | python3 -c 'import json,sys; print(json.dumps({"task_text":sys.stdin.read(),"source":"phase-1.26-controlled-validation","approval_id":"apr_6ee5a19331794c159e4d99070d63d08e"}))')"
+          FIRST_CODE="$(curl -sS -o /tmp/phase126-first.json -w '%{http_code}' -H "$AUTH" -H 'Content-Type: application/json' -d "$PAYLOAD" "$BASE/v1/execute")"
+          echo first_execute_http_status="$FIRST_CODE"
+          if [ "$FIRST_CODE" -lt 200 ] || [ "$FIRST_CODE" -ge 300 ]; then
+            echo first_execute_failed=true
+            python3 -c 'import json; d=json.load(open("/tmp/phase126-first.json")); print("first_execute_status="+str(d.get("status","unknown")))' 2>/dev/null || true
+            exit 1
+          fi
+          echo first_execute_accepted=true
+
+          POST="$(docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); c.row_factory=sqlite3.Row; r=c.execute('select state,consumed_at,consumed_by from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); print(json.dumps(dict(r)) if r else '')")"
+          POST_STATE="$(printf '%s' "$POST" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("state", ""))')"
+          CONSUMED_AT="$(printf '%s' "$POST" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("consumed_at") or "")')"
+          CONSUMED_BY="$(printf '%s' "$POST" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("consumed_by") or "")')"
+          [ "$POST_STATE" = approved ]
+          [ -n "$CONSUMED_AT" ]
+          [ -n "$CONSUMED_BY" ]
+          echo approval_consumed=true
+
+          AUDIT_AFTER_FIRST="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from execution_audit where approval_id=?',('$APPROVAL_ID',)).fetchone()[0])")"
+          [ "$AUDIT_AFTER_FIRST" -eq $((AUDIT_BEFORE+1)) ]
+          echo approval_execution_audit_linked=true
+
+          SECOND_CODE="$(curl -sS -o /tmp/phase126-second.json -w '%{http_code}' -H "$AUTH" -H 'Content-Type: application/json' -d "$PAYLOAD" "$BASE/v1/execute" || true)"
+          echo replay_execute_http_status="$SECOND_CODE"
+          if [ "$SECOND_CODE" -ge 200 ] 2>/dev/null && [ "$SECOND_CODE" -lt 300 ] 2>/dev/null; then
+            echo replay_was_not_blocked=true
+            exit 1
+          fi
+          echo replay_blocked=true
+
+          AUDIT_AFTER_SECOND="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from execution_audit where approval_id=?',('$APPROVAL_ID',)).fetchone()[0])")"
+          [ "$AUDIT_AFTER_SECOND" -eq "$AUDIT_AFTER_FIRST" ]
+          echo no_second_execution_audit=true
+
+          USAGE_AFTER="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from usage_ledger').fetchone()[0])")"
+          USAGE_DELTA=$((USAGE_AFTER-USAGE_BEFORE))
+          [ "$USAGE_DELTA" -ge 0 ]
+          [ "$USAGE_DELTA" -le 1 ]
+          echo usage_ledger_delta="$USAGE_DELTA"
+
+          curl -fsS "$BASE/healthz" >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          echo production_config_change=none
+          echo approval_state=approved
+          echo consumption_semantics=exactly_once
+          echo next_action=PHASE_1_26_CLOSEOUT_AND_NEXT_GATE
+          echo PHIL_AI_OS_PHASE_1_26_CONTROLLED_APPROVED_REQUEST_CONSUMPTION_OK
+          REMOTE
