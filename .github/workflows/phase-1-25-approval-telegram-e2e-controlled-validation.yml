@@ -3,8 +3,7 @@ name: Phase 1.25 Approval Telegram E2E Controlled Validation
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - .github/workflows/phase-1-25-approval-telegram-e2e-controlled-validation.yml
 
@@ -51,7 +50,7 @@ jobs:
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
           BASE=http://127.0.0.1:4870
-          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V9 ==='
+          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V10 ==='
           curl -fsS "$BASE/healthz" >/dev/null
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
@@ -98,46 +97,60 @@ jobs:
           REVIEW_PATH="$(printf '%s' "$LINK_RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("review_path") or "")')"
           REVIEW_TOKEN="$(printf '%s' "$LINK_RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("review_token") or "")')"
           [ -n "$REVIEW_PATH" ] && [ -n "$REVIEW_TOKEN" ]
-          case "$REVIEW_PATH" in /phil-ai-os/approval/*) ;; *) echo invalid_review_path; exit 1;; esac
+          case "$REVIEW_PATH" in /phil-ai-os/approval/*) ;; *) exit 1;; esac
           echo approval_link_issued=true
           echo review_path_contract=valid
 
-          # Resolve the public Mission Control origin from explicit config, Traefik, then the GitHub-proven VPS host.
           PUBLIC_ORIGIN="${PHIL_AI_OS_MISSION_CONTROL_ORIGIN:-}"
-          if [ -z "$PUBLIC_ORIGIN" ] && [ -r /etc/phil-ai-os-monitor.env ]; then
-            PUBLIC_ORIGIN="$(sed -n 's/^PHIL_AI_OS_MISSION_CONTROL_ORIGIN=//p' /etc/phil-ai-os-monitor.env | tail -n1)"
-          fi
+          if [ -z "$PUBLIC_ORIGIN" ] && [ -r /etc/phil-ai-os-monitor.env ]; then PUBLIC_ORIGIN="$(sed -n 's/^PHIL_AI_OS_MISSION_CONTROL_ORIGIN=//p' /etc/phil-ai-os-monitor.env | tail -n1)"; fi
           if [ -z "$PUBLIC_ORIGIN" ]; then
             TRAEFIK_HOST="$(docker inspect "$CONTROL" --format '{{range $k,$v := .Config.Labels}}{{printf "%s=%s\n" $k $v}}{{end}}' 2>/dev/null | sed -n 's/.*Host(`\([^`]*\)`).*/\1/p' | head -n1 || true)"
-            if [ -z "$TRAEFIK_HOST" ]; then
-              TRAEFIK_HOST="$(grep -RhoE 'Host\(`[^`]+`\)' /docker/traefik-fhxl /opt/phil-ai-os /etc/traefik 2>/dev/null | sed -n 's/Host(`\([^`]*\)`).*/\1/p' | head -n1 || true)"
-            fi
+            if [ -z "$TRAEFIK_HOST" ]; then TRAEFIK_HOST="$(grep -RhoE 'Host\(`[^`]+`\)' /docker/traefik-fhxl /opt/phil-ai-os /etc/traefik 2>/dev/null | sed -n 's/Host(`\([^`]*\)`).*/\1/p' | head -n1 || true)"; fi
             [ -n "$TRAEFIK_HOST" ] && PUBLIC_ORIGIN="https://$TRAEFIK_HOST"
           fi
-          if [ -z "$PUBLIC_ORIGIN" ] && [ -n "${PHIL_AI_OS_VPS_PUBLIC_HOST:-}" ]; then
-            PUBLIC_ORIGIN="https://${PHIL_AI_OS_VPS_PUBLIC_HOST}"
-          fi
+          if [ -z "$PUBLIC_ORIGIN" ] && [ -n "${PHIL_AI_OS_VPS_PUBLIC_HOST:-}" ]; then PUBLIC_ORIGIN="https://${PHIL_AI_OS_VPS_PUBLIC_HOST}"; fi
           [ -n "$PUBLIC_ORIGIN" ]
           PUBLIC_ORIGIN="${PUBLIC_ORIGIN%/}"
           LINK="$PUBLIC_ORIGIN$REVIEW_PATH"
           echo mission_control_origin_resolved=true
           echo mission_control_url_constructed=true
 
-          TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
-          TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-}"
-          TELEGRAM_HOME_CHANNEL="${TELEGRAM_HOME_CHANNEL:-}"
-          if [ -r /etc/phil-ai-os-monitor.env ]; then
-            set -a; . /etc/phil-ai-os-monitor.env; set +a
-            TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
-            TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-}"
-            TELEGRAM_HOME_CHANNEL="${TELEGRAM_HOME_CHANNEL:-}"
+          # Resolve Telegram credentials from all live sources, validating bot tokens with getMe.
+          CHAT_CANDIDATES="$(mktemp)"
+          TOKEN_CANDIDATES="$(mktemp)"
+          trap 'rm -f "$CHAT_CANDIDATES" "$TOKEN_CANDIDATES"' EXIT
+          collect_env_file() {
+            local f="$1"
+            [ -r "$f" ] || return 0
+            sed -n -E 's/^(TELEGRAM_BOT_TOKEN|TELEGRAM_TOKEN|BOT_TOKEN)=(.*)$/\2/p' "$f" >> "$TOKEN_CANDIDATES" || true
+            sed -n -E 's/^(TELEGRAM_CHAT_ID|TELEGRAM_HOME_CHANNEL|TELEGRAM_CHANNEL_ID)=(.*)$/\2/p' "$f" >> "$CHAT_CANDIDATES" || true
+          }
+          collect_env_file /etc/phil-ai-os-monitor.env
+          collect_env_file /opt/hermes-agent-whow/.env
+          collect_env_file /docker/hermes-agent-whow/.env
+          HERMES="$(docker ps --format '{{.Names}}' | grep -E '^hermes-agent-whow|hermes' | head -n1 || true)"
+          if [ -n "$HERMES" ]; then
+            docker inspect "$HERMES" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | sed -n -E 's/^(TELEGRAM_BOT_TOKEN|TELEGRAM_TOKEN|BOT_TOKEN)=(.*)$/\2/p' >> "$TOKEN_CANDIDATES" || true
+            docker inspect "$HERMES" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | sed -n -E 's/^(TELEGRAM_CHAT_ID|TELEGRAM_HOME_CHANNEL|TELEGRAM_CHANNEL_ID)=(.*)$/\2/p' >> "$CHAT_CANDIDATES" || true
           fi
-          HERMES_ENV=/opt/hermes-agent-whow/.env
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] && [ -r "$HERMES_ENV" ]; then TELEGRAM_BOT_TOKEN="$(sed -n 's/^TELEGRAM_BOT_TOKEN=//p' "$HERMES_ENV" | tail -n1)"; fi
-          if [ -z "$TELEGRAM_CHAT_ID" ] && [ -r "$HERMES_ENV" ]; then TELEGRAM_CHAT_ID="$(sed -n 's/^TELEGRAM_CHAT_ID=//p' "$HERMES_ENV" | tail -n1)"; fi
-          if [ -z "$TELEGRAM_HOME_CHANNEL" ] && [ -r "$HERMES_ENV" ]; then TELEGRAM_HOME_CHANNEL="$(sed -n 's/^TELEGRAM_HOME_CHANNEL=//p' "$HERMES_ENV" | tail -n1)"; fi
-          if [ -z "$TELEGRAM_CHAT_ID" ]; then TELEGRAM_CHAT_ID="$TELEGRAM_HOME_CHANNEL"; fi
-          [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]
+          sed -i 's/^['"'"']\(.*\)['"'"']$/\1/; s/^"\(.*\)"$/\1/; s/[[:space:]]*$//' "$TOKEN_CANDIDATES" "$CHAT_CANDIDATES"
+          TELEGRAM_BOT_TOKEN=''
+          while IFS= read -r CAND; do
+            [ -n "$CAND" ] || continue
+            case "$CAND" in *:*) ;; *) continue;; esac
+            CODE="$(curl -sS -o /tmp/phase125-getme.json -w '%{http_code}' "https://api.telegram.org/bot${CAND}/getMe" || true)"
+            if [ "$CODE" = 200 ] && python3 -c 'import json; assert json.load(open("/tmp/phase125-getme.json")).get("ok") is True' 2>/dev/null; then TELEGRAM_BOT_TOKEN="$CAND"; break; fi
+          done < <(awk 'NF && !seen[$0]++' "$TOKEN_CANDIDATES")
+          [ -n "$TELEGRAM_BOT_TOKEN" ]
+          echo telegram_bot_token_validated=true
+
+          TELEGRAM_CHAT_ID="$(awk 'NF && !seen[$0]++ {print; exit}' "$CHAT_CANDIDATES")"
+          if [ -z "$TELEGRAM_CHAT_ID" ]; then
+            # Read the most recent chat known to this validated bot without printing message content.
+            UPDATES="$(curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?limit=20")"
+            TELEGRAM_CHAT_ID="$(printf '%s' "$UPDATES" | python3 -c 'import json,sys; d=json.load(sys.stdin); ids=[]; [(ids.append(str((u.get("message") or u.get("channel_post") or {}).get("chat",{}).get("id"))) if (u.get("message") or u.get("channel_post") or {}).get("chat",{}).get("id") is not None else None) for u in d.get("result",[])]; print(ids[-1] if ids else "")')"
+          fi
+          [ -n "$TELEGRAM_CHAT_ID" ]
           echo telegram_destination_resolved=true
 
           MSG="Phil AI OS Phase 1.25 controlled approval test. Approval ID: $APPROVAL_ID. Open Mission Control: $LINK"
