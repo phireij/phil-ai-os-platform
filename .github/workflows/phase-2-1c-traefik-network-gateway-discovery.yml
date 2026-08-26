@@ -1,0 +1,72 @@
+name: Phase 2.1C Traefik Network Gateway Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1c-traefik-network-gateway-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Discover attached network gateway without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          TRAEFIK="$(docker ps --format '{{.Names}}' | grep -m1 'traefik')"
+          test -n "$TRAEFIK"
+          python3 - "$TRAEFIK" <<'PY'
+          import json, subprocess, sys
+          name=sys.argv[1]
+          obj=json.loads(subprocess.check_output(['docker','inspect',name], text=True))[0]
+          nets=((obj.get('NetworkSettings') or {}).get('Networks') or {})
+          if not nets:
+              raise SystemExit('no_attached_networks')
+          for net_name, cfg in nets.items():
+              print(f'network={net_name}')
+              print(f'gateway_present={bool((cfg or {}).get("Gateway"))}')
+              print(f'gateway={(cfg or {}).get("Gateway") or "missing"}')
+          gateways=[(cfg or {}).get('Gateway') for cfg in nets.values() if (cfg or {}).get('Gateway')]
+          if not gateways:
+              raise SystemExit('no_attached_network_gateway')
+          print(f'selected_gateway={gateways[0]}')
+          PY
+          echo production_change=none
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo PHIL_AI_OS_PHASE_2_1C_TRAEFIK_GATEWAY_DISCOVERY_OK
+          REMOTE
