@@ -46,11 +46,12 @@ jobs:
         run: |
           set -euo pipefail
           PORT="${VPS_PORT:-22}"
-          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          PUBLIC_SSH_HOST="$VPS_HOST"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" "PHIL_AI_OS_VPS_PUBLIC_HOST='$PUBLIC_SSH_HOST' bash -s" <<'REMOTE'
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
           BASE=http://127.0.0.1:4870
-          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V8 ==='
+          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V9 ==='
           curl -fsS "$BASE/healthz" >/dev/null
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
@@ -101,16 +102,27 @@ jobs:
           echo approval_link_issued=true
           echo review_path_contract=valid
 
+          # Resolve the public Mission Control origin from explicit config, Traefik, then the GitHub-proven VPS host.
           PUBLIC_ORIGIN="${PHIL_AI_OS_MISSION_CONTROL_ORIGIN:-}"
           if [ -z "$PUBLIC_ORIGIN" ] && [ -r /etc/phil-ai-os-monitor.env ]; then
             PUBLIC_ORIGIN="$(sed -n 's/^PHIL_AI_OS_MISSION_CONTROL_ORIGIN=//p' /etc/phil-ai-os-monitor.env | tail -n1)"
           fi
+          if [ -z "$PUBLIC_ORIGIN" ]; then
+            TRAEFIK_HOST="$(docker inspect "$CONTROL" --format '{{range $k,$v := .Config.Labels}}{{printf "%s=%s\n" $k $v}}{{end}}' 2>/dev/null | sed -n 's/.*Host(`\([^`]*\)`).*/\1/p' | head -n1 || true)"
+            if [ -z "$TRAEFIK_HOST" ]; then
+              TRAEFIK_HOST="$(grep -RhoE 'Host\(`[^`]+`\)' /docker/traefik-fhxl /opt/phil-ai-os /etc/traefik 2>/dev/null | sed -n 's/Host(`\([^`]*\)`).*/\1/p' | head -n1 || true)"
+            fi
+            [ -n "$TRAEFIK_HOST" ] && PUBLIC_ORIGIN="https://$TRAEFIK_HOST"
+          fi
+          if [ -z "$PUBLIC_ORIGIN" ] && [ -n "${PHIL_AI_OS_VPS_PUBLIC_HOST:-}" ]; then
+            PUBLIC_ORIGIN="https://${PHIL_AI_OS_VPS_PUBLIC_HOST}"
+          fi
           [ -n "$PUBLIC_ORIGIN" ]
           PUBLIC_ORIGIN="${PUBLIC_ORIGIN%/}"
           LINK="$PUBLIC_ORIGIN$REVIEW_PATH"
+          echo mission_control_origin_resolved=true
           echo mission_control_url_constructed=true
 
-          # Resolve the live Telegram notifier destination without assuming one variable name.
           TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
           TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-}"
           TELEGRAM_HOME_CHANNEL="${TELEGRAM_HOME_CHANNEL:-}"
