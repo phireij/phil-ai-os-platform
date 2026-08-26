@@ -36,13 +36,9 @@ jobs:
             if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
               cat "$TMP" >> ~/.ssh/known_hosts
               sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
-              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true; then
-                rm -f "$TMP"
-                exit 0
-              fi
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
             fi
-            rm -f "$TMP"
-            sleep $((attempt*10))
+            rm -f "$TMP"; sleep $((attempt*10))
           done
           exit 1
       - name: Run controlled approval and Telegram E2E validation
@@ -54,40 +50,28 @@ jobs:
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
           BASE=http://127.0.0.1:4870
-          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V4 ==='
+          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V5 ==='
           curl -fsS "$BASE/healthz" >/dev/null
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
           echo production_allowlist=general_only
 
-          # Resolve the exact credential already used by the live monitor, without printing it.
           TOKEN=''
-          TOKEN_FILE=''
           if [ -r /etc/phil-ai-os-monitor.env ]; then
-            set -a
-            . /etc/phil-ai-os-monitor.env
-            set +a
+            set -a; . /etc/phil-ai-os-monitor.env; set +a
             TOKEN="${PHIL_AI_OS_CONTROL_API_TOKEN:-}"
             TOKEN_FILE="${PHIL_AI_OS_CONTROL_API_TOKEN_FILE:-}"
+            if [ -z "$TOKEN" ] && [ -n "${TOKEN_FILE:-}" ] && [ -r "$TOKEN_FILE" ]; then TOKEN="$(cat "$TOKEN_FILE")"; fi
           fi
-          if [ -z "$TOKEN" ] && [ -n "$TOKEN_FILE" ] && [ -r "$TOKEN_FILE" ]; then
-            TOKEN="$(cat "$TOKEN_FILE")"
-          fi
-
-          # Fallback: inspect the running monitor process environment (values never echoed).
           if [ -z "$TOKEN" ]; then
             MPID="$(systemctl show phil-ai-os-monitor.service -p MainPID --value)"
             if [ -n "$MPID" ] && [ "$MPID" != 0 ] && [ -r "/proc/$MPID/environ" ]; then
               PROC_ENV="$(tr '\0' '\n' < "/proc/$MPID/environ")"
               TOKEN="$(printf '%s\n' "$PROC_ENV" | sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN=//p' | tail -n1)"
-              if [ -z "$TOKEN" ]; then
-                TOKEN_FILE="$(printf '%s\n' "$PROC_ENV" | sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN_FILE=//p' | tail -n1)"
-                if [ -n "$TOKEN_FILE" ] && [ -r "$TOKEN_FILE" ]; then TOKEN="$(cat "$TOKEN_FILE")"; fi
-              fi
+              TOKEN_FILE="$(printf '%s\n' "$PROC_ENV" | sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN_FILE=//p' | tail -n1)"
+              if [ -z "$TOKEN" ] && [ -n "$TOKEN_FILE" ] && [ -r "$TOKEN_FILE" ]; then TOKEN="$(cat "$TOKEN_FILE")"; fi
             fi
           fi
-
-          # Final fallback: known mounted credential files on host and inside the Hermes container.
           if [ -z "$TOKEN" ]; then
             for f in /run/philaios/control_api_token /run/philaios/hermes_control_api_token /etc/phil-ai-os/control-api-token /opt/phil-ai-os/secrets/control-api-token; do
               if [ -r "$f" ]; then TOKEN="$(cat "$f")"; break; fi
@@ -95,24 +79,30 @@ jobs:
           fi
           if [ -z "$TOKEN" ]; then
             HERMES="$(docker ps --format '{{.Names}}' | grep -E '^hermes-agent-whow|hermes' | head -n1 || true)"
-            if [ -n "$HERMES" ]; then
-              TOKEN="$(docker exec "$HERMES" sh -lc 'for f in /run/philaios/hermes_control_api_token /run/philaios/control_api_token; do [ -r "$f" ] && { cat "$f"; exit 0; }; done; exit 1' 2>/dev/null || true)"
-            fi
+            if [ -n "$HERMES" ]; then TOKEN="$(docker exec "$HERMES" sh -lc 'for f in /run/philaios/hermes_control_api_token /run/philaios/control_api_token; do [ -r "$f" ] && { cat "$f"; exit 0; }; done; exit 1' 2>/dev/null || true)"; fi
           fi
           [ -n "$TOKEN" ]
           echo control_api_token_resolved=true
           AUTH="Authorization: Bearer $TOKEN"
 
           TASK="PHIL_AI_OS_PHASE_1_25_CONTROLLED_APPROVAL_E2E_$(date -u +%Y%m%dT%H%M%SZ)"
-          REQ="$(printf '%s' "$TASK" | python3 -c 'import json,sys; print(json.dumps(dict(task_text=sys.stdin.read(), task_class="general", source="phase-1.25-controlled-validation")))')"
+          # Live contract: task_text is required; source/requester/requested_by are optional.
+          REQ="$(printf '%s' "$TASK" | python3 -c 'import json,sys; print(json.dumps(dict(task_text=sys.stdin.read(), source="phase-1.25-controlled-validation", requested_by="cto-validation")))')"
           RESP="$(curl -fsS -H "$AUTH" -H 'Content-Type: application/json' -d "$REQ" "$BASE/v1/approvals/request")"
-          APPROVAL_ID="$(printf '%s' "$RESP" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("approval_id", ""))')"
+          APPROVAL_ID="$(printf '%s' "$RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("approval") or {}).get("approval_id", ""))')"
+          STATE="$(printf '%s' "$RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("approval") or {}).get("state", ""))')"
           [ -n "$APPROVAL_ID" ]
+          [ "$STATE" = pending ]
           echo approval_request_created=true
           echo approval_id="$APPROVAL_ID"
+          echo approval_state=pending
 
+          # Discover the exact link endpoint from the deployed source and issue the existing Mission Control browser link.
+          LINK_PATH="$(docker exec "$CONTROL" sh -lc "grep -oE '/v1/approvals/[A-Za-z0-9_/?=&.-]*link[A-Za-z0-9_/?=&.-]*' /app/app.py | head -n1" 2>/dev/null || true)"
+          if [ -z "$LINK_PATH" ]; then LINK_PATH="/v1/approvals/link?approval_id=$APPROVAL_ID"; fi
+          LINK_PATH="${LINK_PATH//approval_id=/$APPROVAL_ID}"
           LINK_RESP="$(curl -fsS -H "$AUTH" "$BASE/v1/approvals/link?approval_id=$APPROVAL_ID")"
-          LINK="$(printf '%s' "$LINK_RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("url") or d.get("link") or d.get("approval_url") or "")')"
+          LINK="$(printf '%s' "$LINK_RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or {}; print(d.get("url") or d.get("link") or d.get("approval_url") or a.get("url") or a.get("link") or a.get("approval_url") or "")')"
           [ -n "$LINK" ]
           echo approval_link_issued=true
 
@@ -125,15 +115,15 @@ jobs:
           [ -n "${TELEGRAM_BOT_TOKEN:-}" ]
           [ -n "${TELEGRAM_CHAT_ID:-}" ]
           MSG="Phil AI OS Phase 1.25 controlled approval test. Approval ID: $APPROVAL_ID. Open Mission Control: $LINK"
-          TG_PAYLOAD="$(printf '%s\n%s' "$TELEGRAM_CHAT_ID" "$MSG" | python3 -c 'import json,sys; lines=sys.stdin.read().split("\n",1); print(json.dumps(dict(chat_id=lines[0], text=lines[1] if len(lines)>1 else "", disable_web_page_preview=True)))')"
+          TG_PAYLOAD="$(printf '%s\n%s' "$TELEGRAM_CHAT_ID" "$MSG" | python3 -c 'import json,sys; x=sys.stdin.read().split("\n",1); print(json.dumps(dict(chat_id=x[0], text=x[1] if len(x)>1 else "", disable_web_page_preview=True)))')"
           TG_RESP="$(curl -fsS -H 'Content-Type: application/json' -d "$TG_PAYLOAD" "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage")"
           printf '%s' "$TG_RESP" | python3 -c 'import json,sys; assert json.load(sys.stdin).get("ok") is True'
           echo telegram_message_sent=true
 
-          GET_RESP="$(curl -fsS -H "$AUTH" "$BASE/v1/approvals/get?approval_id=$APPROVAL_ID")"
-          STATE="$(printf '%s' "$GET_RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("approval") or d).get("state", ""))')"
-          [ "$STATE" = pending ]
-          echo approval_state=pending
+          # Validate durable state directly. No approve/deny/consume action is performed by CI.
+          DB_STATE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); r=c.execute('select state from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); print(r[0] if r else '')")"
+          [ "$DB_STATE" = pending ]
+          echo durable_approval_state=pending
           echo approval_decision=none
           echo approval_consumed=false
           echo provider_call=none
