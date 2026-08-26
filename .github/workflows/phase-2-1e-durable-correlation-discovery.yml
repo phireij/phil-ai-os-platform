@@ -1,0 +1,95 @@
+name: Phase 2.1E Durable Correlation Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1e-durable-correlation-discovery.yml'
+      - '.github/phase-2-1e-durable-correlation-discovery-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"
+            sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Discover durable correlation sources read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          DB=/app/state/control-plane.db
+          test -n "$CONTROL"
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
+          docker exec "$CONTROL" test -s "$DB"
+
+          echo '=== PHASE 2.1E DURABLE CORRELATION DISCOVERY ==='
+          echo discovery_mode=read_only
+
+          echo '--- durable tables ---'
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); names=[r[0] for r in c.execute(\"select name from sqlite_master where type='table' order by name\")]; print('tables='+','.join(names))"
+
+          echo '--- correlation table schemas ---'
+          for T in approval_requests execution_audit execution_requests execution_history executions audit_log; do
+            docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); exists=c.execute(\"select 1 from sqlite_master where type='table' and name=?\",('$T',)).fetchone(); print('table=$T exists='+('true' if exists else 'false')); cols=list(c.execute('pragma table_info($T)')) if exists else []; print('columns='+','.join(r[1] for r in cols) if cols else 'columns=none'); print('row_count='+str(c.execute('select count(*) from $T').fetchone()[0]) if exists else 'row_count=0')" || true
+          done
+
+          echo '--- candidate correlation fields ---'
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); candidates={'task_id','canonical_task_id','approval_id','execution_id','request_id','audit_id','source','requester','requested_by','consumed_by','consumed_at'}; tables=[r[0] for r in c.execute(\"select name from sqlite_master where type='table'\")]; [(print(t+':'+','.join(x for x in [r[1] for r in c.execute('pragma table_info('+t+')')] if x in candidates))) for t in sorted(tables) if any(x in candidates for x in [r[1] for r in c.execute('pragma table_info('+t+')'])]"
+
+          echo '--- relevant indexes ---'
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); tables=['approval_requests','execution_audit']; [(print(t+':'+','.join(r[1] for r in c.execute('pragma index_list('+t+')'))) for t in tables if c.execute(\"select 1 from sqlite_master where type='table' and name=?\",(t,)).fetchone())]"
+
+          echo '--- implementation references (source only) ---'
+          docker exec "$CONTROL" sh -lc "grep -n -E 'task_id|canonical_task_id|approval_id|execution_id|execution_audit|approval_requests' /app/app.py | head -n 260" || true
+
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+
+          echo production_allowlist=general_only
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+          echo approval_mutation=none
+          echo provider_call=none
+          echo execution_call=none
+          echo production_change=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1E_DURABLE_CORRELATION_DISCOVERY_OK
+          REMOTE
