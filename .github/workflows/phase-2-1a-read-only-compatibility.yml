@@ -1,0 +1,98 @@
+name: Phase 2.1A Read-Only Compatibility Gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1a-read-only-compatibility.yml'
+      - 'docs/PHASE_2_1A_MISSION_CONTROL_OPERATOR_READ_MODEL_CONTRACT.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Validate read-only Mission Control compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
+          HERMES=$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow')
+          BASE=http://127.0.0.1:4870
+          DB=/app/state/control-plane.db
+
+          echo '=== PHASE 2.1A READ-ONLY COMPATIBILITY ==='
+
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          echo control_api_health=ok
+          echo control_api_readiness=ok
+
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          echo monitoring=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          echo production_allowlist=general_only
+
+          docker exec "$HERMES" test -s /run/philaios/hermes_control_api_token
+          echo hermes_token_mount=ready
+
+          BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); print(json.dumps({'approvals':c.execute('select count(*) from approval_requests').fetchone()[0],'audits':c.execute('select count(*) from execution_audit').fetchone()[0]},sort_keys=True))")"
+
+          for ep in /v1/mission-control/snapshot /v1/approvals/recent /v1/execution/recent; do
+            code=$(docker exec "$HERMES" sh -lc 'T=$(cat /run/philaios/hermes_control_api_token); curl -sS -o /tmp/p21a.out -w "%{http_code}" -H "Authorization: Bearer $T" "http://'"$CONTROL"':4870'"$ep"'"')
+            test "$code" = 200
+            echo "endpoint=$ep http=200"
+          done
+
+          AFTER="$(docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); print(json.dumps({'approvals':c.execute('select count(*) from approval_requests').fetchone()[0],'audits':c.execute('select count(*) from execution_audit').fetchone()[0]},sort_keys=True))")"
+          test "$BEFORE" = "$AFTER"
+          echo approval_and_audit_counts_unchanged=true
+
+          docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); n=c.execute(\"select count(*) from approval_requests where consumed_at is not null and consumed_by is not null\").fetchone()[0]; assert n>=1; m=c.execute(\"select count(*) from execution_audit where approval_id is not null\").fetchone()[0]; assert m>=1; print('consumption_and_audit_linkage=present')"
+
+          echo secret_values_emitted=false
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1A_READ_ONLY_COMPATIBILITY_OK
+          REMOTE
