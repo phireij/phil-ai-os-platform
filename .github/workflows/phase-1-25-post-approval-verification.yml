@@ -1,0 +1,73 @@
+name: Phase 1.25 Post Approval Verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/phase-1-25-post-approval-verification.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Verify controlled human approval persisted
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          APPROVAL_ID=apr_6ee5a19331794c159e4d99070d63d08e
+          DB=/app/state/control-plane.db
+          echo '=== PHASE 1.25 POST APPROVAL VERIFICATION ==='
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+
+          ROW="$(docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); c.row_factory=sqlite3.Row; r=c.execute('select * from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); print(json.dumps(dict(r)) if r else '')")"
+          [ -n "$ROW" ]
+          STATE="$(printf '%s' "$ROW" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("state", ""))')"
+          echo approval_state="$STATE"
+          [ "$STATE" = approved ]
+
+          printf '%s' "$ROW" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("decision_recorded=true" if any(d.get(k) not in (None, "") for k in ("decided_at","decision_at","reviewed_at","approved_at","decided_by","reviewed_by")) else "decision_recorded=state_only")'
+
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          echo production_allowlist=general_only
+          echo approval_id_verified="$APPROVAL_ID"
+          echo provider_call_from_verifier=none
+          echo production_config_change=none
+          echo next_action=PHASE_1_25_CLOSEOUT_AND_NEXT_GATE
+          echo PHIL_AI_OS_PHASE_1_25_POST_APPROVAL_VERIFICATION_OK
+          REMOTE
