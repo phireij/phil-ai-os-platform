@@ -37,7 +37,7 @@ footer{padding:0 20px 20px;color:#667085;font-size:12px}
 <script>
 const esc=x=>String(x??'unknown').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const kv=(k,v)=>`<div class="kv"><span class="muted">${esc(k)}</span><strong>${esc(v)}</strong></div>`;
-fetch('/api/read-model',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(d=>{
+fetch('api/read-model',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(d=>{
  document.getElementById('health').innerHTML=kv('Overall',d.overall_state)+kv('Control API',d.platform?.control_api_health)+kv('Readiness',d.platform?.control_api_readiness)+kv('Monitoring',d.platform?.monitoring_state)+kv('Generated',d.generated_at);
  document.getElementById('governance').innerHTML=kv('Allowed classes',(d.governance?.execution_allowed_task_classes||[]).join(', '))+kv('Enforcement',d.governance?.execution_enforcement_mode)+kv('Scope',d.governance?.execution_enforcement_scope)+kv('Kill switch',d.governance?.kill_switch_state)+kv('Authority expansion',d.governance?.authority_expansion_state);
  document.getElementById('agents').innerHTML='<ul>'+(d.agents||[]).map(a=>`<li><strong>${esc(a.display_name)}</strong> — ${esc(a.role)} / ${esc(a.authority_level)} / ${esc(a.status)}</li>`).join('')+'</ul>';
