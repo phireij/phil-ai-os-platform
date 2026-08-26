@@ -1,0 +1,138 @@
+name: Phase 2.1B Read-Only Mission Control Dashboard Prototype
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/phase-2.1a/philaios-mission-control-read-model.py'
+      - 'ops/phase-2.1b/mission-control-readonly-server.py'
+      - '.github/workflows/phase-2-1b-readonly-dashboard-prototype.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Validate loopback-only browser prototype
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          MODEL='ops/phase-2.1a/philaios-mission-control-read-model.py'
+          SERVER='ops/phase-2.1b/mission-control-readonly-server.py'
+          R_MODEL='/tmp/philaios-mission-control-read-model-phase21a.py'
+          R_SERVER='/tmp/mission-control-readonly-server-phase21b.py'
+
+          python3 -m py_compile "$MODEL" "$SERVER"
+          scp -P "$PORT" -q "$MODEL" "$VPS_USER@$VPS_HOST:$R_MODEL"
+          scp -P "$PORT" -q "$SERVER" "$VPS_USER@$VPS_HOST:$R_SERVER"
+
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" "R_MODEL='$R_MODEL' R_SERVER='$R_SERVER' bash -s" <<'REMOTE'
+          set -euo pipefail
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
+          DB=/app/state/control-plane.db
+          PIDFILE=/tmp/phase21b-dashboard.pid
+          LOG=/tmp/phase21b-dashboard.log
+          HTML=/tmp/phase21b-dashboard.html
+          JSON=/tmp/phase21b-read-model.json
+
+          cleanup() {
+            if [ -f "$PIDFILE" ]; then kill "$(cat "$PIDFILE")" 2>/dev/null || true; fi
+            rm -f "$PIDFILE" "$LOG" "$HTML" "$JSON" "$R_MODEL" "$R_SERVER"
+          }
+          trap cleanup EXIT
+
+          BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); print(json.dumps({'approvals':c.execute('select count(*) from approval_requests').fetchone()[0],'audits':c.execute('select count(*) from execution_audit').fetchone()[0]},sort_keys=True))")"
+
+          PHIL_AI_OS_MC_HOST=127.0.0.1 PHIL_AI_OS_MC_PORT=4881 PHIL_AI_OS_MC_READ_MODEL="$R_MODEL" python3 "$R_SERVER" > "$LOG" 2>&1 &
+          echo $! > "$PIDFILE"
+
+          for i in $(seq 1 20); do
+            if curl -fsS --max-time 3 http://127.0.0.1:4881/ > "$HTML"; then break; fi
+            sleep 1
+          done
+          test -s "$HTML"
+          grep -q 'Phil AI OS Mission Control' "$HTML"
+          grep -q 'READ ONLY' "$HTML"
+          grep -q 'System Health' "$HTML"
+          grep -q 'Governance' "$HTML"
+          grep -q 'Agents' "$HTML"
+          grep -q 'Tasks & Approvals' "$HTML"
+          grep -q 'Executions & Audit' "$HTML"
+          grep -q 'Recovery & Data Quality' "$HTML"
+
+          curl -fsS --max-time 20 http://127.0.0.1:4881/api/read-model > "$JSON"
+          python3 - "$JSON" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1]))
+          assert d['schema_version']=='2.1a.v1'
+          assert d['governance']['execution_allowed_task_classes']==['general']
+          assert d['governance']['direct_provider_bypass_allowed'] is False
+          assert d['governance']['authority_expansion_state']=='blocked'
+          assert {'human-ceo','cto-office','hermes'} <= {x['agent_id'] for x in d['agents']}
+          print('dashboard_read_model=valid')
+          PY
+
+          # All mutation methods must be unavailable.
+          for method in POST PUT PATCH DELETE; do
+            code=$(curl -sS -o /tmp/phase21b-method.out -w '%{http_code}' -X "$method" http://127.0.0.1:4881/api/read-model)
+            test "$code" = 405
+          done
+          echo mutation_methods=blocked
+
+          # Loopback binding must be explicit; no public listener is allowed in this gate.
+          ss -ltnp | grep -q '127.0.0.1:4881'
+          if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'; then
+            echo public_listener=unexpected
+            exit 1
+          fi
+          echo listener=loopback_only
+
+          AFTER="$(docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); print(json.dumps({'approvals':c.execute('select count(*) from approval_requests').fetchone()[0],'audits':c.execute('select count(*) from execution_audit').fetchone()[0]},sort_keys=True))")"
+          test "$BEFORE" = "$AFTER"
+
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+
+          echo dashboard_html=valid
+          echo approval_and_audit_counts_unchanged=true
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1B_READ_ONLY_DASHBOARD_PROTOTYPE_OK
+          REMOTE
