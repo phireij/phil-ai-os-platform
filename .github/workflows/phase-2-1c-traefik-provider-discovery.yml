@@ -1,0 +1,71 @@
+name: Phase 2.1C Traefik Provider Discovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1c-traefik-provider-discovery.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Discover Traefik static and dynamic provider configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          TRAEFIK="$(docker ps --format '{{.Names}}' | grep -m1 'traefik')"
+          test -n "$TRAEFIK"
+          echo traefik_container="$TRAEFIK"
+          echo traefik_network_mode="$(docker inspect "$TRAEFIK" --format '{{.HostConfig.NetworkMode}}')"
+          echo '--- args ---'
+          docker inspect "$TRAEFIK" --format '{{json .Config.Cmd}}'
+          echo '--- env provider signals ---'
+          docker inspect "$TRAEFIK" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -Ei 'TRAEFIK_(PROVIDERS|ENTRYPOINTS|API|CERTIFICATESRESOLVERS)' || true
+          echo '--- mounts ---'
+          docker inspect "$TRAEFIK" --format '{{range .Mounts}}{{println .Source " -> " .Destination}}{{end}}'
+          echo '--- config files ---'
+          for f in /docker/traefik-fhxl/docker-compose.yml /docker/traefik-fhxl/traefik.yml /docker/traefik-fhxl/traefik.yaml /docker/traefik-fhxl/dynamic.yml /docker/traefik-fhxl/dynamic.yaml; do
+            if test -f "$f"; then
+              echo FILE="$f"
+              grep -En 'providers:|file:|directory:|filename:|watch:|docker:|entryPoints:|certificatesResolvers:|api:' "$f" || true
+            fi
+          done
+          echo production_change=none
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo PHIL_AI_OS_PHASE_2_1C_TRAEFIK_PROVIDER_DISCOVERY_OK
+          REMOTE
