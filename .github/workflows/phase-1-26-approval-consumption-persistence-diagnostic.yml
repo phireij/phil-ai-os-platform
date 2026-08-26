@@ -1,0 +1,88 @@
+name: Phase 1.26 Approval Consumption Persistence Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/phase-1-26-approval-consumption-persistence-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Inspect approval consumption persistence boundary read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          DB=/app/state/control-plane.db
+          APPROVAL_ID=apr_6ee5a19331794c159e4d99070d63d08e
+          echo '=== PHASE 1.26 APPROVAL CONSUMPTION PERSISTENCE DIAGNOSTIC ==='
+          echo diagnostic_mode=read_only
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+
+          echo '--- current approval row ---'
+          docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); c.row_factory=sqlite3.Row; r=c.execute('select * from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); print(json.dumps(dict(r), default=str) if r else 'MISSING')"
+
+          echo '--- approval_consume implementation ---'
+          docker exec "$CONTROL" sh -lc "grep -n -A 140 '^def approval_consume' /app/app.py | head -n 180" || true
+
+          echo '--- routed_execute approval handling ---'
+          docker exec "$CONTROL" sh -lc "grep -n -A 260 '^def routed_execute' /app/app.py | grep -n -E 'approval|consume|execution_audit|provider|return|commit' | head -n 220" || true
+
+          echo '--- execute HTTP handler ---'
+          docker exec "$CONTROL" sh -lc "grep -n -B 25 -A 90 -E 'path == .*/v1/execute|payload.get\(\"approval_id\"|payload.get\(\"text\"' /app/app.py | head -n 260" || true
+
+          echo '--- approval_requests schema ---'
+          docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute(\"select sql from sqlite_master where type='table' and name='approval_requests'\").fetchone()[0])"
+
+          echo '--- recent execution audit rows for approval ---'
+          docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); c.row_factory=sqlite3.Row; rows=c.execute('select * from execution_audit where approval_id=? order by rowid desc limit 5',('$APPROVAL_ID',)).fetchall(); print(json.dumps([dict(r) for r in rows], default=str))" || true
+
+          echo '--- transaction and db helper references ---'
+          docker exec "$CONTROL" sh -lc "grep -n -E 'sqlite3.connect|def db_|def approval_|commit\(\)|rollback\(\)' /app/app.py | head -n 320" || true
+
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          echo production_allowlist=general_only
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo production_change=none
+          echo next_action=PATCH_APPROVAL_CONSUMPTION_PERSISTENCE_BOUNDARY
+          echo PHIL_AI_OS_PHASE_1_26_APPROVAL_CONSUMPTION_PERSISTENCE_DIAGNOSTIC_OK
+          REMOTE
