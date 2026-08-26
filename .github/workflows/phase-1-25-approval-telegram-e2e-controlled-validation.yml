@@ -50,7 +50,7 @@ jobs:
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
           BASE=http://127.0.0.1:4870
-          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V6 ==='
+          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V7 ==='
           curl -fsS "$BASE/healthz" >/dev/null
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
@@ -93,36 +93,26 @@ jobs:
           echo approval_id="$APPROVAL_ID"
           echo approval_state=pending
 
-          # Inspect deployed link route/function after creating the approval; no decision or execution mutation.
-          echo approval_link_contract_discovery=true
-          docker exec "$CONTROL" sh -lc "grep -n -B 30 -A 80 'approval.*link\|link.*approval\|link_issued_at' /app/app.py | head -n 220" > /tmp/phase125-link-source.txt || true
-          # Try known authenticated link-issuance shapes and accept only a response containing a URL/link.
-          LINK=''
-          for method_path in \
-            "GET /v1/approvals/link?approval_id=$APPROVAL_ID" \
-            "POST /v1/approvals/link" \
-            "POST /v1/approvals/link/issue" \
-            "POST /v1/approvals/issue-link"; do
-            METHOD="${method_path%% *}"
-            PATH_PART="${method_path#* }"
-            if [ "$METHOD" = GET ]; then
-              CODE="$(curl -sS -o /tmp/phase125-link.json -w '%{http_code}' -H "$AUTH" "$BASE$PATH_PART" || true)"
-            else
-              CODE="$(curl -sS -o /tmp/phase125-link.json -w '%{http_code}' -X POST -H "$AUTH" -H 'Content-Type: application/json' -d "{\"approval_id\":\"$APPROVAL_ID\"}" "$BASE$PATH_PART" || true)"
-            fi
-            echo "link_probe_method=$METHOD link_probe_path=$PATH_PART http_status=$CODE"
-            if [ "$CODE" -ge 200 ] 2>/dev/null && [ "$CODE" -lt 300 ] 2>/dev/null; then
-              LINK="$(python3 -c 'import json; d=json.load(open("/tmp/phase125-link.json")); a=d.get("approval") or {}; print(d.get("url") or d.get("link") or d.get("approval_url") or a.get("url") or a.get("link") or a.get("approval_url") or "")' 2>/dev/null || true)"
-              [ -n "$LINK" ] && break
-            fi
-          done
-          if [ -z "$LINK" ]; then
-            echo '--- deployed approval link source evidence ---'
-            cat /tmp/phase125-link-source.txt
-            echo approval_link_issued=false
-            exit 1
-          fi
+          LINK_RESP="$(curl -fsS -H "$AUTH" "$BASE/v1/approvals/link?approval_id=$APPROVAL_ID")"
+          REVIEW_PATH="$(printf '%s' "$LINK_RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("review_path") or "")')"
+          REVIEW_TOKEN="$(printf '%s' "$LINK_RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("review_token") or "")')"
+          [ -n "$REVIEW_PATH" ] && [ -n "$REVIEW_TOKEN" ]
+          case "$REVIEW_PATH" in /phil-ai-os/approval/*) ;; *) echo invalid_review_path; exit 1;; esac
           echo approval_link_issued=true
+          echo review_path_contract=valid
+
+          # Prefer the configured public Mission Control origin; otherwise use the proven public host.
+          PUBLIC_ORIGIN="${PHIL_AI_OS_MISSION_CONTROL_ORIGIN:-}"
+          if [ -z "$PUBLIC_ORIGIN" ] && [ -r /etc/phil-ai-os-monitor.env ]; then
+            PUBLIC_ORIGIN="$(sed -n 's/^PHIL_AI_OS_MISSION_CONTROL_ORIGIN=//p' /etc/phil-ai-os-monitor.env | tail -n1)"
+          fi
+          if [ -z "$PUBLIC_ORIGIN" ]; then
+            PUBLIC_ORIGIN="https://${VPS_HOST:-}"
+          fi
+          [ -n "$PUBLIC_ORIGIN" ]
+          PUBLIC_ORIGIN="${PUBLIC_ORIGIN%/}"
+          LINK="$PUBLIC_ORIGIN$REVIEW_PATH"
+          echo mission_control_url_constructed=true
 
           set -a
           [ -r /etc/phil-ai-os-monitor.env ] && . /etc/phil-ai-os-monitor.env
