@@ -1,0 +1,91 @@
+name: Phase 2.1C Live Router Hostname Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1c-live-router-hostname-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Discover hostname and router conventions without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo '=== PHASE 2.1C LIVE ROUTER HOSTNAME DISCOVERY ==='
+          python3 - <<'PY'
+          import json, subprocess, re
+
+          names=subprocess.check_output(['docker','ps','--format','{{.Names}}'], text=True).splitlines()
+          hosts=set(); routers=set(); middleware_names=set()
+          for name in names:
+              raw=subprocess.check_output(['docker','inspect',name], text=True)
+              obj=json.loads(raw)[0]
+              labels=(obj.get('Config') or {}).get('Labels') or {}
+              for k,v in labels.items():
+                  kl=k.lower()
+                  if kl.startswith('traefik.http.routers.'):
+                      parts=k.split('.')
+                      if len(parts) >= 4:
+                          routers.add(parts[3])
+                      if kl.endswith('.rule'):
+                          for h in re.findall(r'Host\(`([^`]+)`\)', v or ''):
+                              hosts.add(h)
+                  if kl.startswith('traefik.http.middlewares.'):
+                      parts=k.split('.')
+                      if len(parts) >= 4:
+                          middleware_names.add(parts[3])
+          print('router_names=' + ','.join(sorted(routers)))
+          print('hostnames=' + ','.join(sorted(hosts)))
+          print('middleware_names=' + ','.join(sorted(middleware_names)))
+          print('hostname_count=' + str(len(hosts)))
+          PY
+
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'; then exit 1; fi
+          echo production_allowlist=general_only
+          echo mission_control_public_listener=absent
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1C_LIVE_ROUTER_HOSTNAME_DISCOVERY_OK
+          REMOTE
