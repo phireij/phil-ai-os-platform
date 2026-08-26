@@ -50,7 +50,7 @@ jobs:
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
           BASE=http://127.0.0.1:4870
-          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V11 ==='
+          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V12 ==='
           curl -fsS "$BASE/healthz" >/dev/null
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
@@ -110,16 +110,33 @@ jobs:
           echo mission_control_origin_resolved=true
           echo mission_control_url_constructed=true
 
-          HERMES_ENV=/opt/hermes-agent-whow/.env
+          # V3 discovery proved this is the live Hermes Telegram credential source.
+          HERMES_ENV=/docker/hermes-agent-whow/data/.env
           [ -r "$HERMES_ENV" ]
-          TELEGRAM_BOT_TOKEN="$(sed -n 's/^TELEGRAM_BOT_TOKEN=//p' "$HERMES_ENV" | tail -n1 | sed 's/^['"'"']\(.*\)['"'"']$/\1/; s/^"\(.*\)"$/\1/; s/[[:space:]]*$//')"
+          TELEGRAM_BOT_TOKEN="$(python3 - "$HERMES_ENV" <<'PY'
+import sys
+p=sys.argv[1]
+for line in open(p, encoding='utf-8'):
+    if line.startswith('TELEGRAM_BOT_TOKEN='):
+        print(line.split('=',1)[1].strip().strip('"\''))
+PY
+)"
           [ -n "$TELEGRAM_BOT_TOKEN" ]
           GETME_CODE="$(curl -sS -o /tmp/phase125-getme.json -w '%{http_code}' "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" || true)"
           [ "$GETME_CODE" = 200 ]
           python3 -c 'import json; assert json.load(open("/tmp/phase125-getme.json")).get("ok") is True'
           echo telegram_bot_token_validated=true
 
-          TELEGRAM_CHAT_ID="$(sed -n -E 's/^(TELEGRAM_CHAT_ID|TELEGRAM_HOME_CHANNEL|TELEGRAM_CHANNEL_ID)=(.*)$/\2/p' "$HERMES_ENV" | tail -n1 | sed 's/^['"'"']\(.*\)['"'"']$/\1/; s/^"\(.*\)"$/\1/; s/[[:space:]]*$//')"
+          TELEGRAM_CHAT_ID="$(python3 - "$HERMES_ENV" <<'PY'
+import sys
+names={'TELEGRAM_CHAT_ID','TELEGRAM_HOME_CHANNEL','TELEGRAM_CHANNEL_ID'}
+found=''
+for line in open(sys.argv[1], encoding='utf-8'):
+    if '=' in line and line.split('=',1)[0] in names:
+        found=line.split('=',1)[1].strip().strip('"\'')
+print(found)
+PY
+)"
           if [ -z "$TELEGRAM_CHAT_ID" ]; then
             UPDATES="$(curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?limit=50")"
             TELEGRAM_CHAT_ID="$(printf '%s' "$UPDATES" | python3 -c 'import json,sys; d=json.load(sys.stdin); ids=[]; [(ids.append(str((u.get("message") or u.get("channel_post") or {}).get("chat",{}).get("id"))) if (u.get("message") or u.get("channel_post") or {}).get("chat",{}).get("id") is not None else None) for u in d.get("result",[])]; print(ids[-1] if ids else "")')"
