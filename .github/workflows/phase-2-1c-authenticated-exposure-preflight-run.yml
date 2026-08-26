@@ -61,33 +61,48 @@ jobs:
           PORT="${VPS_PORT:-22}"
           ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
-          test -f /docker/traefik-fhxl/docker-compose.yml
+
+          require() {
+            local name="$1"; shift
+            if "$@"; then
+              echo "$name=ok"
+            else
+              echo "$name=failed"
+              exit 1
+            fi
+          }
+
+          require traefik_compose test -f /docker/traefik-fhxl/docker-compose.yml
           TRAEFIK=$(docker ps --format '{{.Names}}' | grep -m1 'traefik')
           CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
-          test -n "$TRAEFIK"
-          test -n "$CONTROL"
+          test -n "$TRAEFIK" && echo traefik_container=ok
+          test -n "$CONTROL" && echo control_api_container=ok
+
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
-          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
-          systemctl is-active --quiet phil-ai-os-monitor.service
-          systemctl is-active --quiet phil-ai-os-backup.timer
-          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
-          LABELS="$(docker inspect "$CONTROL" --format '{{range $k,$v := .Config.Labels}}{{println $k "=" $v}}{{end}}')"
-          grep -F 'traefik.http.routers.philaios-approval.rule=Host(`hermes-agent-whow.srv1833510.hstgr.cloud`) && PathPrefix(`/phil-ai-os/approval/`)' <<<"$LABELS"
-          grep -F 'traefik.http.routers.philaios-mission-control.rule=Host(`hermes-agent-whow.srv1833510.hstgr.cloud`) && PathPrefix(`/phil-ai-os/mission-control`)' <<<"$LABELS"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV" && echo production_allowlist=general_only
+
+          systemctl is-active --quiet phil-ai-os-monitor.service && echo monitor=active
+          systemctl is-active --quiet phil-ai-os-backup.timer && echo backup_timer=active
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer && echo backup_self_heal=active
+
+          # Use printf in the Go template so labels are emitted as exact key=value pairs.
+          LABELS="$(docker inspect "$CONTROL" --format '{{range $k,$v := .Config.Labels}}{{printf "%s=%s\n" $k $v}}{{end}}')"
+          grep -F 'traefik.http.routers.philaios-approval.rule=Host(`hermes-agent-whow.srv1833510.hstgr.cloud`) && PathPrefix(`/phil-ai-os/approval/`)' <<<"$LABELS" >/dev/null && echo existing_approval_route=preserved
+          grep -F 'traefik.http.routers.philaios-mission-control.rule=Host(`hermes-agent-whow.srv1833510.hstgr.cloud`) && PathPrefix(`/phil-ai-os/mission-control`)' <<<"$LABELS" >/dev/null && echo existing_mission_control_route=preserved
+
           if grep -F 'traefik.http.routers.philaios-operator.' <<<"$LABELS" >/dev/null; then
             echo operator_route=already_present
             exit 1
           fi
-          if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'; then exit 1; fi
-          echo traefik=ready
-          echo existing_approval_route=preserved
-          echo existing_mission_control_route=preserved
           echo operator_route=absent_ready_for_additive_activation
-          echo production_allowlist=general_only
-          echo monitor=active
-          echo backup_timer=active
-          echo backup_self_heal=active
+
+          if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'; then
+            echo mission_control_public_listener=unexpected
+            exit 1
+          fi
           echo mission_control_public_listener=absent
+
+          echo traefik=ready
           echo provider_call=none
           echo execution_call=none
           echo approval_mutation=none
