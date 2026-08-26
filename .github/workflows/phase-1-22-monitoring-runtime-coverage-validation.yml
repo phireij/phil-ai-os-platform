@@ -1,0 +1,84 @@
+name: Phase 1.22 Monitoring Runtime Coverage Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-22-monitoring-runtime-coverage-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+      - name: Validate monitor runtime and Phase 1.22 coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          echo '=== PHASE 1.22 MONITORING RUNTIME COVERAGE VALIDATION ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          ! grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=.*routine' <<<"$ENV"
+          echo production_allowlist=general_only
+
+          echo '--- monitor unit state ---'
+          systemctl is-enabled phil-ai-os-monitor.service || true
+          systemctl is-active phil-ai-os-monitor.service || true
+          systemctl show phil-ai-os-monitor.service -p ActiveState -p SubState -p Result -p ExecMainStatus -p NRestarts --no-pager || true
+          systemctl cat phil-ai-os-monitor.service || true
+
+          echo '--- monitor recent logs ---'
+          journalctl -u phil-ai-os-monitor.service --since '24 hours ago' --no-pager -n 250 || true
+
+          echo '--- monitor implementation coverage ---'
+          test -f /opt/phil-ai-os/phase-1.16/monitor.py
+          grep -nEi 'approval|execution|audit|integrity|telegram|alert|health|backup|consum|usage|provider|budget' /opt/phil-ai-os/phase-1.16/monitor.py | head -n 300 || true
+          if [ -f /opt/phil-ai-os/phase-1.16/test_monitor.py ]; then
+            grep -nEi 'approval|execution|audit|integrity|telegram|alert|health|backup|consum|usage|provider|budget' /opt/phil-ai-os/phase-1.16/test_monitor.py | head -n 300 || true
+          fi
+
+          echo '--- process evidence ---'
+          pgrep -af 'phase-1.16/monitor.py|phil-ai-os.*monitor' || true
+
+          echo '--- durable integrity surfaces in control api ---'
+          docker exec "$CONTROL" sh -lc 'grep -RniE "consumed.*without.*execution|successful.*without.*approval|usage.*without.*execution|unknown.*approval|integrity|approval.*execution" /app 2>/dev/null | head -n 250' || true
+
+          echo '--- alert path/config signals ---'
+          systemctl show phil-ai-os-monitor.service -p Environment -p EnvironmentFiles --no-pager || true
+          find /etc/phil-ai-os /opt/phil-ai-os -maxdepth 4 -type f 2>/dev/null | grep -Ei 'telegram|monitor|alert|approval' | head -n 250 || true
+
+          echo provider_call=none
+          echo production_change=none
+          echo routine_activation=false
+          echo validation_mode=read_only
+          echo next_action=PHASE_1_22_MONITORING_GAP_DECISION
+          echo PHIL_AI_OS_PHASE_1_22_MONITORING_RUNTIME_COVERAGE_VALIDATION_OK
+          REMOTE
