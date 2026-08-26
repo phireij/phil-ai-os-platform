@@ -1,0 +1,90 @@
+name: Phase 1.22 Concurrency Guard Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-22-concurrency-guard-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+      - name: Validate deployed single-flight guard without provider execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          echo '=== PHASE 1.22 CONCURRENCY GUARD VALIDATION ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          ! grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=.*routine' <<<"$ENV"
+          echo production_allowlist=general_only
+
+          docker exec "$CONTROL" python - <<'PY'
+          import app, inspect
+          src=inspect.getsource(app.routed_execute)
+          assert 'PHIL_AI_OS_PHASE_1_22_ROUTINE_SINGLE_FLIGHT_GUARD' in open('/app/app.py').read()
+          assert "task_class == 'routine'" in src
+          assert '_ROUTINE_EXECUTION_LOCK.acquire(blocking=False)' in src
+          assert "'status':'routine_execution_busy'" in src or 'routine_execution_busy' in src
+          assert '_ROUTINE_EXECUTION_LOCK.release()' in src
+          print('guard_marker=present')
+          print('routine_only_acquire=present')
+          print('nonblocking_acquire=present')
+          print('busy_fail_closed=present')
+          print('finally_release=present')
+
+          lock=app._ROUTINE_EXECUTION_LOCK
+          assert lock.acquire(blocking=False), 'test could not acquire lock'
+          try:
+              assert not lock.acquire(blocking=False), 'second concurrent acquire unexpectedly succeeded'
+              print('single_flight_lock_semantics=PASS')
+          finally:
+              lock.release()
+          assert lock.acquire(blocking=False), 'lock did not recover after release'
+          lock.release()
+          print('lock_release_recovery=PASS')
+          PY
+
+          # Confirm no activation drift after validation.
+          ENV2="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV2"
+          ! grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=.*routine' <<<"$ENV2"
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          echo control_api_health=ok
+          echo provider_call=none
+          echo approval_consumption=none
+          echo routine_activation=false
+          echo validation_mode=no_provider
+          echo next_action=PHASE_1_22_MONITORING_RUNTIME_COVERAGE_VALIDATION
+          echo PHIL_AI_OS_PHASE_1_22_CONCURRENCY_GUARD_VALIDATION_OK
+          REMOTE
