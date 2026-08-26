@@ -68,10 +68,14 @@ jobs:
           done
 
           echo '--- candidate correlation fields ---'
-          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); candidates={'task_id','canonical_task_id','approval_id','execution_id','request_id','audit_id','source','requester','requested_by','consumed_by','consumed_at'}; tables=[r[0] for r in c.execute(\"select name from sqlite_master where type='table'\")]; [(print(t+':'+','.join(x for x in [r[1] for r in c.execute('pragma table_info('+t+')')] if x in candidates))) for t in sorted(tables) if any(x in candidates for x in [r[1] for r in c.execute('pragma table_info('+t+')'])]"
+          for T in approval_requests execution_audit advisory_decisions usage_ledger; do
+            docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); candidates={'task_id','canonical_task_id','approval_id','execution_id','request_id','audit_id','source','requester','requested_by','consumed_by','consumed_at'}; exists=c.execute(\"select 1 from sqlite_master where type='table' and name=?\",('$T',)).fetchone(); cols=[r[1] for r in c.execute('pragma table_info($T)')] if exists else []; found=[x for x in cols if x in candidates]; print('$T:'+(','.join(found) if found else 'none'))"
+          done
 
           echo '--- relevant indexes ---'
-          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); tables=['approval_requests','execution_audit']; [(print(t+':'+','.join(r[1] for r in c.execute('pragma index_list('+t+')'))) for t in tables if c.execute(\"select 1 from sqlite_master where type='table' and name=?\",(t,)).fetchone())]"
+          for T in approval_requests execution_audit; do
+            docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); exists=c.execute(\"select 1 from sqlite_master where type='table' and name=?\",('$T',)).fetchone(); idx=[r[1] for r in c.execute('pragma index_list($T)')] if exists else []; print('$T:'+(','.join(idx) if idx else 'none'))"
+          done
 
           echo '--- implementation references (source only) ---'
           docker exec "$CONTROL" sh -lc "grep -n -E 'task_id|canonical_task_id|approval_id|execution_id|execution_audit|approval_requests' /app/app.py | head -n 260" || true
