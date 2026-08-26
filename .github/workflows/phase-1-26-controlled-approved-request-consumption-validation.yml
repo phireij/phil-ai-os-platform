@@ -42,7 +42,7 @@ jobs:
           done
           exit 1
 
-      - name: Discover exact execute request contract without consuming approval
+      - name: Consume approved request exactly once through governed execute route
         shell: bash
         run: |
           set -euo pipefail
@@ -50,39 +50,73 @@ jobs:
           ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
+          HERMES=hermes-agent-whow-hermes-agent-1
           BASE=http://127.0.0.1:4870
           DB=/app/state/control-plane.db
           APPROVAL_ID=apr_6ee5a19331794c159e4d99070d63d08e
-          echo '=== PHASE 1.26 EXECUTE REQUEST CONTRACT DISCOVERY ==='
-          echo discovery_mode=read_only
 
+          echo '=== PHASE 1.26 CONTROLLED APPROVED REQUEST CONSUMPTION VALIDATION ==='
           curl -fsS "$BASE/healthz" >/dev/null
           systemctl is-active --quiet phil-ai-os-monitor.service
+
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$CENV"
           echo production_allowlist=general_only
 
-          FIXTURE="$(docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); c.row_factory=sqlite3.Row; r=c.execute('select approval_id,state,task_text,task_class,consumed_at,consumed_by from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); print(json.dumps(dict(r)) if r else '')")"
+          FIXTURE="$(docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); c.row_factory=sqlite3.Row; r=c.execute('select approval_id,state,task_text,task_class,consumed_at from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); print(json.dumps(dict(r)) if r else '')")"
           [ -n "$FIXTURE" ]
           STATE="$(printf '%s' "$FIXTURE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("state", ""))')"
+          TASK_TEXT="$(printf '%s' "$FIXTURE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("task_text", ""))')"
+          TASK_CLASS="$(printf '%s' "$FIXTURE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("task_class", ""))')"
           CONSUMED="$(printf '%s' "$FIXTURE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("consumed_at") or "")')"
           [ "$STATE" = approved ]
+          [ "$TASK_CLASS" = general ]
+          [ -n "$TASK_TEXT" ]
           [ -z "$CONSUMED" ]
-          echo approved_unconsumed_fixture_verified=true
+          echo approval_state_before=approved_unconsumed_verified
 
-          echo '--- exact /v1/execute HTTP handler context ---'
-          docker exec "$CONTROL" sh -lc "grep -n -B 50 -A 140 -E 'path == .*/v1/execute|/v1/execute|routed_execute\(' /app/app.py | head -n 700" || true
+          TOKEN="$(docker exec "$HERMES" cat /run/philaios/hermes_control_api_token)"
+          [ -n "$TOKEN" ]
+          PAYLOAD="$(APPROVAL_ID="$APPROVAL_ID" TASK_TEXT="$TASK_TEXT" python3 - <<'PY'
+          import json,os
+          print(json.dumps({"approval_id": os.environ["APPROVAL_ID"], "text": os.environ["TASK_TEXT"]}))
+          PY
+          )"
 
-          echo '--- invalid_request branches near execute path ---'
-          docker exec "$CONTROL" sh -lc "grep -n -B 20 -A 45 -E 'invalid_request|approval_(required|invalid|consumed)|already_consumed|consumed_at|routed_execute\(' /app/app.py | head -n 900" || true
+          FIRST_BODY="$(mktemp)"
+          FIRST_CODE="$(curl -sS -o "$FIRST_BODY" -w '%{http_code}' -X POST "$BASE/v1/execute" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data "$PAYLOAD")"
+          cat "$FIRST_BODY"
+          echo
+          [ "$FIRST_CODE" -ge 200 ] && [ "$FIRST_CODE" -lt 300 ]
+          echo first_execution_http=$FIRST_CODE
+          echo exact_execute_field=text
 
-          echo '--- routed_execute signature and initial gates ---'
-          docker exec "$CONTROL" sh -lc "grep -n -A 220 '^def routed_execute' /app/app.py | head -n 240" || true
+          AFTER="$(docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); c.row_factory=sqlite3.Row; r=c.execute('select approval_id,state,consumed_at,consumed_by from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); print(json.dumps(dict(r)) if r else '')")"
+          AFTER_STATE="$(printf '%s' "$AFTER" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("state", ""))')"
+          AFTER_CONSUMED="$(printf '%s' "$AFTER" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("consumed_at") or "")')"
+          [ "$AFTER_STATE" = consumed ]
+          [ -n "$AFTER_CONSUMED" ]
+          echo approval_state_after=consumed_verified
 
-          echo approval_mutation=none
-          echo execution_call=none
-          echo provider_call=none
-          echo production_change=none
-          echo next_action=PATCH_PHASE_1_26_VALIDATION_TO_EXACT_EXECUTE_CONTRACT
-          echo PHIL_AI_OS_PHASE_1_26_EXECUTE_REQUEST_CONTRACT_DISCOVERY_OK
+          SECOND_BODY="$(mktemp)"
+          SECOND_CODE="$(curl -sS -o "$SECOND_BODY" -w '%{http_code}' -X POST "$BASE/v1/execute" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data "$PAYLOAD")"
+          cat "$SECOND_BODY"
+          echo
+          [ "$SECOND_CODE" -ge 400 ]
+          grep -q 'approval_already_consumed' "$SECOND_BODY"
+          echo replay_http=$SECOND_CODE
+          echo replay_blocked=approval_already_consumed_verified
+
+          EXECUTIONS="$(docker exec "$HERMES" /usr/local/bin/philaios-mission-control executions)"
+          printf '%s\n' "$EXECUTIONS" | grep -F "$APPROVAL_ID" >/dev/null
+          echo linked_execution_audit=verified
+
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          rm -f "$FIRST_BODY" "$SECOND_BODY"
+          echo exactly_once_consumption=verified
+          echo production_change=approval_consumed_by_authorized_validation_only
+          echo next_action=PHASE_1_26_POST_CONSUMPTION_CLOSURE
+          echo PHIL_AI_OS_PHASE_1_26_CONTROLLED_APPROVED_REQUEST_CONSUMPTION_VALIDATION_OK
           REMOTE
