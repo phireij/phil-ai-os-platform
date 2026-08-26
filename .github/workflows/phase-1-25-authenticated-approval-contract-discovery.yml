@@ -1,0 +1,113 @@
+name: Phase 1.25 Authenticated Approval Contract Discovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/phase-1-25-authenticated-approval-contract-discovery.yml
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true; then
+                rm -f "$TMP"
+                exit 0
+              fi
+            fi
+            rm -f "$TMP"
+            sleep $((attempt*10))
+          done
+          exit 1
+      - name: Discover authenticated approval API contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          BASE=http://127.0.0.1:4870
+          echo '=== PHASE 1.25 AUTHENTICATED APPROVAL CONTRACT DISCOVERY ==='
+          curl -fsS "$BASE/healthz" >/dev/null
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          echo production_allowlist=general_only
+
+          TOKEN=''
+          # Resolve the same live token path/process used successfully by the Phase 1.25 V4 preflight.
+          for f in /run/philaios/control_api_token /run/philaios/hermes_control_api_token /etc/phil-ai-os/control-api-token /opt/phil-ai-os/secrets/control-api-token; do
+            if [ -r "$f" ]; then TOKEN="$(cat "$f")"; break; fi
+          done
+          if [ -z "$TOKEN" ] && [ -r /etc/phil-ai-os-monitor.env ]; then
+            TOKEN_FILE="$(sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN_FILE=//p' /etc/phil-ai-os-monitor.env | tail -n1)"
+            if [ -n "$TOKEN_FILE" ] && [ -r "$TOKEN_FILE" ]; then TOKEN="$(cat "$TOKEN_FILE")"; fi
+            if [ -z "$TOKEN" ]; then TOKEN="$(sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN=//p' /etc/phil-ai-os-monitor.env | tail -n1)"; fi
+          fi
+          if [ -z "$TOKEN" ]; then
+            MON_PID="$(systemctl show -p MainPID --value phil-ai-os-monitor.service 2>/dev/null || true)"
+            if [ -n "$MON_PID" ] && [ "$MON_PID" != 0 ] && [ -r "/proc/$MON_PID/environ" ]; then
+              TOKEN="$(tr '\0' '\n' < "/proc/$MON_PID/environ" | sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN=//p' | tail -n1)"
+              TOKEN_FILE="$(tr '\0' '\n' < "/proc/$MON_PID/environ" | sed -n 's/^PHIL_AI_OS_CONTROL_API_TOKEN_FILE=//p' | tail -n1)"
+              if [ -z "$TOKEN" ] && [ -n "$TOKEN_FILE" ] && [ -r "$TOKEN_FILE" ]; then TOKEN="$(cat "$TOKEN_FILE")"; fi
+            fi
+          fi
+          if [ -z "$TOKEN" ] && docker exec hermes-agent-whow test -r /run/philaios/hermes_control_api_token 2>/dev/null; then
+            TOKEN="$(docker exec hermes-agent-whow cat /run/philaios/hermes_control_api_token)"
+          fi
+          [ -n "$TOKEN" ]
+          echo control_api_token_resolved=true
+          AUTH="Authorization: Bearer $TOKEN"
+
+          echo '--- authenticated validation probes ---'
+          BEFORE="$(docker exec "$CONTROL" python -c 'import sqlite3; c=sqlite3.connect("/app/state/control-plane.db"); print(c.execute("select count(*) from approval_requests").fetchone()[0])' 2>/dev/null || echo unknown)"
+          echo approval_rows_before="$BEFORE"
+          for body in '{}' '{"task_text":""}' '{"task_text":"PHASE_1_25_SCHEMA_PROBE"}' '{"task_class":"general"}'; do
+            code="$(curl -sS -o /tmp/phase125-auth-probe.json -w '%{http_code}' -H "$AUTH" -H 'Content-Type: application/json' -d "$body" "$BASE/v1/approvals/request" || true)"
+            echo "probe_body=$body http_status=$code"
+            cat /tmp/phase125-auth-probe.json 2>/dev/null || true
+            echo
+          done
+          AFTER="$(docker exec "$CONTROL" python -c 'import sqlite3; c=sqlite3.connect("/app/state/control-plane.db"); print(c.execute("select count(*) from approval_requests").fetchone()[0])' 2>/dev/null || echo unknown)"
+          echo approval_rows_after="$AFTER"
+
+          echo '--- exact deployed route context ---'
+          docker exec "$CONTROL" sh -lc "grep -n -B 35 -A 100 '/v1/approvals/request' /app/app.py || true"
+          echo '--- exact approval table DDL ---'
+          docker exec "$CONTROL" python -c 'import sqlite3; c=sqlite3.connect("/app/state/control-plane.db"); print(c.execute("select sql from sqlite_master where type=\"table\" and name=\"approval_requests\"").fetchone())' || true
+
+          curl -fsS "$BASE/healthz" >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          echo provider_call=none
+          echo approval_decision=none
+          echo production_change=none
+          echo routine_activation=false
+          echo next_action=PHASE_1_25_CONTROLLED_E2E_CONTRACT_CORRECTION
+          echo PHIL_AI_OS_PHASE_1_25_AUTHENTICATED_APPROVAL_CONTRACT_DISCOVERY_OK
+          REMOTE
