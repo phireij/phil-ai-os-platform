@@ -50,7 +50,7 @@ jobs:
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
           BASE=http://127.0.0.1:4870
-          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V5 ==='
+          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V6 ==='
           curl -fsS "$BASE/healthz" >/dev/null
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
@@ -73,9 +73,7 @@ jobs:
             fi
           fi
           if [ -z "$TOKEN" ]; then
-            for f in /run/philaios/control_api_token /run/philaios/hermes_control_api_token /etc/phil-ai-os/control-api-token /opt/phil-ai-os/secrets/control-api-token; do
-              if [ -r "$f" ]; then TOKEN="$(cat "$f")"; break; fi
-            done
+            for f in /run/philaios/control_api_token /run/philaios/hermes_control_api_token /etc/phil-ai-os/control-api-token /opt/phil-ai-os/secrets/control-api-token; do [ -r "$f" ] && { TOKEN="$(cat "$f")"; break; }; done
           fi
           if [ -z "$TOKEN" ]; then
             HERMES="$(docker ps --format '{{.Names}}' | grep -E '^hermes-agent-whow|hermes' | head -n1 || true)"
@@ -86,24 +84,44 @@ jobs:
           AUTH="Authorization: Bearer $TOKEN"
 
           TASK="PHIL_AI_OS_PHASE_1_25_CONTROLLED_APPROVAL_E2E_$(date -u +%Y%m%dT%H%M%SZ)"
-          # Live contract: task_text is required; source/requester/requested_by are optional.
           REQ="$(printf '%s' "$TASK" | python3 -c 'import json,sys; print(json.dumps(dict(task_text=sys.stdin.read(), source="phase-1.25-controlled-validation", requested_by="cto-validation")))')"
           RESP="$(curl -fsS -H "$AUTH" -H 'Content-Type: application/json' -d "$REQ" "$BASE/v1/approvals/request")"
           APPROVAL_ID="$(printf '%s' "$RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("approval") or {}).get("approval_id", ""))')"
           STATE="$(printf '%s' "$RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("approval") or {}).get("state", ""))')"
-          [ -n "$APPROVAL_ID" ]
-          [ "$STATE" = pending ]
+          [ -n "$APPROVAL_ID" ] && [ "$STATE" = pending ]
           echo approval_request_created=true
           echo approval_id="$APPROVAL_ID"
           echo approval_state=pending
 
-          # Discover the exact link endpoint from the deployed source and issue the existing Mission Control browser link.
-          LINK_PATH="$(docker exec "$CONTROL" sh -lc "grep -oE '/v1/approvals/[A-Za-z0-9_/?=&.-]*link[A-Za-z0-9_/?=&.-]*' /app/app.py | head -n1" 2>/dev/null || true)"
-          if [ -z "$LINK_PATH" ]; then LINK_PATH="/v1/approvals/link?approval_id=$APPROVAL_ID"; fi
-          LINK_PATH="${LINK_PATH//approval_id=/$APPROVAL_ID}"
-          LINK_RESP="$(curl -fsS -H "$AUTH" "$BASE/v1/approvals/link?approval_id=$APPROVAL_ID")"
-          LINK="$(printf '%s' "$LINK_RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or {}; print(d.get("url") or d.get("link") or d.get("approval_url") or a.get("url") or a.get("link") or a.get("approval_url") or "")')"
-          [ -n "$LINK" ]
+          # Inspect deployed link route/function after creating the approval; no decision or execution mutation.
+          echo approval_link_contract_discovery=true
+          docker exec "$CONTROL" sh -lc "grep -n -B 30 -A 80 'approval.*link\|link.*approval\|link_issued_at' /app/app.py | head -n 220" > /tmp/phase125-link-source.txt || true
+          # Try known authenticated link-issuance shapes and accept only a response containing a URL/link.
+          LINK=''
+          for method_path in \
+            "GET /v1/approvals/link?approval_id=$APPROVAL_ID" \
+            "POST /v1/approvals/link" \
+            "POST /v1/approvals/link/issue" \
+            "POST /v1/approvals/issue-link"; do
+            METHOD="${method_path%% *}"
+            PATH_PART="${method_path#* }"
+            if [ "$METHOD" = GET ]; then
+              CODE="$(curl -sS -o /tmp/phase125-link.json -w '%{http_code}' -H "$AUTH" "$BASE$PATH_PART" || true)"
+            else
+              CODE="$(curl -sS -o /tmp/phase125-link.json -w '%{http_code}' -X POST -H "$AUTH" -H 'Content-Type: application/json' -d "{\"approval_id\":\"$APPROVAL_ID\"}" "$BASE$PATH_PART" || true)"
+            fi
+            echo "link_probe_method=$METHOD link_probe_path=$PATH_PART http_status=$CODE"
+            if [ "$CODE" -ge 200 ] 2>/dev/null && [ "$CODE" -lt 300 ] 2>/dev/null; then
+              LINK="$(python3 -c 'import json; d=json.load(open("/tmp/phase125-link.json")); a=d.get("approval") or {}; print(d.get("url") or d.get("link") or d.get("approval_url") or a.get("url") or a.get("link") or a.get("approval_url") or "")' 2>/dev/null || true)"
+              [ -n "$LINK" ] && break
+            fi
+          done
+          if [ -z "$LINK" ]; then
+            echo '--- deployed approval link source evidence ---'
+            cat /tmp/phase125-link-source.txt
+            echo approval_link_issued=false
+            exit 1
+          fi
           echo approval_link_issued=true
 
           set -a
@@ -112,15 +130,13 @@ jobs:
           HERMES_ENV=/opt/hermes-agent-whow/.env
           if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] && [ -r "$HERMES_ENV" ]; then TELEGRAM_BOT_TOKEN="$(sed -n 's/^TELEGRAM_BOT_TOKEN=//p' "$HERMES_ENV" | tail -n1)"; fi
           if [ -z "${TELEGRAM_CHAT_ID:-}" ] && [ -r "$HERMES_ENV" ]; then TELEGRAM_CHAT_ID="$(sed -n 's/^TELEGRAM_HOME_CHANNEL=//p' "$HERMES_ENV" | tail -n1)"; fi
-          [ -n "${TELEGRAM_BOT_TOKEN:-}" ]
-          [ -n "${TELEGRAM_CHAT_ID:-}" ]
+          [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]
           MSG="Phil AI OS Phase 1.25 controlled approval test. Approval ID: $APPROVAL_ID. Open Mission Control: $LINK"
           TG_PAYLOAD="$(printf '%s\n%s' "$TELEGRAM_CHAT_ID" "$MSG" | python3 -c 'import json,sys; x=sys.stdin.read().split("\n",1); print(json.dumps(dict(chat_id=x[0], text=x[1] if len(x)>1 else "", disable_web_page_preview=True)))')"
           TG_RESP="$(curl -fsS -H 'Content-Type: application/json' -d "$TG_PAYLOAD" "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage")"
           printf '%s' "$TG_RESP" | python3 -c 'import json,sys; assert json.load(sys.stdin).get("ok") is True'
           echo telegram_message_sent=true
 
-          # Validate durable state directly. No approve/deny/consume action is performed by CI.
           DB_STATE="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); r=c.execute('select state from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); print(r[0] if r else '')")"
           [ "$DB_STATE" = pending ]
           echo durable_approval_state=pending
