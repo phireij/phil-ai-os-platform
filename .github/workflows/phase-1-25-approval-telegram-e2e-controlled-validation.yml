@@ -3,7 +3,8 @@ name: Phase 1.25 Approval Telegram E2E Controlled Validation
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - .github/workflows/phase-1-25-approval-telegram-e2e-controlled-validation.yml
 
@@ -35,9 +36,13 @@ jobs:
             if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
               cat "$TMP" >> ~/.ssh/known_hosts
               sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
-              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true; then
+                rm -f "$TMP"
+                exit 0
+              fi
             fi
-            rm -f "$TMP"; sleep $((attempt*10))
+            rm -f "$TMP"
+            sleep $((attempt*10))
           done
           exit 1
       - name: Run controlled approval and Telegram E2E validation
@@ -50,7 +55,7 @@ jobs:
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
           BASE=http://127.0.0.1:4870
-          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V12 ==='
+          echo '=== PHASE 1.25 CONTROLLED APPROVAL TELEGRAM E2E VALIDATION V13 ==='
           curl -fsS "$BASE/healthz" >/dev/null
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
@@ -58,7 +63,9 @@ jobs:
 
           TOKEN=''
           if [ -r /etc/phil-ai-os-monitor.env ]; then
-            set -a; . /etc/phil-ai-os-monitor.env; set +a
+            set -a
+            . /etc/phil-ai-os-monitor.env
+            set +a
             TOKEN="${PHIL_AI_OS_CONTROL_API_TOKEN:-}"
             TOKEN_FILE="${PHIL_AI_OS_CONTROL_API_TOKEN_FILE:-}"
             if [ -z "$TOKEN" ] && [ -n "${TOKEN_FILE:-}" ] && [ -r "$TOKEN_FILE" ]; then TOKEN="$(cat "$TOKEN_FILE")"; fi
@@ -73,7 +80,9 @@ jobs:
             fi
           fi
           if [ -z "$TOKEN" ]; then
-            for f in /run/philaios/control_api_token /run/philaios/hermes_control_api_token /etc/phil-ai-os/control-api-token /opt/phil-ai-os/secrets/control-api-token; do [ -r "$f" ] && { TOKEN="$(cat "$f")"; break; }; done
+            for f in /run/philaios/control_api_token /run/philaios/hermes_control_api_token /etc/phil-ai-os/control-api-token /opt/phil-ai-os/secrets/control-api-token; do
+              if [ -r "$f" ]; then TOKEN="$(cat "$f")"; break; fi
+            done
           fi
           [ -n "$TOKEN" ]
           echo control_api_token_resolved=true
@@ -84,7 +93,8 @@ jobs:
           RESP="$(curl -fsS -H "$AUTH" -H 'Content-Type: application/json' -d "$REQ" "$BASE/v1/approvals/request")"
           APPROVAL_ID="$(printf '%s' "$RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("approval") or {}).get("approval_id", ""))')"
           STATE="$(printf '%s' "$RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("approval") or {}).get("state", ""))')"
-          [ -n "$APPROVAL_ID" ] && [ "$STATE" = pending ]
+          [ -n "$APPROVAL_ID" ]
+          [ "$STATE" = pending ]
           echo approval_request_created=true
           echo approval_id="$APPROVAL_ID"
           echo approval_state=pending
@@ -92,7 +102,8 @@ jobs:
           LINK_RESP="$(curl -fsS -H "$AUTH" "$BASE/v1/approvals/link?approval_id=$APPROVAL_ID")"
           REVIEW_PATH="$(printf '%s' "$LINK_RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("review_path") or "")')"
           REVIEW_TOKEN="$(printf '%s' "$LINK_RESP" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("review_token") or "")')"
-          [ -n "$REVIEW_PATH" ] && [ -n "$REVIEW_TOKEN" ]
+          [ -n "$REVIEW_PATH" ]
+          [ -n "$REVIEW_TOKEN" ]
           case "$REVIEW_PATH" in /phil-ai-os/approval/*) ;; *) exit 1;; esac
           echo approval_link_issued=true
           echo review_path_contract=valid
@@ -101,7 +112,7 @@ jobs:
           if [ -z "$PUBLIC_ORIGIN" ] && [ -r /etc/phil-ai-os-monitor.env ]; then PUBLIC_ORIGIN="$(sed -n 's/^PHIL_AI_OS_MISSION_CONTROL_ORIGIN=//p' /etc/phil-ai-os-monitor.env | tail -n1)"; fi
           if [ -z "$PUBLIC_ORIGIN" ]; then
             TRAEFIK_HOST="$(docker inspect "$CONTROL" --format '{{range $k,$v := .Config.Labels}}{{printf "%s=%s\n" $k $v}}{{end}}' 2>/dev/null | sed -n 's/.*Host(`\([^`]*\)`).*/\1/p' | head -n1 || true)"
-            [ -n "$TRAEFIK_HOST" ] && PUBLIC_ORIGIN="https://$TRAEFIK_HOST"
+            if [ -n "$TRAEFIK_HOST" ]; then PUBLIC_ORIGIN="https://$TRAEFIK_HOST"; fi
           fi
           if [ -z "$PUBLIC_ORIGIN" ] && [ -n "${PHIL_AI_OS_VPS_PUBLIC_HOST:-}" ]; then PUBLIC_ORIGIN="https://${PHIL_AI_OS_VPS_PUBLIC_HOST}"; fi
           [ -n "$PUBLIC_ORIGIN" ]
@@ -110,33 +121,16 @@ jobs:
           echo mission_control_origin_resolved=true
           echo mission_control_url_constructed=true
 
-          # V3 discovery proved this is the live Hermes Telegram credential source.
           HERMES_ENV=/docker/hermes-agent-whow/data/.env
           [ -r "$HERMES_ENV" ]
-          TELEGRAM_BOT_TOKEN="$(python3 - "$HERMES_ENV" <<'PY'
-import sys
-p=sys.argv[1]
-for line in open(p, encoding='utf-8'):
-    if line.startswith('TELEGRAM_BOT_TOKEN='):
-        print(line.split('=',1)[1].strip().strip('"\''))
-PY
-)"
+          TELEGRAM_BOT_TOKEN="$(awk -F= '$1=="TELEGRAM_BOT_TOKEN"{sub(/^[^=]*=/,""); print; exit}' "$HERMES_ENV" | tr -d '\r' | sed "s/^[\"']//; s/[\"']$//")"
           [ -n "$TELEGRAM_BOT_TOKEN" ]
           GETME_CODE="$(curl -sS -o /tmp/phase125-getme.json -w '%{http_code}' "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" || true)"
           [ "$GETME_CODE" = 200 ]
           python3 -c 'import json; assert json.load(open("/tmp/phase125-getme.json")).get("ok") is True'
           echo telegram_bot_token_validated=true
 
-          TELEGRAM_CHAT_ID="$(python3 - "$HERMES_ENV" <<'PY'
-import sys
-names={'TELEGRAM_CHAT_ID','TELEGRAM_HOME_CHANNEL','TELEGRAM_CHANNEL_ID'}
-found=''
-for line in open(sys.argv[1], encoding='utf-8'):
-    if '=' in line and line.split('=',1)[0] in names:
-        found=line.split('=',1)[1].strip().strip('"\'')
-print(found)
-PY
-)"
+          TELEGRAM_CHAT_ID="$(awk -F= '$1=="TELEGRAM_CHAT_ID" || $1=="TELEGRAM_HOME_CHANNEL" || $1=="TELEGRAM_CHANNEL_ID"{sub(/^[^=]*=/,""); value=$0} END{print value}' "$HERMES_ENV" | tr -d '\r' | sed "s/^[\"']//; s/[\"']$//")"
           if [ -z "$TELEGRAM_CHAT_ID" ]; then
             UPDATES="$(curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?limit=50")"
             TELEGRAM_CHAT_ID="$(printf '%s' "$UPDATES" | python3 -c 'import json,sys; d=json.load(sys.stdin); ids=[]; [(ids.append(str((u.get("message") or u.get("channel_post") or {}).get("chat",{}).get("id"))) if (u.get("message") or u.get("channel_post") or {}).get("chat",{}).get("id") is not None else None) for u in d.get("result",[])]; print(ids[-1] if ids else "")')"
