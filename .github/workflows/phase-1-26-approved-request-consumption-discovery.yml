@@ -37,7 +37,8 @@ jobs:
               sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
               if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
             fi
-            rm -f "$TMP"; sleep $((attempt*10))
+            rm -f "$TMP"
+            sleep $((attempt*10))
           done
           exit 1
       - name: Discover approved-request consumption contract read-only
@@ -50,7 +51,7 @@ jobs:
           CONTROL=phil-ai-os-core-control-api-1
           DB=/app/state/control-plane.db
           APPROVAL_ID=apr_6ee5a19331794c159e4d99070d63d08e
-          echo '=== PHASE 1.26 APPROVED REQUEST CONSUMPTION DISCOVERY ==='
+          echo '=== PHASE 1.26 APPROVED REQUEST CONSUMPTION DISCOVERY V2 ==='
           echo discovery_mode=read_only
           curl -fsS http://127.0.0.1:4870/healthz >/dev/null
           systemctl is-active --quiet phil-ai-os-monitor.service
@@ -59,17 +60,17 @@ jobs:
           [ "$STATE" = approved ]
           echo approved_fixture_present=true
 
-          echo '--- approval/consume/execute route references ---'
+          echo '--- approval consume execute route references ---'
           docker exec "$CONTROL" sh -lc "grep -n -B 25 -A 90 -E '/v1/(approvals|execute)|consume|consumed|approval_id' /app/app.py | head -n 500" || true
 
           echo '--- execution and approval table schemas ---'
-          docker exec "$CONTROL" python -c 'import sqlite3; c=sqlite3.connect("/app/state/control-plane.db");
-for n in ("approval_requests","execution_requests","execution_history","executions"):
- r=c.execute("select sql from sqlite_master where type=\"table\" and name=?",(n,)).fetchone();
- print(n, r[0] if r else "MISSING")' || true
+          for TABLE in approval_requests execution_requests execution_history executions; do
+            SQL="$(docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); r=c.execute('select sql from sqlite_master where type=? and name=?',('table','$TABLE')).fetchone(); print(r[0] if r else 'MISSING')")"
+            echo "$TABLE $SQL"
+          done
 
-          echo '--- recent approved row metadata keys only ---'
-          docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); c.row_factory=sqlite3.Row; r=c.execute('select * from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); print(','.join(r.keys()) if r else '')"
+          echo '--- approved row metadata keys only ---'
+          docker exec "$CONTROL" python -c "import sqlite3; c=sqlite3.connect('$DB'); c.row_factory=sqlite3.Row; r=c.execute('select * from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone(); print(','.join(r.keys()) if r else '')"
 
           echo '--- execution client references ---'
           grep -RniE 'approval_id|consume|consumed|/v1/execute|/v1/approvals' /usr/local/bin/philaios-execute /opt/hermes-agent-whow /opt/phil-ai-os 2>/dev/null | head -n 500 || true
