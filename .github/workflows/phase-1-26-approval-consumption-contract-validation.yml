@@ -1,0 +1,78 @@
+name: Phase 1.26 Approval Consumption Contract Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-26-approval-consumption-contract-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts
+      - name: Validate durable consumption and replay protection
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          DB=/app/state/control-plane.db
+          APPROVAL_ID=apr_6ee5a19331794c159e4d99070d63d08e
+          TASK_TEXT=PHIL_AI_OS_PHASE_1_25_CONTROLLED_APPROVAL_E2E_20260826T072555Z
+
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+
+          docker exec "$CONTROL" python - "$APPROVAL_ID" "$DB" <<'PY'
+          import sqlite3,sys
+          approval_id,db_path=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect(db_path); c.row_factory=sqlite3.Row
+          r=c.execute('select state,consumed_at,consumed_by from approval_requests where approval_id=?',(approval_id,)).fetchone()
+          assert r is not None, 'approval missing'
+          assert r['state']=='approved', dict(r)
+          assert r['consumed_at'], dict(r)
+          assert r['consumed_by']=='hermes', dict(r)
+          a=c.execute("select count(*) from execution_audit where approval_id=? and outcome='success'",(approval_id,)).fetchone()[0]
+          assert a >= 1, 'successful execution audit missing'
+          print('durable_consumption=ok')
+          print('execution_audit_link=ok')
+          PY
+
+          code="$(curl -sS -o /tmp/replay.json -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' \
+            --data "{\"text\":\"$TASK_TEXT\",\"source\":\"hermes\",\"approval_id\":\"$APPROVAL_ID\"}" \
+            http://127.0.0.1:4870/v1/execute)"
+          test "$code" = 409
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/replay.json'))
+          assert d.get('status')=='execution_approval_rejected', d
+          approval=d.get('approval') or {}
+          assert approval.get('status')=='approval_already_consumed', d
+          print('replay_protection=ok')
+          PY
+
+          echo provider_replay_call=blocked_before_provider
+          echo PHIL_AI_OS_PHASE_1_26_APPROVAL_CONSUMPTION_CONTRACT_VALIDATION_OK
+          REMOTE
