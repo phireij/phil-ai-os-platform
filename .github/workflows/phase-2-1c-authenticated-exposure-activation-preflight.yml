@@ -14,22 +14,20 @@ jobs:
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_PORT: ${{ secrets.VPS_PORT }}
       VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-      MC_HOSTNAME: ${{ secrets.MC_HOSTNAME }}
       MC_BASIC_AUTH_HASH: ${{ secrets.MC_BASIC_AUTH_HASH }}
+      MC_HOSTNAME: hermes-agent-whow.srv1833510.hstgr.cloud
+      MC_PATH: /phil-ai-os/operator/
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate protected activation inputs
+      - name: Validate protected activation input
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$MC_HOSTNAME"
           test -n "$MC_BASIC_AUTH_HASH"
-          case "$MC_HOSTNAME" in
-            *[!A-Za-z0-9.-]*|'') echo invalid_mc_hostname; exit 1 ;;
-          esac
           # Never print protected values.
-          echo mission_control_hostname_material=present
+          echo mission_control_hostname=$MC_HOSTNAME
+          echo mission_control_path=$MC_PATH
           echo mission_control_auth_material=present
           echo secret_values_emitted=false
 
@@ -65,13 +63,33 @@ jobs:
           CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
           test -n "$TRAEFIK"
           test -n "$CONTROL"
+
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
           systemctl is-active --quiet phil-ai-os-monitor.service
           systemctl is-active --quiet phil-ai-os-backup.timer
           systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+
+          # Existing approval/control routes must remain exactly present before activation.
+          LABELS="$(docker inspect "$CONTROL" --format '{{range $k,$v := .Config.Labels}}{{println $k "=" $v}}{{end}}')"
+          grep -F 'traefik.http.routers.philaios-approval.rule=Host(`hermes-agent-whow.srv1833510.hstgr.cloud`) && PathPrefix(`/phil-ai-os/approval/`)' <<<"$LABELS"
+          grep -F 'traefik.http.routers.philaios-mission-control.rule=Host(`hermes-agent-whow.srv1833510.hstgr.cloud`) && PathPrefix(`/phil-ai-os/mission-control`)' <<<"$LABELS"
+          grep -F 'traefik.http.routers.philaios-approval.entrypoints=websecure' <<<"$LABELS"
+          grep -F 'traefik.http.routers.philaios-mission-control.entrypoints=websecure' <<<"$LABELS"
+
+          # Operator route must not already exist; activation should be additive.
+          if grep -F 'traefik.http.routers.philaios-operator.' <<<"$LABELS" >/dev/null; then
+            echo operator_route=already_present
+            exit 1
+          fi
+
+          # Backend port must remain non-public.
           if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'; then exit 1; fi
+
           echo traefik=ready
+          echo existing_approval_route=preserved
+          echo existing_mission_control_route=preserved
+          echo operator_route=absent_ready_for_additive_activation
           echo production_allowlist=general_only
           echo monitor=active
           echo backup_timer=active
