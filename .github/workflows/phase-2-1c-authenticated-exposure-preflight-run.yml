@@ -1,0 +1,96 @@
+name: Phase 2.1C Authenticated Exposure Preflight Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1c-authenticated-exposure-preflight-run.yml'
+      - '.github/phase-2-1c-preflight-run-trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      MC_BASIC_AUTH_HASH: ${{ secrets.MC_BASIC_AUTH_HASH }}
+      MC_HOSTNAME: hermes-agent-whow.srv1833510.hstgr.cloud
+      MC_PATH: /phil-ai-os/operator/
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate protected activation input
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$MC_BASIC_AUTH_HASH"
+          echo mission_control_hostname=$MC_HOSTNAME
+          echo mission_control_path=$MC_PATH
+          echo mission_control_auth_material=present
+          echo secret_values_emitted=false
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Read-only activation preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          test -f /docker/traefik-fhxl/docker-compose.yml
+          TRAEFIK=$(docker ps --format '{{.Names}}' | grep -m1 'traefik')
+          CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
+          test -n "$TRAEFIK"
+          test -n "$CONTROL"
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          LABELS="$(docker inspect "$CONTROL" --format '{{range $k,$v := .Config.Labels}}{{println $k "=" $v}}{{end}}')"
+          grep -F 'traefik.http.routers.philaios-approval.rule=Host(`hermes-agent-whow.srv1833510.hstgr.cloud`) && PathPrefix(`/phil-ai-os/approval/`)' <<<"$LABELS"
+          grep -F 'traefik.http.routers.philaios-mission-control.rule=Host(`hermes-agent-whow.srv1833510.hstgr.cloud`) && PathPrefix(`/phil-ai-os/mission-control`)' <<<"$LABELS"
+          if grep -F 'traefik.http.routers.philaios-operator.' <<<"$LABELS" >/dev/null; then
+            echo operator_route=already_present
+            exit 1
+          fi
+          if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'; then exit 1; fi
+          echo traefik=ready
+          echo existing_approval_route=preserved
+          echo existing_mission_control_route=preserved
+          echo operator_route=absent_ready_for_additive_activation
+          echo production_allowlist=general_only
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+          echo mission_control_public_listener=absent
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1C_ACTIVATION_PREFLIGHT_BASELINE_OK
+          REMOTE
