@@ -19,32 +19,35 @@ body{font-family:system-ui,-apple-system,sans-serif;margin:0;background:#f5f7fa;
 header{padding:20px 24px;background:#111827;color:#fff;display:flex;justify-content:space-between;align-items:center}
 main{padding:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
 .card{background:#fff;border:1px solid #dbe2ea;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-h2{font-size:16px;margin:0 0 12px}.kv{display:grid;grid-template-columns:1fr auto;gap:8px;margin:6px 0}.muted{color:#667085}.badge{padding:3px 8px;border-radius:999px;background:#eef2f6;font-size:12px}.warn{color:#9a6700}.err{color:#b42318}.ok{color:#067647}ul{padding-left:18px}button{display:none}.meta{font-size:12px;color:#667085;margin-left:6px}
+h2{font-size:16px;margin:0 0 12px}.kv{display:grid;grid-template-columns:1fr auto;gap:8px;margin:6px 0}.muted{color:#667085}.badge{padding:3px 8px;border-radius:999px;background:#eef2f6;font-size:12px}.warn{color:#9a6700}.err{color:#b42318}.ok{color:#067647}ul{padding-left:18px}button{display:none}.meta{font-size:12px;color:#667085;margin-left:6px}.links{max-height:220px;overflow:auto}.links li{margin-bottom:8px}
 footer{padding:0 20px 20px;color:#667085;font-size:12px}
 </style>
 </head>
 <body>
-<header><strong>Phil AI OS Mission Control</strong><span class="badge">READ ONLY · Phase 2.1D</span></header>
+<header><strong>Phil AI OS Mission Control</strong><span class="badge">READ ONLY · Phase 2.1E</span></header>
 <main>
 <section class="card"><h2>System Health</h2><div id="health">Loading…</div></section>
 <section class="card"><h2>Governance</h2><div id="governance">Loading…</div></section>
 <section class="card"><h2>Agents</h2><div id="agents">Loading…</div></section>
 <section class="card"><h2>Tasks & Approvals</h2><div id="approvals">Loading…</div></section>
+<section class="card"><h2>Durable Approval → Execution Links</h2><div id="durable">Loading…</div></section>
 <section class="card"><h2>Executions & Audit</h2><div id="executions">Loading…</div></section>
 <section class="card"><h2>Recovery & Data Quality</h2><div id="recovery">Loading…</div></section>
 </main>
-<footer>No mutation controls are present. Existing Control API and Telegram approval mechanisms remain authoritative.</footer>
+<footer>No mutation controls are present. Durable links use approval_id and are not canonical task IDs. Existing Control API and Telegram approval mechanisms remain authoritative.</footer>
 <script>
 const esc=x=>String(x??'unknown').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const kv=(k,v)=>`<div class="kv"><span class="muted">${esc(k)}</span><strong>${esc(v)}</strong></div>`;
 const src=(p,k)=>p?.[k]?` <span class="meta">(${esc(p[k])})</span>`:'';
 fetch('api/read-model',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(d=>{
- const g=d.governance||{}, gp=g.provenance||{};
+ const g=d.governance||{}, gp=g.provenance||{}, ds=d.durable_correlation_summary||{}, links=d.durable_correlations||[];
  document.getElementById('health').innerHTML=kv('Overall',d.overall_state)+kv('Control API',d.platform?.control_api_health)+kv('Readiness',d.platform?.control_api_readiness)+kv('Monitoring',d.platform?.monitoring_state)+kv('Generated',d.generated_at)+kv('Schema',d.schema_version);
  document.getElementById('governance').innerHTML=kv('Allowed classes',(g.execution_allowed_task_classes||[]).join(', ')+src(gp,'execution_allowed_task_classes'))+kv('Enforcement',g.execution_enforcement_mode+src(gp,'execution_enforcement_mode'))+kv('Scope',g.execution_enforcement_scope+src(gp,'execution_enforcement_scope'))+kv('Kill switch',g.kill_switch_state+src(gp,'kill_switch_state'))+kv('Authority expansion',g.authority_expansion_state)+kv('Direct provider bypass',g.direct_provider_bypass_allowed);
  document.getElementById('agents').innerHTML='<ul>'+(d.agents||[]).map(a=>`<li><strong>${esc(a.display_name)}</strong> — ${esc(a.role)} / ${esc(a.authority_level)} / ${esc(a.status)}<br><span class="meta">lifecycle=${esc(a.lifecycle_state)} · task=${esc(a.current_task_id??'none')}</span></li>`).join('')+'</ul>';
- document.getElementById('approvals').innerHTML=kv('Canonical tasks',(d.tasks||[]).length)+kv('Recent approvals',(d.approvals||[]).length)+kv('Correlation',d.data_quality?.correlation_quality)+kv('Proven unavailable',(d.data_quality?.proven_unavailable||[]).join(', ')||'none');
- document.getElementById('executions').innerHTML=kv('Recent executions',(d.executions||[]).length)+kv('Direct provider bypass',g.direct_provider_bypass_allowed);
+ document.getElementById('approvals').innerHTML=kv('Canonical tasks',(d.tasks||[]).length)+kv('Recent approvals',(d.approvals||[]).length)+kv('Canonical correlation',d.data_quality?.correlation_quality)+kv('Canonical task persistence',d.data_quality?.canonical_task_persistence)+kv('Proven unavailable',(d.data_quality?.proven_unavailable||[]).join(', ')||'none');
+ const recent=links.slice(0,8);
+ document.getElementById('durable').innerHTML=kv('Correlation key',ds.correlation_key_type)+kv('Durable approvals observed',ds.approval_row_count_observed)+kv('Audit rows observed',ds.execution_audit_row_count_observed)+kv('Approvals with audit links',ds.linked_approval_count)+kv('Approval-only',ds.approval_only_count)+kv('Link quality',d.data_quality?.durable_link_quality)+'<ul class="links">'+recent.map(x=>`<li><strong>${esc(x.approval_id)}</strong><br><span class="meta">state=${esc(x.approval?.state)} · audits=${esc(x.execution_audit_count)} · quality=${esc(x.link_quality)}</span></li>`).join('')+'</ul>';
+ document.getElementById('executions').innerHTML=kv('Recent API executions',(d.executions||[]).length)+kv('Durable audit rows',ds.execution_audit_row_count_observed)+kv('Unlinked audit rows',ds.unlinked_execution_audit_count)+kv('Direct provider bypass',g.direct_provider_bypass_allowed);
  document.getElementById('recovery').innerHTML=kv('Backup timer',d.recovery?.backup_timer_state)+kv('Self-heal',d.recovery?.backup_self_heal_state)+kv('Restore validation',d.recovery?.restore_validation_status)+kv('Freshness',d.data_quality?.freshness)+'<ul class="warn">'+(d.data_quality?.warnings||[]).map(w=>`<li>${esc(w)}</li>`).join('')+'</ul>';
 }).catch(e=>{document.querySelectorAll('main .card div').forEach(x=>x.innerHTML='<span class="err">Unavailable: '+esc(e.message)+'</span>')});
 </script>
@@ -70,7 +73,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 data = json.loads(p.stdout)
             except Exception:
-                data = {'schema_version':'2.1d.v1','overall_state':'unknown','data_quality':{'partial':True,'warnings':['read model unavailable']}}
+                data = {'schema_version':'2.1e.v1','overall_state':'unknown','data_quality':{'partial':True,'warnings':['read model unavailable']}}
                 p = type('P', (), {'returncode':1})()
             code = 200 if p.returncode == 0 else 503
             self._send(code, json.dumps(data, sort_keys=True), 'application/json; charset=utf-8')
@@ -89,5 +92,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f'PHIL_AI_OS_PHASE_2_1D_READ_ONLY_DASHBOARD_LISTENING host={HOST} port={PORT}', flush=True)
+    print(f'PHIL_AI_OS_PHASE_2_1E_READ_ONLY_DASHBOARD_LISTENING host={HOST} port={PORT}', flush=True)
     server.serve_forever()
