@@ -38,7 +38,7 @@ jobs:
             sleep $((attempt*5))
           done
           exit 1
-      - name: Implement routine single-flight guard in deployment source
+      - name: Implement routine single-flight guard in active deployment source
         shell: bash
         run: |
           set -euo pipefail
@@ -46,83 +46,84 @@ jobs:
           ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           CONTROL=phil-ai-os-core-control-api-1
-          ROOT=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core
-          echo '=== PHASE 1.22 CONCURRENCY GUARD IMPLEMENTATION ==='
+          echo '=== PHASE 1.22 CONCURRENCY GUARD IMPLEMENTATION V2 ==='
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
           ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          ! grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=.*routine' <<<"$ENV"
           echo production_allowlist=general_only
 
-          echo '--- locate deployment source ---'
-          APP="$(find "$ROOT" -type f -name app.py 2>/dev/null | head -n1 || true)"
-          if [ -z "$APP" ]; then
-            APP="$(find /opt/phil-ai-os-platform -type f -name app.py 2>/dev/null | grep -E 'control|core' | head -n1 || true)"
+          # Resolve the live Compose project from the running container itself.
+          WORKDIR="$(docker inspect "$CONTROL" --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')"
+          CONFIG_FILES="$(docker inspect "$CONTROL" --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}')"
+          SERVICE="$(docker inspect "$CONTROL" --format '{{ index .Config.Labels "com.docker.compose.service" }}')"
+          test -n "$WORKDIR" -a -n "$CONFIG_FILES" -a -n "$SERVICE"
+          COMPOSE="${CONFIG_FILES%%,*}"
+          if [[ "$COMPOSE" != /* ]]; then COMPOSE="$WORKDIR/$COMPOSE"; fi
+          test -f "$COMPOSE"
+          case "$WORKDIR" in *backup*|*.bak*|*archive*) echo unsafe_workdir="$WORKDIR"; exit 1;; esac
+          echo active_workdir="$WORKDIR"
+          echo active_compose="$COMPOSE"
+          echo active_service="$SERVICE"
+
+          # Ask Compose for the actual build context used by the live service.
+          CONFIG_JSON="$(docker compose -f "$COMPOSE" config --format json)"
+          BUILD_CONTEXT="$(printf '%s' "$CONFIG_JSON" | python3 -c 'import json,sys,os; d=json.load(sys.stdin); s=os.environ["SERVICE"]; b=d["services"][s].get("build"); print((b.get("context") if isinstance(b,dict) else b) or "")' SERVICE="$SERVICE" 2>/dev/null || true)"
+          # Fallback for shells where env placement above is unsupported.
+          if [ -z "$BUILD_CONTEXT" ]; then
+            BUILD_CONTEXT="$(SERVICE="$SERVICE" printf '%s' "$CONFIG_JSON" | SERVICE="$SERVICE" python3 -c 'import json,sys,os; d=json.load(sys.stdin); b=d["services"][os.environ["SERVICE"]].get("build"); print((b.get("context") if isinstance(b,dict) else b) or "")' 2>/dev/null || true)"
           fi
-          test -n "$APP"
-          echo app_source="$APP"
+          test -n "$BUILD_CONTEXT"
+          if [[ "$BUILD_CONTEXT" != /* ]]; then BUILD_CONTEXT="$(cd "$(dirname "$COMPOSE")" && realpath "$BUILD_CONTEXT")"; fi
+          case "$BUILD_CONTEXT" in *backup*|*.bak*|*archive*) echo unsafe_build_context="$BUILD_CONTEXT"; exit 1;; esac
+          test -d "$BUILD_CONTEXT"
+          echo active_build_context="$BUILD_CONTEXT"
+
+          # Select app.py only inside the active build context and require exact live-source identity.
+          APP="$(find "$BUILD_CONTEXT" -type f -name app.py -not -path '*/backup*/*' -not -path '*/*.bak*/*' -not -path '*/archive*/*' | head -n1 || true)"
+          test -n "$APP" -a -f "$APP"
           grep -q 'def routed_execute' "$APP"
+          LIVE_HASH="$(docker exec "$CONTROL" sha256sum /app/app.py | awk '{print $1}')"
+          SOURCE_HASH="$(sha256sum "$APP" | awk '{print $1}')"
+          echo live_hash="$LIVE_HASH"
+          echo source_hash="$SOURCE_HASH"
+          test "$LIVE_HASH" = "$SOURCE_HASH"
+          echo active_source_identity=verified
 
           TS="$(date -u +%Y%m%dT%H%M%SZ)"
           BACKUP="${APP}.phase122-pre-concurrency-${TS}.bak"
           cp -a "$APP" "$BACKUP"
           echo rollback_snapshot="$BACKUP"
 
-          python - "$APP" <<'PY'
+          python3 - "$APP" <<'PY'
           import sys
           from pathlib import Path
-          p=Path(sys.argv[1])
-          s=p.read_text()
+          p=Path(sys.argv[1]); s=p.read_text()
           marker='PHIL_AI_OS_PHASE_1_22_ROUTINE_SINGLE_FLIGHT_GUARD'
           if marker in s:
-              print('guard_source=already_present')
-              raise SystemExit(0)
-          # Add threading import conservatively.
-          lines=s.splitlines(True)
-          insert=0
+              print('guard_source=already_present'); raise SystemExit(0)
+          lines=s.splitlines(True); insert=0
           for i,line in enumerate(lines):
               if line.startswith('import ') or line.startswith('from '): insert=i+1
               elif insert and line.strip() and not line.startswith(('import ','from ')): break
-          lines.insert(insert, 'import threading\n')
-          s=''.join(lines)
-          # Global non-blocking lock; current service is a single Python process.
-          anchor='def routed_execute('
-          idx=s.find(anchor)
+          lines.insert(insert,'import threading\n'); s=''.join(lines)
+          anchor='def routed_execute('; idx=s.find(anchor)
           if idx < 0: raise SystemExit('routed_execute not found')
-          guard='''# PHIL_AI_OS_PHASE_1_22_ROUTINE_SINGLE_FLIGHT_GUARD\n_ROUTINE_EXECUTION_LOCK = threading.Lock()\n\n'''
-          s=s[:idx]+guard+s[idx:]
-          # Inject acquisition immediately after routed_execute signature/body begins by locating first executable line after signature colon.
-          idx=s.find(anchor)
-          pos=idx
-          depth=0
-          found=False
+          s=s[:idx]+'# PHIL_AI_OS_PHASE_1_22_ROUTINE_SINGLE_FLIGHT_GUARD\n_ROUTINE_EXECUTION_LOCK = threading.Lock()\n\n'+s[idx:]
+          idx=s.find(anchor); pos=idx; depth=0; body=None
           while pos < len(s):
               ch=s[pos]
               if ch=='(': depth+=1
               elif ch==')': depth-=1
               elif ch==':' and depth==0:
-                  nl=s.find('\n',pos)
-                  body=nl+1
-                  found=True
-                  break
+                  body=s.find('\n',pos)+1; break
               pos+=1
-          if not found: raise SystemExit('function signature end not found')
-          # We only acquire for task_class routine. A finally release must wrap provider execution, so source-specific implementation requires explicit supported anchor.
-          # Abort rather than make an unsafe partial edit if known anchors are absent.
-          provider_anchor='_provider_execute('
-          pa=s.find(provider_anchor, body)
+          if body is None: raise SystemExit('signature end not found')
+          pa=s.find('_provider_execute(',body)
           if pa < 0: raise SystemExit('provider execution anchor not found')
-          # Identify indentation at provider call and insert nonblocking acquire before it, then release using a compact try/finally around that call expression statement block is unsafe without AST rewrite.
-          # Use an AST-preserving source transform only if provider call is on a return/assignment line with balanced parentheses.
           line_start=s.rfind('\n',body,pa)+1
-          indent=s[line_start:pa]
-          if indent.strip():
-              indent=indent[:len(indent)-len(indent.lstrip())]
-          else:
-              indent=' ' * 4
-          # Find full logical statement containing provider call.
-          stmt_start=line_start
-          i=stmt_start; par=0; quote=None; esc=False
-          stmt_end=None
+          prefix=s[line_start:pa]; indent=prefix[:len(prefix)-len(prefix.lstrip())]
+          stmt_start=line_start; i=stmt_start; par=0; quote=None; esc=False; stmt_end=None
           while i < len(s):
               c=s[i]
               if quote:
@@ -133,8 +134,7 @@ jobs:
                   if c in ('\"',"'"): quote=c
                   elif c in '([{': par+=1
                   elif c in ')]}': par-=1
-                  elif c=='\n' and par==0:
-                      stmt_end=i+1; break
+                  elif c=='\n' and par==0: stmt_end=i+1; break
               i+=1
           if stmt_end is None: raise SystemExit('provider statement end not found')
           stmt=s[stmt_start:stmt_end]
@@ -146,34 +146,24 @@ jobs:
                    f"{indent}        return 409, {{'status':'routine_execution_busy','detail':'routine concurrency limit reached'}}\n"
                    f"{indent}try:\n")
           indented=''.join(indent+'    '+ln[len(indent):] if ln.startswith(indent) else indent+'    '+ln for ln in stmt.splitlines(True))
-          release=(f"{indent}finally:\n"
-                   f"{indent}    if __phase122_routine_lock_acquired:\n"
-                   f"{indent}        _ROUTINE_EXECUTION_LOCK.release()\n")
-          s=s[:stmt_start]+acquire+indented+release+s[stmt_end:]
-          p.write_text(s)
+          release=(f"{indent}finally:\n{indent}    if __phase122_routine_lock_acquired:\n{indent}        _ROUTINE_EXECUTION_LOCK.release()\n")
+          p.write_text(s[:stmt_start]+acquire+indented+release+s[stmt_end:])
           print('guard_source=installed')
           PY
 
-          python -m py_compile "$APP" || { cp -a "$BACKUP" "$APP"; echo rollback=syntax_failure; exit 1; }
+          python3 -m py_compile "$APP" || { cp -a "$BACKUP" "$APP"; echo rollback=syntax_failure; exit 1; }
           grep -q 'PHIL_AI_OS_PHASE_1_22_ROUTINE_SINGLE_FLIGHT_GUARD' "$APP"
           echo syntax_validation=ok
 
-          echo '--- rebuild/redeploy using existing compose definition ---'
-          COMPOSE="$(find "$ROOT" -maxdepth 3 -type f \( -name 'compose.yml' -o -name 'docker-compose.yml' -o -name 'compose.yaml' \) | head -n1 || true)"
-          test -n "$COMPOSE"
-          echo compose_file="$COMPOSE"
-          cd "$(dirname "$COMPOSE")"
-          if docker compose -f "$COMPOSE" config --services | grep -qx 'control-api'; then SERVICE=control-api; else SERVICE="$(docker compose -f "$COMPOSE" config --services | grep -E 'control.*api' | head -n1)"; fi
-          test -n "$SERVICE"
-          docker compose -f "$COMPOSE" build "$SERVICE"
-          docker compose -f "$COMPOSE" up -d --no-deps "$SERVICE"
-
+          cd "$WORKDIR"
+          docker compose -f "$COMPOSE" build "$SERVICE" || { cp -a "$BACKUP" "$APP"; exit 1; }
+          docker compose -f "$COMPOSE" up -d --no-deps --force-recreate "$SERVICE"
           for i in $(seq 1 30); do
-            if curl -fsS --max-time 3 http://127.0.0.1:4870/healthz >/dev/null; then echo control_api_health=ok; break; fi
+            curl -fsS --max-time 3 http://127.0.0.1:4870/healthz >/dev/null 2>&1 && break
             sleep 2
-            [ "$i" -lt 30 ] || { echo control_api_health=failed; cp -a "$BACKUP" "$APP"; docker compose -f "$COMPOSE" build "$SERVICE"; docker compose -f "$COMPOSE" up -d --no-deps "$SERVICE"; exit 1; }
+            [ "$i" -lt 30 ] || { cp -a "$BACKUP" "$APP"; docker compose -f "$COMPOSE" build "$SERVICE"; docker compose -f "$COMPOSE" up -d --no-deps --force-recreate "$SERVICE"; exit 1; }
           done
-
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
           NEWENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$NEWENV"
           ! grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=.*routine' <<<"$NEWENV"
