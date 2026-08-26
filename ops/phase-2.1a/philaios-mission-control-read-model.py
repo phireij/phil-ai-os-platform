@@ -5,8 +5,9 @@ import subprocess
 import sys
 from typing import Any
 
-SCHEMA_VERSION = "2.1d.v1"
+SCHEMA_VERSION = "2.1e.v1"
 CONTROL_API_BASE = "http://127.0.0.1:4870"
+CONTROL_DB = "/app/state/control-plane.db"
 SENSITIVE_FRAGMENTS = ("token", "secret", "api_key", "apikey", "authorization", "password", "private_key")
 
 
@@ -151,6 +152,61 @@ def canonical_tasks(approvals, executions):
     return list(by_id.values()), quality, legacy
 
 
+def durable_approval_execution_links(control: str):
+    # Explicit column allowlists prevent task text, decision notes, link hashes,
+    # execution detail, provider responses, or credential material from entering
+    # the browser-facing read model.
+    code = r'''import sqlite3,json
+c=sqlite3.connect("/app/state/control-plane.db")
+c.row_factory=sqlite3.Row
+approvals=[dict(r) for r in c.execute("""select approval_id,created_at,updated_at,expires_at,state,source,requester,task_class,requested_by,decision_by,decision_at,consumed_at,consumed_by from approval_requests order by rowid desc limit 100""")]
+audits=[dict(r) for r in c.execute("""select id,occurred_at,source,task_class,provider_id,model_id,route_path,compatibility_pass,execution_mode,outcome,approval_id from execution_audit order by rowid desc limit 200""")]
+print(json.dumps({"approvals":approvals,"audits":audits},default=str))'''
+    out, _ = run(["docker", "exec", control, "python3", "-c", code])
+    data = json.loads(out)
+    approvals = data.get("approvals", [])
+    audits = data.get("audits", [])
+    audits_by_approval = {}
+    unlinked_audits = 0
+    for audit in audits:
+        approval_id = audit.get("approval_id")
+        if approval_id:
+            audits_by_approval.setdefault(str(approval_id), []).append(audit)
+        else:
+            unlinked_audits += 1
+    links = []
+    seen = set()
+    for approval in approvals:
+        approval_id = approval.get("approval_id")
+        if not approval_id:
+            continue
+        approval_id = str(approval_id)
+        seen.add(approval_id)
+        linked = audits_by_approval.get(approval_id, [])
+        links.append({
+            "correlation_key_type": "approval_id",
+            "approval_id": approval_id,
+            "canonical_task_id": None,
+            "approval": approval,
+            "execution_audits": linked,
+            "execution_audit_count": len(linked),
+            "link_quality": "durable_authoritative" if linked else "approval_only",
+        })
+    orphan_linked = sum(len(v) for k, v in audits_by_approval.items() if k not in seen)
+    summary = {
+        "approval_row_count_observed": len(approvals),
+        "execution_audit_row_count_observed": len(audits),
+        "linked_approval_count": sum(1 for x in links if x["execution_audit_count"] > 0),
+        "approval_only_count": sum(1 for x in links if x["execution_audit_count"] == 0),
+        "unlinked_execution_audit_count": unlinked_audits,
+        "execution_audits_with_missing_observed_approval": orphan_linked,
+        "canonical_task_persistence": "absent",
+        "correlation_key_type": "approval_id",
+        "provenance": "control_api_sqlite_read_only",
+    }
+    return links, summary
+
+
 def main():
     generated_at = dt.datetime.now(dt.timezone.utc).isoformat()
     warnings = []
@@ -165,6 +221,7 @@ def main():
     snapshot = sanitize(hermes_read(hermes, "snapshot"))
     approvals = list_payload(hermes_read(hermes, "approvals"), "approvals")
     executions = list_payload(hermes_read(hermes, "executions"), "executions")
+    durable_links, durable_summary = durable_approval_execution_links(control)
 
     allowlist_raw = env_value(control, "PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES") or ""
     allowed_task_classes = [x.strip() for x in allowlist_raw.split(",") if x.strip()]
@@ -194,9 +251,10 @@ def main():
 
     tasks, correlation_quality, legacy_record_count = canonical_tasks(approvals, executions)
     if correlation_quality == "legacy":
-        warnings.append("approval/execution records are legacy because no canonical task_id is present")
+        warnings.append("recent approval/execution records are legacy because no canonical task_id is present")
     elif correlation_quality == "none":
-        warnings.append("no recent approval/execution records are available for live task correlation validation")
+        warnings.append("recent API history has no records for canonical task correlation; durable approval_id linkage is shown separately")
+    warnings.append("canonical task persistence is absent; durable approval-to-execution linkage uses approval_id and is not a task_id")
 
     active_task_ids = {t["task_id"] for t in tasks if t.get("lifecycle_state") not in {"SUCCEEDED", "FAILED", "BLOCKED", "CANCELLED", "DENIED", "EXPIRED", "CLOSED"}}
     hermes_task = next(iter(active_task_ids), None) if len(active_task_ids) == 1 else None
@@ -236,13 +294,17 @@ def main():
         "tasks": tasks,
         "approvals": approvals,
         "executions": executions,
+        "durable_correlations": durable_links,
+        "durable_correlation_summary": durable_summary,
         "recovery": {"backup_timer_state":backup_state,"backup_self_heal_state":self_heal_state,"latest_backup_status":"unknown","latest_backup_at":None,"restore_validation_status":"validated","monitoring_independent_of_ui":True},
         "data_quality": {
             "freshness":"fresh" if critical_ok else "unknown",
-            "partial": bool(proven_unavailable or missing_sources or correlation_quality != "canonical"),
+            "partial": bool(proven_unavailable or missing_sources or correlation_quality != "canonical" or durable_summary.get("canonical_task_persistence") != "present"),
             "missing_sources": missing_sources,
             "proven_unavailable": proven_unavailable,
             "correlation_quality": correlation_quality,
+            "durable_link_quality": "approval_id_authoritative",
+            "canonical_task_persistence": durable_summary.get("canonical_task_persistence"),
             "legacy_record_count": legacy_record_count,
             "warnings": warnings
         }
@@ -254,5 +316,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print(json.dumps({"schema_version":SCHEMA_VERSION,"generated_at":dt.datetime.now(dt.timezone.utc).isoformat(),"overall_state":"unknown","error":str(exc),"data_quality":{"freshness":"unknown","partial":True,"missing_sources":["operator_read_model_generation"],"proven_unavailable":[],"correlation_quality":"unknown","warnings":["read model generation failed visibly"]}}, indent=2, sort_keys=True))
+        print(json.dumps({"schema_version":SCHEMA_VERSION,"generated_at":dt.datetime.now(dt.timezone.utc).isoformat(),"overall_state":"unknown","error":str(exc),"data_quality":{"freshness":"unknown","partial":True,"missing_sources":["operator_read_model_generation"],"proven_unavailable":[],"correlation_quality":"unknown","durable_link_quality":"unknown","warnings":["read model generation failed visibly"]}}, indent=2, sort_keys=True))
         sys.exit(1)
