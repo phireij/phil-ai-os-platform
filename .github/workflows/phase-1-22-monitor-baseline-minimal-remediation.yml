@@ -1,0 +1,109 @@
+name: Phase 1.22 Monitor Baseline Minimal Remediation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-22-monitor-baseline-minimal-remediation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  remediate:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH with resilient retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Apply evidence-backed monitor baseline remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          MON=/opt/phil-ai-os/phase-1.16/monitor.py
+          ENVF=/etc/phil-ai-os-monitor.env
+          echo '=== PHASE 1.22 MONITOR BASELINE MINIMAL REMEDIATION ==='
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          grep -q '^PHIL_AI_OS_EXECUTION_KILL_SWITCH=false$' <<<"$CENV"
+          grep -q '^PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=true$' <<<"$CENV" || grep -q '^PHIL_AI_OS_EXECUTION_ROUTED_ENABLED=true$' <<<"$CENV" || true
+          test -f "$MON" -a -f "$ENVF"
+
+          TS="$(date -u +%Y%m%dT%H%M%SZ)"
+          cp -a "$MON" "${MON}.phase122-${TS}.bak"
+          cp -a "$ENVF" "${ENVF}.phase122-${TS}.bak"
+          echo rollback_snapshot_created=true
+
+          # Parameterize the two evolved safety expectations; preserve old defaults.
+          python3 - "$MON" <<'PY'
+          import sys
+          from pathlib import Path
+          p=Path(sys.argv[1]); s=p.read_text()
+          old='[("execution_kill_switch",r.get("execution_kill_switch"),True,"Execution kill switch is not enabled"),("routed_execution_enabled",r.get("routed_execution_enabled"),False,"Routed execution unexpectedly enabled"),("live_test_enabled",r.get("live_test_enabled"),False,"Live test unexpectedly enabled")]'
+          new='[("execution_kill_switch",r.get("execution_kill_switch"),_env_bool("PHIL_AI_OS_EXPECT_EXECUTION_KILL_SWITCH",True),"Execution kill switch state differs from governed baseline"),("routed_execution_enabled",r.get("routed_execution_enabled"),_env_bool("PHIL_AI_OS_EXPECT_ROUTED_EXECUTION_ENABLED",False),"Routed execution state differs from governed baseline"),("live_test_enabled",r.get("live_test_enabled"),False,"Live test unexpectedly enabled")]'
+          if old in s: s=s.replace(old,new)
+          elif 'PHIL_AI_OS_EXPECT_EXECUTION_KILL_SWITCH' not in s: raise SystemExit('expected monitor safety expression not found')
+          p.write_text(s)
+          PY
+          python3 -m py_compile "$MON"
+
+          # Current governed baseline: routed execution ON, emergency kill switch normally OFF.
+          sed -i '/^PHIL_AI_OS_EXPECT_EXECUTION_KILL_SWITCH=/d;/^PHIL_AI_OS_EXPECT_ROUTED_EXECUTION_ENABLED=/d' "$ENVF"
+          printf '%s\n' 'PHIL_AI_OS_EXPECT_EXECUTION_KILL_SWITCH=false' 'PHIL_AI_OS_EXPECT_ROUTED_EXECUTION_ENABLED=true' >> "$ENVF"
+
+          # Daily backup cadence requires freshness window >24h + randomized delay; use 30h.
+          # The latest scheduled backup succeeded today and cleared the stale finding immediately after 03:15 UTC.
+          sed -i '/^PHIL_AI_OS_BACKUP_MAX_AGE_SECONDS=/d' "$ENVF"
+          echo 'PHIL_AI_OS_BACKUP_MAX_AGE_SECONDS=108000' >> "$ENVF"
+
+          systemctl restart phil-ai-os-monitor.service
+          sleep 5
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          echo monitor_service=active
+
+          # Wait for at least one monitor cycle and require the evolved-state false positives to disappear.
+          sleep 65
+          RECENT="$(journalctl -u phil-ai-os-monitor.service --since '90 seconds ago' --no-pager -n 20)"
+          printf '%s\n' "$RECENT"
+          ! grep -q '"key": "execution_kill_switch", "ok": false' <<<"$RECENT"
+          ! grep -q '"key": "routed_execution_enabled", "ok": false' <<<"$RECENT"
+          ! grep -q '"key": "backup_status", "ok": false' <<<"$RECENT"
+
+          CENV2="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV2"
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          echo production_allowlist=general_only
+          echo provider_call=none
+          echo routine_activation=false
+          echo monitor_baseline_reconciled=true
+          echo backup_freshness_window_seconds=108000
+          echo next_action=PHASE_1_22_NO_PROVIDER_NEGATIVE_PATH_VALIDATION
+          echo PHIL_AI_OS_PHASE_1_22_MONITOR_BASELINE_MINIMAL_REMEDIATION_OK
+          REMOTE
