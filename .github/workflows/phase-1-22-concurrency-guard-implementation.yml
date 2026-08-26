@@ -1,0 +1,186 @@
+name: Phase 1.22 Concurrency Guard Implementation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-1-22-concurrency-guard-implementation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  implement:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3; do
+            echo "ssh_preflight_attempt=$attempt"
+            if ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null && ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" true; then
+              echo ssh_preflight=ok
+              exit 0
+            fi
+            sleep $((attempt*5))
+          done
+          exit 1
+      - name: Implement routine single-flight guard in deployment source
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          ROOT=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core
+          echo '=== PHASE 1.22 CONCURRENCY GUARD IMPLEMENTATION ==='
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          ENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$ENV"
+          echo production_allowlist=general_only
+
+          echo '--- locate deployment source ---'
+          APP="$(find "$ROOT" -type f -name app.py 2>/dev/null | head -n1 || true)"
+          if [ -z "$APP" ]; then
+            APP="$(find /opt/phil-ai-os-platform -type f -name app.py 2>/dev/null | grep -E 'control|core' | head -n1 || true)"
+          fi
+          test -n "$APP"
+          echo app_source="$APP"
+          grep -q 'def routed_execute' "$APP"
+
+          TS="$(date -u +%Y%m%dT%H%M%SZ)"
+          BACKUP="${APP}.phase122-pre-concurrency-${TS}.bak"
+          cp -a "$APP" "$BACKUP"
+          echo rollback_snapshot="$BACKUP"
+
+          python - "$APP" <<'PY'
+          import sys
+          from pathlib import Path
+          p=Path(sys.argv[1])
+          s=p.read_text()
+          marker='PHIL_AI_OS_PHASE_1_22_ROUTINE_SINGLE_FLIGHT_GUARD'
+          if marker in s:
+              print('guard_source=already_present')
+              raise SystemExit(0)
+          # Add threading import conservatively.
+          lines=s.splitlines(True)
+          insert=0
+          for i,line in enumerate(lines):
+              if line.startswith('import ') or line.startswith('from '): insert=i+1
+              elif insert and line.strip() and not line.startswith(('import ','from ')): break
+          lines.insert(insert, 'import threading\n')
+          s=''.join(lines)
+          # Global non-blocking lock; current service is a single Python process.
+          anchor='def routed_execute('
+          idx=s.find(anchor)
+          if idx < 0: raise SystemExit('routed_execute not found')
+          guard='''# PHIL_AI_OS_PHASE_1_22_ROUTINE_SINGLE_FLIGHT_GUARD\n_ROUTINE_EXECUTION_LOCK = threading.Lock()\n\n'''
+          s=s[:idx]+guard+s[idx:]
+          # Inject acquisition immediately after routed_execute signature/body begins by locating first executable line after signature colon.
+          idx=s.find(anchor)
+          pos=idx
+          depth=0
+          found=False
+          while pos < len(s):
+              ch=s[pos]
+              if ch=='(': depth+=1
+              elif ch==')': depth-=1
+              elif ch==':' and depth==0:
+                  nl=s.find('\n',pos)
+                  body=nl+1
+                  found=True
+                  break
+              pos+=1
+          if not found: raise SystemExit('function signature end not found')
+          # We only acquire for task_class routine. A finally release must wrap provider execution, so source-specific implementation requires explicit supported anchor.
+          # Abort rather than make an unsafe partial edit if known anchors are absent.
+          provider_anchor='_provider_execute('
+          pa=s.find(provider_anchor, body)
+          if pa < 0: raise SystemExit('provider execution anchor not found')
+          # Identify indentation at provider call and insert nonblocking acquire before it, then release using a compact try/finally around that call expression statement block is unsafe without AST rewrite.
+          # Use an AST-preserving source transform only if provider call is on a return/assignment line with balanced parentheses.
+          line_start=s.rfind('\n',body,pa)+1
+          indent=s[line_start:pa]
+          if indent.strip():
+              indent=indent[:len(indent)-len(indent.lstrip())]
+          else:
+              indent=' ' * 4
+          # Find full logical statement containing provider call.
+          stmt_start=line_start
+          i=stmt_start; par=0; quote=None; esc=False
+          stmt_end=None
+          while i < len(s):
+              c=s[i]
+              if quote:
+                  if esc: esc=False
+                  elif c=='\\': esc=True
+                  elif c==quote: quote=None
+              else:
+                  if c in ('\"',"'"): quote=c
+                  elif c in '([{': par+=1
+                  elif c in ')]}': par-=1
+                  elif c=='\n' and par==0:
+                      stmt_end=i+1; break
+              i+=1
+          if stmt_end is None: raise SystemExit('provider statement end not found')
+          stmt=s[stmt_start:stmt_end]
+          if 'return ' in stmt: raise SystemExit('unsupported direct return provider statement')
+          acquire=(f"{indent}__phase122_routine_lock_acquired = False\n"
+                   f"{indent}if task_class == 'routine':\n"
+                   f"{indent}    __phase122_routine_lock_acquired = _ROUTINE_EXECUTION_LOCK.acquire(blocking=False)\n"
+                   f"{indent}    if not __phase122_routine_lock_acquired:\n"
+                   f"{indent}        return 409, {{'status':'routine_execution_busy','detail':'routine concurrency limit reached'}}\n"
+                   f"{indent}try:\n")
+          indented=''.join(indent+'    '+ln[len(indent):] if ln.startswith(indent) else indent+'    '+ln for ln in stmt.splitlines(True))
+          release=(f"{indent}finally:\n"
+                   f"{indent}    if __phase122_routine_lock_acquired:\n"
+                   f"{indent}        _ROUTINE_EXECUTION_LOCK.release()\n")
+          s=s[:stmt_start]+acquire+indented+release+s[stmt_end:]
+          p.write_text(s)
+          print('guard_source=installed')
+          PY
+
+          python -m py_compile "$APP" || { cp -a "$BACKUP" "$APP"; echo rollback=syntax_failure; exit 1; }
+          grep -q 'PHIL_AI_OS_PHASE_1_22_ROUTINE_SINGLE_FLIGHT_GUARD' "$APP"
+          echo syntax_validation=ok
+
+          echo '--- rebuild/redeploy using existing compose definition ---'
+          COMPOSE="$(find "$ROOT" -maxdepth 3 -type f \( -name 'compose.yml' -o -name 'docker-compose.yml' -o -name 'compose.yaml' \) | head -n1 || true)"
+          test -n "$COMPOSE"
+          echo compose_file="$COMPOSE"
+          cd "$(dirname "$COMPOSE")"
+          if docker compose -f "$COMPOSE" config --services | grep -qx 'control-api'; then SERVICE=control-api; else SERVICE="$(docker compose -f "$COMPOSE" config --services | grep -E 'control.*api' | head -n1)"; fi
+          test -n "$SERVICE"
+          docker compose -f "$COMPOSE" build "$SERVICE"
+          docker compose -f "$COMPOSE" up -d --no-deps "$SERVICE"
+
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 3 http://127.0.0.1:4870/healthz >/dev/null; then echo control_api_health=ok; break; fi
+            sleep 2
+            [ "$i" -lt 30 ] || { echo control_api_health=failed; cp -a "$BACKUP" "$APP"; docker compose -f "$COMPOSE" build "$SERVICE"; docker compose -f "$COMPOSE" up -d --no-deps "$SERVICE"; exit 1; }
+          done
+
+          NEWENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$NEWENV"
+          ! grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=.*routine' <<<"$NEWENV"
+          docker exec "$CONTROL" grep -q 'PHIL_AI_OS_PHASE_1_22_ROUTINE_SINGLE_FLIGHT_GUARD' /app/app.py
+          echo guard_deployed=true
+          echo routine_activation=false
+          echo provider_call=none
+          echo next_action=PHASE_1_22_CONCURRENCY_GUARD_VALIDATION
+          echo PHIL_AI_OS_PHASE_1_22_CONCURRENCY_GUARD_IMPLEMENTATION_OK
+          REMOTE
