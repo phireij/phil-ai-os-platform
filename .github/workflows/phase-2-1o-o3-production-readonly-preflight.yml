@@ -1,0 +1,140 @@
+name: Phase 2.1O O3 Production Read-Only Preflight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1o-o3-production-readonly-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Production read-only lifecycle closure preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect('/app/state/control-plane.db')
+          c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          registry=[tuple(r) for r in c.execute('select agent_id,authority_ceiling,enabled,assignable from agent_registry order by agent_id')]
+          assert registry==[('hermes','L3',1,1)]
+
+          tables={r[0] for r in c.execute("select name from sqlite_master where type='table'")}
+          required={'task_lifecycle_events'}
+          assert required <= tables
+          cols={r['name'] for r in c.execute('pragma table_info(task_lifecycle_events)')}
+          for k in ('task_id','stage','occurred_at','assigned_agent_id'):
+              assert k in cols
+
+          stages=[r[0] for r in c.execute('select distinct stage from task_lifecycle_events order by stage')]
+          observed=set(stages)
+          expected={'RECEIVED','CLASSIFIED','APPROVAL_PENDING','ASSIGNED','PLANNED','AUDITED'}
+          assert observed <= expected, ('unknown_stage',sorted(observed-expected))
+          print('observed_lifecycle_stages='+json.dumps(stages))
+
+          rows=c.execute('''
+            select e.task_id,e.stage,e.assigned_agent_id,e.occurred_at
+            from task_lifecycle_events e
+            join (
+              select task_id,max(occurred_at) mx from task_lifecycle_events group by task_id
+            ) x on x.task_id=e.task_id and x.mx=e.occurred_at
+            order by e.task_id
+          ''').fetchall()
+          latest=[dict(r) for r in rows]
+          print('latest_lifecycle='+json.dumps(latest,sort_keys=True))
+
+          unresolved=[]
+          for r in latest:
+              if r['assigned_agent_id']=='hermes' and r['stage'] in {'ASSIGNED','PLANNED'}:
+                  unresolved.append({'task_id':r['task_id'],'stage':r['stage']})
+          print('historically_unclosed_hermes_tasks='+json.dumps(unresolved,sort_keys=True))
+
+          # Inventory correlation-capable tables/columns without reading payload text or secrets.
+          inventory={}
+          for t in sorted(tables):
+              low=t.lower()
+              if any(k in low for k in ('execution','audit','approval','task')):
+                  names=[r['name'] for r in c.execute(f'pragma table_info({t})')]
+                  keep=[n for n in names if n in {'task_id','approval_id','execution_id','audit_id','response_id','state','status','stage','outcome','result_state','consumed_at','consumed_by','created_at','updated_at','occurred_at'}]
+                  if keep:
+                      inventory[t]=keep
+          print('correlation_column_inventory='+json.dumps(inventory,sort_keys=True))
+          print('workload_closure_projection=indeterminate_until_unique_correlation_proven')
+          PY
+
+          curl -fsS http://127.0.0.1:4881/api/read-model >/tmp/o3-model.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/o3-model.json'))
+          assert d['schema_version']=='2.1n.v1'
+          r=d['worker_readiness']
+          assert r['agent_id']=='hermes'
+          assert r['task_class_scope']=='general'
+          assert r['authority_effect']=='none'
+          assert r['automatic_assignment'] is False
+          assert r['automatic_retry'] is False
+          assert r['automatic_reroute'] is False
+          assert r['automatic_execution'] is False
+          print('current_worker_readiness='+r['readiness'])
+          print('current_readiness_reason='+r['reason_code'])
+          PY
+          rm -f /tmp/o3-model.json
+
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+
+          echo production_change=none
+          echo lifecycle_mutation=none
+          echo assignment_mutation=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo authority_expansion=none
+          echo execution_allowlist=general
+          echo agent_registry=hermes_L3_only
+          echo PHIL_AI_OS_PHASE_2_1O_O3_PRODUCTION_READONLY_PREFLIGHT_OK
+          REMOTE
