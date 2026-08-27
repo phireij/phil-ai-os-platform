@@ -1,0 +1,201 @@
+name: Phase 2.1L L6B Server Dispatcher Cutover
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1l-l6b-server-dispatcher-cutover.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cutover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Phase 2.1L client candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile ops/phase-2.1l/philaios-mission-control-client.py
+          grep -q 'PHIL_AI_OS_AUTO_NOTIFY_APPROVALS", "0"' ops/phase-2.1l/philaios-mission-control-client.py
+          grep -q '"mode": "server_outbox"' ops/phase-2.1l/philaios-mission-control-client.py
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then
+                rm -f "$TMP"; exit 0
+              fi
+            fi
+            rm -f "$TMP"
+            sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Stage persistent client candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1l/philaios-mission-control-client.py "$VPS_USER@$VPS_HOST:/tmp/philaios-mission-control-client-phase21l.py"
+
+      - name: Activate server-outbox notification mode and timer
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          HERMES="$(docker ps --format '{{.Names}}' | grep '^hermes-agent-whow' | head -n1)"
+          HOST_CLIENT=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/hermes/philaios-mission-control-client.py
+          CAND=/tmp/philaios-mission-control-client-phase21l.py
+          BACKUP=${HOST_CLIENT}.pre-phase21l
+          DISPATCHER=/usr/local/sbin/philaios-approval-notification-dispatcher
+          SERVICE=/etc/systemd/system/phil-ai-os-approval-notification-dispatcher.service
+          TIMER=/etc/systemd/system/phil-ai-os-approval-notification-dispatcher.timer
+          success=0
+
+          rollback() {
+            set +e
+            echo rollback=started
+            systemctl disable --now phil-ai-os-approval-notification-dispatcher.timer >/dev/null 2>&1 || true
+            rm -f "$SERVICE" "$TIMER"
+            systemctl daemon-reload || true
+            if [ -f "$BACKUP" ]; then
+              cat "$BACKUP" > "$HOST_CLIENT"
+              chmod 0755 "$HOST_CLIENT"
+            fi
+            echo rollback=completed
+          }
+          cleanup() {
+            rc=$?
+            rm -f "$CAND"
+            if [ "$rc" -ne 0 ] && [ "$success" -ne 1 ]; then rollback; fi
+          }
+          trap cleanup EXIT
+
+          test -n "$HERMES"
+          test -x "$DISPATCHER"
+          test -f "$HOST_CLIENT"
+          test -f "$CAND"
+          python3 -m py_compile "$CAND"
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+
+          docker exec -i "$CONTROL" python - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          eligible=c.execute("select count(*) from approval_notification_outbox where state in ('pending','leased','retry_wait')").fetchone()[0]
+          assert eligible==0, eligible
+          print('pre_cutover_eligible_outbox_rows=0')
+          print('delivered_rows='+str(c.execute("select count(*) from approval_notification_outbox where state='delivered'").fetchone()[0]))
+          print('dead_letter_rows='+str(c.execute("select count(*) from approval_notification_outbox where state='dead_letter'").fetchone()[0]))
+          c.close()
+          PY
+
+          cp -a "$HOST_CLIENT" "$BACKUP"
+          chmod 0600 "$BACKUP"
+          cat "$CAND" > "$HOST_CLIENT"
+          chmod 0755 "$HOST_CLIENT"
+
+          docker exec "$HERMES" python3 -c "compile(open('/usr/local/bin/philaios-mission-control',encoding='utf-8').read(),'/usr/local/bin/philaios-mission-control','exec')"
+          docker exec "$HERMES" grep -q 'PHIL_AI_OS_AUTO_NOTIFY_APPROVALS", "0"' /usr/local/bin/philaios-mission-control
+          docker exec "$HERMES" python3 - <<'PY'
+          import importlib.util
+          p='/usr/local/bin/philaios-mission-control'
+          s=importlib.util.spec_from_file_location('philaios_mc',p)
+          m=importlib.util.module_from_spec(s); s.loader.exec_module(m)
+          assert m.AUTO_NOTIFY is False
+          print('legacy_direct_notify_default=false')
+          PY
+
+          for cmd in snapshot approvals executions; do
+            docker exec "$HERMES" /usr/local/bin/philaios-mission-control "$cmd" >/dev/null
+          done
+
+          NO_WORK="$($DISPATCHER)"
+          printf '%s\n' "$NO_WORK"
+          grep -q '^dispatcher_status=no_work$' <<< "$NO_WORK"
+
+          cat > "$SERVICE" <<'UNIT'
+          [Unit]
+          Description=Phil AI OS approval notification dispatcher
+          After=docker.service network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/sbin/philaios-approval-notification-dispatcher
+          User=root
+          UNIT
+
+          cat > "$TIMER" <<'UNIT'
+          [Unit]
+          Description=Phil AI OS approval notification dispatcher timer
+
+          [Timer]
+          OnBootSec=60s
+          OnUnitActiveSec=60s
+          AccuracySec=10s
+          Persistent=true
+          Unit=phil-ai-os-approval-notification-dispatcher.service
+
+          [Install]
+          WantedBy=timers.target
+          UNIT
+
+          systemctl daemon-reload
+          systemctl enable --now phil-ai-os-approval-notification-dispatcher.timer >/dev/null
+          systemctl is-enabled --quiet phil-ai-os-approval-notification-dispatcher.timer
+          systemctl is-active --quiet phil-ai-os-approval-notification-dispatcher.timer
+
+          docker exec -i "$CONTROL" python - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          assert c.execute("select count(*) from approval_notification_outbox where state in ('pending','leased','retry_wait')").fetchone()[0]==0
+          print('post_cutover_eligible_outbox_rows=0')
+          c.close()
+          PY
+
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          success=1
+          echo server_outbox_mode=active
+          echo legacy_direct_notify_default=false
+          echo dispatcher_timer=active
+          echo dispatcher_interval_seconds=60
+          echo notification_send_during_cutover=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo rollback_client="$BACKUP"
+          echo PHIL_AI_OS_PHASE_2_1L_L6B_SERVER_DISPATCHER_CUTOVER_OK
+          REMOTE
