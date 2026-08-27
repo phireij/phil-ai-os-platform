@@ -24,7 +24,7 @@ jobs:
       - name: Validate builders
         run: |
           set -euo pipefail
-          python3 -m py_compile ops/phase-2.1h/build-lifecycle-writer-candidate.py ops/phase-2.1h/validate-lifecycle-ledger-migration.py
+          python3 -m py_compile ops/phase-2.1h/build-lifecycle-writer-candidate.py ops/phase-2.1h/validate-lifecycle-ledger-migration.py ops/phase-2.1h/apply-lifecycle-ledger-migration.py
       - name: Configure SSH
         shell: bash
         run: |
@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           PORT="${VPS_PORT:-22}"
-          scp -P "$PORT" -q ops/phase-2.1h/build-lifecycle-writer-candidate.py ops/phase-2.1h/validate-lifecycle-ledger-migration.py "$VPS_USER@$VPS_HOST:/tmp/"
+          scp -P "$PORT" -q ops/phase-2.1h/build-lifecycle-writer-candidate.py ops/phase-2.1h/validate-lifecycle-ledger-migration.py ops/phase-2.1h/apply-lifecycle-ledger-migration.py "$VPS_USER@$VPS_HOST:/tmp/"
       - name: Validate candidate on isolated app and DB copies
         shell: bash
         run: |
@@ -61,22 +61,24 @@ jobs:
           DB=/app/state/control-plane.db
           HOST_APP="$(mktemp /tmp/philaios-21h-app.XXXXXX.py)"
           HOST_CAND="$(mktemp /tmp/philaios-21h-candidate.XXXXXX.py)"
-          HOST_DB="$(mktemp /tmp/philaios-21h-db.XXXXXX.db)"
+          HOST_VALID_DB="$(mktemp /tmp/philaios-21h-validate.XXXXXX.db)"
+          HOST_DB="$(mktemp /tmp/philaios-21h-behavior.XXXXXX.db)"
           IN_APP=/tmp/philaios-21h-candidate-app.py
           IN_DB=/tmp/philaios-21h-candidate.db
-          cleanup(){ docker exec "$CONTROL" rm -f "$IN_APP" "$IN_DB" /tmp/philaios-21h-behavior-test.py >/dev/null 2>&1 || true; rm -f "$HOST_APP" "$HOST_CAND" "$HOST_DB" /tmp/build-lifecycle-writer-candidate.py /tmp/validate-lifecycle-ledger-migration.py; }
+          cleanup(){ docker exec "$CONTROL" rm -f "$IN_APP" "$IN_DB" /tmp/philaios-21h-behavior-test.py >/dev/null 2>&1 || true; rm -f "$HOST_APP" "$HOST_CAND" "$HOST_VALID_DB" "$HOST_DB" /tmp/build-lifecycle-writer-candidate.py /tmp/validate-lifecycle-ledger-migration.py /tmp/apply-lifecycle-ledger-migration.py; }
           trap cleanup EXIT
           test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.1-phase21f'
           BEFORE="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0],c.execute(\"select count(*) from sqlite_master where type='table' and name='task_lifecycle_events'\").fetchone()[0])")"
           docker cp "$CONTROL:/app/app.py" "$HOST_APP"
+          docker cp "$CONTROL:$DB" "$HOST_VALID_DB"
           docker cp "$CONTROL:$DB" "$HOST_DB"
           python3 /tmp/build-lifecycle-writer-candidate.py "$HOST_APP" "$HOST_CAND"
           python3 -m py_compile "$HOST_CAND"
-          python3 /tmp/validate-lifecycle-ledger-migration.py "$HOST_DB" >/tmp/philaios-21h-migration-validation.log
-          # Remove synthetic validator rows; retain only the isolated schema for behavior testing.
+          python3 /tmp/validate-lifecycle-ledger-migration.py "$HOST_VALID_DB" >/tmp/philaios-21h-migration-validation.log
+          python3 /tmp/apply-lifecycle-ledger-migration.py "$HOST_DB" >/tmp/philaios-21h-migration-apply.log
           python3 - "$HOST_DB" <<'PY'
           import sqlite3,sys
-          c=sqlite3.connect(sys.argv[1]); c.execute('delete from task_lifecycle_events'); c.commit(); assert c.execute('select count(*) from task_lifecycle_events').fetchone()[0]==0; c.close()
+          c=sqlite3.connect(sys.argv[1]); assert c.execute('select count(*) from task_lifecycle_events').fetchone()[0]==0; assert c.execute('pragma quick_check').fetchone()[0]=='ok'; c.close()
           PY
           docker cp "$HOST_CAND" "$CONTROL:$IN_APP"
           docker cp "$HOST_DB" "$CONTROL:$IN_DB"
