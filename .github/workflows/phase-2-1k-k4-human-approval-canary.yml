@@ -50,8 +50,6 @@ jobs:
           curl -fsS "$BASE/healthz" >/dev/null
           curl -fsS "$BASE/readyz" >/dev/null
 
-          # Idempotency guard: reuse the exact pending K4 canary if a prior attempt
-          # created it but failed during verification. Never create a second one.
           EXISTING="$(docker exec -i "$CONTROL" python - "$TASK_TEXT" <<'PY'
           import sqlite3,sys,json
           task_text=sys.argv[1]
@@ -78,10 +76,13 @@ jobs:
             echo k4_request_mode=created_new
           fi
 
-          APPROVAL_ID="$(printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or d; print(a["approval_id"])')"
-          TASK_ID="$(printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or d; print(a["task_id"])')"
-          STATE="$(printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or d; print(a["state"])')"
-          TASK_CLASS="$(printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or d; print(a["task_class"])')"
+          parse_field() {
+            printf '%s' "$RESPONSE" | docker exec -i "$CONTROL" python -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or d; print(a[sys.argv[1]])' "$1"
+          }
+          APPROVAL_ID="$(parse_field approval_id)"
+          TASK_ID="$(parse_field task_id)"
+          STATE="$(parse_field state)"
+          TASK_CLASS="$(parse_field task_class)"
           test "$STATE" = pending
           test "$TASK_CLASS" = general
           echo "k4_approval_id=$APPROVAL_ID"
