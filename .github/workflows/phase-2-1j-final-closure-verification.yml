@@ -1,0 +1,84 @@
+name: Phase 2.1J Final Closure Verification
+on:
+  push:
+    branches: [main]
+    paths: ['.github/phase-2-1j-final-closure-trigger']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do TMP="$(mktemp)"; if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts; if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi; fi; rm -f "$TMP"; sleep $((attempt*10)); done; exit 1
+      - name: Verify live Phase 2.1J closure state read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 control-api)"
+          HERMES="$(docker ps --format '{{.Names}}' | grep -m1 hermes)"
+          AUTO_APPROVAL='apr_5188662cea844e9a88eec5f3b0acb8f5'
+          AUTO_TASK='tsk_b54be038f46c4be58addde12b7c2dc01'
+          GENUINE_TASK='tsk_9cf154fca7fb4a74a4632b6af069fa89'
+
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.3-phase21i'
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-telegram-approval-notifier
+          docker exec "$HERMES" grep -q 'notify_pending_approval' /usr/local/bin/philaios-mission-control
+          docker exec "$HERMES" grep -q 'PHIL_AI_OS_AUTO_NOTIFY_APPROVALS' /usr/local/bin/philaios-mission-control
+          docker exec "$HERMES" test -r /run/philaios/hermes_control_api_token
+          docker exec "$HERMES" test -r /opt/data/.env
+          for cmd in snapshot approvals executions; do docker exec "$HERMES" /usr/local/bin/philaios-mission-control "$cmd" >/dev/null; done
+
+          docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');assert c.execute('pragma quick_check').fetchone()[0]=='ok';a=c.execute('select state,consumed_at,task_class,task_id from approval_requests where approval_id=?',('$AUTO_APPROVAL',)).fetchone();assert a and a[1] is None and a[2]=='general' and a[3]=='$AUTO_TASK',a;e=[r[0] for r in c.execute('select stage from task_lifecycle_events where task_id=? order by occurred_at,event_id',('$AUTO_TASK',))];assert e==['RECEIVED','CLASSIFIED','APPROVAL_PENDING'],e;assert c.execute('select count(*) from execution_audit where approval_id=?',('$AUTO_APPROVAL',)).fetchone()[0]==0;g=[r[0] for r in c.execute('select stage from task_lifecycle_events where task_id=? order by occurred_at,event_id',('$GENUINE_TASK',))];assert g==['RECEIVED','CLASSIFIED','APPROVAL_PENDING','ASSIGNED','PLANNED'],g;assert c.execute('select count(*) from execution_audit where task_id=?',('$GENUINE_TASK',)).fetchone()[0]==0;assert c.execute('select count(*) from task_plans where task_id=?',('$GENUINE_TASK',)).fetchone()[0]==1;assert c.execute(\"select count(*) from agent_registry where agent_id='hermes' and authority_ceiling='L3' and enabled=1 and assignable=1\").fetchone()[0]==1;c.close()"
+
+          grep -q 'SCHEMA_VERSION = "2.1i.v1"' /opt/phil-ai-os/mission-control/read-model.py
+          grep -q 'READ ONLY · Phase 2.1I' /opt/phil-ai-os/mission-control/server.py
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+          for m in POST PUT PATCH DELETE; do test "$(curl -ksS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4870/v1/approvals/request)" = 401
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4870/v1/tasks/assign)" = 401
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4870/v1/tasks/plan)" = 401
+
+          echo control_api_image=0.20.3-phase21i
+          echo auto_notify_client=active
+          echo auto_notify_canary=durable_pending_unconsumed
+          echo genuine_coordination_lifecycle=RECEIVED_CLASSIFIED_APPROVAL_PENDING_ASSIGNED_PLANNED
+          echo auto_notify_lifecycle=RECEIVED_CLASSIFIED_APPROVAL_PENDING
+          echo canary_execution_audit=none
+          echo production_allowlist=general_only
+          echo mission_control_read_only=preserved
+          echo operator_auth=401
+          echo dashboard_mutations=405
+          echo recovery_services=active
+          echo provider_call=none
+          echo execution_call=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1J_FINAL_CLOSURE_VERIFICATION_OK
+          REMOTE
