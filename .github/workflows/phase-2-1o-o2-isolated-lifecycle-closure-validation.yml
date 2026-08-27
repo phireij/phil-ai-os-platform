@@ -1,0 +1,30 @@
+name: Phase 2.1O O2 Isolated Lifecycle Closure Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/phase-2.1o/lifecycle-closure-evidence-v21o.py'
+      - 'docs/PHASE_2_1O_O2_LIFECYCLE_CLOSURE_EVIDENCE_CONTRACT.md'
+      - '.github/workflows/phase-2-1o-o2-isolated-lifecycle-closure-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile isolated classifier
+        run: python3 -m py_compile ops/phase-2.1o/lifecycle-closure-evidence-v21o.py
+      - name: Validate lifecycle closure evidence contract
+        run: |
+          set -euo pipefail
+          python3 ops/phase-2.1o/lifecycle-closure-evidence-v21o.py | tee /tmp/o2.out
+          grep -q 'PHIL_AI_OS_PHASE_2_1O_O2_ISOLATED_LIFECYCLE_CLOSURE_VALIDATION_OK' /tmp/o2.out
+          grep -q '"evidence_complete": false' /tmp/o2.out
+          grep -q '"active_task_count": 0' /tmp/o2.out
+          grep -q '"active_task_count": 1' /tmp/o2.out
