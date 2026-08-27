@@ -1,0 +1,110 @@
+name: Phase 2.1F Post-Activation Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1f-post-activation-verification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Verify Phase 2.1F live state read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          COMPOSE=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core/compose.yml
+          IMAGE='phil-ai-os/control-api:0.20.1-phase21f'
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = "$IMAGE"
+          test "$(docker compose -f "$COMPOSE" config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["control-api"]["image"])')" = "$IMAGE"
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,inspect,importlib.util
+          c=sqlite3.connect('/app/state/control-plane.db')
+          try:
+              assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+              a=[r[1] for r in c.execute('pragma table_info(approval_requests)')]
+              e=[r[1] for r in c.execute('pragma table_info(execution_audit)')]
+              assert 'task_id' in a and 'task_id' in e
+              assert 'idx_approval_requests_task_id_nonnull' in [r[1] for r in c.execute('pragma index_list(approval_requests)')]
+              print('approval_task_id_column=present')
+              print('execution_audit_task_id_column=present')
+              print('approval_task_id_unique_partial_index=present')
+              print('historical_approval_task_ids_nonnull='+str(c.execute('select count(*) from approval_requests where task_id is not null').fetchone()[0]))
+              print('historical_audit_task_ids_nonnull='+str(c.execute('select count(*) from execution_audit where task_id is not null').fetchone()[0]))
+          finally:
+              c.close()
+          spec=importlib.util.spec_from_file_location('live','/app/app.py')
+          mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+          src=inspect.getsource(mod.approval_create)
+          assert 'task_id = "tsk_" + uuid.uuid4().hex' in src
+          assert '"task_id": task_id' in src
+          assert 'task_id' not in inspect.signature(mod.execution_audit_write).parameters
+          print('canonical_task_generation=server_side_approval_create')
+          print('canonical_task_audit_propagation=approval_id_lookup')
+          PY
+          ALLOWLIST="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=' || true)"
+          test "$ALLOWLIST" = 'PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general'
+          for unit in phil-ai-os-monitor.service phil-ai-os-backup.timer phil-ai-os-backup-self-heal.timer phil-ai-os-mission-control-operator.service; do
+            test "$(systemctl is-active "$unit")" = active
+          done
+          HOST=hermes-agent-whow.srv1833510.hstgr.cloud
+          test "$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "https://$HOST/phil-ai-os/operator/")" = '401'
+          test "$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "https://$HOST/phil-ai-os/approval/")" = '404'
+          test "$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "https://$HOST/phil-ai-os/mission-control")" = '401'
+          test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:4870/phil-ai-os/approval/)" = '404'
+          test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:4870/phil-ai-os/mission-control)" = '401'
+          for method in POST PUT PATCH DELETE; do
+            test "$(curl -s -o /dev/null -w '%{http_code}' -X "$method" --max-time 5 http://127.0.0.1:4881/)" = '405'
+          done
+          echo phase_2_1f_image="$IMAGE"
+          echo control_api_health=ok
+          echo control_api_readiness=ok
+          echo production_allowlist=general_only
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+          echo operator_auth_boundary=preserved
+          echo public_routes=baseline_preserved
+          echo browser_mutation_methods=405
+          echo provider_call=none
+          echo governed_execution_call=none
+          echo approval_mutation=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1F_POST_ACTIVATION_VERIFICATION_OK
+          REMOTE
