@@ -8,7 +8,7 @@ def rep(old,new,label):
     if n!=1: raise SystemExit(f'{label}_match_count={n}')
     s=s.replace(old,new,1)
 rep('SCHEMA_VERSION = "2.1h.v1"','SCHEMA_VERSION = "2.1i.v1"','schema')
-helper=r'''def coordinator_metadata(control: str):
+helper=r"""def coordinator_metadata(control: str):
     code = r'''import sqlite3,json
 c=sqlite3.connect("/app/state/control-plane.db")
 c.row_factory=sqlite3.Row
@@ -31,7 +31,7 @@ print(json.dumps({"registry":registry,"plans":plans,"registry_present":"agent_re
     }
     return registry,plans,summary
 
-'''
+"""
 rep('\ndef main():','\n'+helper+'def main():','coordinator_helper')
 rep('    durable_links, durable_summary, lifecycle_events = durable_approval_execution_links(control)',
     '    durable_links, durable_summary, lifecycle_events = durable_approval_execution_links(control)\n    coordinator_agents, coordinator_plans, coordinator_summary = coordinator_metadata(control)',
