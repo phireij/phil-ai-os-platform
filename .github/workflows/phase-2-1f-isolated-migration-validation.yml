@@ -1,0 +1,93 @@
+name: Phase 2.1F Isolated Migration Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1f-isolated-migration-validation.yml'
+      - 'ops/phase-2.1f/validate-canonical-task-migration.py'
+      - '.github/phase-2-1f-isolated-migration-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Stage validator only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1f/validate-canonical-task-migration.py "$VPS_USER@$VPS_HOST:/tmp/philaios-phase-2-1f-migration-validator.py"
+
+      - name: Validate migration on isolated live DB copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          DB=/app/state/control-plane.db
+          COPY="$(mktemp /tmp/philaios-phase-2-1f-db-copy.XXXXXX.db)"
+          trap 'rm -f "$COPY" /tmp/philaios-phase-2-1f-migration-validator.py' EXIT
+          test -n "$CONTROL"
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
+
+          LIVE_APPROVALS="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from approval_requests').fetchone()[0])")"
+          LIVE_AUDITS="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from execution_audit').fetchone()[0])")"
+          docker cp "$CONTROL:$DB" "$COPY"
+          python3 /tmp/philaios-phase-2-1f-migration-validator.py "$COPY"
+
+          AFTER_APPROVALS="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from approval_requests').fetchone()[0])")"
+          AFTER_AUDITS="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from execution_audit').fetchone()[0])")"
+          test "$LIVE_APPROVALS" = "$AFTER_APPROVALS"
+          test "$LIVE_AUDITS" = "$AFTER_AUDITS"
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); assert 'task_id' not in [r[1] for r in c.execute('pragma table_info(approval_requests)')]; assert 'task_id' not in [r[1] for r in c.execute('pragma table_info(execution_audit)')]; assert c.execute('pragma quick_check').fetchone()[0]=='ok'"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+
+          echo live_database_schema_change=none
+          echo live_database_write=none
+          echo live_approval_rows_unchanged=true
+          echo live_execution_audit_rows_unchanged=true
+          echo production_allowlist=general_only
+          echo approval_mutation=none
+          echo provider_call=none
+          echo execution_call=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1F_ISOLATED_LIVE_COPY_VALIDATION_OK
+          REMOTE
