@@ -1,0 +1,124 @@
+name: Phase 2.1L L4A Outbox Schema Activation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1l-l4a-outbox-schema-activation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activate-schema:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          getent ahosts "$VPS_HOST" >/dev/null
+          timeout 20 bash -c "</dev/tcp/$VPS_HOST/$PORT"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true
+
+      - name: Create additive outbox schema with rollback backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=http://127.0.0.1:4870
+          CONTROL=phil-ai-os-core-control-api-1
+          TS="$(date -u +%Y%m%dT%H%M%SZ)"
+          BACKUP="/app/state/control-plane.db.pre-phase21l-l4a-$TS"
+
+          echo '=== L4A PRECHECK ==='
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+
+          docker exec -i "$CONTROL" python - "$BACKUP" <<'PY'
+          import sqlite3,sys
+          backup=sys.argv[1]
+          src=sqlite3.connect('/app/state/control-plane.db')
+          assert src.execute('pragma quick_check').fetchone()[0]=='ok'
+          present=src.execute("select count(*) from sqlite_master where type='table' and name='approval_notification_outbox'").fetchone()[0]
+          assert present in (0,1)
+          dst=sqlite3.connect(backup)
+          src.backup(dst)
+          dst.close(); src.close()
+          check=sqlite3.connect(f'file:{backup}?mode=ro',uri=True)
+          assert check.execute('pragma quick_check').fetchone()[0]=='ok'
+          check.close()
+          print('rollback_backup='+backup)
+          print('pre_schema_present='+str(present))
+          PY
+
+          echo '=== L4A ADDITIVE SCHEMA ==='
+          docker exec -i "$CONTROL" python - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('/app/state/control-plane.db')
+          c.executescript('''
+          CREATE TABLE IF NOT EXISTS approval_notification_outbox (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id TEXT NOT NULL UNIQUE,
+            approval_id TEXT NOT NULL,
+            task_id TEXT NOT NULL,
+            event_type TEXT NOT NULL CHECK(event_type='approval_pending'),
+            channel TEXT NOT NULL CHECK(channel='telegram'),
+            state TEXT NOT NULL CHECK(state IN ('pending','leased','retry_wait','delivered','dead_letter')),
+            attempt_count INTEGER NOT NULL DEFAULT 0 CHECK(attempt_count >= 0),
+            next_attempt_at TEXT,
+            lease_until TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            delivered_at TEXT,
+            last_error_code TEXT,
+            UNIQUE(approval_id,event_type,channel)
+          );
+          CREATE INDEX IF NOT EXISTS idx_approval_notification_outbox_delivery
+            ON approval_notification_outbox(state,next_attempt_at,id);
+          CREATE INDEX IF NOT EXISTS idx_approval_notification_outbox_task
+            ON approval_notification_outbox(task_id,id);
+          ''')
+          c.commit()
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          cols=[r[1] for r in c.execute('pragma table_info(approval_notification_outbox)').fetchall()]
+          forbidden={'token','raw_token','link_token','telegram_token','bearer_token','credential','payload','command','provider','model'}
+          assert not (set(cols) & forbidden), cols
+          assert c.execute('select count(*) from approval_notification_outbox').fetchone()[0]==0
+          print('schema_present=1')
+          print('schema_secret_fields=absent')
+          print('outbox_rows=0')
+          print('quick_check=ok')
+          c.close()
+          PY
+
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          echo health=ok
+          echo readiness=ok
+          echo execution_allowlist=general
+          echo notification_send=none
+          echo approval_creation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo PHIL_AI_OS_PHASE_2_1L_L4A_SCHEMA_ACTIVATION_OK
+          REMOTE
