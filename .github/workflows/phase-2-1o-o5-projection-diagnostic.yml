@@ -1,0 +1,93 @@
+name: Phase 2.1O O5 Projection Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1o-o5-projection-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate wrapper
+        run: python3 -m py_compile ops/phase-2.1o/philaios-read-model-wrapper-v21o.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage diagnostic wrapper
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1o/philaios-read-model-wrapper-v21o.py "$VPS_USER@$VPS_HOST:/tmp/philaios-read-model-wrapper-v21o-diagnostic.py"
+      - name: Read-only projection diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          WRAP=/tmp/philaios-read-model-wrapper-v21o-diagnostic.py
+          test -f /opt/phil-ai-os/mission-control/read-model.py.pre-phase21o
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          python3 "$WRAP" > /tmp/o5-diagnostic-model.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/o5-diagnostic-model.json'))
+          w=d['agent_runtime']['workload']
+          r=d['worker_readiness']
+          print('schema_version='+d['schema_version'])
+          print('workload_source='+str(w.get('source')))
+          print('evidence_complete='+str(w.get('evidence_complete')).lower())
+          print('active_task_count='+json.dumps(w.get('active_task_count')))
+          print('active_states='+json.dumps(w.get('active_states'),sort_keys=True))
+          print('active_tasks='+json.dumps(w.get('active_tasks'),sort_keys=True))
+          print('closed_tasks='+json.dumps(w.get('closed_tasks'),sort_keys=True))
+          print('indeterminate_tasks='+json.dumps(w.get('indeterminate_tasks'),sort_keys=True))
+          print('worker_readiness='+str(r.get('readiness')))
+          print('readiness_reason='+str(r.get('reason_code')))
+          assert r.get('authority_effect')=='none'
+          assert r.get('automatic_assignment') is False
+          assert r.get('automatic_retry') is False
+          assert r.get('automatic_reroute') is False
+          assert r.get('automatic_execution') is False
+          PY
+          rm -f "$WRAP" /tmp/o5-diagnostic-model.json
+          echo production_change=none
+          echo mission_control_restart=none
+          echo lifecycle_mutation=none
+          echo assignment_mutation=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1O_O5_PROJECTION_DIAGNOSTIC_OK
+          REMOTE
