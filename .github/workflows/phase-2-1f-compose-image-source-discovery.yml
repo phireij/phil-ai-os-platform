@@ -1,0 +1,90 @@
+name: Phase 2.1F Compose Image Source Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1f-compose-image-source-discovery.yml'
+      - '.github/phase-2-1f-compose-image-source-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Discover Control API image source read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          WD=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core
+          COMPOSE="$WD/compose.yml"
+          test -f "$COMPOSE"
+
+          python3 - "$COMPOSE" <<'PY'
+          import pathlib,re,sys
+          p=pathlib.Path(sys.argv[1])
+          lines=p.read_text().splitlines()
+          in_service=False
+          base_indent=None
+          for i,line in enumerate(lines,1):
+              if re.match(r'^  control-api:\s*$', line):
+                  in_service=True; base_indent=2; print(f'control_api_service_line={i}'); continue
+              if in_service:
+                  if line and not line.startswith('    ') and re.match(r'^  [A-Za-z0-9_.-]+:\s*$', line):
+                      break
+                  if re.match(r'^    image:\s*', line):
+                      value=line.split(':',1)[1].strip()
+                      print('control_api_image_expression='+value)
+                      vars_=re.findall(r'\$\{([A-Za-z_][A-Za-z0-9_]*)', value)
+                      print('control_api_image_variables='+','.join(vars_) if vars_ else 'control_api_image_variables=none')
+          PY
+
+          for f in "$WD/.env" "$WD/.env.production" "$WD/.env.prod"; do
+            if [ -f "$f" ]; then
+              echo env_file_present="$f"
+              grep -E '^(CONTROL_API_IMAGE|CONTROL_API_VERSION|CONTROL_API_TAG)=' "$f" || true
+            fi
+          done
+
+          RESOLVED="$(docker compose -f "$COMPOSE" config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["control-api"]["image"])')"
+          echo compose_resolved_control_api_image="$RESOLVED"
+          test "$RESOLVED" = 'phil-ai-os/control-api:0.20.0'
+          echo database_write=none
+          echo database_schema_change=none
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1F_COMPOSE_IMAGE_SOURCE_DISCOVERY_OK
+          REMOTE
