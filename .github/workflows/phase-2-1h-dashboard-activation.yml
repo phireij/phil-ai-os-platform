@@ -1,0 +1,110 @@
+name: Phase 2.1H Dashboard Activation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/phase-2-1h-dashboard-activation-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate transformer
+        run: python3 -m py_compile ops/phase-2.1h/build-dashboard-phase21h.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage transformer
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1h/build-dashboard-phase21h.py "$VPS_USER@$VPS_HOST:/tmp/"
+      - name: Activate dashboard with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          LIVE=/opt/phil-ai-os/mission-control/server.py
+          BACK=/opt/phil-ai-os/mission-control/server.py.pre-phase21h
+          CAND=/tmp/philaios-dashboard-2.1h.py
+          HTML=/tmp/philaios-dashboard-2.1h.html
+          JSON=/tmp/philaios-dashboard-2.1h.json
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          success=0
+          rollback(){ cp "$BACK" "$LIVE" 2>/dev/null || true; systemctl restart phil-ai-os-mission-control-operator.service >/dev/null 2>&1 || true; }
+          cleanup(){ rc=$?; rm -f "$CAND" "$HTML" "$JSON" /tmp/build-dashboard-phase21h.py; if [ "$rc" -ne 0 ] && [ "$success" -ne 1 ]; then rollback; fi; }
+          trap cleanup EXIT
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.2-phase21h'
+          grep -q 'SCHEMA_VERSION = "2.1h.v1"' /opt/phil-ai-os/mission-control/read-model.py
+          grep -q 'READ ONLY · Phase 2.1G' "$LIVE"
+          BEFORE="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0],c.execute('select count(*) from task_lifecycle_events').fetchone()[0])")"
+          cp "$LIVE" "$BACK"
+          chmod 600 "$BACK"
+          python3 /tmp/build-dashboard-phase21h.py "$LIVE" "$CAND"
+          python3 -m py_compile "$CAND"
+          cp "$CAND" "$LIVE"
+          systemctl restart phil-ai-os-mission-control-operator.service
+          for _ in $(seq 1 15); do
+            if systemctl is-active --quiet phil-ai-os-mission-control-operator.service && curl -fsS --max-time 5 http://127.0.0.1:4881/ > "$HTML" && curl -fsS --max-time 5 http://127.0.0.1:4881/api/read-model > "$JSON"; then break; fi
+            sleep 2
+          done
+          grep -q 'READ ONLY · Phase 2.1H' "$HTML"
+          grep -q 'Lifecycle Evidence' "$HTML"
+          grep -q 'Ledger state' "$HTML"
+          python3 - "$JSON" <<'PY'
+          import json,sys
+          m=json.load(open(sys.argv[1]))
+          assert m['schema_version']=='2.1h.v1'
+          assert m['overall_state']=='healthy'
+          q=m['data_quality']
+          assert q['lifecycle_provenance']=='append_only_ledger_available'
+          assert q['lifecycle_ledger_state']=='append_only'
+          assert q['lifecycle_event_count_observed']==0
+          assert q['agent_assignment_provenance']=='explicit_ledger_event_only'
+          assert m['governance']['execution_allowed_task_classes']==['general']
+          PY
+          AFTER="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0],c.execute('select count(*) from task_lifecycle_events').fetchone()[0])")"
+          test "$BEFORE" = "$AFTER"
+          test "$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+          for method in POST PUT PATCH DELETE; do test "$(curl -s -o /dev/null -w '%{http_code}' -X "$method" --max-time 5 http://127.0.0.1:4881/)" = 405; done
+          success=1
+          echo dashboard_badge=Phase_2.1H
+          echo dashboard_lifecycle_ledger_metrics=active
+          echo read_model_schema=2.1h.v1
+          echo lifecycle_event_count_observed=0
+          echo operator_auth_boundary=preserved
+          echo browser_mutation_methods=405
+          echo approval_execution_lifecycle_counts_unchanged=true
+          echo production_authority_change=none
+          echo PHIL_AI_OS_PHASE_2_1H_DASHBOARD_ACTIVATION_OK
+          REMOTE
