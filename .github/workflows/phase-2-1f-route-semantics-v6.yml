@@ -1,0 +1,118 @@
+name: Phase 2.1F Route Semantics V6
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1f-route-semantics-v6.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage candidate builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1f/build-canonical-task-app-candidate.py "$VPS_USER@$VPS_HOST:/tmp/philaios-phase-2-1f-app-builder.py"
+      - name: Validate isolated candidate routes as test root
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          BASE="$(mktemp /tmp/philaios-v6-base.XXXXXX.py)"
+          CAND="$(mktemp /tmp/philaios-v6-cand.XXXXXX.py)"
+          DB_COPY="$(mktemp /tmp/philaios-v6-db.XXXXXX.db)"
+          CT=philaios-phase21f-route-v6
+          cleanup(){ docker rm -f "$CT" >/dev/null 2>&1 || true; rm -f "$BASE" "$CAND" "$DB_COPY" /tmp/philaios-phase-2-1f-app-builder.py; }
+          trap cleanup EXIT
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.0'
+          test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:4870/phil-ai-os/approval/)" = '404'
+          test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:4870/phil-ai-os/mission-control)" = '401'
+          docker cp "$CONTROL:/app/app.py" "$BASE"
+          docker cp "$CONTROL:/app/state/control-plane.db" "$DB_COPY"
+          python3 /tmp/philaios-phase-2-1f-app-builder.py "$BASE" "$CAND" >/dev/null
+          python3 -m py_compile "$CAND"
+          chmod 644 "$CAND" "$DB_COPY"
+          python3 - "$DB_COPY" <<'PY'
+          import sqlite3,sys
+          c=sqlite3.connect(sys.argv[1])
+          try:
+              a=[r[1] for r in c.execute('pragma table_info(approval_requests)')]
+              e=[r[1] for r in c.execute('pragma table_info(execution_audit)')]
+              if 'task_id' not in a: c.execute('alter table approval_requests add column task_id text')
+              if 'task_id' not in e: c.execute('alter table execution_audit add column task_id text')
+              c.execute('create unique index if not exists idx_approval_requests_task_id_nonnull on approval_requests(task_id) where task_id is not null')
+              c.commit()
+              assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          finally:
+              c.close()
+          PY
+          ENV_ARGS=()
+          while IFS= read -r e; do [ -n "$e" ] || continue; ENV_ARGS+=(--env "$e"); done < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          docker create --name "$CT" --user 0 "${ENV_ARGS[@]}" --entrypoint python3 phil-ai-os/control-api:0.20.0 /app/app.py >/dev/null
+          docker cp "$CAND" "$CT:/app/app.py"
+          docker cp "$DB_COPY" "$CT:/app/state/control-plane.db"
+          docker start "$CT" >/dev/null
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if docker exec "$CT" python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4870/healthz',timeout=2).read()" >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec -i "$CT" python3 - <<'PY'
+          import urllib.request, urllib.error
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl): return None
+          opener=urllib.request.build_opener(NoRedirect)
+          expected={'/phil-ai-os/approval/':404,'/phil-ai-os/mission-control':401}
+          for path,want in expected.items():
+              try:
+                  r=opener.open('http://127.0.0.1:4870'+path,timeout=3); code=r.status; loc=r.headers.get('Location')
+              except urllib.error.HTTPError as e:
+                  code=e.code; loc=e.headers.get('Location')
+              print(path+' status='+str(code)+' location='+(loc or 'none'))
+              assert code==want, (path,code,want,loc)
+          print('candidate_local_routes_match_baseline=true')
+          PY
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.0'
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); assert 'task_id' not in [r[1] for r in c.execute('pragma table_info(approval_requests)')]; assert c.execute('pragma quick_check').fetchone()[0]=='ok'"
+          echo isolation_user_override=root_test_only
+          echo production_change=none
+          echo live_database_write=none
+          echo provider_call=none
+          echo execution_call=none
+          echo PHIL_AI_OS_PHASE_2_1F_ROUTE_SEMANTICS_V6_OK
+          REMOTE
