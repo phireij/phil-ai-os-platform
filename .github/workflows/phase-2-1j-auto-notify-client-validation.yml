@@ -1,0 +1,23 @@
+name: Phase 2.1J Auto Notify Client Validation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/phase-2-1j-auto-notify-validation-trigger']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile client and validator
+        run: |
+          set -euo pipefail
+          python3 -m py_compile ops/phase-2.1j/philaios-mission-control-client.py
+          python3 -m py_compile ops/phase-2.1j/validate-auto-notify-client.py
+      - name: Validate isolated auto notification behavior
+        run: |
+          set -euo pipefail
+          python3 ops/phase-2.1j/validate-auto-notify-client.py ops/phase-2.1j/philaios-mission-control-client.py
