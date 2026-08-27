@@ -1,0 +1,144 @@
+name: Phase 2.1K K5 Controlled Approved Execution Canary
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1k-k5-controlled-approved-execution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  execute-once:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          getent ahosts "$VPS_HOST" >/dev/null
+          timeout 20 bash -c "</dev/tcp/$VPS_HOST/$PORT"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true
+      - name: Execute exact approved canary once and prove replay rejection
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=http://127.0.0.1:4870
+          CONTROL=phil-ai-os-core-control-api-1
+          APPROVAL_ID='apr_7a3594fc61d1467593181d1ca7a2d502'
+          TASK_ID='tsk_e9694565de884bc9afa550d57db32426'
+          TASK_TEXT='Phase 2.1K K4 governed canary: return PHIL_AI_OS_PHASE_2_1K_CANARY_OK'
+          HERMES="$(docker ps --format '{{.Names}}' | grep '^hermes-agent-whow' | head -n1)"
+          test -n "$HERMES"
+          TOKEN="$(docker exec "$HERMES" cat /run/philaios/hermes_control_api_token)"
+          test -n "$TOKEN"
+
+          echo '=== K5 PRE-EXECUTION GUARD ==='
+          docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
+          import sqlite3,sys
+          a,t=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          r=c.execute('select state,consumed_at,task_class,task_text from approval_requests where approval_id=? and task_id=?',(a,t)).fetchone()
+          assert r is not None
+          assert r['state']=='approved', dict(r)
+          assert r['consumed_at'] is None, dict(r)
+          assert r['task_class']=='general', dict(r)
+          assert c.execute('select count(*) from execution_audit where approval_id=? or task_id=?',(a,t)).fetchone()[0]==0
+          print('pre_state=approved')
+          print('pre_consumed=false')
+          print('pre_execution_audit_links=0')
+          PY
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          echo execution_allowlist=general
+
+          PAYLOAD="$(docker exec -i "$CONTROL" python - "$TASK_TEXT" "$APPROVAL_ID" <<'PY'
+          import json,sys
+          print(json.dumps({'text':sys.argv[1],'source':'hermes','approval_id':sys.argv[2]}))
+          PY
+          )"
+
+          echo '=== K5 FIRST AND ONLY GOVERNED EXECUTION ==='
+          FIRST_FILE="$(mktemp)"
+          FIRST_CODE="$(curl -sS -o "$FIRST_FILE" -w '%{http_code}' -X POST "$BASE/v1/execute" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data "$PAYLOAD")"
+          echo "first_http_code=$FIRST_CODE"
+          cat "$FIRST_FILE"
+          echo
+          docker exec -i "$CONTROL" python - "$FIRST_CODE" < "$FIRST_FILE" <<'PY'
+          PY
+          # Validate first result in the container without exposing credentials.
+          FIRST_JSON="$(cat "$FIRST_FILE")"
+          printf '%s' "$FIRST_JSON" | docker exec -i "$CONTROL" python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok", d; assert d.get("execution_mode")=="controlled", d; assert d.get("compatibility_pass") is True, d; print("first_execution_status=ok"); print("first_compatibility_pass=true"); print("first_provider="+str(d.get("provider"))); print("first_model="+str(d.get("model"))); print("first_route_path="+str(d.get("route_path"))); print("first_response_id="+str(d.get("response_id")))'
+          test "$FIRST_CODE" = 200
+
+          echo '=== K5 POST-FIRST DURABLE GUARD ==='
+          docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
+          import sqlite3,sys,json
+          a,t=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          r=c.execute('select state,consumed_at,consumed_by from approval_requests where approval_id=? and task_id=?',(a,t)).fetchone()
+          assert r is not None and r['state']=='approved' and r['consumed_at'] is not None
+          assert r['consumed_by']=='hermes', dict(r)
+          rows=c.execute('select id,outcome,provider_id,model_id,route_path,response_id,approval_id,task_id from execution_audit where approval_id=? or task_id=? order by id',(a,t)).fetchall()
+          success=[x for x in rows if x['outcome']=='success']
+          assert len(success)==1, [dict(x) for x in rows]
+          assert success[0]['approval_id']==a and success[0]['task_id']==t
+          assert success[0]['response_id']
+          print('post_first_consumed=true')
+          print('post_first_consumed_by=hermes')
+          print('post_first_success_audits=1')
+          print('post_first_provider='+str(success[0]['provider_id']))
+          print('post_first_model='+str(success[0]['model_id']))
+          print('post_first_response_id='+str(success[0]['response_id']))
+          PY
+
+          echo '=== K5 REPLAY ATTEMPT — SAME APPROVAL ==='
+          REPLAY_FILE="$(mktemp)"
+          REPLAY_CODE="$(curl -sS -o "$REPLAY_FILE" -w '%{http_code}' -X POST "$BASE/v1/execute" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data "$PAYLOAD")"
+          echo "replay_http_code=$REPLAY_CODE"
+          cat "$REPLAY_FILE"
+          echo
+          REPLAY_JSON="$(cat "$REPLAY_FILE")"
+          printf '%s' "$REPLAY_JSON" | docker exec -i "$CONTROL" python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="execution_approval_rejected", d; a=d.get("approval") or {}; assert a.get("status")=="approval_already_consumed", d; print("replay_status=execution_approval_rejected"); print("replay_reason=approval_already_consumed")'
+          test "$REPLAY_CODE" = 409
+
+          echo '=== K5 FINAL DURABLE PROOF ==='
+          docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
+          import sqlite3,sys
+          a,t=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          r=c.execute('select consumed_at,consumed_by from approval_requests where approval_id=?',(a,)).fetchone()
+          assert r and r['consumed_at'] and r['consumed_by']=='hermes'
+          rows=c.execute('select outcome,provider_id,response_id,approval_id,task_id from execution_audit where approval_id=? or task_id=? order by id',(a,t)).fetchall()
+          success=[x for x in rows if x['outcome']=='success']
+          provider_attempt_rows=[x for x in rows if x['provider_id'] is not None and x['response_id'] is not None]
+          replay_rejected=[x for x in rows if x['outcome']=='approval_rejected']
+          assert len(success)==1, [dict(x) for x in rows]
+          assert len(provider_attempt_rows)==1, [dict(x) for x in rows]
+          assert len(replay_rejected)==1, [dict(x) for x in rows]
+          assert all(x['approval_id']==a and x['task_id']==t for x in rows)
+          stages=[x[0] for x in c.execute('select stage from task_lifecycle_events where task_id=? order by occurred_at,event_id',(t,)).fetchall()]
+          print('final_success_audits=1')
+          print('final_provider_response_rows=1')
+          print('final_replay_rejection_audits=1')
+          print('final_lifecycle='+','.join(stages))
+          print('replay_second_provider_call=false')
+          PY
+          echo PHIL_AI_OS_PHASE_2_1K_K5_EXECUTION_AND_REPLAY_GREEN
+          REMOTE
