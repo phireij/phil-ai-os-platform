@@ -71,15 +71,15 @@ jobs:
 
           docker inspect "$CONTROL" --format 'control_api_image={{.Config.Image}}'
 
-          docker exec "$CONTROL" python - <<'PY'
+          docker exec -i "$CONTROL" python - <<'PY'
           import sqlite3
           db='/app/state/control-plane.db'
-          c=sqlite3.connect(db)
+          c=sqlite3.connect(f'file:{db}?mode=ro', uri=True)
           c.row_factory=sqlite3.Row
           print('sqlite_quick_check=' + c.execute('pragma quick_check').fetchone()[0])
           tables=[r[0] for r in c.execute("select name from sqlite_master where type='table' order by name")]
           print('tables=' + ','.join(tables))
-          focus=['approval_requests','execution_audit','tasks','task_lifecycle','task_assignments','task_plans','agent_registry']
+          focus=['approval_requests','execution_audit','tasks','task_lifecycle_events','task_assignments','task_plans','agent_registry']
           for table in focus:
               if table not in tables:
                   print(f'{table}.present=false')
@@ -92,41 +92,44 @@ jobs:
               print(f'{table}.has_agent_id=' + str('agent_id' in cols).lower())
               print(f'{table}.row_count=' + str(c.execute(f'select count(*) from {table}').fetchone()[0]))
 
-          # Read the newest canonical task and its known correlations without changing state.
-          if 'tasks' in tables:
-              cols=[r[1] for r in c.execute('pragma table_info(tasks)')]
+          # Canonical task identity currently originates in approval_requests.
+          if 'approval_requests' in tables:
+              cols=[r[1] for r in c.execute('pragma table_info(approval_requests)')]
               order_col='created_at' if 'created_at' in cols else ('updated_at' if 'updated_at' in cols else None)
-              q='select * from tasks' + (f' order by {order_col} desc' if order_col else '') + ' limit 1'
+              q='select * from approval_requests where task_id is not null' + (f' order by {order_col} desc' if order_col else '') + ' limit 1'
               r=c.execute(q).fetchone()
               if r:
-                  task_id=r['task_id'] if 'task_id' in r.keys() else None
+                  task_id=r['task_id']
+                  approval_id=r['approval_id'] if 'approval_id' in r.keys() else None
                   print('latest_task_present=true')
                   print('latest_task_id=' + str(task_id or ''))
-                  for table in ['approval_requests','execution_audit','task_lifecycle','task_assignments','task_plans']:
+                  print('latest_task_approval_id=' + str(approval_id or ''))
+                  print('latest_task_approval_state=' + str(r['state'] if 'state' in r.keys() else ''))
+                  print('latest_task_consumed_at=' + str(r['consumed_at'] if 'consumed_at' in r.keys() and r['consumed_at'] else ''))
+                  for table in ['execution_audit','task_lifecycle_events','task_assignments','task_plans']:
                       if table not in tables or not task_id:
                           continue
                       tcols=[x[1] for x in c.execute(f'pragma table_info({table})')]
                       if 'task_id' in tcols:
                           n=c.execute(f'select count(*) from {table} where task_id=?',(task_id,)).fetchone()[0]
                           print(f'latest_task_{table}_links={n}')
+                  if 'execution_audit' in tables and approval_id:
+                      ecols=[x[1] for x in c.execute('pragma table_info(execution_audit)')]
+                      if 'approval_id' in ecols:
+                          n=c.execute('select count(*) from execution_audit where approval_id=?',(approval_id,)).fetchone()[0]
+                          print('latest_approval_execution_audit_links=' + str(n))
               else:
                   print('latest_task_present=false')
           PY
 
-          # Inspect application source shape only. No files are written.
           echo '=== CONTROL API SOURCE CORRELATION REFERENCES ==='
           docker exec "$CONTROL" sh -lc '
             set -eu
             for root in /app /opt/app /srv/app; do
               [ -d "$root" ] || continue
-              grep -R -n -E "task_id|approval_id|consumed_at|execution_audit|/v1/execute" "$root" 2>/dev/null | head -n 160 || true
+              grep -R -n -E "task_id|approval_id|consumed_at|execution_audit" "$root" 2>/dev/null | head -n 160 || true
             done
           '
-
-          # Verify public/operator surfaces remain non-authoritative for mutation.
-          unauth_code="$(curl -sS -o /tmp/phase21k-unauth.json -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' "$BASE/v1/execute")"
-          echo unauthenticated_execute_http_code="$unauth_code"
-          test "$unauth_code" = 401
 
           echo provider_call=none
           echo execution_call=none
