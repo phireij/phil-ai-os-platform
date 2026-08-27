@@ -1,0 +1,135 @@
+name: Phase 2.1M M7 Closure Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1m-m7-closure-verification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Verify Phase 2.1M closure invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          MODEL=http://127.0.0.1:4881/api/read-model
+          STATE=/var/lib/phil-ai-os/agent-presence/hermes.json
+
+          echo '=== PHASE 2.1M M7 CLOSURE BASELINE ==='
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          systemctl is-active --quiet phil-ai-os-approval-notification-dispatcher.timer
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');assert c.execute('pragma quick_check').fetchone()[0]=='ok';r=c.execute(\"select agent_id,authority_ceiling,assignable from agent_registry\").fetchall();assert r==[('hermes','L3',1)]"
+
+          echo '=== FIRST HEARTBEAT OBSERVATION ==='
+          test -s "$STATE"
+          FIRST="$(python3 - "$STATE" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1])); assert d['agent_id']=='hermes'; assert d['observation_type']=='authenticated_control_api_roundtrip'; assert d['authority_effect']=='none'; print(d['observed_at'])
+          PY
+          )"
+          curl -fsS "$MODEL" > /tmp/m7-first.json
+          python3 - /tmp/m7-first.json <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1])); assert d['schema_version']=='2.1m.v1'
+          ar=d['agent_runtime']; assert ar['agent']['agent_id']=='hermes' and ar['agent']['authority_ceiling']=='L3'
+          assert ar['presence']['logical_presence'] in {'fresh','stale'}
+          assert ar['workload']['source']=='durable_latest_task_lifecycle'
+          g=ar['governance']; assert g['presence_authority_effect']=='none'; assert not any(g[k] for k in ('automatic_retry','automatic_reroute','automatic_delegation','automatic_execution'))
+          PY
+
+          echo '=== WAIT FOR NATURAL TIMER ADVANCE ==='
+          sleep 75
+          SECOND="$(python3 - "$STATE" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1])); print(d['observed_at'])
+          PY
+          )"
+          python3 - "$FIRST" "$SECOND" <<'PY'
+          import datetime,sys
+          a=datetime.datetime.fromisoformat(sys.argv[1].replace('Z','+00:00'))
+          b=datetime.datetime.fromisoformat(sys.argv[2].replace('Z','+00:00'))
+          assert b>a, (a,b)
+          print('heartbeat_advanced_seconds='+str(int((b-a).total_seconds())))
+          PY
+          curl -fsS "$MODEL" > /tmp/m7-second.json
+          python3 - /tmp/m7-second.json <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1])); ar=d['agent_runtime']
+          assert ar['presence']['logical_presence']=='fresh'
+          assert ar['presence']['heartbeat_age_seconds'] is not None and ar['presence']['heartbeat_age_seconds'] <= 120
+          assert d['governance']['agent_runtime_presence_authority_effect']=='none'
+          PY
+
+          echo '=== DASHBOARD / GOVERNANCE NEGATIVE CHECKS ==='
+          grep -q 'READ ONLY · Phase 2.1M' /opt/phil-ai-os/mission-control/server.py
+          grep -q '<h2>Runtime Presence & Workload</h2>' /opt/phil-ai-os/mission-control/server.py
+          grep -q 'Presence is observational only' /opt/phil-ai-os/mission-control/server.py
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' "$MODEL")" = 405; done
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+
+          # Reassert the unchanged authority boundary after the observation window.
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');assert c.execute('pragma quick_check').fetchone()[0]=='ok';r=c.execute(\"select agent_id,authority_ceiling,assignable from agent_registry\").fetchall();assert r==[('hermes','L3',1)]"
+
+          rm -f /tmp/m7-first.json /tmp/m7-second.json
+          echo control_api_health=ok
+          echo recovery_services=active
+          echo notification_dispatcher=active
+          echo heartbeat_timer=active
+          echo mission_control_schema=2.1m.v1
+          echo dashboard_runtime_presence=read_only
+          echo logical_presence=fresh
+          echo workload_source=durable_latest_task_lifecycle
+          echo presence_authority_effect=none
+          echo execution_allowlist=general
+          echo agent_registry=hermes_L3_only
+          echo dashboard_mutations=405
+          echo operator_auth=401
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo authority_expansion=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1M_M7_CLOSURE_VERIFICATION_OK
+          REMOTE
