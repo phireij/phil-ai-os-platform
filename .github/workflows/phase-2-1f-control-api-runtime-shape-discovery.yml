@@ -1,0 +1,61 @@
+name: Phase 2.1F Control API Runtime Shape Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1f-control-api-runtime-shape-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Discover runtime shape read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test -n "$CONTROL"
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.0'
+          echo runtime_image=phil-ai-os/control-api:0.20.0
+          docker inspect "$CONTROL" --format 'entrypoint={{json .Config.Entrypoint}} cmd={{json .Config.Cmd}} working_dir={{.Config.WorkingDir}}'
+          docker inspect "$CONTROL" --format '{{range .Mounts}}{{println "mount_type=" .Type " destination=" .Destination " rw=" .RW}}{{end}}' | sed '/^[[:space:]]*$/d'
+          docker inspect "$CONTROL" --format '{{range .NetworkSettings.Networks}}{{println "network=" .NetworkID}}{{end}}' | sed '/^[[:space:]]*$/d'
+          docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}' | awk -F= 'NF && $1!="" {print "env_name=" $1}' | sort -u
+          echo production_change=none
+          echo database_write=none
+          echo secret_values_emitted=false
+          echo PHIL_AI_OS_PHASE_2_1F_CONTROL_API_RUNTIME_SHAPE_OK
+          REMOTE
