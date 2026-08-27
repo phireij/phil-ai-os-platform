@@ -1,0 +1,151 @@
+name: Phase 2.1F Candidate Diff Route Impact
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1f-candidate-diff-route-impact.yml'
+      - '.github/phase-2-1f-candidate-diff-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage candidate builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1f/build-canonical-task-app-candidate.py "$VPS_USER@$VPS_HOST:/tmp/philaios-phase-2-1f-app-builder.py"
+      - name: Inspect candidate diff and route impact read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          BASE="$(mktemp /tmp/philaios-phase21f-base.XXXXXX.py)"
+          CAND="$(mktemp /tmp/philaios-phase21f-candidate.XXXXXX.py)"
+          trap 'rm -f "$BASE" "$CAND" /tmp/philaios-phase-2-1f-app-builder.py' EXIT
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.0'
+          docker cp "$CONTROL:/app/app.py" "$BASE"
+          python3 /tmp/philaios-phase-2-1f-app-builder.py "$BASE" "$CAND" >/dev/null
+          python3 -m py_compile "$CAND"
+
+          python3 - "$BASE" "$CAND" <<'PY'
+          import ast,difflib,pathlib,sys
+          bpath,cpath=sys.argv[1:]
+          b=pathlib.Path(bpath).read_text().splitlines()
+          c=pathlib.Path(cpath).read_text().splitlines()
+          diff=list(difflib.unified_diff(b,c,fromfile='baseline/app.py',tofile='candidate/app.py',n=3,lineterm=''))
+          changed=[]
+          for line in diff:
+              if line.startswith(('---','+++','@@')): continue
+              if line.startswith(('+','-')): changed.append(line)
+          print('changed_line_count='+str(len(changed)))
+          print('--- candidate changed lines ---')
+          for line in changed:
+              print(line)
+
+          expected_tokens=(
+              'task_id = "tsk_" + uuid.uuid4().hex',
+              'task_id,',
+              '"task_id": task_id',
+              'task_id = None',
+              'SELECT task_id FROM approval_requests WHERE approval_id=?',
+              'approval_id,task_id',
+              'approval_id, task_id',
+          )
+          unexpected=[]
+          for line in changed:
+              body=line[1:].strip()
+              if not body: continue
+              if not any(tok in body for tok in expected_tokens):
+                  # SQL placeholder/value-list lines are expected adjacent mechanics.
+                  if body in {"?,?,?,?,'pending',", "?,?,?,?,?,'pending',", 'VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', 'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', 'try:', 'except (KeyError, IndexError, TypeError):', 'finally:', 'lookup.close()', 'lookup = db()', 'row = lookup.execute(', '(approval_id,),', ').fetchone()'}:
+                      continue
+                  unexpected.append(line)
+          print('unexpected_changed_line_count='+str(len(unexpected)))
+          for line in unexpected: print('UNEXPECTED='+line)
+
+          def funcs(text):
+              tree=ast.parse(text)
+              out={}
+              for n in ast.walk(tree):
+                  if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)):
+                      out[n.name]=(n.lineno,getattr(n,'end_lineno',n.lineno))
+              return out
+          bf=funcs('\n'.join(b)); cf=funcs('\n'.join(c))
+          changed_functions=[]
+          # Map changed candidate line numbers from SequenceMatcher opcodes.
+          sm=difflib.SequenceMatcher(a=b,b=c)
+          clines=set()
+          for tag,i1,i2,j1,j2 in sm.get_opcodes():
+              if tag!='equal': clines.update(range(j1+1,j2+1))
+          for name,(s,e) in cf.items():
+              if any(s<=x<=e for x in clines): changed_functions.append(name)
+          print('changed_functions='+','.join(sorted(set(changed_functions))))
+          route_names=[n for n in cf if any(k in n.lower() for k in ('mission_control','approval_browser','do_get','handler'))]
+          impacted_routes=sorted(set(changed_functions).intersection(route_names))
+          print('route_function_changes='+(','.join(impacted_routes) if impacted_routes else 'none'))
+          assert set(changed_functions).issubset({'approval_create','execution_audit_write'}), changed_functions
+          assert not impacted_routes, impacted_routes
+          PY
+
+          echo '--- baseline route source hashes ---'
+          docker exec "$CONTROL" python3 - <<'PY'
+          import app,inspect,hashlib
+          names=['mission_control_approval_page','mission_control_approval_detail','approval_browser_page']
+          for n in names:
+              if hasattr(app,n):
+                  s=inspect.getsource(getattr(app,n)).encode()
+                  print(n+'_sha256='+hashlib.sha256(s).hexdigest())
+          # Main request-handler class source: report only route-related line signatures, not secrets.
+          for name,obj in vars(app).items():
+              if isinstance(obj,type):
+                  try: src=inspect.getsource(obj)
+                  except Exception: continue
+                  if '/phil-ai-os/mission-control' in src or '/phil-ai-os/approval/' in src:
+                      print('handler_class='+name)
+                      for i,line in enumerate(src.splitlines(),1):
+                          if '/phil-ai-os/mission-control' in line or '/phil-ai-os/approval/' in line or 'send_response(302)' in line or '_redirect' in line:
+                              print(f'handler_route_line_{i}='+line.strip())
+          PY
+
+          echo production_change=none
+          echo database_write=none
+          echo provider_call=none
+          echo execution_call=none
+          echo PHIL_AI_OS_PHASE_2_1F_CANDIDATE_DIFF_ROUTE_IMPACT_OK
+          REMOTE
