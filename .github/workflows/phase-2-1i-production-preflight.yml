@@ -1,0 +1,90 @@
+name: Phase 2.1I Production Preflight
+on:
+  push:
+    branches: [main]
+    paths: ['.github/phase-2-1i-production-preflight-trigger']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate candidate tools
+        run: |
+          python3 -m py_compile ops/phase-2.1i/build-coordinator-app-candidate.py
+          python3 -m py_compile ops/phase-2.1i/apply-coordinator-schema.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage builder only
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1i/build-coordinator-app-candidate.py "$VPS_USER@$VPS_HOST:/tmp/phase21i-preflight-builder.py"
+      - name: Verify live baseline and candidate compatibility read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"; test -n "$CONTROL"
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.2-phase21h'
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
+          docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');assert c.execute('pragma quick_check').fetchone()[0]=='ok';names={r[0] for r in c.execute(\"select name from sqlite_master where type='table'\")};assert 'task_lifecycle_events' in names;assert 'agent_registry' not in names;assert 'task_plans' not in names;print('lifecycle_rows='+str(c.execute('select count(*) from task_lifecycle_events').fetchone()[0]));print('canonical_approvals='+str(c.execute('select count(*) from approval_requests where task_id is not null').fetchone()[0]))"
+          APP="$(mktemp /tmp/phase21i-preflight-app.XXXXXX.py)"; CAND="$(mktemp /tmp/phase21i-preflight-candidate.XXXXXX.py)"
+          trap 'rm -f "$APP" "$CAND" /tmp/phase21i-preflight-builder.py' EXIT
+          docker cp "$CONTROL:/app/app.py" "$APP"
+          python3 /tmp/phase21i-preflight-builder.py "$APP" "$CAND"
+          python3 -m py_compile "$CAND"
+          grep -q 'path=="/v1/tasks/assign"' "$CAND"
+          grep -q 'path=="/v1/tasks/plan"' "$CAND"
+          grep -q 'authorized(self.headers)' "$CAND"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          grep -q 'SCHEMA_VERSION = "2.1h.v1"' /opt/phil-ai-os/mission-control/read-model.py
+          grep -q 'READ ONLY · Phase 2.1H' /opt/phil-ai-os/mission-control/server.py
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+          for method in POST PUT PATCH DELETE; do test "$(curl -ksS -X "$method" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          echo current_image=0.20.2-phase21h
+          echo live_agent_registry=absent
+          echo live_task_plans=absent
+          echo candidate_build_from_exact_live_app=ok
+          echo candidate_routes_auth_guard=present
+          echo mission_control_schema=2.1h.v1
+          echo production_allowlist=general_only
+          echo recovery_services=active
+          echo operator_auth=401
+          echo dashboard_mutations=405
+          echo production_change=none
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1I_PRODUCTION_PREFLIGHT_OK
+          REMOTE
