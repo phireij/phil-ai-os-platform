@@ -1,0 +1,82 @@
+name: Phase 2.1I Dashboard Activation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/phase-2-1i-dashboard-activation-trigger']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate transformer
+        run: python3 -m py_compile ops/phase-2.1i/build-dashboard-phase21i.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do TMP="$(mktemp)"; if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts; if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi; fi; rm -f "$TMP"; sleep $((attempt*10)); done; exit 1
+      - name: Stage transformer
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1i/build-dashboard-phase21i.py "$VPS_USER@$VPS_HOST:/tmp/build-dashboard-phase21i.py"
+      - name: Activate read-only dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=/opt/phil-ai-os/mission-control/server.py
+          BACKUP=/opt/phil-ai-os/mission-control/server.py.pre-phase21i
+          CAND=/tmp/server-v21i.py
+          success=0
+          rollback(){ set +e; echo rollback=started; if [ -f "$BACKUP" ]; then cp "$BACKUP" "$BASE"; chmod 0644 "$BASE"; systemctl restart phil-ai-os-mission-control-operator.service >/dev/null 2>&1 || true; fi; echo rollback=completed; }
+          cleanup(){ rc=$?; rm -f "$CAND" /tmp/build-dashboard-phase21i.py; if [ "$rc" -ne 0 ] && [ "$success" -ne 1 ]; then rollback; fi; }
+          trap cleanup EXIT
+          grep -q 'READ ONLY · Phase 2.1H' "$BASE"
+          grep -q 'SCHEMA_VERSION = "2.1i.v1"' /opt/phil-ai-os/mission-control/read-model.py
+          cp "$BASE" "$BACKUP"; chmod 0600 "$BACKUP"
+          python3 /tmp/build-dashboard-phase21i.py "$BASE" "$CAND"
+          python3 -m py_compile "$CAND"
+          grep -q 'READ ONLY · Phase 2.1I' "$CAND"
+          grep -q '<h2>Coordinator</h2>' "$CAND"
+          grep -q "getElementById('coordinator')" "$CAND"
+          grep -q 'def do_POST' "$CAND"; grep -q '405' "$CAND"
+          install -m 0644 "$CAND" "$BASE"
+          systemctl restart phil-ai-os-mission-control-operator.service
+          for _ in $(seq 1 15); do systemctl is-active --quiet phil-ai-os-mission-control-operator.service && break; sleep 2; done
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          grep -q 'READ ONLY · Phase 2.1I' "$BASE"
+          grep -q '<h2>Coordinator</h2>' "$BASE"
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+          for m in POST PUT PATCH DELETE; do test "$(curl -ksS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          python3 - <<'PY'
+          import json,urllib.request
+          d=json.load(urllib.request.urlopen('http://127.0.0.1:4881/api/read-model',timeout=5))
+          assert d['schema_version']=='2.1i.v1'; c=d['coordinator']; assert c['summary']['coordinator_owner']=='control-api'; assert c['summary']['registered_agent_count']==1; assert c['summary']['plan_count_observed']==0; assert c['summary']['mission_control_mutation']=='none'
+          PY
+          success=1
+          echo dashboard_badge=Phase_2.1I
+          echo coordinator_card=active_read_only
+          echo mission_control_mutation=none
+          echo operator_auth=401
+          echo dashboard_mutations=405
+          echo control_api_change=none
+          echo database_change=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1I_DASHBOARD_ACTIVATION_OK
+          REMOTE
