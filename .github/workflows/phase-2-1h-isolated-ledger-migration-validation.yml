@@ -1,0 +1,88 @@
+name: Phase 2.1H Isolated Ledger Migration Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/phase-2-1h-ledger-migration-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate local script
+        run: |
+          set -euo pipefail
+          python3 -m py_compile ops/phase-2.1h/validate-lifecycle-ledger-migration.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1h/validate-lifecycle-ledger-migration.py "$VPS_USER@$VPS_HOST:/tmp/validate-lifecycle-ledger-migration.py"
+      - name: Validate on copied live DB only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.1-phase21f'
+          BEFORE="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0],','.join(r[0] for r in c.execute(\"select name from sqlite_master where type='table' order by name\")))")"
+          TMPDB=/tmp/philaios-phase21h-ledger-validation.db
+          rm -f "$TMPDB"
+          docker cp "$CONTROL:/app/state/control-plane.db" "$TMPDB"
+          python3 /tmp/validate-lifecycle-ledger-migration.py "$TMPDB"
+          python3 - "$TMPDB" <<'PY'
+          import sqlite3,sys
+          c=sqlite3.connect(sys.argv[1])
+          assert c.execute("select count(*) from task_lifecycle_events").fetchone()[0]==4
+          assert c.execute("select count(*) from task_lifecycle_events where assigned_agent_id='hermes'").fetchone()[0]==1
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          print('isolated_copy_validation=ok')
+          PY
+          AFTER="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0],','.join(r[0] for r in c.execute(\"select name from sqlite_master where type='table' order by name\")))")"
+          test "$BEFORE" = "$AFTER"
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); assert c.execute(\"select count(*) from sqlite_master where type='table' and name='task_lifecycle_events'\").fetchone()[0]==0; assert c.execute('pragma quick_check').fetchone()[0]=='ok'"
+          rm -f "$TMPDB" /tmp/validate-lifecycle-ledger-migration.py
+          echo live_database_schema_unchanged=true
+          echo live_approval_execution_counts_unchanged=true
+          echo production_change=none
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo assignment_mutation=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1H_ISOLATED_LEDGER_MIGRATION_VALIDATION_OK
+          REMOTE
