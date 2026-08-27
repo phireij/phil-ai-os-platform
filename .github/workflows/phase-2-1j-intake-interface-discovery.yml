@@ -1,0 +1,94 @@
+name: Phase 2.1J Intake Interface Discovery
+on:
+  push:
+    branches: [main]
+    paths: ['.github/phase-2-1j-intake-interface-discovery-trigger']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do TMP="$(mktemp)"; if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts; if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi; fi; rm -f "$TMP"; sleep $((attempt*10)); done; exit 1
+      - name: Discover current intake interfaces read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 control-api)"
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.3-phase21i'
+          docker exec "$CONTROL" python3 - <<'PY'
+          import ast
+          p='/app/app.py'
+          s=open(p).read()
+          tree=ast.parse(s)
+          funcs={n.name for n in ast.walk(tree) if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))}
+          required={'approval_create','lifecycle_event_insert','task_assign','task_plan'}
+          missing=required-funcs
+          assert not missing,missing
+          checks={
+            'approval_request_route':'/v1/approvals/request' in s,
+            'assign_route':'/v1/tasks/assign' in s,
+            'plan_route':'/v1/tasks/plan' in s,
+            'execute_route':'/v1/execute' in s,
+            'task_id_generation':'tsk_' in s and 'uuid.uuid4().hex' in s,
+            'received_stage':'RECEIVED' in s,
+            'classified_stage':'CLASSIFIED' in s,
+            'approval_pending_stage':'APPROVAL_PENDING' in s,
+            'assigned_stage':'ASSIGNED' in s,
+            'planned_stage':'PLANNED' in s,
+          }
+          assert all(checks.values()),checks
+          for k,v in checks.items(): print(f'{k}={str(v).lower()}')
+          print('functions='+','.join(sorted(required)))
+          PY
+          docker exec "$CONTROL" python3 - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('/app/state/control-plane.db')
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          tables={r[0] for r in c.execute("select name from sqlite_master where type='table'")}
+          assert {'approval_requests','execution_audit','task_lifecycle_events','agent_registry','task_plans'} <= tables
+          print('approval_rows='+str(c.execute('select count(*) from approval_requests').fetchone()[0]))
+          print('audit_rows='+str(c.execute('select count(*) from execution_audit').fetchone()[0]))
+          print('lifecycle_rows='+str(c.execute('select count(*) from task_lifecycle_events').fetchone()[0]))
+          print('plan_rows='+str(c.execute('select count(*) from task_plans').fetchone()[0]))
+          print('registry_rows='+str(c.execute('select count(*) from agent_registry').fetchone()[0]))
+          print('hermes_registry='+str(c.execute("select count(*) from agent_registry where agent_id='hermes' and enabled=1 and assignable=1 and authority_ceiling='L3'").fetchone()[0]))
+          c.close()
+          PY
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4870/v1/approvals/request)" = 401
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4870/v1/tasks/assign)" = 401
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4870/v1/tasks/plan)" = 401
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+          for m in POST PUT PATCH DELETE; do test "$(curl -ksS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          echo approval_request_unauth=401
+          echo assignment_unauth=401
+          echo planning_unauth=401
+          echo operator_auth=401
+          echo dashboard_mutations=405
+          echo production_allowlist=general_only
+          echo production_change=none
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo PHIL_AI_OS_PHASE_2_1J_INTAKE_INTERFACE_DISCOVERY_OK
+          REMOTE
