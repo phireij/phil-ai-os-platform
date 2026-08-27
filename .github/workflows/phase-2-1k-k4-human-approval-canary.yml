@@ -43,40 +43,51 @@ jobs:
           ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           BASE=http://127.0.0.1:4870
-          TOKEN_FILE=/run/philaios/hermes_control_api_token
           CONTROL=phil-ai-os-core-control-api-1
-          test -s "$TOKEN_FILE"
-          TOKEN="$(cat "$TOKEN_FILE")"
+          TASK_TEXT='Phase 2.1K K4 governed canary: return PHIL_AI_OS_PHASE_2_1K_CANARY_OK'
 
           echo '=== PHASE 2.1K K4 HUMAN APPROVAL CANARY PREPARATION ==='
           curl -fsS "$BASE/healthz" >/dev/null
           curl -fsS "$BASE/readyz" >/dev/null
 
-          PAYLOAD='{"task_text":"Phase 2.1K K4 governed canary: return PHIL_AI_OS_PHASE_2_1K_CANARY_OK","source":"hermes","requester":"hermes","requested_by":"hermes"}'
-          RESPONSE="$(curl -fsS -X POST "$BASE/v1/approvals/request" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H 'Content-Type: application/json' \
-            --data "$PAYLOAD")"
-
-          printf '%s' "$RESPONSE" | python - <<'PY'
-          import json,sys
-          data=json.load(sys.stdin)
-          approval=data.get('approval') or data
-          approval_id=approval.get('approval_id')
-          task_id=approval.get('task_id')
-          state=approval.get('state')
-          task_class=approval.get('task_class')
-          assert approval_id and task_id, data
-          assert state == 'pending', data
-          assert task_class == 'general', data
-          print('k4_approval_id=' + approval_id)
-          print('k4_task_id=' + task_id)
-          print('k4_state=' + state)
-          print('k4_task_class=' + task_class)
+          # Idempotency guard: reuse the exact pending K4 canary if a prior attempt
+          # created it but failed during verification. Never create a second one.
+          EXISTING="$(docker exec -i "$CONTROL" python - "$TASK_TEXT" <<'PY'
+          import sqlite3,sys,json
+          task_text=sys.argv[1]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro', uri=True)
+          c.row_factory=sqlite3.Row
+          r=c.execute("select approval_id,task_id,state,task_class from approval_requests where task_text=? and state='pending' order by created_at desc limit 1",(task_text,)).fetchone()
+          print(json.dumps(dict(r)) if r else '')
           PY
+          )"
+
+          if [ -n "$EXISTING" ]; then
+            RESPONSE="$EXISTING"
+            echo k4_request_mode=reused_existing_pending
+          else
+            HERMES="$(docker ps --format '{{.Names}}' | grep '^hermes-agent-whow' | head -n1)"
+            test -n "$HERMES"
+            TOKEN="$(docker exec "$HERMES" cat /run/philaios/hermes_control_api_token)"
+            test -n "$TOKEN"
+            PAYLOAD='{"task_text":"Phase 2.1K K4 governed canary: return PHIL_AI_OS_PHASE_2_1K_CANARY_OK","source":"hermes","requester":"hermes","requested_by":"hermes"}'
+            RESPONSE="$(curl -fsS -X POST "$BASE/v1/approvals/request" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H 'Content-Type: application/json' \
+              --data "$PAYLOAD")"
+            echo k4_request_mode=created_new
+          fi
 
           APPROVAL_ID="$(printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or d; print(a["approval_id"])')"
           TASK_ID="$(printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or d; print(a["task_id"])')"
+          STATE="$(printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or d; print(a["state"])')"
+          TASK_CLASS="$(printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or d; print(a["task_class"])')"
+          test "$STATE" = pending
+          test "$TASK_CLASS" = general
+          echo "k4_approval_id=$APPROVAL_ID"
+          echo "k4_task_id=$TASK_ID"
+          echo "k4_state=$STATE"
+          echo "k4_task_class=$TASK_CLASS"
 
           docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
           import sqlite3,sys
