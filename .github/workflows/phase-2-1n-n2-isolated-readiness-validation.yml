@@ -1,0 +1,55 @@
+name: Phase 2.1N N2 Isolated Readiness Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1n-n2-isolated-readiness-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate classifier syntax
+        run: python3 -m py_compile ops/phase-2.1n/worker-readiness-v21n.py
+      - name: Validate readiness matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util,pathlib
+          p=pathlib.Path('ops/phase-2.1n/worker-readiness-v21n.py')
+          spec=importlib.util.spec_from_file_location('r',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+          base={'registry':{'enabled':True,'assignable':True,'authority_ceiling':'L3'},'presence':'fresh','execution_allowlist':['general'],'workload':{'evidence_complete':True,'active_states':[],'active_task_count':0}}
+          cases=[
+            ('ready',base),
+            ('busy',{**base,'workload':{'evidence_complete':True,'active_states':['ASSIGNED'],'active_task_count':1}}),
+            ('stale',{**base,'presence':'stale'}),
+            ('stale',{**base,'presence':'offline'}),
+            ('unassignable',{**base,'registry':{'enabled':False,'assignable':True,'authority_ceiling':'L3'}}),
+            ('unassignable',{**base,'registry':{'enabled':True,'assignable':False,'authority_ceiling':'L3'}}),
+            ('unassignable',{**base,'registry':{'enabled':True,'assignable':True,'authority_ceiling':'L4'}}),
+            ('indeterminate',{**base,'presence':'unknown'}),
+            ('indeterminate',{**base,'workload':None}),
+            ('indeterminate',{**base,'workload':{'evidence_complete':False,'active_states':[],'active_task_count':0}}),
+            ('indeterminate',{**base,'workload':{'evidence_complete':True,'active_states':['MYSTERY'],'active_task_count':1}}),
+            ('indeterminate',{**base,'execution_allowlist':['general','coding']}),
+          ]
+          for expected,payload in cases:
+              actual=m.classify(payload)
+              assert actual==expected,(expected,actual,payload)
+              print(f'case={expected}:ok')
+          print('authority_effect=none')
+          print('automatic_assignment=false')
+          print('automatic_retry=false')
+          print('automatic_reroute=false')
+          print('automatic_execution=false')
+          print('production_change=none')
+          print('PHIL_AI_OS_PHASE_2_1N_N2_ISOLATED_READINESS_VALIDATION_OK')
+          PY
