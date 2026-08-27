@@ -61,7 +61,12 @@ jobs:
           rollback(){
             set +e
             echo rollback=started
-            if [ -f "$BACKUP" ]; then cp "$BACKUP" "$BASE"; chmod 0644 "$BASE"; systemctl restart phil-ai-os-mission-control-operator.service >/dev/null 2>&1 || true; fi
+            if [ -f "$BACKUP" ]; then
+              cp "$BACKUP" "$BASE"
+              chmod 0644 "$BASE"
+              systemctl restart phil-ai-os-mission-control-operator.service >/dev/null 2>&1 || true
+              rm -f "$BACKUP"
+            fi
             echo rollback=completed
           }
           cleanup(){ rc=$?; rm -f "$WRAP" /tmp/mc-v21m.json; if [ "$rc" -ne 0 ] && [ "$success" -ne 1 ]; then rollback; fi; }
@@ -70,8 +75,14 @@ jobs:
           systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
           systemctl is-active --quiet phil-ai-os-mission-control-operator.service
           test -x "$RUNTIME"
-          test ! -e "$BACKUP"
           test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+
+          # Recover cleanly from a previous failed attempt whose rollback left
+          # only an identical backup artifact behind.
+          if [ -e "$BACKUP" ]; then
+            cmp -s "$BASE" "$BACKUP"
+            rm -f "$BACKUP"
+          fi
           grep -q 'SCHEMA_VERSION = "2.1i.v1"' "$BASE"
 
           cp "$BASE" "$BACKUP"
@@ -90,8 +101,11 @@ jobs:
           PY
 
           systemctl restart phil-ai-os-mission-control-operator.service
-          for _ in $(seq 1 15); do systemctl is-active --quiet phil-ai-os-mission-control-operator.service && break; sleep 2; done
           systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4881/api/read-model > /tmp/mc-v21m.json 2>/dev/null; then break; fi
+            sleep 2
+          done
           curl -fsS http://127.0.0.1:4881/api/read-model > /tmp/mc-v21m.json
           python3 - /tmp/mc-v21m.json <<'PY'
           import json,sys
