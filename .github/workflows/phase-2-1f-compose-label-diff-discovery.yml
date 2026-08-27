@@ -1,0 +1,102 @@
+name: Phase 2.1F Compose Label Diff Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1f-compose-label-diff-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Compare prospective Compose labels read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          WD=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core
+          COMPOSE="$WD/compose.yml"
+          TEMP="$(mktemp /tmp/philaios-compose-phase21f.XXXXXX.yml)"
+          trap 'rm -f "$TEMP"' EXIT
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.0'
+          cp "$COMPOSE" "$TEMP"
+          python3 - "$TEMP" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1]); s=p.read_text()
+          old='    image: phil-ai-os/control-api:${PHIL_AI_OS_VERSION:-0.20.0}'
+          new='    image: phil-ai-os/control-api:0.20.1-phase21f'
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new,1))
+          PY
+          python3 - "$COMPOSE" "$TEMP" <<'PY'
+          import json,subprocess,sys,hashlib
+          def cfg(path):
+              raw=subprocess.check_output(['docker','compose','-f',path,'config','--format','json'],text=True)
+              return json.loads(raw)['services']['control-api']
+          b=cfg(sys.argv[1]); c=cfg(sys.argv[2])
+          bl=b.get('labels') or {}; cl=c.get('labels') or {}
+          print('service_label_count_baseline='+str(len(bl)))
+          print('service_label_count_candidate='+str(len(cl)))
+          print('service_defined_labels_equal='+str(bl==cl).lower())
+          btr={k:v for k,v in bl.items() if k.lower().startswith('traefik.')}
+          ctr={k:v for k,v in cl.items() if k.lower().startswith('traefik.')}
+          print('traefik_label_count='+str(len(btr)))
+          print('traefik_labels_equal='+str(btr==ctr).lower())
+          def h(obj):
+              return hashlib.sha256(json.dumps(obj,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+          print('service_defined_label_hash_baseline='+h(bl))
+          print('service_defined_label_hash_candidate='+h(cl))
+          print('traefik_label_hash_baseline='+h(btr))
+          print('traefik_label_hash_candidate='+h(ctr))
+          diff=sorted(set(bl)|set(cl))
+          changed=[k for k in diff if bl.get(k)!=cl.get(k)]
+          print('service_defined_changed_label_count='+str(len(changed)))
+          for k in changed:
+              print('changed_service_label='+k)
+          assert bl==cl
+          assert btr==ctr
+          PY
+          echo '--- runtime metadata labels excluded from routing equality ---'
+          docker inspect "$CONTROL" --format '{{range $k,$v := .Config.Labels}}{{println $k}}{{end}}' | grep '^com.docker.compose\.' | sort || true
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:4870/phil-ai-os/approval/)" = '404'
+          test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:4870/phil-ai-os/mission-control)" = '401'
+          echo production_change=none
+          echo database_write=none
+          echo provider_call=none
+          echo execution_call=none
+          echo PHIL_AI_OS_PHASE_2_1F_COMPOSE_LABEL_DIFF_DISCOVERY_OK
+          REMOTE
