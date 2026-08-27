@@ -1,0 +1,106 @@
+name: Phase 2.1J Auto Notify Client Activation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/phase-2-1j-auto-notify-activation-trigger']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate candidate
+        run: |
+          set -euo pipefail
+          python3 -m py_compile ops/phase-2.1j/philaios-mission-control-client.py
+          python3 ops/phase-2.1j/validate-auto-notify-client.py ops/phase-2.1j/philaios-mission-control-client.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1j/philaios-mission-control-client.py "$VPS_USER@$VPS_HOST:/tmp/philaios-mission-control-client-phase21j.py"
+      - name: Activate rollback-protected client
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HOST_CLIENT=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/hermes/philaios-mission-control-client.py
+          BACKUP=${HOST_CLIENT}.pre-phase21j
+          CAND=/tmp/philaios-mission-control-client-phase21j.py
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 control-api)"
+          HERMES="$(docker ps --format '{{.Names}}' | grep -m1 hermes)"
+          success=0
+          rollback(){ set +e; echo rollback=started; if [ -f "$BACKUP" ]; then cat "$BACKUP" > "$HOST_CLIENT"; chmod 0755 "$HOST_CLIENT"; fi; echo rollback=completed; }
+          cleanup(){ rc=$?; rm -f "$CAND"; if [ "$rc" -ne 0 ] && [ "$success" -ne 1 ]; then rollback; fi; }
+          trap cleanup EXIT
+
+          test -f "$HOST_CLIENT"
+          test -x "$HOST_CLIENT"
+          test -x /proc/$$/exe
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-mission-control
+          docker exec "$HERMES" test -x /usr/local/bin/philaios-telegram-approval-notifier
+          docker exec "$HERMES" test -r /run/philaios/hermes_control_api_token
+          docker exec "$HERMES" test -r /opt/data/.env
+          python3 -m py_compile "$CAND"
+
+          BEFORE="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(','.join(str(c.execute('select count(*) from '+t).fetchone()[0]) for t in ['approval_requests','execution_audit','task_lifecycle_events','task_plans','agent_registry'])); c.close()")"
+          cp -a "$HOST_CLIENT" "$BACKUP"
+          chmod 0600 "$BACKUP"
+          cat "$CAND" > "$HOST_CLIENT"
+          chmod 0755 "$HOST_CLIENT"
+
+          docker exec "$HERMES" python3 -c "compile(open('/usr/local/bin/philaios-mission-control',encoding='utf-8').read(),'/usr/local/bin/philaios-mission-control','exec')"
+          docker exec "$HERMES" grep -q 'notify_pending_approval' /usr/local/bin/philaios-mission-control
+          docker exec "$HERMES" grep -q 'PHIL_AI_OS_AUTO_NOTIFY_APPROVALS' /usr/local/bin/philaios-mission-control
+          for cmd in snapshot approvals executions; do docker exec "$HERMES" /usr/local/bin/philaios-mission-control "$cmd" >/dev/null; done
+
+          AFTER="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(','.join(str(c.execute('select count(*) from '+t).fetchone()[0]) for t in ['approval_requests','execution_audit','task_lifecycle_events','task_plans','agent_registry'])); c.close()")"
+          test "$BEFORE" = "$AFTER"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+
+          success=1
+          echo auto_notify_client=active
+          echo notifier_runtime=ready
+          echo request_retry_on_notify_failure=none
+          echo database_change=none
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo authority_expansion=none
+          echo rollback_file="$BACKUP"
+          echo PHIL_AI_OS_PHASE_2_1J_AUTO_NOTIFY_CLIENT_ACTIVATION_OK
+          REMOTE
