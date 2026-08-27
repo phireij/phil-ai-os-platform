@@ -1,0 +1,199 @@
+name: Phase 2.1N N6 Dynamic-State Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1n-n6-dynamic-state-verification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate readiness classifier
+        run: python3 -m py_compile ops/phase-2.1n/philaios-read-model-wrapper-v21n.py
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Observe natural heartbeat progression read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          first="$(python3 -c "import json;print(json.load(open('/var/lib/phil-ai-os/agent-presence/hermes.json'))['observed_at'])")"
+          echo heartbeat_first="$first"
+          sleep 75
+          second="$(python3 -c "import json;print(json.load(open('/var/lib/phil-ai-os/agent-presence/hermes.json'))['observed_at'])")"
+          echo heartbeat_second="$second"
+          python3 - "$first" "$second" <<'PY'
+          import sys,datetime
+          a=datetime.datetime.fromisoformat(sys.argv[1].replace('Z','+00:00'))
+          b=datetime.datetime.fromisoformat(sys.argv[2].replace('Z','+00:00'))
+          assert b>a
+          print('heartbeat_advanced_seconds='+str(int((b-a).total_seconds())))
+          PY
+          curl -fsS http://127.0.0.1:4881/api/read-model >/tmp/n6-live-model.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/n6-live-model.json'))
+          assert d['schema_version']=='2.1n.v1'
+          r=d['worker_readiness']
+          assert r['readiness']=='indeterminate'
+          assert r['reason_code']=='workload_evidence_incomplete'
+          assert r['authority_effect']=='none'
+          assert r['automatic_assignment'] is False
+          assert r['automatic_execution'] is False
+          print('live_readiness='+r['readiness'])
+          print('live_reason='+r['reason_code'])
+          PY
+          rm -f /tmp/n6-live-model.json
+          REMOTE
+
+      - name: Capture production-shaped read model read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" \
+            "curl -fsS http://127.0.0.1:4881/api/read-model" > /tmp/n6-production-model.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/n6-production-model.json'))
+          assert d['schema_version']=='2.1n.v1'
+          assert d['worker_readiness']['readiness']=='indeterminate'
+          print('production_capture=ok')
+          PY
+
+      - name: Verify readiness transitions on local production-shaped copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import copy,importlib.util,json
+          spec=importlib.util.spec_from_file_location('n','ops/phase-2.1n/philaios-read-model-wrapper-v21n.py')
+          mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+          base=json.load(open('/tmp/n6-production-model.json'))
+
+          def run(name, mutate, expected):
+              d=copy.deepcopy(base)
+              mutate(d)
+              got=mod.classify(d)
+              assert got==expected,(name,got,expected)
+              print(name+'='+got[0]+'/'+got[1])
+
+          run('state_stale',
+              lambda d: d['agent_runtime']['presence'].__setitem__('logical_presence','stale'),
+              ('stale','logical_presence_not_fresh'))
+
+          run('state_unassignable',
+              lambda d: next(a for a in d['coordinator']['agent_registry'] if a['agent_id']=='hermes').__setitem__('assignable',0),
+              ('unassignable','registry_not_eligible'))
+
+          def ready(d):
+              d['agent_runtime']['presence']['logical_presence']='fresh'
+              d['agent_runtime']['workload'].update({'evidence_complete':True,'active_task_count':0,'active_states':[]})
+          run('state_ready',ready,('ready','durable_zero_active_workload_proven'))
+
+          def busy(d):
+              d['agent_runtime']['presence']['logical_presence']='fresh'
+              d['agent_runtime']['workload'].update({'evidence_complete':True,'active_task_count':1,'active_states':['ASSIGNED']})
+          run('state_busy',busy,('busy','durable_active_workload_present'))
+
+          def incomplete(d):
+              d['agent_runtime']['presence']['logical_presence']='fresh'
+              d['agent_runtime']['workload'].pop('evidence_complete',None)
+              d['agent_runtime']['workload'].pop('active_task_count',None)
+              d['agent_runtime']['workload'].pop('active_states',None)
+          run('state_indeterminate',incomplete,('indeterminate','workload_evidence_incomplete'))
+
+          # Production capture itself must remain unchanged.
+          assert base['worker_readiness']['readiness']=='indeterminate'
+          assert base['worker_readiness']['authority_effect']=='none'
+          print('local_dynamic_matrix=ok')
+          PY
+
+      - name: Revalidate production governance read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          systemctl is-active --quiet phil-ai-os-approval-notification-dispatcher.timer
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('/app/state/control-plane.db')
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          assert c.execute('select agent_id,authority_ceiling,enabled,assignable from agent_registry order by agent_id').fetchall()==[('hermes','L3',1,1)]
+          PY
+          curl -fsS http://127.0.0.1:4881/api/read-model >/tmp/n6-final-model.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/n6-final-model.json'))
+          assert d['schema_version']=='2.1n.v1'
+          r=d['worker_readiness']
+          assert r['readiness']=='indeterminate'
+          assert r['reason_code']=='workload_evidence_incomplete'
+          assert r['authority_effect']=='none'
+          assert r['automatic_assignment'] is False
+          assert r['automatic_retry'] is False
+          assert r['automatic_reroute'] is False
+          assert r['automatic_execution'] is False
+          PY
+          rm -f /tmp/n6-final-model.json
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+          echo production_change=none
+          echo lifecycle_mutation=none
+          echo assignment_mutation=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo authority_expansion=none
+          echo execution_allowlist=general
+          echo agent_registry=hermes_L3_only
+          echo PHIL_AI_OS_PHASE_2_1N_N6_DYNAMIC_STATE_VERIFICATION_OK
+          REMOTE
