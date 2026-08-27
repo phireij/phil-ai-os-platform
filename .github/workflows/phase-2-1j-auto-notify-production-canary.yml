@@ -1,0 +1,72 @@
+name: Phase 2.1J Auto Notify Production Canary
+on:
+  push:
+    branches: [main]
+    paths: ['.github/phase-2-1j-auto-notify-canary-trigger']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  canary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do TMP="$(mktemp)"; if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts; if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi; fi; rm -f "$TMP"; sleep $((attempt*10)); done; exit 1
+      - name: Run one pending approval auto-notify canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 control-api)"
+          HERMES="$(docker ps --format '{{.Names}}' | grep -m1 hermes)"
+          MARKER="PHASE_2_1J_AUTO_NOTIFY_$(date -u +%Y%m%dT%H%M%SZ)"
+          BEFORE_AUDIT="$(docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');print(c.execute('select count(*) from execution_audit').fetchone()[0]);c.close()")"
+          BEFORE_PLANS="$(docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');print(c.execute('select count(*) from task_plans').fetchone()[0]);c.close()")"
+          docker exec "$HERMES" philaios-mission-control request "$MARKER — automatic Telegram notification validation only; do not execute" >/tmp/phase21j-auto-notify-result.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/phase21j-auto-notify-result.json'))
+          a=d.get('approval') or {}; n=d.get('notification') or {}
+          assert a.get('state')=='pending',a
+          assert a.get('approval_id'),a
+          assert a.get('task_id'),a
+          assert n.get('status')=='ok',n
+          assert n.get('telegram_ok') is True,n
+          print('notification_status=ok')
+          print('telegram_ok=true')
+          print('approval_id='+str(a['approval_id']))
+          print('task_id='+str(a['task_id']))
+          PY
+          APPROVAL_ID="$(python3 -c "import json;print(json.load(open('/tmp/phase21j-auto-notify-result.json'))['approval']['approval_id'])")"
+          TASK_ID="$(python3 -c "import json;print(json.load(open('/tmp/phase21j-auto-notify-result.json'))['approval']['task_id'])")"
+          rm -f /tmp/phase21j-auto-notify-result.json
+          docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');r=c.execute('select state,consumed_at,task_class from approval_requests where approval_id=?',('$APPROVAL_ID',)).fetchone();assert r==('pending',None,'general'),r;e=[x[0] for x in c.execute('select stage from task_lifecycle_events where task_id=? order by occurred_at,event_id',('$TASK_ID',))];assert e==['RECEIVED','CLASSIFIED','APPROVAL_PENDING'],e;print('approval_state=pending');print('consumed_at=None');print('lifecycle='+','.join(e));c.close()"
+          AFTER_AUDIT="$(docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');print(c.execute('select count(*) from execution_audit').fetchone()[0]);c.close()")"
+          AFTER_PLANS="$(docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');print(c.execute('select count(*) from task_plans').fetchone()[0]);c.close()")"
+          test "$BEFORE_AUDIT" = "$AFTER_AUDIT"
+          test "$BEFORE_PLANS" = "$AFTER_PLANS"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          echo audit_rows_unchanged=true
+          echo plan_rows_unchanged=true
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_consumption=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1J_AUTO_NOTIFY_PRODUCTION_CANARY_OK
+          REMOTE
