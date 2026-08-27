@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+STATE_DIR="${PHIL_AI_OS_AGENT_PRESENCE_DIR:-/var/lib/phil-ai-os/agent-presence}"
+STATE_FILE="$STATE_DIR/hermes.json"
+mkdir -p "$STATE_DIR"
+chmod 0755 "$STATE_DIR"
+
+HERMES="$(docker ps --format '{{.Names}}' | grep '^hermes-agent-whow' | head -n1)"
+test -n "$HERMES"
+
+# The heartbeat is not inferred from container liveness.  It is emitted only
+# after an authenticated Control API round trip executed inside the Hermes
+# runtime with Hermes' existing least-privilege token mount.
+OBSERVED_JSON="$(docker exec "$HERMES" python3 - <<'PY'
+import json, pathlib, urllib.request
+base='http://host.docker.internal:4870'
+# Linux Docker deployments may not expose host.docker.internal.  The existing
+# Mission Control client defaults are discovered from its installed source.
+client=pathlib.Path('/usr/local/bin/philaios-mission-control').read_text()
+import re
+m=re.search(r'PHIL_AI_OS_CONTROL_API_BASE_URL[^\n]*\n\s*["\']([^"\']+)', client)
+if m:
+    base=m.group(1)
+else:
+    # Existing production client uses the Docker gateway host route.
+    base='http://172.17.0.1:4870'
+token=pathlib.Path('/run/philaios/hermes_control_api_token').read_text().strip()
+req=urllib.request.Request(base.rstrip('/')+'/v1/mission-control/snapshot',headers={'Authorization':'Bearer '+token})
+with urllib.request.urlopen(req,timeout=10) as r:
+    body=json.loads(r.read().decode())
+assert body.get('status')=='ok'
+print(json.dumps({'control_api_status':'ok','snapshot_timestamp':body.get('timestamp')}))
+PY
+)"
+
+TMP="$(mktemp "$STATE_DIR/.hermes.XXXXXX")"
+python3 - "$TMP" "$OBSERVED_JSON" <<'PY'
+import datetime,json,os,sys
+path=sys.argv[1]
+proof=json.loads(sys.argv[2])
+record={
+  'agent_id':'hermes',
+  'observed_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+  'observation_type':'authenticated_control_api_roundtrip',
+  'source_component':'hermes-runtime',
+  'control_api_status':proof.get('control_api_status'),
+  'snapshot_timestamp':proof.get('snapshot_timestamp'),
+  'authority_effect':'none',
+}
+with open(path,'w',encoding='utf-8') as f:
+    json.dump(record,f,sort_keys=True)
+    f.write('\n')
+os.chmod(path,0o644)
+PY
+mv -f "$TMP" "$STATE_FILE"
+echo PHIL_AI_OS_AGENT_HEARTBEAT_OK
