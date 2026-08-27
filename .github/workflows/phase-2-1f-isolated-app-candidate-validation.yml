@@ -1,0 +1,186 @@
+name: Phase 2.1F Isolated App Candidate Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/phase-2.1f/build-canonical-task-app-candidate.py'
+      - '.github/workflows/phase-2-1f-isolated-app-candidate-validation.yml'
+      - '.github/phase-2-1f-app-candidate-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage candidate builder only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1f/build-canonical-task-app-candidate.py "$VPS_USER@$VPS_HOST:/tmp/philaios-phase-2-1f-app-builder.py"
+      - name: Validate candidate on isolated app and DB copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          DB=/app/state/control-plane.db
+          HOST_APP="$(mktemp /tmp/philaios-phase-2-1f-app.XXXXXX.py)"
+          HOST_CANDIDATE="$(mktemp /tmp/philaios-phase-2-1f-candidate.XXXXXX.py)"
+          HOST_DB="$(mktemp /tmp/philaios-phase-2-1f-db.XXXXXX.db)"
+          IN_APP=/tmp/philaios-phase-2-1f-candidate-app.py
+          IN_DB=/tmp/philaios-phase-2-1f-candidate.db
+          cleanup() {
+            docker exec "$CONTROL" rm -f "$IN_APP" "$IN_DB" /tmp/philaios-phase-2-1f-behavior-test.py >/dev/null 2>&1 || true
+            rm -f "$HOST_APP" "$HOST_CANDIDATE" "$HOST_DB" /tmp/philaios-phase-2-1f-app-builder.py
+          }
+          trap cleanup EXIT
+
+          test -n "$CONTROL"
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
+
+          BEFORE_APPROVALS="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from approval_requests').fetchone()[0])")"
+          BEFORE_AUDITS="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from execution_audit').fetchone()[0])")"
+          docker cp "$CONTROL:/app/app.py" "$HOST_APP"
+          docker cp "$CONTROL:$DB" "$HOST_DB"
+
+          python3 /tmp/philaios-phase-2-1f-app-builder.py "$HOST_APP" "$HOST_CANDIDATE"
+          python3 -m py_compile "$HOST_CANDIDATE"
+
+          # Apply the already-validated nullable schema only to the copied DB.
+          python3 - "$HOST_DB" <<'PY'
+          import sqlite3,sys
+          db=sys.argv[1]
+          c=sqlite3.connect(db)
+          try:
+              a=[r[1] for r in c.execute('pragma table_info(approval_requests)')]
+              e=[r[1] for r in c.execute('pragma table_info(execution_audit)')]
+              if 'task_id' not in a: c.execute('alter table approval_requests add column task_id text')
+              if 'task_id' not in e: c.execute('alter table execution_audit add column task_id text')
+              c.execute('create unique index if not exists idx_approval_requests_task_id_nonnull on approval_requests(task_id) where task_id is not null')
+              c.commit()
+              assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          finally:
+              c.close()
+          PY
+
+          docker cp "$HOST_CANDIDATE" "$CONTROL:$IN_APP"
+          docker cp "$HOST_DB" "$CONTROL:$IN_DB"
+          docker exec "$CONTROL" sh -lc "cat > /tmp/philaios-phase-2-1f-behavior-test.py <<'PY'
+          import importlib.util, inspect, re, sqlite3
+
+          APP='/tmp/philaios-phase-2-1f-candidate-app.py'
+          DB='/tmp/philaios-phase-2-1f-candidate.db'
+          spec=importlib.util.spec_from_file_location('phase21f_candidate', APP)
+          mod=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+
+          def copied_db():
+              c=sqlite3.connect(DB)
+              c.row_factory=sqlite3.Row
+              return c
+
+          mod.db=copied_db
+          mod.classify_task=lambda text: {'task_class':'general','confidence':1.0}
+          mod.evaluate_route=lambda task_class: (200, {'decision': {'profile':'validation','primary': {'provider':'none','model':'none'}, 'fallback': {}}})
+
+          sig=inspect.signature(mod.execution_audit_write)
+          assert 'task_id' not in sig.parameters
+
+          before_a=copied_db().execute('select count(*) from approval_requests').fetchone()[0]
+          before_e=copied_db().execute('select count(*) from execution_audit').fetchone()[0]
+
+          task_text='phase-2.1f isolated canonical task validation'
+          code,body=mod.approval_create(task_text, source='phase21f-validation', requester='phase21f-validation', requested_by='phase21f-validation')
+          assert code==201, (code,body)
+          approval=body['approval']
+          approval_id=approval['approval_id']
+          task_id=approval['task_id']
+          assert re.fullmatch(r'tsk_[0-9a-f]{32}', task_id), task_id
+
+          c=copied_db()
+          row=c.execute('select task_id,state from approval_requests where approval_id=?',(approval_id,)).fetchone()
+          assert row is not None and row['task_id']==task_id and row['state']=='pending'
+          c.execute("update approval_requests set state='approved' where approval_id=?",(approval_id,))
+          c.commit(); c.close()
+
+          code,consumed=mod.approval_consume(approval_id, task_text, consumed_by='phase21f-validation')
+          assert code==200, (code,consumed)
+          assert consumed['approval']['task_id']==task_id
+
+          mod.execution_audit_write(source='phase21f-validation', task_class='general', execution_mode='validation', outcome='success', detail='isolated-only', approval_id=approval_id)
+          c=copied_db()
+          audit=c.execute('select approval_id,task_id,outcome from execution_audit where approval_id=? order by rowid desc limit 1',(approval_id,)).fetchone()
+          assert audit is not None and audit['approval_id']==approval_id and audit['task_id']==task_id and audit['outcome']=='success'
+          assert c.execute('select count(*) from approval_requests').fetchone()[0]==before_a+1
+          assert c.execute('select count(*) from execution_audit').fetchone()[0]==before_e+1
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          c.close()
+
+          print('candidate_module_compile=ok')
+          print('task_id_generated_once_at_approval_creation=true')
+          print('task_id_format=tsk_uuid4_hex')
+          print('approval_response_includes_task_id=true')
+          print('approval_persistence_task_id=validated')
+          print('approval_consumption_preserves_task_id=true')
+          print('execution_audit_derives_task_id_from_approval_id=true')
+          print('caller_supplied_task_id_parameter=absent')
+          print('provider_call=none')
+          print('PHIL_AI_OS_PHASE_2_1F_ISOLATED_APP_BEHAVIOR_OK')
+          PY
+          python3 /tmp/philaios-phase-2-1f-behavior-test.py"
+
+          AFTER_APPROVALS="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from approval_requests').fetchone()[0])")"
+          AFTER_AUDITS="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from execution_audit').fetchone()[0])")"
+          test "$BEFORE_APPROVALS" = "$AFTER_APPROVALS"
+          test "$BEFORE_AUDITS" = "$AFTER_AUDITS"
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); assert 'task_id' not in [r[1] for r in c.execute('pragma table_info(approval_requests)')]; assert 'task_id' not in [r[1] for r in c.execute('pragma table_info(execution_audit)')]; assert c.execute('pragma quick_check').fetchone()[0]=='ok'"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+
+          echo live_database_schema_change=none
+          echo live_database_write=none
+          echo live_approval_rows_unchanged=true
+          echo live_execution_audit_rows_unchanged=true
+          echo production_allowlist=general_only
+          echo approval_mutation_live=none
+          echo provider_call_live=none
+          echo execution_call_live=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1F_ISOLATED_APP_CANDIDATE_VALIDATION_OK
+          REMOTE
