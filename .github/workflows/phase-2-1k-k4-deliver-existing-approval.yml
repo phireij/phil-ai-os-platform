@@ -1,0 +1,99 @@
+name: Phase 2.1K K4 Deliver Existing Approval Notification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1k-k4-deliver-existing-approval.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deliver:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          getent ahosts "$VPS_HOST" >/dev/null
+          timeout 20 bash -c "</dev/tcp/$VPS_HOST/$PORT"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true
+
+      - name: Deliver exact K4 approval notification and verify no state transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          APPROVAL_ID='apr_7a3594fc61d1467593181d1ca7a2d502'
+          TASK_ID='tsk_e9694565de884bc9afa550d57db32426'
+          CONTROL=phil-ai-os-core-control-api-1
+          HERMES="$(docker ps --format '{{.Names}}' | grep '^hermes-agent-whow' | head -n1)"
+          test -n "$HERMES"
+
+          echo '=== PHASE 2.1K K4 EXISTING APPROVAL DELIVERY ==='
+
+          # Pre-delivery durable guard.
+          docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
+          import sqlite3,sys
+          approval_id,task_id=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro', uri=True)
+          c.row_factory=sqlite3.Row
+          r=c.execute('select approval_id,task_id,state,task_class,consumed_at from approval_requests where approval_id=?',(approval_id,)).fetchone()
+          assert r is not None
+          assert r['task_id']==task_id
+          assert r['state']=='pending'
+          assert r['task_class']=='general'
+          assert r['consumed_at'] is None
+          audits=c.execute('select count(*) from execution_audit where task_id=? or approval_id=?',(task_id,approval_id)).fetchone()[0]
+          assert audits == 0
+          print('pre_delivery_pending=true')
+          print('pre_delivery_consumed=false')
+          print('pre_delivery_execution_audit_links=0')
+          PY
+
+          # Deliver notification for this exact pre-existing approval only.
+          OUT="$(docker exec "$HERMES" /usr/local/bin/philaios-telegram-approval-notifier "$APPROVAL_ID")"
+          printf '%s\n' "$OUT"
+          printf '%s' "$OUT" | docker exec -i "$CONTROL" python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("telegram_ok") is True or d.get("status")=="ok", d; print("telegram_delivery=ok")'
+
+          # Post-delivery durable guard: notification must not alter approval/execution state.
+          docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
+          import sqlite3,sys
+          approval_id,task_id=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro', uri=True)
+          c.row_factory=sqlite3.Row
+          r=c.execute('select state,consumed_at from approval_requests where approval_id=?',(approval_id,)).fetchone()
+          assert r is not None
+          assert r['state']=='pending'
+          assert r['consumed_at'] is None
+          audits=c.execute('select count(*) from execution_audit where task_id=? or approval_id=?',(task_id,approval_id)).fetchone()[0]
+          assert audits == 0
+          print('post_delivery_pending=true')
+          print('post_delivery_consumed=false')
+          print('post_delivery_execution_audit_links=0')
+          PY
+
+          echo approval_decision=none
+          echo approval_consumption=none
+          echo execution_call=none
+          echo provider_call=none
+          echo PHIL_AI_OS_PHASE_2_1K_K4_TELEGRAM_DELIVERY_OK
+          REMOTE
