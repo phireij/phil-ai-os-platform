@@ -1,0 +1,90 @@
+name: Phase 2.1F Canonical Task Write-Path Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1f-canonical-task-write-path-discovery.yml'
+      - '.github/phase-2-1f-write-path-discovery-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Discover canonical task persistence write paths read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          HERMES="$(docker ps --format '{{.Names}}' | grep -m1 '^hermes-agent-whow')"
+          DB=/app/state/control-plane.db
+          test -n "$CONTROL"; test -n "$HERMES"
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
+
+          echo '=== PHASE 2.1F CANONICAL TASK WRITE-PATH DISCOVERY ==='
+          echo discovery_mode=read_only
+
+          echo '--- approval schema ---'
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print('approval_columns='+','.join(r[1] for r in c.execute('pragma table_info(approval_requests)'))); print('approval_indexes='+','.join(r[1] for r in c.execute('pragma index_list(approval_requests)'))); print('approval_rows='+str(c.execute('select count(*) from approval_requests').fetchone()[0]))"
+          echo '--- execution audit schema ---'
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print('execution_audit_columns='+','.join(r[1] for r in c.execute('pragma table_info(execution_audit)'))); print('execution_audit_indexes='+','.join(r[1] for r in c.execute('pragma index_list(execution_audit)'))); print('execution_audit_rows='+str(c.execute('select count(*) from execution_audit').fetchone()[0]))"
+
+          echo '--- control-api write path symbols ---'
+          docker exec "$CONTROL" sh -lc "grep -n -E 'def approval_create|def approval_|INSERT INTO approval_requests|insert into approval_requests|execution_audit|INSERT INTO execution_audit|insert into execution_audit|/v1/approvals/request|/v1/execute|approval_id|task_id|canonical_task_id' /app/app.py | head -n 420" || true
+
+          echo '--- approval creation function source ---'
+          docker exec "$CONTROL" python3 -c "import app,inspect; names=['approval_create','approval_request','approval_consume','execute_task','execute','execution_audit_write']; [(print('FUNCTION='+n+'\n'+inspect.getsource(getattr(app,n)))) for n in names if hasattr(app,n)]" || true
+
+          echo '--- Hermes/control clients task identity references ---'
+          docker exec "$HERMES" sh -lc "grep -RniE 'task_id|canonical_task_id|approval_id|/v1/approvals/request|/v1/execute' /usr/local/bin/philaios-mission-control /usr/local/bin/philaios-execute /opt/hermes/docker /opt/data 2>/dev/null | head -n 320" || true
+
+          echo '--- host integration task identity references ---'
+          grep -RniE 'task_id|canonical_task_id|approval_id|/v1/approvals/request|/v1/execute' /opt/phil-ai-os /opt/phil-ai-os-platform 2>/dev/null | head -n 320 || true
+
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          echo production_allowlist=general_only
+          echo database_schema_change=none
+          echo database_write=none
+          echo approval_mutation=none
+          echo provider_call=none
+          echo execution_call=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1F_WRITE_PATH_DISCOVERY_OK
+          REMOTE
