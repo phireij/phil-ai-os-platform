@@ -1,0 +1,125 @@
+name: Phase 2.1K K3 Read-Only Production Preflight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1k-k3-production-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          getent ahosts "$VPS_HOST" >/dev/null
+          timeout 20 bash -c "</dev/tcp/$VPS_HOST/$PORT"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true
+          echo ssh_preflight=ok
+
+      - name: Validate K3 production protections without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          BASE=http://127.0.0.1:4870
+
+          echo '=== PHASE 2.1K K3 READ-ONLY PRODUCTION PREFLIGHT ==='
+
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          echo control_api_health=ok
+          echo control_api_readiness=ok
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+
+          docker inspect "$CONTROL" --format 'control_api_image={{.Config.Image}}'
+
+          echo '=== DURABLE POLICY / AGENT / CORRELATION STATE ==='
+          docker exec -i "$CONTROL" python - <<'PY'
+          import sqlite3, json
+          db='/app/state/control-plane.db'
+          c=sqlite3.connect(f'file:{db}?mode=ro', uri=True)
+          c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0] == 'ok'
+          print('sqlite_quick_check=ok')
+          tables={r[0] for r in c.execute("select name from sqlite_master where type='table'")}
+
+          def rows(table):
+              if table not in tables:
+                  return []
+              return [dict(r) for r in c.execute(f'select * from {table}').fetchall()]
+
+          agents=rows('agent_registry')
+          print('agent_registry_count=' + str(len(agents)))
+          for a in agents:
+              safe={k:a.get(k) for k in ['agent_id','display_name','role','authority_ceiling','enabled','assignable'] if k in a}
+              print('agent=' + json.dumps(safe, sort_keys=True))
+
+          policies=rows('route_policies')
+          print('route_policy_count=' + str(len(policies)))
+          for p in policies:
+              safe={k:p.get(k) for k in p.keys() if k not in {'api_key','secret','token','credential'}}
+              print('route_policy=' + json.dumps(safe, sort_keys=True, default=str))
+
+          acols=[r[1] for r in c.execute('pragma table_info(approval_requests)')] if 'approval_requests' in tables else []
+          ecols=[r[1] for r in c.execute('pragma table_info(execution_audit)')] if 'execution_audit' in tables else []
+          required_a={'approval_id','state','consumed_at','consumed_by','task_id'}
+          required_e={'approval_id','task_id','outcome'}
+          print('approval_required_columns=' + str(required_a.issubset(acols)).lower())
+          print('execution_required_columns=' + str(required_e.issubset(ecols)).lower())
+          assert required_a.issubset(acols)
+          assert required_e.issubset(ecols)
+
+          if 'approval_requests' in tables:
+              consumed=c.execute('select count(*) from approval_requests where consumed_at is not null').fetchone()[0]
+              print('consumed_approval_count=' + str(consumed))
+          PY
+
+          echo '=== BACKUP / ROLLBACK READINESS ==='
+          systemctl show phil-ai-os-backup.timer -p ActiveState -p SubState -p NextElapseUSecRealtime --no-pager
+          systemctl show phil-ai-os-backup-self-heal.timer -p ActiveState -p SubState -p NextElapseUSecRealtime --no-pager
+          systemctl cat phil-ai-os-backup.service --no-pager | sed -n '1,180p'
+          systemctl cat phil-ai-os-backup-self-heal.service --no-pager | sed -n '1,180p'
+          echo rollback_protection_services=inspectable
+
+          echo '=== SOURCE SAFEGUARDS ==='
+          docker exec "$CONTROL" sh -lc '
+            set -eu
+            grep -n -E "approval_id is required|consumed_at|consumed_by|already_consumed|replay|self.approv|decision_by|execution_audit_write|SELECT task_id FROM approval_requests|Mission Control|method_not_allowed|read.only|readonly" /app/app.py 2>/dev/null | head -n 240 || true
+          '
+
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_creation=none
+          echo approval_decision=none
+          echo approval_consumption=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1K_K3_PREFLIGHT_OK
+          REMOTE
