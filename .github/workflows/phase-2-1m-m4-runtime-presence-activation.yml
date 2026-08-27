@@ -1,0 +1,171 @@
+name: Phase 2.1M M4 Runtime Presence Activation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1m-m4-runtime-presence-activation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate activation payload
+        run: |
+          set -euo pipefail
+          bash -n ops/phase-2.1m/philaios-agent-heartbeat
+          python3 -m py_compile ops/phase-2.1m/philaios-agent-runtime-read-model.py
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Stage activation payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1m/philaios-agent-heartbeat "$VPS_USER@$VPS_HOST:/tmp/philaios-agent-heartbeat"
+          scp -P "$PORT" -q ops/phase-2.1m/philaios-agent-runtime-read-model.py "$VPS_USER@$VPS_HOST:/tmp/philaios-agent-runtime-read-model.py"
+
+      - name: Activate bounded runtime presence observation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          HB=/usr/local/sbin/philaios-agent-heartbeat
+          RM=/opt/phil-ai-os/mission-control/agent-runtime-read-model.py
+          SVC=/etc/systemd/system/phil-ai-os-agent-heartbeat.service
+          TMR=/etc/systemd/system/phil-ai-os-agent-heartbeat.timer
+          STATE=/var/lib/phil-ai-os/agent-presence/hermes.json
+          success=0
+
+          rollback(){
+            set +e
+            echo rollback=started
+            systemctl disable --now phil-ai-os-agent-heartbeat.timer >/dev/null 2>&1 || true
+            rm -f "$SVC" "$TMR" "$HB" "$RM" "$STATE"
+            systemctl daemon-reload >/dev/null 2>&1 || true
+            echo rollback=completed
+          }
+          cleanup(){
+            rc=$?
+            rm -f /tmp/philaios-agent-heartbeat /tmp/philaios-agent-runtime-read-model.py /tmp/agent-runtime-v21m.json
+            if [ "$rc" -ne 0 ] && [ "$success" -ne 1 ]; then rollback; fi
+          }
+          trap cleanup EXIT
+
+          echo '=== M4 SAFETY BASELINE ==='
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          systemctl is-active --quiet phil-ai-os-approval-notification-dispatcher.timer
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          test ! -e "$SVC"; test ! -e "$TMR"; test ! -e "$HB"; test ! -e "$RM"
+          docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');assert c.execute('pragma quick_check').fetchone()[0]=='ok';r=c.execute(\"select agent_id,authority_ceiling,assignable from agent_registry\").fetchall();assert r==[('hermes','L3',1)]"
+
+          install -m 0755 /tmp/philaios-agent-heartbeat "$HB"
+          install -d -m 0755 /opt/phil-ai-os/mission-control /var/lib/phil-ai-os/agent-presence
+          install -m 0755 /tmp/philaios-agent-runtime-read-model.py "$RM"
+
+          cat > "$SVC" <<'EOF'
+          [Unit]
+          Description=Phil AI OS authenticated Hermes heartbeat observation
+          After=docker.service
+          Wants=docker.service
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/sbin/philaios-agent-heartbeat
+          User=root
+          Group=root
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectSystem=strict
+          ReadWritePaths=/var/lib/phil-ai-os/agent-presence
+          EOF
+
+          cat > "$TMR" <<'EOF'
+          [Unit]
+          Description=Phil AI OS Hermes heartbeat timer
+
+          [Timer]
+          OnBootSec=30s
+          OnUnitActiveSec=60s
+          AccuracySec=5s
+          Persistent=false
+          Unit=phil-ai-os-agent-heartbeat.service
+
+          [Install]
+          WantedBy=timers.target
+          EOF
+
+          systemctl daemon-reload
+          systemctl start phil-ai-os-agent-heartbeat.service
+          test -s "$STATE"
+          python3 "$RM" > /tmp/agent-runtime-v21m.json
+          python3 - /tmp/agent-runtime-v21m.json <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1]))
+          assert d['schema_version']=='2.1m.v1' and d['status']=='ok'
+          a=d['agent']; assert a['agent_id']=='hermes' and a['authority_ceiling']=='L3' and a['assignable']==1
+          assert d['presence']['logical_presence']=='fresh'
+          hb=d['presence']['heartbeat']; assert hb['observation_type']=='authenticated_control_api_roundtrip' and hb['authority_effect']=='none'
+          g=d['governance']; assert g['presence_authority_effect']=='none'; assert not any(g[k] for k in ('automatic_retry','automatic_reroute','automatic_delegation','automatic_execution'))
+          assert d['workload']['source']=='durable_latest_task_lifecycle'
+          PY
+          systemctl enable --now phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+
+          # Reassert production governance after activation.
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');assert c.execute('pragma quick_check').fetchone()[0]=='ok';r=c.execute(\"select agent_id,authority_ceiling,assignable from agent_registry\").fetchall();assert r==[('hermes','L3',1)]"
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+
+          success=1
+          echo heartbeat_observation=authenticated_control_api_roundtrip
+          echo logical_presence=fresh
+          echo workload_source=durable_latest_task_lifecycle
+          echo heartbeat_timer=active
+          echo control_api_change=none
+          echo database_schema_change=none
+          echo execution_allowlist=general
+          echo agent_registry=hermes_L3_only
+          echo authority_expansion=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo PHIL_AI_OS_PHASE_2_1M_M4_RUNTIME_PRESENCE_ACTIVATION_OK
+          REMOTE
