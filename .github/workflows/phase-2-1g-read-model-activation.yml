@@ -1,0 +1,128 @@
+name: Phase 2.1G Read Model Activation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/phase-2-1g-read-model-activation-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build validated 2.1G read model
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ops/phase-2.1f/build-read-model-v21f.py ops/phase-2.1a/philaios-mission-control-read-model.py /tmp/read-model-2.1f.py
+          python3 ops/phase-2.1g/build-read-model-v21g.py /tmp/read-model-2.1f.py /tmp/read-model-2.1g.py
+          python3 -m py_compile /tmp/read-model-2.1g.py
+          grep -q 'SCHEMA_VERSION = "2.1g.v1"' /tmp/read-model-2.1g.py
+          echo activation_artifact=validated
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Stage validated read model
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q /tmp/read-model-2.1g.py "$VPS_USER@$VPS_HOST:/tmp/philaios-read-model-2.1g.py"
+
+      - name: Atomic read-model activation with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          STAGED=/tmp/philaios-read-model-2.1g.py
+          LIVE=/opt/phil-ai-os/mission-control/read-model.py
+          BACKUP="$LIVE.phase21g.rollback"
+          SERVICE=phil-ai-os-mission-control-operator.service
+          HOSTNAME=hermes-agent-whow.srv1833510.hstgr.cloud
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          success=0
+          changed=0
+          rollback(){ echo rollback=started; set +e; if [ "$changed" -eq 1 ] && [ -f "$BACKUP" ]; then cp "$BACKUP" "$LIVE"; systemctl restart "$SERVICE" >/dev/null 2>&1 || true; fi; echo rollback=completed; }
+          cleanup(){ rc=$?; rm -f "$STAGED"; if [ "$rc" -ne 0 ] && [ "$success" -ne 1 ]; then rollback; fi; }
+          trap cleanup EXIT
+
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.1-phase21f'
+          test -f "$LIVE"; test -f "$STAGED"
+          grep -q 'SCHEMA_VERSION = "2.1f.v1"' "$LIVE"
+          systemctl is-active --quiet "$SERVICE"
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
+          BEFORE="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0])")"
+          test "$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://$HOSTNAME/phil-ai-os/operator/)" = 401
+
+          cp "$LIVE" "$BACKUP"
+          chmod --reference="$LIVE" "$BACKUP" 2>/dev/null || true
+          install -m "$(stat -c '%a' "$LIVE")" "$STAGED" "$LIVE"
+          changed=1
+          systemctl restart "$SERVICE"
+          ready=0
+          for i in $(seq 1 20); do
+            if systemctl is-active --quiet "$SERVICE" && curl -fsS --max-time 3 http://127.0.0.1:4881/api/read-model >/tmp/philaios-2.1g-live.json 2>/dev/null; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          python3 -c "import json; m=json.load(open('/tmp/philaios-2.1g-live.json')); assert m['schema_version']=='2.1g.v1'; assert m['overall_state']=='healthy'; assert m['governance']['execution_allowed_task_classes']==['general']; assert m['governance']['direct_provider_bypass_allowed'] is False; assert m['governance']['authority_expansion_state']=='blocked'; q=m['data_quality']; assert q['lifecycle_provenance']=='durable_subset_only'; assert q['agent_assignment_provenance']=='authoritative_source_unavailable'; assert q['unsupported_lifecycle_stages']==['ASSIGNED','PLANNED','POLICY_CHECK','EXECUTING','CLOSED']; assert m['durable_correlation_summary']['canonical_task_id_mismatch_count']==0"
+          for method in POST PUT PATCH DELETE; do test "$(curl -s -o /dev/null -w '%{http_code}' -X "$method" --max-time 5 http://127.0.0.1:4881/)" = 405; done
+          test "$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://$HOSTNAME/phil-ai-os/operator/)" = 401
+          AFTER="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0])")"
+          test "$BEFORE" = "$AFTER"
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          rm -f /tmp/philaios-2.1g-live.json
+          success=1
+          echo read_model_activation=active
+          echo schema_version=2.1g.v1
+          echo lifecycle_provenance=durable_subset_only
+          echo agent_assignment=authoritative_source_unavailable
+          echo unsupported_stages=ASSIGNED,PLANNED,POLICY_CHECK,EXECUTING,CLOSED
+          echo approval_execution_counts_unchanged=true
+          echo production_allowlist=general_only
+          echo operator_auth_boundary=preserved
+          echo browser_mutation_methods=405
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1G_READ_MODEL_ACTIVATION_OK
+          REMOTE
