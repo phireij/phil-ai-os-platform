@@ -96,7 +96,9 @@ jobs:
           assert isinstance(w['active_task_count'],int) and w['active_task_count'] >= 1
           assert 'PLANNED' in w['active_states']
           assert any(x.get('task_id')=='tsk_9cf154fca7fb4a74a4632b6af069fa89' for x in w['active_tasks'])
-          assert any(x.get('task_id')=='tsk_e9694565de884bc9afa550d57db32426' for x in w['closed_tasks'])
+          # Worker workload is scoped only to tasks durably assigned to Hermes.
+          # The Phase 2.1K governed canary proved global closure but carried no
+          # Hermes assignment lifecycle row, so it must not be required here.
           r=d['worker_readiness']
           assert r['readiness'] in {'busy','stale','indeterminate'}
           assert r['readiness'] != 'ready'
@@ -120,6 +122,7 @@ jobs:
           assert d['schema_version']=='2.1o.v1'
           w=d['agent_runtime']['workload']
           assert w['evidence_complete'] is True and w['active_task_count'] >= 1
+          assert any(x.get('task_id')=='tsk_9cf154fca7fb4a74a4632b6af069fa89' for x in w['active_tasks'])
           r=d['worker_readiness']
           assert r['readiness'] != 'ready'
           assert r['authority_effect']=='none' and r['automatic_assignment'] is False and r['automatic_execution'] is False
