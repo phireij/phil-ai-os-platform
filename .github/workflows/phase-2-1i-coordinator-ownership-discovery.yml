@@ -49,20 +49,14 @@ jobs:
           test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.2-phase21h'
           curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
           curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
-          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); assert c.execute('pragma quick_check').fetchone()[0]=='ok'; print('lifecycle_table='+str(c.execute(\"select count(*) from sqlite_master where type='table' and name='task_lifecycle_events'\").fetchone()[0])); print('lifecycle_rows='+str(c.execute('select count(*) from task_lifecycle_events').fetchone()[0])); print('canonical_approvals='+str(c.execute('select count(*) from approval_requests where task_id is not null').fetchone()[0])); print('canonical_audits='+str(c.execute('select count(*) from execution_audit where task_id is not null').fetchone()[0]))"
-          docker exec "$CONTROL" python3 -c "import inspect,importlib.util; s=importlib.util.spec_from_file_location('app','/app/app.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); names=[n for n in dir(m) if any(k in n.lower() for k in ('assign','plan','coordin','lifecycle'))]; print('control_api_coordination_symbols='+(','.join(sorted(names)) if names else 'none'))"
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); assert c.execute('pragma quick_check').fetchone()[0]=='ok'; print('lifecycle_rows='+str(c.execute('select count(*) from task_lifecycle_events').fetchone()[0])); print('canonical_approvals='+str(c.execute('select count(*) from approval_requests where task_id is not null').fetchone()[0])); print('canonical_audits='+str(c.execute('select count(*) from execution_audit where task_id is not null').fetchone()[0]))"
+          docker exec "$CONTROL" python3 -c "import importlib.util; s=importlib.util.spec_from_file_location('app','/app/app.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); names=[n for n in dir(m) if any(k in n.lower() for k in ('assign','plan','coordin','lifecycle'))]; print('control_api_coordination_symbols='+(','.join(sorted(names)) if names else 'none'))"
           docker exec "$HERMES" sh -lc "test -x /usr/local/bin/philaios-mission-control && echo hermes_mission_control_client=present; test -x /usr/local/bin/philaios-execute && echo hermes_execution_client=present || true"
-          docker exec "$HERMES" sh -lc "python3 - <<'PY'
-import os
-keys=[k for k in os.environ if any(x in k.lower() for x in ('agent','coordin','assign','plan'))]
-print('hermes_coordination_env_names='+(','.join(sorted(keys)) if keys else 'none'))
-PY"
+          docker exec "$HERMES" python3 -c "import os; keys=[k for k in os.environ if any(x in k.lower() for x in ('agent','coordin','assign','plan'))]; print('hermes_coordination_env_names='+(','.join(sorted(keys)) if keys else 'none'))"
           grep -q 'SCHEMA_VERSION = "2.1h.v1"' /opt/phil-ai-os/mission-control/read-model.py
           grep -q 'READ ONLY · Phase 2.1H' /opt/phil-ai-os/mission-control/server.py
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
           echo mission_control_writer=none
-          echo assignment_writer_discovered=none_expected_unless_symbol_proves_otherwise
-          echo planning_writer_discovered=none_expected_unless_symbol_proves_otherwise
           echo production_change=none
           echo provider_call=none
           echo execution_call=none
