@@ -74,7 +74,8 @@ jobs:
               except Exception as e:
                   print('rows_error:'+t+'='+type(e).__name__)
 
-          assert c.execute('select agent_id,authority_ceiling,enabled,assignable from agent_registry order by agent_id').fetchall()==[('hermes','L3',1,1)]
+          registry=[tuple(r) for r in c.execute('select agent_id,authority_ceiling,enabled,assignable from agent_registry order by agent_id').fetchall()]
+          assert registry==[('hermes','L3',1,1)]
 
           lifecycle_tables=[t for t in interesting if 'lifecycle' in t.lower()]
           if not lifecycle_tables:
@@ -93,7 +94,6 @@ jobs:
                   rows=c.execute(f'SELECT {task_col},{stage_col} FROM {t}{order} LIMIT 30').fetchall()
                   print('recent_lifecycle_events='+json.dumps([[r[0],r[1]] for r in rows]))
 
-          # Find task IDs that appear in lifecycle plus execution/audit-like tables.
           task_ids=set()
           for t in lifecycle_tables:
               names=[r['name'] for r in c.execute(f'pragma table_info({t})')]
@@ -113,7 +113,6 @@ jobs:
                       safe=[]
                       for r in rows:
                           d=dict(r)
-                          # Never print free-form payloads or tokens; retain only structural correlation fields.
                           keep={k:v for k,v in d.items() if k in {'task_id','approval_id','execution_id','audit_id','agent_id','assigned_agent_id','stage','state','status','event_type','created_at','updated_at','timestamp','outcome','result_state','consumed_by'}}
                           safe.append(keep)
                       evidence.append([t,safe])
