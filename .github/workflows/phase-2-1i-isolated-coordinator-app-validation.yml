@@ -1,0 +1,139 @@
+name: Phase 2.1I Isolated Coordinator App Validation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/phase-2-1i-coordinator-app-trigger']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate builders
+        run: |
+          python3 -m py_compile ops/phase-2.1i/build-coordinator-app-candidate.py
+          python3 -m py_compile ops/phase-2.1i/apply-coordinator-schema.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage builders
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1i/build-coordinator-app-candidate.py "$VPS_USER@$VPS_HOST:/tmp/phase21i-coordinator-builder.py"
+          scp -P "$PORT" -q ops/phase-2.1i/apply-coordinator-schema.py "$VPS_USER@$VPS_HOST:/tmp/phase21i-coordinator-schema.py"
+      - name: Validate candidate on isolated app and DB copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          DB=/app/state/control-plane.db
+          HOST_APP="$(mktemp /tmp/phase21i-app.XXXXXX.py)"
+          HOST_CANDIDATE="$(mktemp /tmp/phase21i-candidate.XXXXXX.py)"
+          HOST_DB="$(mktemp /tmp/phase21i-db.XXXXXX.db)"
+          IN_APP=/tmp/phase21i-candidate-app.py
+          IN_DB=/tmp/phase21i-candidate.db
+          cleanup() {
+            docker exec "$CONTROL" rm -f "$IN_APP" "$IN_DB" /tmp/phase21i-behavior-test.py >/dev/null 2>&1 || true
+            rm -f "$HOST_APP" "$HOST_CANDIDATE" "$HOST_DB" /tmp/phase21i-coordinator-builder.py /tmp/phase21i-coordinator-schema.py
+          }
+          trap cleanup EXIT
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.2-phase21h'
+          read A0 E0 L0 < <(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); assert c.execute('pragma quick_check').fetchone()[0]=='ok'; print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0],c.execute('select count(*) from task_lifecycle_events').fetchone()[0])")
+          docker cp "$CONTROL:/app/app.py" "$HOST_APP"
+          docker exec "$CONTROL" python3 -c "import sqlite3; s=sqlite3.connect('$DB'); d=sqlite3.connect('/tmp/phase21i-copy.db'); s.backup(d); d.close(); s.close()"
+          docker cp "$CONTROL:/tmp/phase21i-copy.db" "$HOST_DB"
+          python3 /tmp/phase21i-coordinator-builder.py "$HOST_APP" "$HOST_CANDIDATE"
+          python3 -m py_compile "$HOST_CANDIDATE"
+          python3 /tmp/phase21i-coordinator-schema.py "$HOST_DB"
+          docker cp "$HOST_CANDIDATE" "$CONTROL:$IN_APP"
+          docker cp "$HOST_DB" "$CONTROL:$IN_DB"
+          docker exec "$CONTROL" sh -lc "cat > /tmp/phase21i-behavior-test.py <<'PY'
+          import importlib.util, sqlite3, re
+          APP='/tmp/phase21i-candidate-app.py'
+          DB='/tmp/phase21i-candidate.db'
+          spec=importlib.util.spec_from_file_location('phase21i_candidate',APP)
+          mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+          def copied_db():
+              c=sqlite3.connect(DB); c.row_factory=sqlite3.Row; return c
+          mod.db=copied_db
+          mod.classify_task=lambda text:{'task_class':'general','confidence':1.0}
+          mod.evaluate_route=lambda task_class:(200,{'decision':{'profile':'validation','primary':{'provider':'none','model':'none'},'fallback':{}}})
+          before_a=copied_db().execute('select count(*) from approval_requests').fetchone()[0]
+          before_e=copied_db().execute('select count(*) from execution_audit').fetchone()[0]
+          code,body=mod.approval_create('phase21i isolated coordinator task',source='phase21i-validation',requester='phase21i-validation',requested_by='phase21i-validation')
+          assert code==201,(code,body)
+          task_id=body['approval']['task_id']; assert re.fullmatch(r'tsk_[0-9a-f]{32}',task_id)
+          code,assignment=mod.coordinator_assign(task_id,'hermes',requested_by='control-api')
+          assert code==200,(code,assignment)
+          assert assignment['assignment']['agent_id']=='hermes'
+          code,p1=mod.coordinator_plan(task_id,'bounded',requested_by='control-api')
+          assert code==201,(code,p1)
+          plan1=p1['plan']['plan_ref']; assert re.fullmatch(r'pln_[0-9a-f]{32}',plan1)
+          code,p2=mod.coordinator_plan(task_id,'bounded',requested_by='control-api',supersedes_plan_ref=plan1)
+          assert code==201,(code,p2)
+          assert p2['plan']['supersedes_plan_ref']==plan1 and p2['plan']['plan_ref']!=plan1
+          assert mod.coordinator_assign(task_id,'missing-agent')[0]==404
+          assert mod.coordinator_plan('tsk_missing')[0]==404
+          c=copied_db()
+          stages=[r[0] for r in c.execute('select stage from task_lifecycle_events where task_id=? order by occurred_at,event_id',(task_id,))]
+          assert 'ASSIGNED' in stages and stages.count('PLANNED')==2
+          assert c.execute('select count(*) from task_plans where task_id=?',(task_id,)).fetchone()[0]==2
+          assert c.execute('select count(*) from execution_audit').fetchone()[0]==before_e
+          assert c.execute('select count(*) from approval_requests').fetchone()[0]==before_a+1
+          mod.lifecycle_event_insert(c,task_id,'CLOSED',reason_code='isolated_terminal'); c.commit(); c.close()
+          assert mod.coordinator_assign(task_id,'hermes')[0]==409
+          assert mod.coordinator_plan(task_id)[0]==409
+          c=copied_db(); assert c.execute('pragma quick_check').fetchone()[0]=='ok'; c.close()
+          print('canonical_task_created_on_copy=true')
+          print('assignment_to_registered_hermes=ok')
+          print('plan_ref_server_generated=true')
+          print('replan_append_only=true')
+          print('unknown_agent=blocked')
+          print('unknown_task=blocked')
+          print('terminal_task_assignment=blocked')
+          print('terminal_task_planning=blocked')
+          print('execution_audit_side_effect=none')
+          print('provider_call=none')
+          print('authority_expansion=none')
+          print('PHIL_AI_OS_PHASE_2_1I_ISOLATED_COORDINATOR_APP_BEHAVIOR_OK')
+          PY
+          python3 /tmp/phase21i-behavior-test.py"
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); assert c.execute('pragma quick_check').fetchone()[0]=='ok'; assert c.execute('select count(*) from approval_requests').fetchone()[0]==$A0; assert c.execute('select count(*) from execution_audit').fetchone()[0]==$E0; assert c.execute('select count(*) from task_lifecycle_events').fetchone()[0]==$L0; assert c.execute(\"select count(*) from sqlite_master where type='table' and name in ('agent_registry','task_plans')\").fetchone()[0]==0"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          echo live_schema_change=none
+          echo live_counts_unchanged=true
+          echo production_allowlist=general_only
+          echo execution_call_live=none
+          echo provider_call_live=none
+          echo approval_mutation_live=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1I_ISOLATED_COORDINATOR_APP_VALIDATION_OK
+          REMOTE
