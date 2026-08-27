@@ -1,0 +1,119 @@
+name: Phase 2.1M M5 Read Model Integration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1m-m5-read-model-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate wrapper
+        run: python3 -m py_compile ops/phase-2.1m/philaios-read-model-wrapper-v21m.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage wrapper
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1m/philaios-read-model-wrapper-v21m.py "$VPS_USER@$VPS_HOST:/tmp/philaios-read-model-wrapper-v21m.py"
+      - name: Integrate runtime presence into Mission Control read model
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=/opt/phil-ai-os/mission-control/read-model.py
+          BACKUP=/opt/phil-ai-os/mission-control/read-model.py.pre-phase21m
+          WRAP=/tmp/philaios-read-model-wrapper-v21m.py
+          RUNTIME=/opt/phil-ai-os/mission-control/agent-runtime-read-model.py
+          CONTROL=phil-ai-os-core-control-api-1
+          success=0
+          rollback(){
+            set +e
+            echo rollback=started
+            if [ -f "$BACKUP" ]; then cp "$BACKUP" "$BASE"; chmod 0644 "$BASE"; systemctl restart phil-ai-os-mission-control-operator.service >/dev/null 2>&1 || true; fi
+            echo rollback=completed
+          }
+          cleanup(){ rc=$?; rm -f "$WRAP" /tmp/mc-v21m.json; if [ "$rc" -ne 0 ] && [ "$success" -ne 1 ]; then rollback; fi; }
+          trap cleanup EXIT
+
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          test -x "$RUNTIME"
+          test ! -e "$BACKUP"
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          grep -q 'SCHEMA_VERSION = "2.1i.v1"' "$BASE"
+
+          cp "$BASE" "$BACKUP"
+          chmod 0600 "$BACKUP"
+          install -m 0644 "$WRAP" "$BASE"
+          python3 "$BASE" > /tmp/mc-v21m.json
+          python3 - /tmp/mc-v21m.json <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1]))
+          assert d['schema_version']=='2.1m.v1'
+          ar=d['agent_runtime']; assert ar['schema_version']=='2.1m.v1' and ar['status']=='ok'
+          assert ar['agent']['agent_id']=='hermes' and ar['agent']['authority_ceiling']=='L3'
+          assert ar['presence']['logical_presence'] in {'fresh','stale'}
+          assert ar['governance']['presence_authority_effect']=='none'
+          assert d['governance']['agent_runtime_presence_authority_effect']=='none'
+          PY
+
+          systemctl restart phil-ai-os-mission-control-operator.service
+          for _ in $(seq 1 15); do systemctl is-active --quiet phil-ai-os-mission-control-operator.service && break; sleep 2; done
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          curl -fsS http://127.0.0.1:4881/api/read-model > /tmp/mc-v21m.json
+          python3 - /tmp/mc-v21m.json <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1])); assert d['schema_version']=='2.1m.v1'
+          ar=d['agent_runtime']; assert ar['agent']['agent_id']=='hermes'; assert ar['governance']['automatic_execution'] is False
+          assert ar['workload']['source']=='durable_latest_task_lifecycle'
+          PY
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');assert c.execute('pragma quick_check').fetchone()[0]=='ok';r=c.execute(\"select agent_id,authority_ceiling,assignable from agent_registry\").fetchall();assert r==[('hermes','L3',1)]"
+
+          success=1
+          echo mission_control_schema=2.1m.v1
+          echo agent_runtime_projection=present
+          echo mission_control_mutation=none
+          echo dashboard_api_mutations=405
+          echo operator_auth=401
+          echo execution_allowlist=general
+          echo agent_registry=hermes_L3_only
+          echo control_api_change=none
+          echo database_change=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1M_M5_READ_MODEL_INTEGRATION_OK
+          REMOTE
