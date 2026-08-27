@@ -1,0 +1,82 @@
+name: Phase 2.1F Dashboard ExecStart Path Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1f-dashboard-execstart-path-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Compare process and systemd paths read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          SERVICE=phil-ai-os-mission-control-operator.service
+          PID="$(systemctl show "$SERVICE" -p MainPID --value)"
+          test -n "$PID"; test "$PID" != 0
+          PROC_EXE="$(readlink -f "/proc/$PID/exe")"
+          CMDLINE="$(tr '\0' ' ' < "/proc/$PID/cmdline")"
+          PROC_SCRIPT="$(python3 - "$CMDLINE" <<'PY'
+          import shlex,sys
+          parts=shlex.split(sys.argv[1])
+          vals=[x for x in parts if x.endswith('mission-control-readonly-server.py')]
+          print(vals[0] if vals else '')
+          PY
+          )"
+          EXECSTART="$(systemctl show "$SERVICE" -p ExecStart --value)"
+          EXEC_SCRIPT="$(python3 - "$EXECSTART" <<'PY'
+          import re,sys
+          m=re.search(r'(/[^ ;{}]+mission-control-readonly-server\.py)',sys.argv[1])
+          print(m.group(1) if m else '')
+          PY
+          )"
+          echo main_pid_present=true
+          echo process_executable="$PROC_EXE"
+          echo process_script="$PROC_SCRIPT"
+          echo execstart_script="$EXEC_SCRIPT"
+          test -n "$PROC_SCRIPT"; test -n "$EXEC_SCRIPT"
+          echo process_script_realpath="$(readlink -f "$PROC_SCRIPT")"
+          echo execstart_script_realpath="$(readlink -f "$EXEC_SCRIPT")"
+          echo paths_match=$([ "$(readlink -f "$PROC_SCRIPT")" = "$(readlink -f "$EXEC_SCRIPT")" ] && echo true || echo false)
+          echo process_script_sha256="$(sha256sum "$(readlink -f "$PROC_SCRIPT")" | awk '{print $1}')"
+          echo execstart_script_sha256="$(sha256sum "$(readlink -f "$EXEC_SCRIPT")" | awk '{print $1}')"
+          grep -q 'READ ONLY · Phase 2.1E' "$(readlink -f "$EXEC_SCRIPT")" && echo execstart_badge=Phase_2.1E || true
+          echo production_change=none
+          echo database_write=none
+          echo PHIL_AI_OS_PHASE_2_1F_DASHBOARD_EXECSTART_PATH_OK
+          REMOTE
