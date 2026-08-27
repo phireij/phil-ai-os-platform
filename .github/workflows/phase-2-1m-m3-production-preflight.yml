@@ -1,0 +1,122 @@
+name: Phase 2.1M M3 Production Preflight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1m-m3-production-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Validate heartbeat/read-model production insertion points read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=http://127.0.0.1:4870
+          CONTROL=phil-ai-os-core-control-api-1
+          HERMES="$(docker ps --format '{{.Names}}' | grep '^hermes-agent-whow' | head -n1)"
+          test -n "$HERMES"
+
+          echo '=== M3 SAFETY / RECOVERY BASELINE ==='
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          systemctl is-active --quiet phil-ai-os-approval-notification-dispatcher.timer
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          echo health=ok
+          echo readiness=ok
+          echo recovery_services=active
+          echo execution_allowlist=general
+
+          echo '=== DB ADDITIVE MIGRATION READINESS ==='
+          docker exec -i "$CONTROL" python - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          tables={r[0] for r in c.execute("select name from sqlite_master where type='table'")}
+          print('quick_check=ok')
+          print('agent_runtime_status_present='+str('agent_runtime_status' in tables).lower())
+          print('agent_runtime_heartbeat_present='+str('agent_runtime_heartbeat' in tables).lower())
+          agents=[dict(zip(['agent_id','role','authority_ceiling','enabled','assignable'],r)) for r in c.execute('select agent_id,role,authority_ceiling,enabled,assignable from agent_registry').fetchall()]
+          print('agent_count='+str(len(agents)))
+          print('agents='+repr(agents))
+          assert len(agents)==1 and agents[0]['agent_id']=='hermes' and agents[0]['authority_ceiling']=='L3' and agents[0]['assignable']==1
+          c.close()
+          PY
+
+          echo '=== CONTROL API DEPLOYMENT / SOURCE PERSISTENCE ==='
+          docker inspect "$CONTROL" --format '{{range .Mounts}}mount={{.Source}} -> {{.Destination}} rw={{.RW}}{{println}}{{end}}'
+          docker inspect "$CONTROL" --format 'control_image={{.Config.Image}}'
+          docker inspect "$CONTROL" --format 'control_restart_policy={{.HostConfig.RestartPolicy.Name}}'
+          docker inspect "$CONTROL" --format 'control_started_at={{.State.StartedAt}}'
+          docker exec "$CONTROL" sh -lc 'test -f /app/app.py; sha256sum /app/app.py'
+          find /opt/phil-ai-os-platform -maxdepth 5 -type f \( -name 'app.py' -o -name 'docker-compose*.yml' -o -name 'compose*.yml' \) -print 2>/dev/null | head -n 80
+
+          echo '=== MISSION CONTROL SNAPSHOT INSERTION POINT ==='
+          docker exec "$CONTROL" sh -lc "sed -n '500,630p' /app/app.py"
+          echo '=== AGENT / TASK HELPERS INSERTION POINT ==='
+          docker exec "$CONTROL" sh -lc "sed -n '1460,1540p' /app/app.py"
+
+          echo '=== HERMES HEARTBEAT EMITTER OPTIONS ==='
+          docker inspect "$HERMES" --format '{{range .Mounts}}hermes_mount={{.Source}} -> {{.Destination}} rw={{.RW}}{{println}}{{end}}'
+          docker inspect "$HERMES" --format 'hermes_restart_policy={{.HostConfig.RestartPolicy.Name}}'
+          docker exec "$HERMES" sh -lc 'test -r /run/philaios/hermes_control_api_token && echo hermes_control_token_mount=present'
+          docker exec "$HERMES" sh -lc 'test -x /usr/local/bin/philaios-mission-control && echo mission_control_client=present'
+          docker exec "$HERMES" sh -lc "grep -n -E 'BASE_URL|TOKEN_FILE|def call|READ_COMMANDS' /usr/local/bin/philaios-mission-control | head -n 80"
+
+          echo '=== EXISTING TIMER NAMESPACE / COLLISION CHECK ==='
+          systemctl list-unit-files --type=service --type=timer --no-pager | grep -E 'phil-ai-os.*(agent|heartbeat|presence|runtime)' || true
+          test ! -e /etc/systemd/system/phil-ai-os-agent-heartbeat.timer
+          test ! -e /etc/systemd/system/phil-ai-os-agent-heartbeat.service
+          echo heartbeat_timer_collision=none
+
+          echo '=== ROLLBACK SIGNALS ==='
+          ls -1t /app/state/control-plane.db.pre-* 2>/dev/null | head -n 5 || true
+          test -x /usr/local/sbin/philaios-approval-notification-dispatcher
+          echo existing_backup_primitives=present
+
+          echo database_write=none
+          echo approval_mutation=none
+          echo notification_send=none
+          echo execution_call=none
+          echo provider_call=none
+          echo service_restart=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1M_M3_PRODUCTION_PREFLIGHT_OK
+          REMOTE
