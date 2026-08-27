@@ -1,0 +1,138 @@
+name: Phase 2.1N N3 Production Preflight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1n-n3-production-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate classifier
+        run: python3 -m py_compile ops/phase-2.1n/worker-readiness-v21n.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Read-only production preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test -n "$CONTROL"
+
+          echo '=== N3 GOVERNANCE ==='
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          systemctl is-active --quiet phil-ai-os-approval-notification-dispatcher.timer
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          echo execution_allowlist=general
+
+          echo '=== N3 DIRECT DB EVIDENCE ==='
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect('/app/state/control-plane.db'); c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          tables={r[0] for r in c.execute("select name from sqlite_master where type='table'")}
+          assert 'agent_registry' in tables and 'task_lifecycle_events' in tables
+          print('required_tables=present')
+          registry=[dict(r) for r in c.execute('select agent_id,display_name,role,authority_ceiling,enabled,assignable,source_component from agent_registry order by agent_id')]
+          print('agent_registry='+json.dumps(registry,separators=(',',':')))
+          assert registry==[{'agent_id':'hermes','display_name':'Hermes','role':'coordinator-worker','authority_ceiling':'L3','enabled':1,'assignable':1,'source_component':'control-api'}] or (len(registry)==1 and registry[0]['agent_id']=='hermes' and registry[0]['authority_ceiling']=='L3' and int(registry[0]['enabled'])==1 and int(registry[0]['assignable'])==1)
+          cols=[r[1] for r in c.execute('pragma table_info(task_lifecycle_events)')]
+          print('lifecycle_columns='+','.join(cols))
+          assert 'task_id' in cols
+          vocab={}
+          for name in ('stage','event_type','state'):
+              if name in cols:
+                  vals=[r[0] for r in c.execute(f'select distinct {name} from task_lifecycle_events where {name} is not null order by {name}')]
+                  vocab[name]=vals
+                  print('lifecycle_'+name+'_values='+','.join(map(str,vals)))
+          assert vocab, 'no canonical lifecycle vocabulary column found'
+          safe=[x for x in ('task_id','event_type','stage','state','assigned_agent_id','agent_id','occurred_at','created_at') if x in cols]
+          rows=[dict(r) for r in c.execute('select '+','.join(safe)+' from task_lifecycle_events order by rowid desc limit 30')]
+          print('recent_lifecycle_count='+str(len(rows)))
+          print('recent_lifecycle='+json.dumps(rows,separators=(',',':'),default=str))
+          PY
+
+          echo '=== N3 HEARTBEAT / READ MODEL ==='
+          test -s /var/lib/phil-ai-os/agent-presence/hermes.json
+          python3 - <<'PY'
+          import json,datetime
+          d=json.load(open('/var/lib/phil-ai-os/agent-presence/hermes.json'))
+          assert d.get('agent_id')=='hermes'
+          assert d.get('observation_type')=='authenticated_control_api_roundtrip'
+          assert d.get('authority_effect')=='none'
+          age=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(d['observed_at'].replace('Z','+00:00'))).total_seconds()
+          print('heartbeat_age_seconds='+str(int(age)))
+          assert age < 180
+          PY
+          curl -fsS http://127.0.0.1:4881/api/read-model >/tmp/n3-model.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/n3-model.json'))
+          assert d.get('schema_version')=='2.1m.v1'
+          ar=d.get('agent_runtime') or {}
+          assert (ar.get('agent') or {}).get('agent_id')=='hermes'
+          assert (ar.get('agent') or {}).get('authority_ceiling')=='L3'
+          assert (ar.get('governance') or {}).get('presence_authority_effect')=='none'
+          print('logical_presence='+str((ar.get('presence') or {}).get('logical_presence')))
+          print('workload_source='+str((ar.get('workload') or {}).get('source')))
+          print('workload_state='+str((ar.get('workload') or {}).get('state')))
+          PY
+          rm -f /tmp/n3-model.json
+
+          echo '=== N3 INSERTION / ROLLBACK SURFACE ==='
+          test -f /opt/phil-ai-os/mission-control/read-model.py
+          test -f /opt/phil-ai-os/mission-control/agent-runtime-read-model.py
+          grep -q '2.1m.v1' /opt/phil-ai-os/mission-control/read-model.py
+          echo read_model_wrapper=present
+          echo runtime_projection=present
+          test -d /var/lib/phil-ai-os/agent-presence
+          df -Pk /opt/phil-ai-os | tail -1 | awk '{print "free_kb=" $4}'
+
+          echo '=== N3 READ-ONLY BOUNDARY ==='
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+          echo production_change=none
+          echo approval_mutation=none
+          echo assignment_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1N_N3_PRODUCTION_PREFLIGHT_OK
+          REMOTE
