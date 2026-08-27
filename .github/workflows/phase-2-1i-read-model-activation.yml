@@ -1,0 +1,105 @@
+name: Phase 2.1I Read Model Activation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/phase-2-1i-read-model-activation-trigger']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate transformer
+        run: python3 -m py_compile ops/phase-2.1i/build-read-model-v21i.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage transformer
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1i/build-read-model-v21i.py "$VPS_USER@$VPS_HOST:/tmp/build-read-model-v21i.py"
+      - name: Activate read-only Mission Control model
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=/opt/phil-ai-os/mission-control/read-model.py
+          BACKUP=/opt/phil-ai-os/mission-control/read-model.py.pre-phase21i
+          CAND=/tmp/read-model-v21i.py
+          OUT=/tmp/read-model-v21i.json
+          success=0
+          rollback(){
+            set +e
+            echo rollback=started
+            if [ -f "$BACKUP" ]; then cp "$BACKUP" "$BASE"; chmod 0644 "$BASE"; systemctl restart phil-ai-os-mission-control-operator.service >/dev/null 2>&1 || true; fi
+            echo rollback=completed
+          }
+          cleanup(){ rc=$?; rm -f "$CAND" "$OUT" /tmp/build-read-model-v21i.py; if [ "$rc" -ne 0 ] && [ "$success" -ne 1 ]; then rollback; fi; }
+          trap cleanup EXIT
+          grep -q 'SCHEMA_VERSION = "2.1h.v1"' "$BASE"
+          test "$(docker inspect $(docker ps --format '{{.Names}}' | grep -m1 control-api) --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.3-phase21i'
+          cp "$BASE" "$BACKUP"; chmod 0600 "$BACKUP"
+          python3 /tmp/build-read-model-v21i.py "$BASE" "$CAND"
+          python3 -m py_compile "$CAND"
+          python3 "$CAND" > "$OUT"
+          python3 - "$OUT" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1])); assert d['schema_version']=='2.1i.v1'; assert d['overall_state']=='healthy'
+          c=d['coordinator']; s=c['summary']; assert s['coordinator_owner']=='control-api'; assert s['registered_agent_count']==1; assert s['plan_count_observed']==0; assert s['mission_control_mutation']=='none'
+          a=c['agent_registry']; assert len(a)==1 and a[0]['agent_id']=='hermes' and a[0]['authority_ceiling']=='L3'
+          assert c['plans']==[]
+          PY
+          install -m 0644 "$CAND" "$BASE"
+          systemctl restart phil-ai-os-mission-control-operator.service
+          for _ in $(seq 1 15); do systemctl is-active --quiet phil-ai-os-mission-control-operator.service && break; sleep 2; done
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          python3 "$BASE" > "$OUT"
+          python3 - "$OUT" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1])); assert d['schema_version']=='2.1i.v1'; assert d['overall_state']=='healthy'
+          c=d['coordinator']; assert c['summary']['coordinator_owner']=='control-api'; assert c['summary']['registered_agent_count']==1; assert c['summary']['plan_count_observed']==0; assert c['summary']['mission_control_mutation']=='none'
+          assert len(c['agent_registry'])==1 and c['agent_registry'][0]['agent_id']=='hermes'; assert c['plans']==[]
+          PY
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+          for m in POST PUT PATCH DELETE; do test "$(curl -ksS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 control-api)"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');assert c.execute('pragma quick_check').fetchone()[0]=='ok';assert c.execute('select count(*) from task_plans').fetchone()[0]==0;assert c.execute('select count(*) from task_lifecycle_events').fetchone()[0]==0"
+          success=1
+          echo read_model_schema=2.1i.v1
+          echo coordinator_registry=hermes_only
+          echo coordinator_plans=0
+          echo mission_control_mutation=none
+          echo operator_auth=401
+          echo dashboard_mutations=405
+          echo production_allowlist=general_only
+          echo control_api_change=none
+          echo database_change=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1I_READ_MODEL_ACTIVATION_OK
+          REMOTE
