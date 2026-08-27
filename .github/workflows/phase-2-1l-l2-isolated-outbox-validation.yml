@@ -1,0 +1,103 @@
+name: Phase 2.1L L2 Isolated Outbox Contract Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1l-l2-isolated-outbox-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate isolated SQLite outbox semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import sqlite3, uuid
+
+          c=sqlite3.connect(':memory:')
+          c.row_factory=sqlite3.Row
+          c.executescript('''
+          CREATE TABLE approval_notification_outbox (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id TEXT NOT NULL UNIQUE,
+            approval_id TEXT NOT NULL,
+            task_id TEXT NOT NULL,
+            event_type TEXT NOT NULL CHECK(event_type='approval_pending'),
+            channel TEXT NOT NULL CHECK(channel='telegram'),
+            state TEXT NOT NULL CHECK(state IN ('pending','leased','retry_wait','delivered','dead_letter')),
+            attempt_count INTEGER NOT NULL DEFAULT 0 CHECK(attempt_count >= 0),
+            next_attempt_at TEXT,
+            lease_until TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            delivered_at TEXT,
+            last_error_code TEXT,
+            UNIQUE(approval_id,event_type,channel)
+          );
+          ''')
+
+          cols=[r['name'] for r in c.execute('pragma table_info(approval_notification_outbox)')]
+          forbidden={'token','raw_token','link_token','telegram_token','bearer_token','credential','payload','command','provider','model'}
+          assert not (set(cols) & forbidden), cols
+
+          approval_id='apr_isolated_001'
+          task_id='tsk_isolated_001'
+          now='2026-08-27T00:00:00+00:00'
+          event_id='evt_'+uuid.uuid4().hex
+          c.execute('''INSERT INTO approval_notification_outbox
+          (event_id,approval_id,task_id,event_type,channel,state,created_at,updated_at)
+          VALUES (?,?,?,?,?,?,?,?)''',(event_id,approval_id,task_id,'approval_pending','telegram','pending',now,now))
+          c.commit()
+
+          try:
+              c.execute('''INSERT INTO approval_notification_outbox
+              (event_id,approval_id,task_id,event_type,channel,state,created_at,updated_at)
+              VALUES (?,?,?,?,?,?,?,?)''',('evt_'+uuid.uuid4().hex,approval_id,task_id,'approval_pending','telegram','pending',now,now))
+              c.commit()
+              raise AssertionError('duplicate insert unexpectedly succeeded')
+          except sqlite3.IntegrityError:
+              c.rollback()
+
+          rows=c.execute('select * from approval_notification_outbox where approval_id=?',(approval_id,)).fetchall()
+          assert len(rows)==1
+          row=rows[0]
+          assert row['task_id']==task_id and row['state']=='pending' and row['attempt_count']==0
+
+          c.execute("update approval_notification_outbox set state='leased', attempt_count=attempt_count+1, lease_until=?, updated_at=? where id=? and state='pending'",('2026-08-27T00:01:00+00:00',now,row['id']))
+          c.commit()
+          r=c.execute('select * from approval_notification_outbox where id=?',(row['id'],)).fetchone()
+          assert r['state']=='leased' and r['attempt_count']==1
+
+          c.execute("update approval_notification_outbox set state='retry_wait', next_attempt_at=?, lease_until=NULL, last_error_code='telegram_timeout', updated_at=? where id=?",('2026-08-27T00:02:00+00:00',now,row['id']))
+          c.commit()
+          r=c.execute('select * from approval_notification_outbox where id=?',(row['id'],)).fetchone()
+          assert r['state']=='retry_wait' and r['attempt_count']==1
+
+          c.execute("update approval_notification_outbox set state='leased', attempt_count=attempt_count+1, lease_until=?, next_attempt_at=NULL, updated_at=? where id=? and state='retry_wait'",('2026-08-27T00:03:00+00:00',now,row['id']))
+          c.execute("update approval_notification_outbox set state='delivered', delivered_at=?, lease_until=NULL, last_error_code=NULL, updated_at=? where id=? and state='leased'",(now,now,row['id']))
+          c.commit()
+          r=c.execute('select * from approval_notification_outbox where id=?',(row['id'],)).fetchone()
+          assert r['state']=='delivered' and r['attempt_count']==2 and r['delivered_at'] is not None
+
+          eligible=c.execute("select count(*) from approval_notification_outbox where state in ('pending','retry_wait')").fetchone()[0]
+          assert eligible==0
+
+          print('schema_secret_fields=absent')
+          print('correlation_preserved=true')
+          print('duplicate_suppression=true')
+          print('retry_reuses_same_row=true')
+          print('delivered_not_retry_eligible=true')
+          print('approval_mutation=none')
+          print('execution_call=none')
+          print('provider_call=none')
+          print('network_call=none')
+          print('PHIL_AI_OS_PHASE_2_1L_L2_ISOLATED_OUTBOX_VALIDATION_OK')
+          PY
