@@ -1,0 +1,109 @@
+name: Phase 2.1K K4 Human Approval Canary Preparation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1k-k4-human-approval-canary.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          getent ahosts "$VPS_HOST" >/dev/null
+          timeout 20 bash -c "</dev/tcp/$VPS_HOST/$PORT"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true
+
+      - name: Create exactly one bounded general canary and verify pending state
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=http://127.0.0.1:4870
+          TOKEN_FILE=/run/philaios/hermes_control_api_token
+          CONTROL=phil-ai-os-core-control-api-1
+          test -s "$TOKEN_FILE"
+          TOKEN="$(cat "$TOKEN_FILE")"
+
+          echo '=== PHASE 2.1K K4 HUMAN APPROVAL CANARY PREPARATION ==='
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+
+          PAYLOAD='{"task_text":"Phase 2.1K K4 governed canary: return PHIL_AI_OS_PHASE_2_1K_CANARY_OK","source":"hermes","requester":"hermes","requested_by":"hermes"}'
+          RESPONSE="$(curl -fsS -X POST "$BASE/v1/approvals/request" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data "$PAYLOAD")"
+
+          printf '%s' "$RESPONSE" | python - <<'PY'
+          import json,sys
+          data=json.load(sys.stdin)
+          approval=data.get('approval') or data
+          approval_id=approval.get('approval_id')
+          task_id=approval.get('task_id')
+          state=approval.get('state')
+          task_class=approval.get('task_class')
+          assert approval_id and task_id, data
+          assert state == 'pending', data
+          assert task_class == 'general', data
+          print('k4_approval_id=' + approval_id)
+          print('k4_task_id=' + task_id)
+          print('k4_state=' + state)
+          print('k4_task_class=' + task_class)
+          PY
+
+          APPROVAL_ID="$(printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or d; print(a["approval_id"])')"
+          TASK_ID="$(printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or d; print(a["task_id"])')"
+
+          docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
+          import sqlite3,sys
+          approval_id,task_id=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro', uri=True)
+          c.row_factory=sqlite3.Row
+          r=c.execute('select approval_id,task_id,state,task_class,consumed_at from approval_requests where approval_id=?',(approval_id,)).fetchone()
+          assert r is not None
+          assert r['task_id']==task_id
+          assert r['state']=='pending'
+          assert r['task_class']=='general'
+          assert r['consumed_at'] is None
+          lifecycle=c.execute('select stage,correlation_id from task_lifecycle_events where task_id=? order by occurred_at,event_id',(task_id,)).fetchall()
+          stages=[x['stage'] for x in lifecycle]
+          assert stages[:3] == ['RECEIVED','CLASSIFIED','APPROVAL_PENDING'], stages
+          assert all(x['correlation_id']==approval_id for x in lifecycle[:3])
+          audits=c.execute('select count(*) from execution_audit where task_id=? or approval_id=?',(task_id,approval_id)).fetchone()[0]
+          assert audits == 0, audits
+          print('k4_durable_correlation=ok')
+          print('k4_lifecycle=' + ','.join(stages))
+          print('k4_consumed=false')
+          print('k4_execution_audit_links=0')
+          PY
+
+          echo execution_call=none
+          echo provider_call=none
+          echo approval_decision=none
+          echo approval_consumption=none
+          echo PHIL_AI_OS_PHASE_2_1K_K4_CANARY_PREPARED
+          REMOTE
