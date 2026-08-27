@@ -65,7 +65,7 @@ jobs:
           HOST_DB="$(mktemp /tmp/philaios-21h-behavior.XXXXXX.db)"
           IN_APP=/tmp/philaios-21h-candidate-app.py
           IN_DB=/tmp/philaios-21h-candidate.db
-          cleanup(){ docker exec "$CONTROL" rm -f "$IN_APP" "$IN_DB" /tmp/philaios-21h-behavior-test.py >/dev/null 2>&1 || true; rm -f "$HOST_APP" "$HOST_CAND" "$HOST_VALID_DB" "$HOST_DB" /tmp/build-lifecycle-writer-candidate.py /tmp/validate-lifecycle-ledger-migration.py /tmp/apply-lifecycle-ledger-migration.py; }
+          cleanup(){ docker exec -u 0 "$CONTROL" rm -f "$IN_APP" "$IN_DB" /tmp/philaios-21h-behavior-test.py >/dev/null 2>&1 || true; rm -f "$HOST_APP" "$HOST_CAND" "$HOST_VALID_DB" "$HOST_DB" /tmp/build-lifecycle-writer-candidate.py /tmp/validate-lifecycle-ledger-migration.py /tmp/apply-lifecycle-ledger-migration.py; }
           trap cleanup EXIT
           test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.1-phase21f'
           BEFORE="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0],c.execute(\"select count(*) from sqlite_master where type='table' and name='task_lifecycle_events'\").fetchone()[0])")"
@@ -82,6 +82,8 @@ jobs:
           PY
           docker cp "$HOST_CAND" "$CONTROL:$IN_APP"
           docker cp "$HOST_DB" "$CONTROL:$IN_DB"
+          docker exec -u 0 "$CONTROL" chmod 0644 "$IN_APP"
+          docker exec -u 0 "$CONTROL" chmod 0666 "$IN_DB"
           docker exec "$CONTROL" sh -lc "cat > /tmp/philaios-21h-behavior-test.py <<'PY'
           import importlib.util,re,sqlite3
           APP='/tmp/philaios-21h-candidate-app.py'; DB='/tmp/philaios-21h-candidate.db'
