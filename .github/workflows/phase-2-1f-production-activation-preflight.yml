@@ -59,9 +59,14 @@ jobs:
           curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
           echo checkpoint=control_api_health_ready
 
-          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.0'
-          test "$(docker exec "$CONTROL" sha256sum /app/app.py | awk '{print $1}')" = 'c950ff968d54d083ae36c318fc97d279be78dd1543913c28d1e3d2b57fd29046'
-          grep -q 'phil-ai-os/control-api:0.20.0' "$COMPOSE"
+          RUNTIME_IMAGE="$(docker inspect "$CONTROL" --format '{{.Config.Image}}')"
+          APP_HASH="$(docker exec "$CONTROL" sha256sum /app/app.py | awk '{print $1}')"
+          COMPOSE_IMAGE="$(docker compose -f "$COMPOSE" config --format json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["services"]["control-api"]["image"])')"
+          echo runtime_image="$RUNTIME_IMAGE"
+          echo compose_resolved_image="$COMPOSE_IMAGE"
+          test "$RUNTIME_IMAGE" = 'phil-ai-os/control-api:0.20.0'
+          test "$APP_HASH" = 'c950ff968d54d083ae36c318fc97d279be78dd1543913c28d1e3d2b57fd29046'
+          test "$COMPOSE_IMAGE" = "$RUNTIME_IMAGE"
           echo checkpoint=image_and_compose_baseline
 
           docker exec -i "$CONTROL" python3 - <<'PY'
