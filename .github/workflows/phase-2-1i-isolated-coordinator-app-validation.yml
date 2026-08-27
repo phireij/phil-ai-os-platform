@@ -75,6 +75,8 @@ jobs:
           python3 /tmp/phase21i-coordinator-schema.py "$HOST_DB"
           docker cp "$HOST_CANDIDATE" "$CONTROL:$IN_APP"
           docker cp "$HOST_DB" "$CONTROL:$IN_DB"
+          docker exec "$CONTROL" chmod 0644 "$IN_APP"
+          docker exec "$CONTROL" chmod 0666 "$IN_DB"
           docker exec "$CONTROL" sh -lc "cat > /tmp/phase21i-behavior-test.py <<'PY'
           import importlib.util, sqlite3, re
           APP='/tmp/phase21i-candidate-app.py'
