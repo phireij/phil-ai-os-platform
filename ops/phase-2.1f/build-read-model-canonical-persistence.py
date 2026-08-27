@@ -14,7 +14,7 @@ src = src.replace('SCHEMA_VERSION = "2.1e.v1"', 'SCHEMA_VERSION = "2.1f.v1"', 1)
 start = src.index('def durable_approval_execution_links(control: str):')
 end = src.index('\ndef main():', start)
 
-new_func = r'''def durable_approval_execution_links(control: str):
+new_func = r"""def durable_approval_execution_links(control: str):
     # Explicit column allowlists prevent task text, decision notes, link hashes,
     # execution detail, provider responses, or credential material from entering
     # the browser-facing read model. task_id is safe correlation metadata.
@@ -25,8 +25,8 @@ approval_cols={r[1] for r in c.execute("pragma table_info(approval_requests)")}
 audit_cols={r[1] for r in c.execute("pragma table_info(execution_audit)")}
 approval_task_expr="task_id" if "task_id" in approval_cols else "NULL as task_id"
 audit_task_expr="task_id" if "task_id" in audit_cols else "NULL as task_id"
-approvals=[dict(r) for r in c.execute(f"""select approval_id,{approval_task_expr},created_at,updated_at,expires_at,state,source,requester,task_class,requested_by,decision_by,decision_at,consumed_at,consumed_by from approval_requests order by rowid desc limit 100""")]
-audits=[dict(r) for r in c.execute(f"""select id,{audit_task_expr},occurred_at,source,task_class,provider_id,model_id,route_path,compatibility_pass,execution_mode,outcome,approval_id from execution_audit order by rowid desc limit 200""")]
+approvals=[dict(r) for r in c.execute(f"select approval_id,{approval_task_expr},created_at,updated_at,expires_at,state,source,requester,task_class,requested_by,decision_by,decision_at,consumed_at,consumed_by from approval_requests order by rowid desc limit 100")]
+audits=[dict(r) for r in c.execute(f"select id,{audit_task_expr},occurred_at,source,task_class,provider_id,model_id,route_path,compatibility_pass,execution_mode,outcome,approval_id from execution_audit order by rowid desc limit 200")]
 print(json.dumps({"approvals":approvals,"audits":audits,"schema":{"approval_task_id":"task_id" in approval_cols,"audit_task_id":"task_id" in audit_cols}},default=str))'''
     out, _ = run(["docker", "exec", control, "python3", "-c", code])
     data = json.loads(out)
@@ -99,7 +99,7 @@ print(json.dumps({"approvals":approvals,"audits":audits,"schema":{"approval_task
         "provenance": "control_api_sqlite_read_only",
     }
     return links, summary
-'''
+"""
 
 src = src[:start] + new_func + src[end:]
 
