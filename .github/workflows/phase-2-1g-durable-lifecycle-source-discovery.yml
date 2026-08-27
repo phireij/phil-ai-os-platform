@@ -1,0 +1,86 @@
+name: Phase 2.1G Durable Lifecycle Source Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/phase-2-1g-lifecycle-discovery-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Discover durable lifecycle sources read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test -n "$CONTROL"
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.1-phase21f'
+          curl -fsS --max-time 5 http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS --max-time 5 http://127.0.0.1:4870/readyz >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
+
+          BEFORE="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0])")"
+
+          docker exec "$CONTROL" python3 -c "import sqlite3,json; c=sqlite3.connect('/app/state/control-plane.db'); c.row_factory=sqlite3.Row; ac=[r[1] for r in c.execute('pragma table_info(approval_requests)')]; ec=[r[1] for r in c.execute('pragma table_info(execution_audit)')]; print('approval_columns='+','.join(ac)); print('execution_columns='+','.join(ec)); print('approval_rows='+str(c.execute('select count(*) from approval_requests').fetchone()[0])); print('execution_rows='+str(c.execute('select count(*) from execution_audit').fetchone()[0])); print('approval_task_id_nonnull='+str(c.execute('select count(*) from approval_requests where task_id is not null').fetchone()[0])); print('execution_task_id_nonnull='+str(c.execute('select count(*) from execution_audit where task_id is not null').fetchone()[0])); print('task_id_mismatch_count='+str(c.execute('select count(*) from execution_audit e join approval_requests a on a.approval_id=e.approval_id where e.task_id is not null and a.task_id is not null and e.task_id<>a.task_id').fetchone()[0])); safe=['state','task_class','source','requester','requested_by','decision_by','consumed_by','status','success'];
+for table,cols in [('approval_requests',ac),('execution_audit',ec)]:
+  for col in safe:
+    if col in cols:
+      vals=c.execute('select '+col+',count(*) from '+table+' group by '+col+' order by count(*) desc limit 20').fetchall(); print(table+'_'+col+'_distribution='+json.dumps([[str(x[0]) if x[0] is not None else None,x[1]] for x in vals],separators=(',',':')))
+"
+
+          docker exec "$CONTROL" python3 -c "import ast; p='/app/app.py'; s=open(p,encoding='utf-8').read(); t=ast.parse(s); wanted={'approval_create','execution_audit_write','approval_consume'}; fs={n.name:[a.arg for a in n.args.args] for n in ast.walk(t) if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name in wanted}; print('function_signatures='+__import__('json').dumps(fs,sort_keys=True,separators=(',',':')))"
+
+          AFTER="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0])")"
+          test "$BEFORE" = "$AFTER"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST --max-time 5 http://127.0.0.1:4881/)" = 405
+
+          echo control_api_health=ok
+          echo control_api_readiness=ok
+          echo production_allowlist=general_only
+          echo approval_execution_counts_unchanged=true
+          echo database_write=none
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1G_DURABLE_LIFECYCLE_SOURCE_DISCOVERY_OK
+          REMOTE
