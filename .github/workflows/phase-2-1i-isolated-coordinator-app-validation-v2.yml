@@ -1,0 +1,80 @@
+name: Phase 2.1I Isolated Coordinator App Validation V2
+on:
+  push:
+    branches: [main]
+    paths: ['.github/phase-2-1i-coordinator-app-v2-trigger']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate tools
+        run: |
+          python3 -m py_compile ops/phase-2.1i/build-coordinator-app-candidate.py
+          python3 -m py_compile ops/phase-2.1i/apply-coordinator-schema.py
+          python3 -m py_compile ops/phase-2.1i/validate-coordinator-app-behavior.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage tools
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1i/build-coordinator-app-candidate.py "$VPS_USER@$VPS_HOST:/tmp/phase21i-builder.py"
+          scp -P "$PORT" -q ops/phase-2.1i/apply-coordinator-schema.py "$VPS_USER@$VPS_HOST:/tmp/phase21i-schema.py"
+          scp -P "$PORT" -q ops/phase-2.1i/validate-coordinator-app-behavior.py "$VPS_USER@$VPS_HOST:/tmp/phase21i-behavior.py"
+      - name: Validate isolated app and DB copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"; DB=/app/state/control-plane.db
+          HA="$(mktemp /tmp/phase21i-app.XXXXXX.py)"; HC="$(mktemp /tmp/phase21i-candidate.XXXXXX.py)"; HD="$(mktemp /tmp/phase21i-db.XXXXXX.db)"
+          IA=/tmp/phase21i-candidate-app.py; ID=/tmp/phase21i-candidate.db; IB=/tmp/phase21i-behavior.py
+          cleanup(){ docker exec "$CONTROL" rm -f "$IA" "$ID" "$IB" >/dev/null 2>&1 || true; rm -f "$HA" "$HC" "$HD" /tmp/phase21i-builder.py /tmp/phase21i-schema.py /tmp/phase21i-behavior.py; }
+          trap cleanup EXIT
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.2-phase21h'
+          read A0 E0 L0 < <(docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('$DB');assert c.execute('pragma quick_check').fetchone()[0]=='ok';print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0],c.execute('select count(*) from task_lifecycle_events').fetchone()[0])")
+          docker cp "$CONTROL:/app/app.py" "$HA"
+          docker exec "$CONTROL" python3 -c "import sqlite3;s=sqlite3.connect('$DB');d=sqlite3.connect('/tmp/phase21i-copy.db');s.backup(d);d.close();s.close()"
+          docker cp "$CONTROL:/tmp/phase21i-copy.db" "$HD"
+          python3 /tmp/phase21i-builder.py "$HA" "$HC"; python3 -m py_compile "$HC"; python3 /tmp/phase21i-schema.py "$HD"
+          chmod 0644 "$HC"; chmod 0666 "$HD"; chmod 0644 /tmp/phase21i-behavior.py
+          docker cp "$HC" "$CONTROL:$IA"; docker cp "$HD" "$CONTROL:$ID"; docker cp /tmp/phase21i-behavior.py "$CONTROL:$IB"
+          docker exec "$CONTROL" python3 "$IB" "$IA" "$ID"
+          docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('$DB');assert c.execute('pragma quick_check').fetchone()[0]=='ok';assert c.execute('select count(*) from approval_requests').fetchone()[0]==$A0;assert c.execute('select count(*) from execution_audit').fetchone()[0]==$E0;assert c.execute('select count(*) from task_lifecycle_events').fetchone()[0]==$L0;assert c.execute(\"select count(*) from sqlite_master where type='table' and name in ('agent_registry','task_plans')\").fetchone()[0]==0"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          echo live_schema_change=none
+          echo live_counts_unchanged=true
+          echo production_allowlist=general_only
+          echo execution_call_live=none
+          echo provider_call_live=none
+          echo approval_mutation_live=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1I_ISOLATED_COORDINATOR_APP_VALIDATION_V2_OK
+          REMOTE
