@@ -64,7 +64,7 @@ jobs:
           docker exec "$CONTROL" python3 -c "import app,inspect; names=['approval_create','approval_request','approval_consume','execute_task','execute','execution_audit_write']; [(print('FUNCTION='+n+'\n'+inspect.getsource(getattr(app,n)))) for n in names if hasattr(app,n)]" || true
 
           echo '--- bounded Hermes client references ---'
-          docker exec "$HERMES" sh -lc "for f in /usr/local/bin/philaios-mission-control /usr/local/bin/philaios-execute /opt/hermes/docker/main-wrapper.sh /opt/data/config.yaml; do [ -f \"$f\" ] && { echo FILE=$f; grep -niE 'task_id|canonical_task_id|approval_id|/v1/approvals/request|/v1/execute' \"$f\" | head -n 120 || true; }; done"
+          docker exec "$HERMES" sh -lc 'for f in /usr/local/bin/philaios-mission-control /usr/local/bin/philaios-execute /opt/hermes/docker/main-wrapper.sh /opt/data/config.yaml; do [ -f "$f" ] && { echo FILE="$f"; grep -niE "task_id|canonical_task_id|approval_id|/v1/approvals/request|/v1/execute" "$f" | head -n 120 || true; }; done'
 
           echo '--- bounded host integration references ---'
           for f in /usr/local/bin/philaios-execute /opt/phil-ai-os/mission-control/read-model.py /opt/phil-ai-os/mission-control/server.py /opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/hermes/philaios-mission-control-client.py; do
