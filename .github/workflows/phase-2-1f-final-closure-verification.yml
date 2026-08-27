@@ -62,37 +62,13 @@ jobs:
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
 
-          BEFORE="$(docker exec "$CONTROL" python3 - <<'PY'
-import sqlite3
-c=sqlite3.connect('/app/state/control-plane.db')
-assert c.execute('pragma quick_check').fetchone()[0]=='ok'
-a=[r[1] for r in c.execute('pragma table_info(approval_requests)')]
-e=[r[1] for r in c.execute('pragma table_info(execution_audit)')]
-assert 'task_id' in a
-assert 'task_id' in e
-idx=[r[1] for r in c.execute('pragma index_list(approval_requests)')]
-assert 'idx_approval_requests_task_id_nonnull' in idx
-print(c.execute('select count(*) from approval_requests').fetchone()[0], c.execute('select count(*) from execution_audit').fetchone()[0])
-PY
-)"
+          BEFORE="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); assert c.execute('pragma quick_check').fetchone()[0]=='ok'; a=[r[1] for r in c.execute('pragma table_info(approval_requests)')]; e=[r[1] for r in c.execute('pragma table_info(execution_audit)')]; idx=[r[1] for r in c.execute('pragma index_list(approval_requests)')]; assert 'task_id' in a and 'task_id' in e and 'idx_approval_requests_task_id_nonnull' in idx; print(c.execute('select count(*) from approval_requests').fetchone()[0], c.execute('select count(*) from execution_audit').fetchone()[0])")"
 
           curl -fsS --max-time 8 http://127.0.0.1:4881/ > /tmp/philaios-final-dashboard.html
           grep -q 'READ ONLY · Phase 2.1F' /tmp/philaios-final-dashboard.html
           grep -q 'Canonical task persistence is active' /tmp/philaios-final-dashboard.html
           curl -fsS --max-time 8 http://127.0.0.1:4881/api/read-model > /tmp/philaios-final-read-model.json
-          python3 - /tmp/philaios-final-read-model.json <<'PY'
-import json,sys
-m=json.load(open(sys.argv[1]))
-assert m['schema_version']=='2.1f.v1'
-assert m['overall_state']=='healthy'
-assert m['governance']['execution_allowed_task_classes']==['general']
-assert m['governance']['direct_provider_bypass_allowed'] is False
-assert m['governance']['authority_expansion_state']=='blocked'
-s=m['durable_correlation_summary']
-assert s['canonical_task_persistence']=='present'
-assert s['task_id_mismatch_count']==0
-assert s['historical_null_task_ids_allowed'] is True
-PY
+          python3 -c "import json; m=json.load(open('/tmp/philaios-final-read-model.json')); assert m['schema_version']=='2.1f.v1'; assert m['overall_state']=='healthy'; assert m['governance']['execution_allowed_task_classes']==['general']; assert m['governance']['direct_provider_bypass_allowed'] is False; assert m['governance']['authority_expansion_state']=='blocked'; s=m['durable_correlation_summary']; assert s['canonical_task_persistence']=='present'; assert s['task_id_mismatch_count']==0; assert s['historical_null_task_ids_allowed'] is True"
 
           test "$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://$HOSTNAME/phil-ai-os/operator/)" = 401
           for method in POST PUT PATCH DELETE; do
