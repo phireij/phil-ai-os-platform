@@ -1,0 +1,136 @@
+name: Phase 2.1K Read-Only Approval-to-Execution Correlation Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1k-correlation-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then
+                rm -f "$TMP"
+                exit 0
+              fi
+            fi
+            rm -f "$TMP"
+            sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Discover durable correlation shape without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          DB=/app/state/control-plane.db
+          BASE=http://127.0.0.1:4870
+
+          echo '=== PHASE 2.1K K1 READ-ONLY CORRELATION DISCOVERY ==='
+
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          echo control_api_health=ok
+          echo control_api_readiness=ok
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+
+          docker inspect "$CONTROL" --format 'control_api_image={{.Config.Image}}'
+
+          docker exec "$CONTROL" python - <<'PY'
+          import sqlite3
+          db='/app/state/control-plane.db'
+          c=sqlite3.connect(db)
+          c.row_factory=sqlite3.Row
+          print('sqlite_quick_check=' + c.execute('pragma quick_check').fetchone()[0])
+          tables=[r[0] for r in c.execute("select name from sqlite_master where type='table' order by name")]
+          print('tables=' + ','.join(tables))
+          focus=['approval_requests','execution_audit','tasks','task_lifecycle','task_assignments','task_plans','agent_registry']
+          for table in focus:
+              if table not in tables:
+                  print(f'{table}.present=false')
+                  continue
+              cols=[r[1] for r in c.execute(f'pragma table_info({table})')]
+              print(f'{table}.present=true')
+              print(f'{table}.columns=' + ','.join(cols))
+              print(f'{table}.has_task_id=' + str('task_id' in cols).lower())
+              print(f'{table}.has_approval_id=' + str('approval_id' in cols).lower())
+              print(f'{table}.has_agent_id=' + str('agent_id' in cols).lower())
+              print(f'{table}.row_count=' + str(c.execute(f'select count(*) from {table}').fetchone()[0]))
+
+          # Read the newest canonical task and its known correlations without changing state.
+          if 'tasks' in tables:
+              cols=[r[1] for r in c.execute('pragma table_info(tasks)')]
+              order_col='created_at' if 'created_at' in cols else ('updated_at' if 'updated_at' in cols else None)
+              q='select * from tasks' + (f' order by {order_col} desc' if order_col else '') + ' limit 1'
+              r=c.execute(q).fetchone()
+              if r:
+                  task_id=r['task_id'] if 'task_id' in r.keys() else None
+                  print('latest_task_present=true')
+                  print('latest_task_id=' + str(task_id or ''))
+                  for table in ['approval_requests','execution_audit','task_lifecycle','task_assignments','task_plans']:
+                      if table not in tables or not task_id:
+                          continue
+                      tcols=[x[1] for x in c.execute(f'pragma table_info({table})')]
+                      if 'task_id' in tcols:
+                          n=c.execute(f'select count(*) from {table} where task_id=?',(task_id,)).fetchone()[0]
+                          print(f'latest_task_{table}_links={n}')
+              else:
+                  print('latest_task_present=false')
+          PY
+
+          # Inspect application source shape only. No files are written.
+          echo '=== CONTROL API SOURCE CORRELATION REFERENCES ==='
+          docker exec "$CONTROL" sh -lc '
+            set -eu
+            for root in /app /opt/app /srv/app; do
+              [ -d "$root" ] || continue
+              grep -R -n -E "task_id|approval_id|consumed_at|execution_audit|/v1/execute" "$root" 2>/dev/null | head -n 160 || true
+            done
+          '
+
+          # Verify public/operator surfaces remain non-authoritative for mutation.
+          unauth_code="$(curl -sS -o /tmp/phase21k-unauth.json -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' "$BASE/v1/execute")"
+          echo unauthenticated_execute_http_code="$unauth_code"
+          test "$unauth_code" = 401
+
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1K_K1_CORRELATION_DISCOVERY_OK
+          REMOTE
