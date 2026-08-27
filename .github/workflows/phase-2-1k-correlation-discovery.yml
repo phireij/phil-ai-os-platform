@@ -29,21 +29,36 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           PORT="${VPS_PORT:-22}"
-          : > ~/.ssh/known_hosts
-          for attempt in 1 2 3 4 5 6; do
-            TMP="$(mktemp)"
-            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
-              cat "$TMP" >> ~/.ssh/known_hosts
-              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
-              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then
-                rm -f "$TMP"
-                exit 0
-              fi
-            fi
-            rm -f "$TMP"
-            sleep $((attempt*10))
-          done
-          exit 1
+
+          echo 'ssh_diag=begin'
+          if ! getent ahosts "$VPS_HOST" >/dev/null 2>&1; then
+            echo 'ssh_diag=dns_resolution_failed'
+            exit 11
+          fi
+          echo 'ssh_diag=dns_resolution_ok'
+
+          if ! timeout 20 bash -c "</dev/tcp/$VPS_HOST/$PORT" 2>/dev/null; then
+            echo 'ssh_diag=tcp_connect_failed'
+            exit 12
+          fi
+          echo 'ssh_diag=tcp_connect_ok'
+
+          TMP="$(mktemp)"
+          trap 'rm -f "$TMP"' EXIT
+          if ! ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null || ! test -s "$TMP"; then
+            echo 'ssh_diag=host_key_scan_failed'
+            exit 13
+          fi
+          install -m 600 /dev/null ~/.ssh/known_hosts
+          cat "$TMP" > ~/.ssh/known_hosts
+          echo 'ssh_diag=host_key_scan_ok'
+
+          if ! ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true; then
+            echo 'ssh_diag=authentication_or_session_failed'
+            exit 14
+          fi
+          echo 'ssh_diag=authentication_ok'
+          echo 'ssh_diag=ready'
 
       - name: Discover durable correlation shape without mutation
         shell: bash
@@ -92,7 +107,6 @@ jobs:
               print(f'{table}.has_agent_id=' + str('agent_id' in cols).lower())
               print(f'{table}.row_count=' + str(c.execute(f'select count(*) from {table}').fetchone()[0]))
 
-          # Canonical task identity currently originates in approval_requests.
           if 'approval_requests' in tables:
               cols=[r[1] for r in c.execute('pragma table_info(approval_requests)')]
               order_col='created_at' if 'created_at' in cols else ('updated_at' if 'updated_at' in cols else None)
