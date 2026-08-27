@@ -1,0 +1,94 @@
+name: Phase 2.1L Read-Only Notification Path Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1l-notification-path-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          getent ahosts "$VPS_HOST" >/dev/null
+          timeout 20 bash -c "</dev/tcp/$VPS_HOST/$PORT"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true
+
+      - name: Discover notification path without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=http://127.0.0.1:4870
+          CONTROL=phil-ai-os-core-control-api-1
+          echo '=== PHASE 2.1L L1 READ-ONLY DISCOVERY ==='
+
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          echo health=ok
+          echo readiness=ok
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          echo execution_allowlist=general
+
+          echo '=== DURABLE TABLE INVENTORY ==='
+          docker exec -i "$CONTROL" python - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          tables=[r[0] for r in c.execute("select name from sqlite_master where type='table' order by name").fetchall()]
+          print('tables='+','.join(tables))
+          candidates=[t for t in tables if any(k in t.lower() for k in ('notif','outbox','deliver','telegram','approval'))]
+          print('notification_related_tables='+','.join(candidates))
+          for t in candidates:
+              cols=[r[1] for r in c.execute(f'pragma table_info({t})').fetchall()]
+              print(f'table_{t}_columns='+','.join(cols))
+          PY
+
+          echo '=== CONTROL API NOTIFICATION SOURCE SIGNALS ==='
+          docker exec "$CONTROL" sh -lc "grep -n -E 'notification|notify|telegram|outbox|approval_link_issue|approval_create' /app/app.py | head -n 220 || true"
+
+          echo '=== HERMES CLIENT / NOTIFIER SIGNALS ==='
+          HERMES="$(docker ps --format '{{.Names}}' | grep '^hermes-agent-whow' | head -n1)"
+          test -n "$HERMES"
+          docker exec "$HERMES" sh -lc "find /opt /usr/local/bin -maxdepth 5 -type f \( -iname '*mission*control*' -o -iname '*approval*' -o -iname '*telegram*' -o -iname '*notify*' \) 2>/dev/null | head -n 120"
+          docker exec "$HERMES" sh -lc "grep -R -n -E 'telegram|notify|approval_id|approvals/link' /opt/phil-ai-os-platform /usr/local/bin 2>/dev/null | head -n 220 || true"
+
+          echo '=== SERVICE / TIMER SIGNALS ==='
+          systemctl list-unit-files --type=service --type=timer --no-pager | grep -Ei 'phil-ai-os|telegram|notif|approval|outbox' || true
+
+          echo approval_mutation=none
+          echo notification_send=none
+          echo execution_call=none
+          echo provider_call=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1L_L1_NOTIFICATION_DISCOVERY_OK
+          REMOTE
