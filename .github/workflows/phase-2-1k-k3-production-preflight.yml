@@ -102,6 +102,25 @@ jobs:
               print('consumed_approval_count=' + str(consumed))
           PY
 
+          echo '=== EXECUTION BOUNDARY ==='
+          docker exec -i "$CONTROL" python - <<'PY'
+          import os
+          matches=[]
+          for k,v in sorted(os.environ.items()):
+              u=k.upper()
+              if ('EXECUTION' in u or 'ALLOW' in u) and ('TASK' in u or 'CLASS' in u or 'EXECUTION' in u):
+                  matches.append((k,v))
+          if not matches:
+              print('execution_boundary_env_matches=none')
+          else:
+              for k,v in matches:
+                  print(f'execution_boundary_env.{k}={v}')
+          PY
+          docker exec "$CONTROL" sh -lc '
+            set -eu
+            grep -n -E "allowed.*task|task.*allow|execution.*allow|allow.*execution|general.*only|task_class.*general|general.*task_class" /app/app.py 2>/dev/null | head -n 160 || true
+          '
+
           echo '=== BACKUP / ROLLBACK READINESS ==='
           systemctl show phil-ai-os-backup.timer -p ActiveState -p SubState -p NextElapseUSecRealtime --no-pager
           systemctl show phil-ai-os-backup-self-heal.timer -p ActiveState -p SubState -p NextElapseUSecRealtime --no-pager
