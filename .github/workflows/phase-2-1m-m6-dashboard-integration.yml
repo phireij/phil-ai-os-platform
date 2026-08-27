@@ -1,0 +1,128 @@
+name: Phase 2.1M M6 Read-Only Dashboard Integration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1m-m6-dashboard-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate transformer
+        run: python3 -m py_compile ops/phase-2.1m/build-dashboard-phase21m.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage transformer
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1m/build-dashboard-phase21m.py "$VPS_USER@$VPS_HOST:/tmp/build-dashboard-phase21m.py"
+      - name: Integrate runtime presence card read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=/opt/phil-ai-os/mission-control/server.py
+          BACKUP=/opt/phil-ai-os/mission-control/server.py.pre-phase21m
+          CAND=/tmp/server-v21m.py
+          BUILD=/tmp/build-dashboard-phase21m.py
+          CONTROL=phil-ai-os-core-control-api-1
+          success=0
+          rollback(){
+            set +e
+            echo rollback=started
+            if [ -f "$BACKUP" ]; then
+              cp "$BACKUP" "$BASE"; chmod 0644 "$BASE"
+              systemctl restart phil-ai-os-mission-control-operator.service >/dev/null 2>&1 || true
+              rm -f "$BACKUP"
+            fi
+            echo rollback=completed
+          }
+          cleanup(){ rc=$?; rm -f "$CAND" "$BUILD" /tmp/m6-model.json; if [ "$rc" -ne 0 ] && [ "$success" -ne 1 ]; then rollback; fi; }
+          trap cleanup EXIT
+
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          grep -q 'READ ONLY · Phase 2.1I' "$BASE"
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          curl -fsS http://127.0.0.1:4881/api/read-model > /tmp/m6-model.json
+          python3 - /tmp/m6-model.json <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1])); assert d['schema_version']=='2.1m.v1'
+          ar=d['agent_runtime']; assert ar['agent']['agent_id']=='hermes'; assert ar['governance']['presence_authority_effect']=='none'
+          PY
+
+          if [ -e "$BACKUP" ]; then
+            cmp -s "$BASE" "$BACKUP"; rm -f "$BACKUP"
+          fi
+          cp "$BASE" "$BACKUP"; chmod 0600 "$BACKUP"
+          python3 "$BUILD" "$BASE" "$CAND"
+          python3 -m py_compile "$CAND"
+          grep -q 'READ ONLY · Phase 2.1M' "$CAND"
+          grep -q '<h2>Runtime Presence & Workload</h2>' "$CAND"
+          grep -q "getElementById('runtime')" "$CAND"
+          grep -q 'Presence is observational only' "$CAND"
+          grep -q 'def do_POST' "$CAND"; grep -q '405' "$CAND"
+          install -m 0644 "$CAND" "$BASE"
+          systemctl restart phil-ai-os-mission-control-operator.service
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4881/api/read-model > /tmp/m6-model.json 2>/dev/null; then break; fi
+            sleep 2
+          done
+          grep -q 'READ ONLY · Phase 2.1M' "$BASE"
+          grep -q '<h2>Runtime Presence & Workload</h2>' "$BASE"
+          python3 - /tmp/m6-model.json <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1])); assert d['schema_version']=='2.1m.v1'
+          ar=d['agent_runtime']; assert ar['agent']['agent_id']=='hermes'; assert ar['workload']['source']=='durable_latest_task_lifecycle'; assert ar['governance']['automatic_execution'] is False
+          PY
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          docker exec "$CONTROL" python3 -c "import sqlite3;c=sqlite3.connect('/app/state/control-plane.db');assert c.execute('pragma quick_check').fetchone()[0]=='ok';r=c.execute(\"select agent_id,authority_ceiling,assignable from agent_registry\").fetchall();assert r==[('hermes','L3',1)]"
+
+          success=1
+          echo dashboard_badge=Phase_2.1M
+          echo runtime_presence_card=active_read_only
+          echo presence_authority_effect=none
+          echo dashboard_mutations=405
+          echo operator_auth=401
+          echo execution_allowlist=general
+          echo agent_registry=hermes_L3_only
+          echo authority_expansion=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo PHIL_AI_OS_PHASE_2_1M_M6_DASHBOARD_INTEGRATION_OK
+          REMOTE
