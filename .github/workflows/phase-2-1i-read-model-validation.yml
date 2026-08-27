@@ -1,0 +1,62 @@
+name: Phase 2.1I Read Model Validation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/phase-2-1i-read-model-validation-trigger']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate transformer
+        run: python3 -m py_compile ops/phase-2.1i/build-read-model-v21i.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh; printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519; chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do TMP="$(mktemp)"; if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts; if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi; fi; rm -f "$TMP"; sleep $((attempt*10)); done; exit 1
+      - name: Stage transformer
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"; scp -P "$PORT" -q ops/phase-2.1i/build-read-model-v21i.py "$VPS_USER@$VPS_HOST:/tmp/build-read-model-v21i.py"
+      - name: Validate candidate read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=/opt/phil-ai-os/mission-control/read-model.py; CAND=/tmp/read-model-v21i.py; OUT=/tmp/read-model-v21i.json
+          trap 'rm -f "$CAND" "$OUT" /tmp/build-read-model-v21i.py' EXIT
+          grep -q 'SCHEMA_VERSION = "2.1h.v1"' "$BASE"
+          python3 /tmp/build-read-model-v21i.py "$BASE" "$CAND"
+          python3 -m py_compile "$CAND"
+          python3 "$CAND" > "$OUT"
+          python3 - "$OUT" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1])); assert d['schema_version']=='2.1i.v1'; assert d['overall_state']=='healthy'
+          c=d['coordinator']; s=c['summary']; assert s['coordinator_owner']=='control-api'; assert s['registry_state']=='active'; assert s['plan_store_state']=='active'; assert s['registered_agent_count']==1; assert s['plan_count_observed']==0; assert s['mission_control_mutation']=='none'
+          r=c['agent_registry']; assert len(r)==1; a=r[0]; assert a['agent_id']=='hermes' and a['authority_ceiling']=='L3' and a['enabled']==1 and a['assignable']==1
+          assert c['plans']==[]
+          q=d['data_quality']; assert q['coordinator_registry_state']=='active'; assert q['coordinator_plan_store_state']=='active'
+          print('schema_version=2.1i.v1'); print('coordinator_registry=hermes_only'); print('coordinator_plans=0'); print('mission_control_mutation=none')
+          PY
+          grep -q 'SCHEMA_VERSION = "2.1h.v1"' "$BASE"
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+          for m in POST PUT PATCH DELETE; do test "$(curl -ksS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          echo live_read_model_unchanged=2.1h.v1
+          echo production_change=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1I_READ_MODEL_VALIDATION_OK
+          REMOTE
