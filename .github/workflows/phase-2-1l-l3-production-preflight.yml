@@ -1,0 +1,98 @@
+name: Phase 2.1L L3 Production Migration Preflight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1l-l3-production-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          getent ahosts "$VPS_HOST" >/dev/null
+          timeout 20 bash -c "</dev/tcp/$VPS_HOST/$PORT"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true
+      - name: Verify additive migration readiness without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=http://127.0.0.1:4870
+          CONTROL=phil-ai-os-core-control-api-1
+          echo '=== PHASE 2.1L L3 PRODUCTION PREFLIGHT ==='
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          echo health=ok
+          echo readiness=ok
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          echo execution_allowlist=general
+
+          echo '=== DATABASE / BACKUP READINESS ==='
+          docker exec -i "$CONTROL" python - <<'PY'
+          import sqlite3, os
+          p='/app/state/control-plane.db'
+          c=sqlite3.connect(f'file:{p}?mode=ro',uri=True)
+          print('quick_check='+c.execute('pragma quick_check').fetchone()[0])
+          print('table_count='+str(c.execute("select count(*) from sqlite_master where type='table'").fetchone()[0]))
+          print('outbox_table_present='+str(c.execute("select count(*) from sqlite_master where type='table' and name='approval_notification_outbox'").fetchone()[0]))
+          print('db_size_bytes='+str(os.path.getsize(p)))
+          PY
+          df -Pk / | tail -n 1 | awk '{print "root_free_kb="$4}'
+          ls -lt /var/backups/phil-ai-os 2>/dev/null | head -n 8 || true
+
+          echo '=== APPROVAL CREATE INSERTION POINT ==='
+          docker exec "$CONTROL" sh -lc "sed -n '1532,1645p' /app/app.py"
+
+          echo '=== LINK / NOTIFIER CONTRACT ==='
+          docker exec "$CONTROL" sh -lc "sed -n '1800,1875p' /app/app.py"
+          HERMES="$(docker ps --format '{{.Names}}' | grep '^hermes-agent-whow' | head -n1)"
+          test -n "$HERMES"
+          docker exec "$HERMES" sh -lc "sed -n '1,190p' /usr/local/bin/philaios-telegram-approval-notifier"
+          docker exec "$HERMES" sh -lc "sed -n '1,155p' /usr/local/bin/philaios-mission-control"
+
+          echo '=== AGENT / AUTHORITY STATE ==='
+          docker exec -i "$CONTROL" python - <<'PY'
+          import sqlite3, json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          agents=[dict(r) for r in c.execute('select agent_id,role,authority_ceiling,enabled,assignable from agent_registry').fetchall()]
+          print('agents='+json.dumps(agents,sort_keys=True))
+          assert len(agents)==1 and agents[0]['agent_id']=='hermes' and agents[0]['assignable']==1
+          PY
+
+          echo migration_applied=false
+          echo approval_mutation=none
+          echo notification_send=none
+          echo execution_call=none
+          echo provider_call=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1L_L3_PREFLIGHT_OK
+          REMOTE
