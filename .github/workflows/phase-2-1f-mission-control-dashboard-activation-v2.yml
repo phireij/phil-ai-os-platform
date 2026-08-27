@@ -1,0 +1,204 @@
+name: Phase 2.1F Mission Control Dashboard Activation V2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1f-mission-control-dashboard-activation-v2.yml'
+      - '.github/phase-2-1f-dashboard-activation-v2-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and validate Phase 2.1F dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile ops/phase-2.1f/build-dashboard-phase21f.py
+          python3 ops/phase-2.1f/build-dashboard-phase21f.py \
+            ops/phase-2.1b/mission-control-readonly-server.py \
+            /tmp/mission-control-readonly-server-2.1f.py
+          python3 -m py_compile /tmp/mission-control-readonly-server-2.1f.py
+          grep -q 'READ ONLY · Phase 2.1F' /tmp/mission-control-readonly-server-2.1f.py
+          grep -q 'Canonical persistence' /tmp/mission-control-readonly-server-2.1f.py
+          grep -q 'PHIL_AI_OS_PHASE_2_1F_READ_ONLY_DASHBOARD_LISTENING' /tmp/mission-control-readonly-server-2.1f.py
+          echo dashboard_artifact=validated
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage validated dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q /tmp/mission-control-readonly-server-2.1f.py "$VPS_USER@$VPS_HOST:/tmp/mission-control-readonly-server-2.1f.py"
+      - name: Atomic dashboard activation V2 with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          STAGED=/tmp/mission-control-readonly-server-2.1f.py
+          SERVICE=phil-ai-os-mission-control-operator.service
+          SERVER=/opt/phil-ai-os/mission-control/server.py
+          READ_MODEL=/opt/phil-ai-os/mission-control/read-model.py
+          HOSTNAME=hermes-agent-whow.srv1833510.hstgr.cloud
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          success=0
+          live_changed=0
+          BACKUP="$SERVER.phase21f.rollback"
+
+          rollback(){
+            echo rollback=started
+            set +e
+            if [ "$live_changed" -eq 1 ] && [ -f "$BACKUP" ]; then
+              cp "$BACKUP" "$SERVER"
+              systemctl restart "$SERVICE" >/dev/null 2>&1 || true
+              for i in 1 2 3 4 5 6 7 8 9 10; do
+                if systemctl is-active --quiet "$SERVICE" && curl -fsS --max-time 3 http://127.0.0.1:4881/ >/dev/null 2>&1; then break; fi
+                sleep 1
+              done
+            fi
+            echo rollback=completed
+          }
+          cleanup(){ rc=$?; rm -f "$STAGED"; if [ "$rc" -ne 0 ] && [ "$success" -ne 1 ]; then rollback; fi; }
+          trap cleanup EXIT
+
+          echo '=== PHASE 2.1F MISSION CONTROL DASHBOARD ACTIVATION V2 ==='
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.1-phase21f'
+          echo checkpoint=control_api_image_ok
+          test "$(systemctl is-active "$SERVICE")" = active
+          echo checkpoint=operator_service_active
+          test -f "$SERVER"; test -f "$READ_MODEL"; test -f "$STAGED"
+          echo checkpoint=authoritative_paths_present
+          grep -q 'READ ONLY · Phase 2.1E' "$SERVER"
+          grep -q 'SCHEMA_VERSION = "2.1f.v1"' "$READ_MODEL"
+          echo checkpoint=baseline_html_2_1e_read_model_2_1f
+          python3 -m py_compile "$STAGED"
+          echo checkpoint=staged_dashboard_compiles
+
+          EXECSTART="$(systemctl show "$SERVICE" -p ExecStart --value)"
+          grep -Fq "$SERVER" <<<"$EXECSTART"
+          echo checkpoint=execstart_targets_authoritative_server
+
+          ROOT_BEFORE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:4881/ || true)"
+          API_BEFORE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://127.0.0.1:4881/api/read-model || true)"
+          OP_BEFORE="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "https://$HOSTNAME/phil-ai-os/operator/" || true)"
+          test "$ROOT_BEFORE" = 200; test "$API_BEFORE" = 200; test "$OP_BEFORE" = 401
+          echo checkpoint=pre_activation_routes_ok
+
+          BEFORE="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0], c.execute('select count(*) from execution_audit').fetchone()[0])")"
+          cp "$SERVER" "$BACKUP"
+          chmod --reference="$SERVER" "$BACKUP" 2>/dev/null || true
+          echo checkpoint=server_rollback_snapshot_verified
+
+          install -m "$(stat -c '%a' "$SERVER")" "$STAGED" "$SERVER"
+          live_changed=1
+          test "$(sha256sum "$SERVER" | awk '{print $1}')" = "$(sha256sum "$STAGED" | awk '{print $1}')"
+          echo checkpoint=server_file_switched
+          systemctl restart "$SERVICE"
+          echo checkpoint=service_restart_requested
+
+          ready=0
+          for i in $(seq 1 20); do
+            STATE="$(systemctl is-active "$SERVICE" 2>/dev/null || true)"
+            ROOT="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4881/ || true)"
+            API="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:4881/api/read-model || true)"
+            echo "readiness_attempt=$i service=$STATE root=$ROOT api=$API"
+            if [ "$STATE" = active ] && [ "$ROOT" = 200 ] && [ "$API" = 200 ]; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          echo checkpoint=post_restart_listener_and_api_ready
+
+          curl -fsS --max-time 10 http://127.0.0.1:4881/ > /tmp/philaios-dashboard-v2.html
+          grep -q 'READ ONLY · Phase 2.1F' /tmp/philaios-dashboard-v2.html
+          echo checkpoint=html_badge_2_1f
+          grep -q 'Canonical task persistence is active' /tmp/philaios-dashboard-v2.html
+          echo checkpoint=html_footer_2_1f
+          grep -q 'Canonical persistence' /tmp/philaios-dashboard-v2.html
+          echo checkpoint=html_canonical_metrics_present
+
+          curl -fsS --max-time 10 http://127.0.0.1:4881/api/read-model > /tmp/philaios-dashboard-model-v2.json
+          python3 - /tmp/philaios-dashboard-model-v2.json <<'PY'
+          import json,sys
+          m=json.load(open(sys.argv[1]))
+          assert m['schema_version']=='2.1f.v1'
+          assert m['overall_state']=='healthy'
+          s=m['durable_correlation_summary']
+          assert s['canonical_task_persistence']=='present'
+          assert s['task_id_mismatch_count']==0
+          assert m['governance']['execution_allowed_task_classes']==['general']
+          print('dashboard_schema=2.1f.v1')
+          print('dashboard_canonical_persistence=present')
+          print('dashboard_task_id_mismatch_count=0')
+          PY
+          echo checkpoint=dashboard_api_2_1f_verified
+
+          for method in POST PUT PATCH DELETE; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -X "$method" --max-time 5 http://127.0.0.1:4881/)"
+            echo "mutation_${method}_status=$code"
+            test "$code" = 405
+          done
+          echo checkpoint=mutation_methods_blocked
+
+          OP_AFTER="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "https://$HOSTNAME/phil-ai-os/operator/" || true)"
+          test "$OP_AFTER" = 401
+          echo checkpoint=operator_auth_boundary_preserved
+          AFTER="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0], c.execute('select count(*) from execution_audit').fetchone()[0])")"
+          test "$BEFORE" = "$AFTER"
+          echo checkpoint=approval_execution_counts_unchanged
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          echo checkpoint=recovery_services_active
+          rm -f /tmp/philaios-dashboard-v2.html /tmp/philaios-dashboard-model-v2.json
+
+          success=1
+          echo dashboard_activation=active
+          echo dashboard_badge=Phase_2.1F
+          echo canonical_task_persistence=present
+          echo task_id_mismatch_count=0
+          echo historical_backfill=none
+          echo production_allowlist=general_only
+          echo operator_auth_boundary=preserved
+          echo browser_mutation_methods=405
+          echo approval_execution_counts_unchanged=true
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1F_MISSION_CONTROL_DASHBOARD_ACTIVATION_V2_OK
+          REMOTE
