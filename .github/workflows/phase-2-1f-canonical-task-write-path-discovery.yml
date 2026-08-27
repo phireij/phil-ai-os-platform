@@ -56,23 +56,20 @@ jobs:
 
           echo '=== PHASE 2.1F CANONICAL TASK WRITE-PATH DISCOVERY ==='
           echo discovery_mode=read_only
-
-          echo '--- approval schema ---'
-          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print('approval_columns='+','.join(r[1] for r in c.execute('pragma table_info(approval_requests)'))); print('approval_indexes='+','.join(r[1] for r in c.execute('pragma index_list(approval_requests)'))); print('approval_rows='+str(c.execute('select count(*) from approval_requests').fetchone()[0]))"
-          echo '--- execution audit schema ---'
-          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print('execution_audit_columns='+','.join(r[1] for r in c.execute('pragma table_info(execution_audit)'))); print('execution_audit_indexes='+','.join(r[1] for r in c.execute('pragma index_list(execution_audit)'))); print('execution_audit_rows='+str(c.execute('select count(*) from execution_audit').fetchone()[0]))"
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print('approval_columns='+','.join(r[1] for r in c.execute('pragma table_info(approval_requests)'))); print('approval_indexes='+','.join(r[1] for r in c.execute('pragma index_list(approval_requests)'))); print('approval_rows='+str(c.execute('select count(*) from approval_requests').fetchone()[0])); print('execution_audit_columns='+','.join(r[1] for r in c.execute('pragma table_info(execution_audit)'))); print('execution_audit_indexes='+','.join(r[1] for r in c.execute('pragma index_list(execution_audit)'))); print('execution_audit_rows='+str(c.execute('select count(*) from execution_audit').fetchone()[0]))"
 
           echo '--- control-api write path symbols ---'
           docker exec "$CONTROL" sh -lc "grep -n -E 'def approval_create|def approval_|INSERT INTO approval_requests|insert into approval_requests|execution_audit|INSERT INTO execution_audit|insert into execution_audit|/v1/approvals/request|/v1/execute|approval_id|task_id|canonical_task_id' /app/app.py | head -n 420" || true
-
-          echo '--- approval creation function source ---'
+          echo '--- selected function source ---'
           docker exec "$CONTROL" python3 -c "import app,inspect; names=['approval_create','approval_request','approval_consume','execute_task','execute','execution_audit_write']; [(print('FUNCTION='+n+'\n'+inspect.getsource(getattr(app,n)))) for n in names if hasattr(app,n)]" || true
 
-          echo '--- Hermes/control clients task identity references ---'
-          docker exec "$HERMES" sh -lc "grep -RniE 'task_id|canonical_task_id|approval_id|/v1/approvals/request|/v1/execute' /usr/local/bin/philaios-mission-control /usr/local/bin/philaios-execute /opt/hermes/docker /opt/data 2>/dev/null | head -n 320" || true
+          echo '--- bounded Hermes client references ---'
+          docker exec "$HERMES" sh -lc "for f in /usr/local/bin/philaios-mission-control /usr/local/bin/philaios-execute /opt/hermes/docker/main-wrapper.sh /opt/data/config.yaml; do [ -f \"$f\" ] && { echo FILE=$f; grep -niE 'task_id|canonical_task_id|approval_id|/v1/approvals/request|/v1/execute' \"$f\" | head -n 120 || true; }; done"
 
-          echo '--- host integration task identity references ---'
-          grep -RniE 'task_id|canonical_task_id|approval_id|/v1/approvals/request|/v1/execute' /opt/phil-ai-os /opt/phil-ai-os-platform 2>/dev/null | head -n 320 || true
+          echo '--- bounded host integration references ---'
+          for f in /usr/local/bin/philaios-execute /opt/phil-ai-os/mission-control/read-model.py /opt/phil-ai-os/mission-control/server.py /opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/hermes/philaios-mission-control-client.py; do
+            if [ -f "$f" ]; then echo FILE="$f"; grep -niE 'task_id|canonical_task_id|approval_id|/v1/approvals/request|/v1/execute' "$f" | head -n 120 || true; fi
+          done
 
           CENV="$(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')"
           grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' <<<"$CENV"
