@@ -9,11 +9,14 @@ def load(path):
         raise SystemExit(p.stderr.strip() or f'{path} failed')
     return json.loads(p.stdout)
 
+def flag_true(value):
+    return value is True or value == 1 or (isinstance(value,str) and value.strip().lower() in {'1','true','yes','on'})
+
 def classify(data):
     coord=data.get('coordinator') or {}
     registry=coord.get('agent_registry') or []
     hermes=next((a for a in registry if a.get('agent_id')=='hermes'),None)
-    if not hermes or hermes.get('enabled') is not True or hermes.get('assignable') is not True or hermes.get('authority_ceiling')!='L3':
+    if not hermes or not flag_true(hermes.get('enabled')) or not flag_true(hermes.get('assignable')) or hermes.get('authority_ceiling')!='L3':
         return 'unassignable','registry_not_eligible'
 
     runtime=data.get('agent_runtime') or {}
