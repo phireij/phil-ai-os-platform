@@ -1,0 +1,114 @@
+name: Phase 2.1L L4B Outbox Enqueue Trigger
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1l-l4b-outbox-enqueue-trigger.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activate-trigger:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          getent ahosts "$VPS_HOST" >/dev/null
+          timeout 20 bash -c "</dev/tcp/$VPS_HOST/$PORT"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true
+
+      - name: Activate source-independent atomic enqueue trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=http://127.0.0.1:4870
+          CONTROL=phil-ai-os-core-control-api-1
+          TS="$(date -u +%Y%m%dT%H%M%SZ)"
+          BACKUP="/app/state/control-plane.db.pre-phase21l-l4b-$TS"
+
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+
+          docker exec -i "$CONTROL" python - "$BACKUP" <<'PY'
+          import sqlite3,sys
+          backup=sys.argv[1]
+          src=sqlite3.connect('/app/state/control-plane.db')
+          assert src.execute('pragma quick_check').fetchone()[0]=='ok'
+          assert src.execute("select count(*) from sqlite_master where type='table' and name='approval_notification_outbox'").fetchone()[0]==1
+          dst=sqlite3.connect(backup); src.backup(dst); dst.close(); src.close()
+          check=sqlite3.connect(f'file:{backup}?mode=ro',uri=True)
+          assert check.execute('pragma quick_check').fetchone()[0]=='ok'; check.close()
+          print('rollback_backup='+backup)
+          PY
+
+          docker exec -i "$CONTROL" python - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('/app/state/control-plane.db')
+          before=c.execute('select count(*) from approval_notification_outbox').fetchone()[0]
+          c.executescript('''
+          CREATE TRIGGER IF NOT EXISTS trg_approval_notification_outbox_enqueue
+          AFTER INSERT ON approval_requests
+          WHEN NEW.state='pending'
+          BEGIN
+            INSERT OR IGNORE INTO approval_notification_outbox(
+              event_id,approval_id,task_id,event_type,channel,state,
+              attempt_count,created_at,updated_at
+            ) VALUES(
+              'approval_pending:' || NEW.approval_id,
+              NEW.approval_id,
+              NEW.task_id,
+              'approval_pending',
+              'telegram',
+              'pending',
+              0,
+              NEW.created_at,
+              NEW.created_at
+            );
+          END;
+          ''')
+          c.commit()
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          trigger=c.execute("select sql from sqlite_master where type='trigger' and name='trg_approval_notification_outbox_enqueue'").fetchone()
+          assert trigger and 'AFTER INSERT ON approval_requests' in trigger[0]
+          after=c.execute('select count(*) from approval_notification_outbox').fetchone()[0]
+          assert after==before
+          print('trigger_present=1')
+          print('existing_rows_unchanged=true')
+          print('outbox_rows='+str(after))
+          print('quick_check=ok')
+          c.close()
+          PY
+
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          echo health=ok
+          echo readiness=ok
+          echo execution_allowlist=general
+          echo approval_creation=none
+          echo notification_send=none
+          echo dispatcher_enabled=false
+          echo execution_call=none
+          echo provider_call=none
+          echo PHIL_AI_OS_PHASE_2_1L_L4B_ENQUEUE_TRIGGER_OK
+          REMOTE
