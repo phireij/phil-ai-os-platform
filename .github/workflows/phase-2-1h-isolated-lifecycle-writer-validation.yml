@@ -1,0 +1,122 @@
+name: Phase 2.1H Isolated Lifecycle Writer Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/phase-2-1h-writer-candidate-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate builders
+        run: |
+          set -euo pipefail
+          python3 -m py_compile ops/phase-2.1h/build-lifecycle-writer-candidate.py ops/phase-2.1h/validate-lifecycle-ledger-migration.py
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage builders only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1h/build-lifecycle-writer-candidate.py ops/phase-2.1h/validate-lifecycle-ledger-migration.py "$VPS_USER@$VPS_HOST:/tmp/"
+      - name: Validate candidate on isolated app and DB copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          DB=/app/state/control-plane.db
+          HOST_APP="$(mktemp /tmp/philaios-21h-app.XXXXXX.py)"
+          HOST_CAND="$(mktemp /tmp/philaios-21h-candidate.XXXXXX.py)"
+          HOST_DB="$(mktemp /tmp/philaios-21h-db.XXXXXX.db)"
+          IN_APP=/tmp/philaios-21h-candidate-app.py
+          IN_DB=/tmp/philaios-21h-candidate.db
+          cleanup(){ docker exec "$CONTROL" rm -f "$IN_APP" "$IN_DB" /tmp/philaios-21h-behavior-test.py >/dev/null 2>&1 || true; rm -f "$HOST_APP" "$HOST_CAND" "$HOST_DB" /tmp/build-lifecycle-writer-candidate.py /tmp/validate-lifecycle-ledger-migration.py; }
+          trap cleanup EXIT
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.1-phase21f'
+          BEFORE="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0],c.execute(\"select count(*) from sqlite_master where type='table' and name='task_lifecycle_events'\").fetchone()[0])")"
+          docker cp "$CONTROL:/app/app.py" "$HOST_APP"
+          docker cp "$CONTROL:$DB" "$HOST_DB"
+          python3 /tmp/build-lifecycle-writer-candidate.py "$HOST_APP" "$HOST_CAND"
+          python3 -m py_compile "$HOST_CAND"
+          python3 /tmp/validate-lifecycle-ledger-migration.py "$HOST_DB" >/tmp/philaios-21h-migration-validation.log
+          # Remove synthetic validator rows; retain only the isolated schema for behavior testing.
+          python3 - "$HOST_DB" <<'PY'
+          import sqlite3,sys
+          c=sqlite3.connect(sys.argv[1]); c.execute('delete from task_lifecycle_events'); c.commit(); assert c.execute('select count(*) from task_lifecycle_events').fetchone()[0]==0; c.close()
+          PY
+          docker cp "$HOST_CAND" "$CONTROL:$IN_APP"
+          docker cp "$HOST_DB" "$CONTROL:$IN_DB"
+          docker exec "$CONTROL" sh -lc "cat > /tmp/philaios-21h-behavior-test.py <<'PY'
+          import importlib.util,re,sqlite3
+          APP='/tmp/philaios-21h-candidate-app.py'; DB='/tmp/philaios-21h-candidate.db'
+          spec=importlib.util.spec_from_file_location('phase21h_candidate',APP); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+          def copied_db():
+              c=sqlite3.connect(DB); c.row_factory=sqlite3.Row; return c
+          mod.db=copied_db
+          mod.classify_task=lambda text:{'task_class':'general','confidence':1.0}
+          mod.evaluate_route=lambda task_class:(200,{'decision':{'profile':'validation','primary':{'provider':'none','model':'none'},'fallback':{}}})
+          c=copied_db(); before_a=c.execute('select count(*) from approval_requests').fetchone()[0]; before_e=c.execute('select count(*) from execution_audit').fetchone()[0]; c.close()
+          text='phase-2.1h isolated lifecycle validation'
+          code,body=mod.approval_create(text,source='phase21h-validation',requester='phase21h-validation',requested_by='phase21h-validation')
+          assert code==201,(code,body); approval=body['approval']; aid=approval['approval_id']; tid=approval['task_id']; assert re.fullmatch(r'tsk_[0-9a-f]{32}',tid)
+          c=copied_db(); events=[dict(r) for r in c.execute('select stage,assigned_agent_id,correlation_id from task_lifecycle_events where task_id=? order by occurred_at,event_id',(tid,))]; c.close()
+          assert [x['stage'] for x in events]==['RECEIVED','CLASSIFIED','APPROVAL_PENDING'],events
+          assert all(x['assigned_agent_id'] is None for x in events)
+          assert all(x['correlation_id']==aid for x in events)
+          mod.execution_audit_write(source='phase21h-validation',task_class='general',execution_mode='validation',outcome='success',detail='isolated-only',approval_id=aid)
+          c=copied_db(); events=[dict(r) for r in c.execute('select stage,assigned_agent_id,correlation_id from task_lifecycle_events where task_id=? order by occurred_at,event_id',(tid,))]; assert [x['stage'] for x in events]==['RECEIVED','CLASSIFIED','APPROVAL_PENDING','AUDITED'],events; assert events[-1]['correlation_id']==aid; assert all(x['assigned_agent_id'] is None for x in events); assert c.execute('select count(*) from approval_requests').fetchone()[0]==before_a+1; assert c.execute('select count(*) from execution_audit').fetchone()[0]==before_e+1; assert c.execute('pragma quick_check').fetchone()[0]=='ok'; c.close()
+          print('approval_creation_lifecycle=RECEIVED,CLASSIFIED,APPROVAL_PENDING')
+          print('execution_audit_lifecycle=AUDITED')
+          print('assignment_inference=none')
+          print('event_domain_transaction=validated')
+          print('provider_call=none')
+          print('PHIL_AI_OS_PHASE_2_1H_ISOLATED_WRITER_BEHAVIOR_OK')
+          PY
+          python3 /tmp/philaios-21h-behavior-test.py"
+          AFTER="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('$DB'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0],c.execute(\"select count(*) from sqlite_master where type='table' and name='task_lifecycle_events'\").fetchone()[0])")"
+          test "$BEFORE" = "$AFTER"
+          grep -q '^PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES=general$' < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST --max-time 5 http://127.0.0.1:4881/)" = 405
+          echo live_database_schema_change=none
+          echo live_database_write=none
+          echo live_approval_execution_counts_unchanged=true
+          echo assignment_mutation_live=none
+          echo provider_call_live=none
+          echo execution_call_live=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1H_ISOLATED_LIFECYCLE_WRITER_VALIDATION_OK
+          REMOTE
