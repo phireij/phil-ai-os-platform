@@ -1,0 +1,68 @@
+name: Phase 2.1K K5 Read-Only Execution Contract Inspection
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1k-k5-execution-contract-inspection.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          getent ahosts "$VPS_HOST" >/dev/null
+          timeout 20 bash -c "</dev/tcp/$VPS_HOST/$PORT"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true
+      - name: Inspect exact K5 contract without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL=phil-ai-os-core-control-api-1
+          APPROVAL_ID='apr_7a3594fc61d1467593181d1ca7a2d502'
+          TASK_ID='tsk_e9694565de884bc9afa550d57db32426'
+          echo '=== EXACT APPROVAL PRE-K5 STATE ==='
+          docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
+          import sqlite3,sys,json
+          approval_id,task_id=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          c.row_factory=sqlite3.Row
+          r=c.execute('select * from approval_requests where approval_id=? and task_id=?',(approval_id,task_id)).fetchone()
+          assert r is not None
+          safe={k:r[k] for k in r.keys() if k not in {'approval_token','token','secret'}}
+          print(json.dumps(safe,sort_keys=True,default=str))
+          print('execution_audit_links='+str(c.execute('select count(*) from execution_audit where approval_id=? or task_id=?',(approval_id,task_id)).fetchone()[0]))
+          PY
+          echo '=== EXECUTION FUNCTION CONTRACT ==='
+          docker exec "$CONTROL" sh -lc "sed -n '1000,1335p' /app/app.py"
+          echo '=== HTTP HANDLER CONTRACT ==='
+          docker exec "$CONTROL" sh -lc "sed -n '3320,3665p' /app/app.py"
+          echo '=== APPROVAL CONSUMPTION CONTRACT ==='
+          docker exec "$CONTROL" sh -lc "sed -n '2990,3125p' /app/app.py"
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo PHIL_AI_OS_PHASE_2_1K_K5_CONTRACT_INSPECTION_OK
+          REMOTE
