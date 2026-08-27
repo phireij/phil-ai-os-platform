@@ -1,0 +1,103 @@
+name: Phase 2.1K K6 Post-Execution and Replay Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1k-k6-post-execution-verification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          getent ahosts "$VPS_HOST" >/dev/null
+          timeout 20 bash -c "</dev/tcp/$VPS_HOST/$PORT"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true
+      - name: Verify K6 durable state and unchanged governance
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=http://127.0.0.1:4870
+          CONTROL=phil-ai-os-core-control-api-1
+          APPROVAL_ID='apr_7a3594fc61d1467593181d1ca7a2d502'
+          TASK_ID='tsk_e9694565de884bc9afa550d57db32426'
+          echo '=== K6 HEALTH / PROTECTIONS ==='
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          echo health=ok
+          echo readiness=ok
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          echo execution_allowlist=general
+
+          echo '=== K6 EXACT DURABLE CORRELATION ==='
+          docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
+          import sqlite3,sys,json
+          a,t=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          ar=c.execute('select approval_id,task_id,state,task_class,decision_by,decision_at,expires_at,consumed_at,consumed_by from approval_requests where approval_id=? and task_id=?',(a,t)).fetchone()
+          assert ar is not None
+          assert ar['state']=='approved'
+          assert ar['task_class']=='general'
+          assert ar['decision_by']=='mission-control-link'
+          assert ar['consumed_at'] is not None and ar['consumed_by']=='hermes'
+          print('approval='+json.dumps(dict(ar),sort_keys=True))
+          rows=c.execute('select id,occurred_at,outcome,provider_id,model_id,route_path,response_id,compatibility_pass,approval_id,task_id from execution_audit where approval_id=? or task_id=? order by id',(a,t)).fetchall()
+          print('audit_count='+str(len(rows)))
+          for r in rows: print('audit='+json.dumps(dict(r),sort_keys=True,default=str))
+          success=[r for r in rows if r['outcome']=='success']
+          rejected=[r for r in rows if r['outcome']=='approval_rejected']
+          provider_responses=[r for r in rows if r['provider_id'] is not None and r['response_id'] is not None]
+          assert len(success)==1
+          assert len(rejected)==1
+          assert len(provider_responses)==1
+          assert success[0]['compatibility_pass']==1
+          assert all(r['approval_id']==a and r['task_id']==t for r in rows)
+          stages=[dict(r) for r in c.execute('select stage,correlation_id,occurred_at from task_lifecycle_events where task_id=? order by occurred_at,event_id',(t,)).fetchall()]
+          assert all((x['correlation_id'] in (None,a)) for x in stages)
+          print('lifecycle='+json.dumps(stages,sort_keys=True))
+          agents=[dict(r) for r in c.execute('select agent_id,role,authority_ceiling,enabled,assignable from agent_registry').fetchall()]
+          assert len(agents)==1 and agents[0]['agent_id']=='hermes' and agents[0]['assignable']==1
+          print('agents='+json.dumps(agents,sort_keys=True))
+          print('success_audits=1')
+          print('replay_rejection_audits=1')
+          print('provider_response_rows=1')
+          print('second_provider_call=false')
+          PY
+
+          echo '=== K6 APPROVAL EXPIRY SEMANTICS ==='
+          docker exec "$CONTROL" sh -lc "grep -n -A45 -B5 'def _approval_expire_if_needed' /app/app.py"
+          echo production_change=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo PHIL_AI_OS_PHASE_2_1K_K6_POST_EXECUTION_VERIFICATION_OK
+          REMOTE
