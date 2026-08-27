@@ -1,0 +1,139 @@
+name: Phase 2.1F Route Redirect Semantics Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1f-route-redirect-semantics-discovery.yml'
+      - '.github/phase-2-1f-route-redirect-semantics-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage candidate builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q ops/phase-2.1f/build-canonical-task-app-candidate.py "$VPS_USER@$VPS_HOST:/tmp/philaios-phase-2-1f-app-builder.py"
+      - name: Discover redirect semantics in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          BASE=/tmp/philaios-phase21f-route-base.py
+          CAND=/tmp/philaios-phase21f-route-candidate.py
+          DB_COPY=/tmp/philaios-phase21f-route.db
+          NET=philaios-phase21f-route-test
+          CT=philaios-phase21f-route-candidate
+          cleanup() {
+            docker rm -f "$CT" >/dev/null 2>&1 || true
+            docker network rm "$NET" >/dev/null 2>&1 || true
+            rm -f "$BASE" "$CAND" "$DB_COPY" /tmp/philaios-phase-2-1f-app-builder.py
+          }
+          trap cleanup EXIT
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.0'
+
+          echo '--- baseline route handler semantics ---'
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import app,inspect
+          for name,obj in vars(app).items():
+              if isinstance(obj,type):
+                  try: src=inspect.getsource(obj)
+                  except Exception: continue
+                  if '/phil-ai-os/mission-control' in src or '/phil-ai-os/approval/' in src:
+                      print('handler_class='+name)
+                      lines=src.splitlines()
+                      for i,line in enumerate(lines,1):
+                          if any(x in line for x in ('/phil-ai-os/mission-control','/phil-ai-os/approval/','302','Location','redirect')):
+                              lo=max(0,i-3); hi=min(len(lines),i+4)
+                              print('context_start='+str(i))
+                              for j in range(lo,hi): print(f'{j+1}: '+lines[j].strip())
+          PY
+
+          docker cp "$CONTROL:/app/app.py" "$BASE"
+          docker cp "$CONTROL:/app/state/control-plane.db" "$DB_COPY"
+          python3 /tmp/philaios-phase-2-1f-app-builder.py "$BASE" "$CAND" >/dev/null
+          python3 - "$DB_COPY" <<'PY'
+          import sqlite3,sys
+          c=sqlite3.connect(sys.argv[1])
+          try:
+              a=[r[1] for r in c.execute('pragma table_info(approval_requests)')]
+              e=[r[1] for r in c.execute('pragma table_info(execution_audit)')]
+              if 'task_id' not in a: c.execute('alter table approval_requests add column task_id text')
+              if 'task_id' not in e: c.execute('alter table execution_audit add column task_id text')
+              c.execute('create unique index if not exists idx_approval_requests_task_id_nonnull on approval_requests(task_id) where task_id is not null')
+              c.commit(); assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          finally: c.close()
+          PY
+
+          docker network create "$NET" >/dev/null
+          # Copy baseline environment but remove secrets from output; no host/public port is published.
+          ENV_ARGS=()
+          while IFS= read -r e; do ENV_ARGS+=(--env "$e"); done < <(docker inspect "$CONTROL" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          docker create --name "$CT" --network "$NET" "${ENV_ARGS[@]}" \
+            --entrypoint python3 phil-ai-os/control-api:0.20.0 /app/app.py >/dev/null
+          docker cp "$CAND" "$CT:/app/app.py"
+          docker cp "$DB_COPY" "$CT:/app/state/control-plane.db"
+          docker start "$CT" >/dev/null
+          IP="$(docker inspect "$CT" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')"
+          test -n "$IP"
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            curl -fsS --max-time 3 "http://$IP:4870/healthz" >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS --max-time 3 "http://$IP:4870/healthz" >/dev/null
+
+          for p in '/phil-ai-os/approval/' '/phil-ai-os/mission-control'; do
+            HDR="$(mktemp)"
+            code="$(curl -sS -D "$HDR" -o /dev/null -w '%{http_code}' --max-time 5 "http://$IP:4870$p")"
+            location="$(awk 'BEGIN{IGNORECASE=1} /^Location:/{sub(/\r$/,"",$0); sub(/^[^:]+:[ ]*/,"",$0); print; exit}' "$HDR")"
+            key="$(echo "$p" | tr '/-' '__' | tr -cd 'A-Za-z0-9_')"
+            echo "isolated_${key}_status=$code"
+            echo "isolated_${key}_location=${location:-none}"
+            rm -f "$HDR"
+          done
+
+          # Confirm production remained old baseline and untouched.
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.0'
+          docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); assert 'task_id' not in [r[1] for r in c.execute('pragma table_info(approval_requests)')]; assert c.execute('pragma quick_check').fetchone()[0]=='ok'"
+          echo production_change=none
+          echo live_database_write=none
+          echo provider_call=none
+          echo execution_call=none
+          echo PHIL_AI_OS_PHASE_2_1F_ROUTE_REDIRECT_SEMANTICS_OK
+          REMOTE
