@@ -1,0 +1,171 @@
+name: Phase 2.1O O1 Lifecycle Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1o-o1-lifecycle-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Read-only lifecycle discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          systemctl is-active --quiet phil-ai-os-approval-notification-dispatcher.timer
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+
+          echo '=== O1 SQLITE LIFECYCLE DISCOVERY ==='
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect('/app/state/control-plane.db')
+          c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          tables=[r[0] for r in c.execute("select name from sqlite_master where type='table' order by name")]
+          interesting=[t for t in tables if any(k in t.lower() for k in ('task','life','exec','audit','approval','agent','plan'))]
+          print('interesting_tables='+json.dumps(interesting))
+          for t in interesting:
+              cols=[dict(r) for r in c.execute(f'pragma table_info({t})')]
+              print('schema:'+t+'='+json.dumps(cols,sort_keys=True))
+              try:
+                  n=c.execute(f'select count(*) from {t}').fetchone()[0]
+                  print('rows:'+t+'='+str(n))
+              except Exception as e:
+                  print('rows_error:'+t+'='+type(e).__name__)
+
+          assert c.execute('select agent_id,authority_ceiling,enabled,assignable from agent_registry order by agent_id').fetchall()==[('hermes','L3',1,1)]
+
+          lifecycle_tables=[t for t in interesting if 'lifecycle' in t.lower()]
+          if not lifecycle_tables:
+              raise SystemExit('no_lifecycle_table_found')
+          for t in lifecycle_tables:
+              names=[r['name'] for r in c.execute(f'pragma table_info({t})')]
+              stage_col=next((x for x in ('stage','state','status','event_type') if x in names),None)
+              task_col=next((x for x in ('task_id','id') if x in names),None)
+              time_col=next((x for x in ('created_at','updated_at','timestamp','occurred_at') if x in names),None)
+              print(f'lifecycle_table={t};stage_col={stage_col};task_col={task_col};time_col={time_col}')
+              if stage_col:
+                  rows=c.execute(f'SELECT {stage_col},COUNT(*) n FROM {t} GROUP BY {stage_col} ORDER BY {stage_col}').fetchall()
+                  print('lifecycle_stage_counts='+json.dumps([[r[0],r[1]] for r in rows]))
+              if task_col and stage_col:
+                  order=f' ORDER BY {time_col} DESC' if time_col else ''
+                  rows=c.execute(f'SELECT {task_col},{stage_col} FROM {t}{order} LIMIT 30').fetchall()
+                  print('recent_lifecycle_events='+json.dumps([[r[0],r[1]] for r in rows]))
+
+          # Find task IDs that appear in lifecycle plus execution/audit-like tables.
+          task_ids=set()
+          for t in lifecycle_tables:
+              names=[r['name'] for r in c.execute(f'pragma table_info({t})')]
+              if 'task_id' in names:
+                  task_ids.update(r[0] for r in c.execute(f'SELECT DISTINCT task_id FROM {t} WHERE task_id IS NOT NULL ORDER BY rowid DESC LIMIT 20'))
+          print('sample_task_ids='+json.dumps(sorted(task_ids)))
+          for tid in sorted(task_ids)[:10]:
+              evidence=[]
+              for t in interesting:
+                  names=[r['name'] for r in c.execute(f'pragma table_info({t})')]
+                  if 'task_id' not in names: continue
+                  try:
+                      rows=c.execute(f'SELECT * FROM {t} WHERE task_id=? ORDER BY rowid DESC LIMIT 10',(tid,)).fetchall()
+                  except Exception:
+                      rows=[]
+                  if rows:
+                      safe=[]
+                      for r in rows:
+                          d=dict(r)
+                          # Never print free-form payloads or tokens; retain only structural correlation fields.
+                          keep={k:v for k,v in d.items() if k in {'task_id','approval_id','execution_id','audit_id','agent_id','assigned_agent_id','stage','state','status','event_type','created_at','updated_at','timestamp','outcome','result_state','consumed_by'}}
+                          safe.append(keep)
+                      evidence.append([t,safe])
+              print('task_evidence:'+tid+'='+json.dumps(evidence,sort_keys=True))
+          PY
+
+          echo '=== O1 CONTROL API ROUTE LITERALS ==='
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import os,re,json
+          roots=['/app']
+          needles=('lifecycle','/v1/tasks','/v1/execute','/v1/execution','approval','audit')
+          found=[]
+          for root in roots:
+              for dp,_,fs in os.walk(root):
+                  for fn in fs:
+                      if not fn.endswith(('.py','.sh')): continue
+                      p=os.path.join(dp,fn)
+                      try: txt=open(p,errors='ignore').read()
+                      except Exception: continue
+                      for m in re.finditer(r"['\"](/v1/[^'\"\s]+)['\"]",txt):
+                          route=m.group(1)
+                          if any(n in route.lower() for n in needles): found.append((p,route))
+          found=sorted(set(found))
+          print('route_literals='+json.dumps(found))
+          PY
+
+          curl -fsS http://127.0.0.1:4881/api/read-model >/tmp/o1-model.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/o1-model.json'))
+          assert d['schema_version']=='2.1n.v1'
+          r=d['worker_readiness']
+          assert r['authority_effect']=='none'
+          assert r['automatic_assignment'] is False
+          assert r['automatic_retry'] is False
+          assert r['automatic_reroute'] is False
+          assert r['automatic_execution'] is False
+          print('live_readiness='+r['readiness'])
+          print('live_reason='+r['reason_code'])
+          PY
+          rm -f /tmp/o1-model.json
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+
+          echo production_change=none
+          echo lifecycle_mutation=none
+          echo assignment_mutation=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo authority_expansion=none
+          echo execution_allowlist=general
+          echo agent_registry=hermes_L3_only
+          echo PHIL_AI_OS_PHASE_2_1O_O1_LIFECYCLE_DISCOVERY_OK
+          REMOTE
