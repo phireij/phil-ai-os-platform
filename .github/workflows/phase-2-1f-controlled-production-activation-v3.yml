@@ -1,0 +1,72 @@
+name: Phase 2.1F Controlled Production Activation V3
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/phase-2-1f-production-activation-v3-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and validate activation V3
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ops/phase-2.1f/build-activation-v3.py \
+            ops/phase-2.1f/activate-canonical-task-production-v2.sh \
+            /tmp/philaios-phase-2-1f-activation-v3.sh
+          bash -n /tmp/philaios-phase-2-1f-activation-v3.sh
+          grep -q 'PHIL_AI_OS_PHASE_2_1F_CONTROLLED_PRODUCTION_ACTIVATION_V3_OK' /tmp/philaios-phase-2-1f-activation-v3.sh
+          grep -q 'post_public_routes_converged_to_baseline' /tmp/philaios-phase-2-1f-activation-v3.sh
+          grep -q 'post_local_routes_and_labels_preserved' /tmp/philaios-phase-2-1f-activation-v3.sh
+          echo activation_v3_runner_validation=green
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Stage validated Phase 2.1F V3 assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -P "$PORT" -q \
+            ops/phase-2.1f/build-canonical-task-app-candidate.py \
+            "$VPS_USER@$VPS_HOST:/tmp/philaios-phase-2-1f-app-builder.py"
+          scp -P "$PORT" -q \
+            /tmp/philaios-phase-2-1f-activation-v3.sh \
+            "$VPS_USER@$VPS_HOST:/tmp/philaios-phase-2-1f-activation-v3.sh"
+      - name: Atomic Phase 2.1F production activation V3
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" \
+            'chmod 700 /tmp/philaios-phase-2-1f-activation-v3.sh && /tmp/philaios-phase-2-1f-activation-v3.sh; rc=$?; rm -f /tmp/philaios-phase-2-1f-activation-v3.sh; exit $rc'
