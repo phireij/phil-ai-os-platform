@@ -1,0 +1,157 @@
+name: Phase 2.1L L6 Retry Idempotency Failure Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1l-l6-retry-idempotency-failure-verification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          getent ahosts "$VPS_HOST" >/dev/null
+          timeout 20 bash -c "</dev/tcp/$VPS_HOST/$PORT"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true
+
+      - name: Prove retry and dead-letter behavior without network delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=http://127.0.0.1:4870
+          CONTROL=phil-ai-os-core-control-api-1
+          DISPATCHER=/usr/local/sbin/philaios-approval-notification-dispatcher
+          TASK_TEXT='Phase 2.1L L6 retry canary only; do not approve or execute'
+          HERMES="$(docker ps --format '{{.Names}}' | grep '^hermes-agent-whow' | head -n1)"
+          test -n "$HERMES"; test -x "$DISPATCHER"
+
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          docker exec -i "$CONTROL" python - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          assert c.execute("select count(*) from approval_notification_outbox where state in ('pending','leased','retry_wait')").fetchone()[0]==0
+          print('pre_eligible_outbox_rows=0')
+          c.close()
+          PY
+
+          CLIENT_OUT="$(mktemp)"
+          docker exec "$HERMES" env PHIL_AI_OS_AUTO_NOTIFY_APPROVALS=0 /usr/local/bin/philaios-mission-control request "$TASK_TEXT" > "$CLIENT_OUT"
+          PARSED="$(cat "$CLIENT_OUT" | docker exec -i "$CONTROL" python -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or {}; n=d.get("notification") or {}; assert a.get("state")=="pending" and a.get("task_class")=="general" and n.get("status")=="disabled",d; print(str(a.get("approval_id"))+"|"+str(a.get("task_id")))')"
+          IFS='|' read -r APPROVAL_ID TASK_ID <<< "$PARSED"
+          test -n "$APPROVAL_ID"; test -n "$TASK_ID"
+          echo l6_approval_id="$APPROVAL_ID"
+          echo l6_task_id="$TASK_ID"
+          echo legacy_client_notification=disabled_for_canary
+
+          docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
+          import sqlite3,sys
+          a,t=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          assert c.execute('select count(*) from approval_requests where approval_id=? and task_id=?',(a,t)).fetchone()[0]==1
+          r=c.execute('select state,attempt_count from approval_notification_outbox where approval_id=? and task_id=?',(a,t)).fetchone()
+          assert r and r['state']=='pending' and r['attempt_count']==0
+          assert c.execute('select count(*) from approval_notification_outbox where approval_id=?',(a,)).fetchone()[0]==1
+          assert c.execute('select count(*) from execution_audit where approval_id=? or task_id=?',(a,t)).fetchone()[0]==0
+          print('initial_outbox_rows=1')
+          print('initial_attempt_count=0')
+          c.close()
+          PY
+
+          echo '=== L6 FORCED TRANSPORT FAILURE ATTEMPT 1 ==='
+          F1="$(mktemp)"
+          set +e
+          PHIL_AI_OS_HERMES_CONTAINER=phase21l-nonexistent-transport \
+          PHIL_AI_OS_NOTIFICATION_RETRY_SECONDS=0 \
+          PHIL_AI_OS_NOTIFICATION_MAX_ATTEMPTS=2 \
+          "$DISPATCHER" >"$F1" 2>&1
+          RC1=$?
+          set -e
+          test "$RC1" -ne 0
+          cat "$F1"
+          grep -q '^dispatcher_attempt=1$' "$F1"
+          grep -q '^dispatcher_failure_state=retry_wait$' "$F1"
+
+          docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
+          import sqlite3,sys
+          a,t=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          r=c.execute('select state,attempt_count,last_error_code from approval_notification_outbox where approval_id=? and task_id=?',(a,t)).fetchone()
+          assert r and r['state']=='retry_wait' and r['attempt_count']==1 and r['last_error_code']
+          assert c.execute('select count(*) from approval_notification_outbox where approval_id=?',(a,)).fetchone()[0]==1
+          assert c.execute('select count(*) from approval_requests where approval_id=?',(a,)).fetchone()[0]==1
+          ar=c.execute('select state,consumed_at,decision_at from approval_requests where approval_id=?',(a,)).fetchone()
+          assert ar and ar['state']=='pending' and ar['consumed_at'] is None and ar['decision_at'] is None
+          assert c.execute('select count(*) from execution_audit where approval_id=? or task_id=?',(a,t)).fetchone()[0]==0
+          print('after_failure1_state=retry_wait')
+          print('after_failure1_attempt_count=1')
+          print('approval_rows_still_1=true')
+          print('outbox_rows_still_1=true')
+          c.close()
+          PY
+
+          echo '=== L6 FORCED TRANSPORT FAILURE ATTEMPT 2 / BOUNDED TERMINAL ==='
+          F2="$(mktemp)"
+          set +e
+          PHIL_AI_OS_HERMES_CONTAINER=phase21l-nonexistent-transport \
+          PHIL_AI_OS_NOTIFICATION_RETRY_SECONDS=0 \
+          PHIL_AI_OS_NOTIFICATION_MAX_ATTEMPTS=2 \
+          "$DISPATCHER" >"$F2" 2>&1
+          RC2=$?
+          set -e
+          test "$RC2" -ne 0
+          cat "$F2"
+          grep -q '^dispatcher_attempt=2$' "$F2"
+          grep -q '^dispatcher_failure_state=dead_letter$' "$F2"
+
+          docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
+          import sqlite3,sys
+          a,t=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          r=c.execute('select state,attempt_count,last_error_code,delivered_at from approval_notification_outbox where approval_id=? and task_id=?',(a,t)).fetchone()
+          assert r and r['state']=='dead_letter' and r['attempt_count']==2 and r['last_error_code'] and r['delivered_at'] is None
+          assert c.execute('select count(*) from approval_notification_outbox where approval_id=?',(a,)).fetchone()[0]==1
+          assert c.execute('select count(*) from approval_requests where approval_id=?',(a,)).fetchone()[0]==1
+          ar=c.execute('select state,consumed_at,decision_at from approval_requests where approval_id=?',(a,)).fetchone()
+          assert ar and ar['state']=='pending' and ar['consumed_at'] is None and ar['decision_at'] is None
+          assert c.execute('select count(*) from execution_audit where approval_id=? or task_id=?',(a,t)).fetchone()[0]==0
+          print('final_outbox_state=dead_letter')
+          print('final_attempt_count=2')
+          print('duplicate_approval=false')
+          print('duplicate_outbox=false')
+          print('approval_decision=none')
+          print('approval_consumption=none')
+          print('execution_audit_links=0')
+          c.close()
+          PY
+
+          rm -f "$CLIENT_OUT" "$F1" "$F2"
+          echo telegram_send=none
+          echo execution_call=none
+          echo provider_call=none
+          echo PHIL_AI_OS_PHASE_2_1L_L6_RETRY_IDEMPOTENCY_FAILURE_OK
+          REMOTE
