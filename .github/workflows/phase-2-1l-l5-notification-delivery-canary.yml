@@ -1,0 +1,137 @@
+name: Phase 2.1L L5 Notification Delivery Canary
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1l-l5-notification-delivery-canary.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          getent ahosts "$VPS_HOST" >/dev/null
+          timeout 20 bash -c "</dev/tcp/$VPS_HOST/$PORT"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=2 "$VPS_USER@$VPS_HOST" true
+
+      - name: Create one pending canary and dispatch exactly once
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=http://127.0.0.1:4870
+          CONTROL=phil-ai-os-core-control-api-1
+          DISPATCHER=/usr/local/sbin/philaios-approval-notification-dispatcher
+          TASK_TEXT='Phase 2.1L L5 notification canary only; do not approve or execute'
+          HERMES="$(docker ps --format '{{.Names}}' | grep '^hermes-agent-whow' | head -n1)"
+          test -n "$HERMES"
+          test -x "$DISPATCHER"
+
+          echo '=== L5 PRE-CANARY GUARD ==='
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          docker exec -i "$CONTROL" python - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          count=c.execute("select count(*) from approval_notification_outbox where state in ('pending','leased','retry_wait')").fetchone()[0]
+          assert count==0, count
+          print('pre_eligible_outbox_rows=0')
+          c.close()
+          PY
+
+          echo '=== L5 GENUINE COORDINATOR REQUEST / LEGACY NOTIFY DISABLED FOR THIS INVOCATION ==='
+          CLIENT_OUT="$(mktemp)"
+          docker exec "$HERMES" env PHIL_AI_OS_AUTO_NOTIFY_APPROVALS=0 /usr/local/bin/philaios-mission-control request "$TASK_TEXT" > "$CLIENT_OUT"
+          cat "$CLIENT_OUT"
+          PARSED="$(cat "$CLIENT_OUT" | docker exec -i "$CONTROL" python -c 'import json,sys; d=json.load(sys.stdin); a=d.get("approval") or {}; n=d.get("notification") or {}; assert a.get("state")=="pending",d; assert a.get("task_class")=="general",d; assert n.get("status")=="disabled",d; print(str(a.get("approval_id"))+"|"+str(a.get("task_id")))')"
+          IFS='|' read -r APPROVAL_ID TASK_ID <<< "$PARSED"
+          test -n "$APPROVAL_ID"; test -n "$TASK_ID"
+          echo l5_approval_id="$APPROVAL_ID"
+          echo l5_task_id="$TASK_ID"
+          echo legacy_client_notification=disabled_for_canary
+
+          echo '=== L5 DURABLE ENQUEUE PROOF ==='
+          docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
+          import sqlite3,sys
+          a,t=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          ar=c.execute('select state,task_class,consumed_at,task_id from approval_requests where approval_id=?',(a,)).fetchone()
+          assert ar and ar['state']=='pending' and ar['task_class']=='general' and ar['consumed_at'] is None and ar['task_id']==t
+          rows=c.execute('select * from approval_notification_outbox where approval_id=? and task_id=?',(a,t)).fetchall()
+          assert len(rows)==1, len(rows)
+          r=rows[0]
+          assert r['state']=='pending' and r['attempt_count']==0 and r['event_type']=='approval_pending' and r['channel']=='telegram'
+          assert c.execute('select count(*) from execution_audit where approval_id=? or task_id=?',(a,t)).fetchone()[0]==0
+          stages=[x[0] for x in c.execute('select stage from task_lifecycle_events where task_id=? order by occurred_at,event_id',(t,)).fetchall()]
+          assert stages[:3]==['RECEIVED','CLASSIFIED','APPROVAL_PENDING'],stages
+          print('outbox_rows_for_canary=1')
+          print('outbox_pre_dispatch_state=pending')
+          print('outbox_pre_dispatch_attempt_count=0')
+          print('approval_pre_dispatch_state=pending')
+          print('approval_consumed=false')
+          print('execution_audit_links=0')
+          c.close()
+          PY
+
+          echo '=== L5 ONE-SHOT SERVER DISPATCH ==='
+          DISPATCH_OUT="$(mktemp)"
+          "$DISPATCHER" > "$DISPATCH_OUT"
+          cat "$DISPATCH_OUT"
+          grep -q '^dispatcher_status=delivered$' "$DISPATCH_OUT"
+          grep -q "^dispatcher_approval_id=$APPROVAL_ID$" "$DISPATCH_OUT"
+          grep -q "^dispatcher_task_id=$TASK_ID$" "$DISPATCH_OUT"
+          grep -q '^dispatcher_attempt=1$' "$DISPATCH_OUT"
+
+          echo '=== L5 POST-DISPATCH DURABLE PROOF ==='
+          docker exec -i "$CONTROL" python - "$APPROVAL_ID" "$TASK_ID" <<'PY'
+          import sqlite3,sys
+          a,t=sys.argv[1],sys.argv[2]
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          ar=c.execute('select state,task_class,consumed_at,decision_at,link_issued_at from approval_requests where approval_id=? and task_id=?',(a,t)).fetchone()
+          assert ar and ar['state']=='pending' and ar['task_class']=='general' and ar['consumed_at'] is None and ar['decision_at'] is None
+          r=c.execute('select state,attempt_count,delivered_at,last_error_code from approval_notification_outbox where approval_id=? and task_id=?',(a,t)).fetchone()
+          assert r and r['state']=='delivered' and r['attempt_count']==1 and r['delivered_at'] and r['last_error_code'] is None
+          assert c.execute('select count(*) from approval_notification_outbox where approval_id=? and task_id=?',(a,t)).fetchone()[0]==1
+          assert c.execute('select count(*) from execution_audit where approval_id=? or task_id=?',(a,t)).fetchone()[0]==0
+          print('outbox_post_dispatch_state=delivered')
+          print('outbox_attempt_count=1')
+          print('outbox_exact_rows=1')
+          print('approval_post_dispatch_state=pending')
+          print('approval_decision=none')
+          print('approval_consumption=none')
+          print('execution_audit_links=0')
+          c.close()
+          PY
+
+          rm -f "$CLIENT_OUT" "$DISPATCH_OUT"
+          echo execution_call=none
+          echo provider_call=none
+          echo PHIL_AI_OS_PHASE_2_1L_L5_NOTIFICATION_DELIVERY_CANARY_OK
+          REMOTE
