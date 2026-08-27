@@ -49,15 +49,8 @@ jobs:
           CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
           test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.1-phase21f'
           BEFORE="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0])")"
-          docker exec "$CONTROL" python3 -c "import ast,json; s=open('/app/app.py',encoding='utf-8').read(); t=ast.parse(s); names=[]; wanted=('approval','execute','execution','route','classif','policy');
-for n in ast.walk(t):
-    if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and any(x in n.name.lower() for x in wanted): names.append({'name':n.name,'args':[a.arg for a in n.args.args],'lineno':n.lineno,'end_lineno':getattr(n,'end_lineno',None)})
-print(json.dumps(sorted(names,key=lambda x:x['lineno']),separators=(',',':')))" | tr -d '\n' | sed 's/^/writer_hook_functions=/'
-          docker exec "$CONTROL" python3 -c "import ast,json; s=open('/app/app.py',encoding='utf-8').read(); t=ast.parse(s); targets={'approval_create','approval_consume','execution_audit_write'}; out={};
-for n in ast.walk(t):
-    if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name in targets:
-        calls=sorted({x.func.id if isinstance(x.func,ast.Name) else x.func.attr if isinstance(x.func,ast.Attribute) else 'other' for x in ast.walk(n) if isinstance(x,ast.Call)}); out[n.name]={'calls':calls,'returns':sum(isinstance(x,ast.Return) for x in ast.walk(n)),'raises':sum(isinstance(x,ast.Raise) for x in ast.walk(n))}
-print(json.dumps(out,sort_keys=True,separators=(',',':')))" | tr -d '\n' | sed 's/^/writer_hook_callshape=/'
+          docker exec "$CONTROL" python3 -c "import ast,json; t=ast.parse(open('/app/app.py',encoding='utf-8').read()); wanted=('approval','execute','execution','route','classif','policy'); names=[{'name':n.name,'args':[a.arg for a in n.args.args],'lineno':n.lineno,'end_lineno':getattr(n,'end_lineno',None)} for n in ast.walk(t) if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and any(x in n.name.lower() for x in wanted)]; print(json.dumps(sorted(names,key=lambda x:x['lineno']),separators=(',',':')))" | tr -d '\n' | sed 's/^/writer_hook_functions=/'
+          docker exec "$CONTROL" python3 -c "import ast,json; t=ast.parse(open('/app/app.py',encoding='utf-8').read()); targets={'approval_create','approval_consume','execution_audit_write'}; funcs=[n for n in ast.walk(t) if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name in targets]; out={n.name:{'calls':sorted({x.func.id if isinstance(x.func,ast.Name) else x.func.attr if isinstance(x.func,ast.Attribute) else 'other' for x in ast.walk(n) if isinstance(x,ast.Call)}),'returns':sum(isinstance(x,ast.Return) for x in ast.walk(n)),'raises':sum(isinstance(x,ast.Raise) for x in ast.walk(n))} for n in funcs}; print(json.dumps(out,sort_keys=True,separators=(',',':')))" | tr -d '\n' | sed 's/^/writer_hook_callshape=/'
           AFTER="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0])")"
           test "$BEFORE" = "$AFTER"
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST --max-time 5 http://127.0.0.1:4881/)" = 405
