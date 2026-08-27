@@ -1,6 +1,6 @@
 # Phase 2.1I — Coordinator Registry, Assignment & Planning Closure
 
-Status: **GREEN — closure verification pending**
+Status: **GREEN — formally closed**
 
 ## Scope
 Phase 2.1I introduced a bounded coordinator capability owned by Control API while preserving Hermes as the bounded worker and Mission Control as a read-only operator surface.
@@ -9,7 +9,8 @@ Phase 2.1I introduced a bounded coordinator capability owned by Control API whil
 - Control API image: `phil-ai-os/control-api:0.20.3-phase21i`
 - Coordinator owner: Control API
 - Agent registry: active, one bounded entry (`hermes`), authority ceiling `L3`
-- Plan store: active, zero plans at activation/closure baseline
+- Plan store: active, zero plans at closure baseline
+- Lifecycle ledger rows: zero at closure baseline
 - Assignment route: authenticated Control API operation only
 - Planning route: authenticated Control API operation only; plan references are server-generated
 - Mission Control read model: `2.1i.v1`
@@ -19,7 +20,7 @@ Phase 2.1I introduced a bounded coordinator capability owned by Control API whil
 
 ## Safety properties retained
 - No task, assignment, plan, provider call, execution call, or approval mutation was created by the activation canary.
-- Lifecycle rows remained unchanged at activation baseline.
+- Lifecycle rows remained unchanged at activation and closure baseline.
 - Unauthenticated coordinator assignment/planning requests return `401`.
 - Mission Control POST/PUT/PATCH/DELETE remain `405`.
 - Mission Control does not own coordinator mutation authority.
@@ -36,8 +37,9 @@ Phase 2.1I introduced a bounded coordinator capability owned by Control API whil
 - Controlled production coordinator canary: run `33043006245` — GREEN; marker `PHIL_AI_OS_PHASE_2_1I_CONTROLLED_PRODUCTION_CANARY_OK`.
 - Mission Control read-model validation: run `33043246122` — GREEN.
 - Mission Control read-model activation: run `33044284643` — first attempt SSH-only failure before staging; retry GREEN with marker `PHIL_AI_OS_PHASE_2_1I_READ_MODEL_ACTIVATION_OK`.
-- Mission Control dashboard activation: run `33044815969` — startup-listener race, file rollback completed.
+- Mission Control dashboard activation: run `33044815969` — startup-listener race; file rollback completed.
 - Mission Control dashboard activation retry: run `33044904930` — GREEN with marker `PHIL_AI_OS_PHASE_2_1I_DASHBOARD_ACTIVATION_OK`.
+- Final read-only closure verification: run `33045016595` — GREEN with marker `PHIL_AI_OS_PHASE_2_1I_CLOSURE_VERIFICATION_OK`.
 
-## Closure gate
-Phase 2.1I is formally closed only after the final read-only closure verification confirms the live image/schema/read-model/dashboard/security/recovery invariants above.
+## Closure decision
+Phase 2.1I is formally CLOSED GREEN. The live coordinator capability is present but bounded and inert at the closure baseline: Hermes is the only registered assignable worker, no plans or lifecycle assignment/planning events exist, Mission Control remains read-only, production execution remains `general`-only, and no authority expansion occurred.
