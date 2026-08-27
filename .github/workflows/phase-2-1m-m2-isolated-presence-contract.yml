@@ -1,0 +1,105 @@
+name: Phase 2.1M M2 Isolated Presence Contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1m-m2-isolated-presence-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deterministic non-authoritative presence semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from datetime import datetime, timezone, timedelta
+
+          FRESH_SECONDS=120
+          STALE_SECONDS=300
+
+          def classify(*, enabled, assignable, runtime_running, heartbeat_at, now):
+              # Registry, runtime and logical presence remain distinct signals.
+              registry_status = 'enabled' if enabled else 'disabled'
+              runtime_status = 'running' if runtime_running else 'stopped'
+              if heartbeat_at is None:
+                  presence='unknown'
+                  age=None
+              else:
+                  age=max(0,int((now-heartbeat_at).total_seconds()))
+                  if age <= FRESH_SECONDS:
+                      presence='fresh'
+                  elif age <= STALE_SECONDS:
+                      presence='stale'
+                  else:
+                      presence='offline'
+              return {
+                  'registry_status': registry_status,
+                  'assignable': bool(assignable),
+                  'runtime_status': runtime_status,
+                  'logical_presence': presence,
+                  'heartbeat_age_seconds': age,
+                  # This read model NEVER derives or grants execution authority.
+                  'authority_effect': 'none',
+                  'automatic_reroute': False,
+                  'automatic_retry': False,
+                  'automatic_delegation': False,
+                  'automatic_execution': False,
+              }
+
+          now=datetime(2026,8,27,12,0,0,tzinfo=timezone.utc)
+
+          cases={
+              'no_heartbeat_running': classify(enabled=True,assignable=True,runtime_running=True,heartbeat_at=None,now=now),
+              'fresh': classify(enabled=True,assignable=True,runtime_running=True,heartbeat_at=now-timedelta(seconds=60),now=now),
+              'stale': classify(enabled=True,assignable=True,runtime_running=True,heartbeat_at=now-timedelta(seconds=180),now=now),
+              'offline': classify(enabled=True,assignable=True,runtime_running=True,heartbeat_at=now-timedelta(seconds=600),now=now),
+              'runtime_stopped_but_recent_hb': classify(enabled=True,assignable=True,runtime_running=False,heartbeat_at=now-timedelta(seconds=30),now=now),
+              'disabled_but_recent_hb': classify(enabled=False,assignable=False,runtime_running=True,heartbeat_at=now-timedelta(seconds=30),now=now),
+          }
+
+          assert cases['no_heartbeat_running']['logical_presence']=='unknown'
+          assert cases['fresh']['logical_presence']=='fresh'
+          assert cases['stale']['logical_presence']=='stale'
+          assert cases['offline']['logical_presence']=='offline'
+          # Runtime status cannot overwrite heartbeat-derived logical presence.
+          assert cases['runtime_stopped_but_recent_hb']['runtime_status']=='stopped'
+          assert cases['runtime_stopped_but_recent_hb']['logical_presence']=='fresh'
+          # Presence never overrides registry authority/assignability.
+          assert cases['disabled_but_recent_hb']['registry_status']=='disabled'
+          assert cases['disabled_but_recent_hb']['assignable'] is False
+
+          for name,result in cases.items():
+              assert result['authority_effect']=='none'
+              assert not result['automatic_reroute']
+              assert not result['automatic_retry']
+              assert not result['automatic_delegation']
+              assert not result['automatic_execution']
+              print(name+'='+repr(result))
+
+          # Workload is a read-only durable-state aggregation contract.
+          terminal={'SUCCEEDED','FAILED','BLOCKED','CANCELLED','DENIED','EXPIRED','REJECTED','AUDITED','CLOSED'}
+          latest_stages={
+              'tsk_a':('hermes','ASSIGNED'),
+              'tsk_b':('hermes','APPROVAL_PENDING'),
+              'tsk_c':('hermes','AUDITED'),
+              'tsk_d':(None,'RECEIVED'),
+          }
+          active=sum(1 for _,(agent,stage) in latest_stages.items() if agent=='hermes' and stage not in terminal)
+          assert active==2
+          print('derived_active_workload=2')
+          print('workload_source=durable_latest_task_lifecycle')
+          print('heartbeat_source=explicit_observation_only')
+          print('container_running_does_not_imply_presence=true')
+          print('presence_authority_effect=none')
+          print('network_call=none')
+          print('production_change=none')
+          print('PHIL_AI_OS_PHASE_2_1M_M2_ISOLATED_PRESENCE_CONTRACT_OK')
+          PY
