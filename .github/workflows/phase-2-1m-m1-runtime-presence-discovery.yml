@@ -1,0 +1,132 @@
+name: Phase 2.1M M1 Runtime Presence Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1m-m1-runtime-presence-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+
+      - name: Discover production runtime presence primitives read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BASE=http://127.0.0.1:4870
+          CONTROL=phil-ai-os-core-control-api-1
+          HERMES="$(docker ps --format '{{.Names}}' | grep '^hermes-agent-whow' | head -n1)"
+          test -n "$HERMES"
+
+          echo '=== PHASE 2.1M M1 SAFETY BASELINE ==='
+          curl -fsS "$BASE/healthz" >/dev/null
+          curl -fsS "$BASE/readyz" >/dev/null
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          systemctl is-active --quiet phil-ai-os-approval-notification-dispatcher.timer
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          echo health=ok
+          echo readiness=ok
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+          echo notification_dispatcher_timer=active
+          echo execution_allowlist=general
+
+          echo '=== AGENT REGISTRY / DURABLE WORKLOAD SIGNALS ==='
+          docker exec -i "$CONTROL" python - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          tables={r[0] for r in c.execute("select name from sqlite_master where type='table'")}
+          print('sqlite_quick_check=ok')
+          for t in ('agent_registry','task_plans','task_lifecycle_events','approval_requests','execution_audit'):
+              print(f'table_{t}_present='+str(t in tables).lower())
+              if t in tables:
+                  cols=[r[1] for r in c.execute(f'pragma table_info({t})').fetchall()]
+                  print(f'table_{t}_columns='+','.join(cols))
+          if 'agent_registry' in tables:
+              rows=[dict(r) for r in c.execute('select * from agent_registry order by agent_id').fetchall()]
+              print('agent_registry_count='+str(len(rows)))
+              for r in rows:
+                  safe={k:v for k,v in r.items() if k.lower() not in {'token','credential','secret','api_key','password'}}
+                  print('agent_registry_row='+repr(safe))
+          if 'task_plans' in tables:
+              cols={r[1] for r in c.execute('pragma table_info(task_plans)').fetchall()}
+              agent_col=next((x for x in ('assigned_agent_id','agent_id','assigned_agent') if x in cols),None)
+              if agent_col:
+                  q=f"select {agent_col},count(*) n from task_plans group by {agent_col} order by {agent_col}"
+                  for r in c.execute(q).fetchall(): print(f'task_plan_count_{r[0]}={r[1]}')
+          if 'approval_requests' in tables:
+              for state,n in c.execute('select state,count(*) from approval_requests group by state order by state').fetchall():
+                  print(f'approval_count_{state}={n}')
+          if 'task_lifecycle_events' in tables:
+              for stage,n in c.execute('select stage,count(*) from task_lifecycle_events group by stage order by stage').fetchall():
+                  print(f'lifecycle_count_{stage}={n}')
+          c.close()
+          PY
+
+          echo '=== HERMES RUNTIME STATUS SIGNALS ==='
+          docker inspect "$HERMES" --format 'hermes_container_status={{.State.Status}}'
+          docker inspect "$HERMES" --format 'hermes_container_running={{.State.Running}}'
+          docker inspect "$HERMES" --format 'hermes_container_started_at={{.State.StartedAt}}'
+          docker inspect "$HERMES" --format 'hermes_container_restart_count={{.RestartCount}}'
+          docker inspect "$HERMES" --format 'hermes_container_health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
+          docker stats --no-stream --format 'hermes_runtime_stats={{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}}' "$HERMES"
+
+          echo '=== PRESENCE / HEARTBEAT SOURCE SIGNALS ==='
+          docker exec "$CONTROL" sh -lc "grep -n -E 'heartbeat|last_seen|presence|session|workload|agent_registry|assignable|authority_ceiling' /app/app.py | head -n 260 || true"
+          docker exec "$HERMES" sh -lc "grep -R -n -E 'heartbeat|last_seen|presence|session|workload' /usr/local/bin /opt/phil-ai-os-platform /opt/hermes 2>/dev/null | head -n 220 || true"
+
+          echo '=== MISSION CONTROL READ MODEL SIGNALS ==='
+          docker exec "$CONTROL" sh -lc "grep -n -E 'mission-control|agent_registry|task_plans|task_lifecycle|approval|execution' /app/app.py | head -n 260 || true"
+
+          echo approval_creation=none
+          echo approval_decision=none
+          echo approval_consumption=none
+          echo notification_send=none
+          echo execution_call=none
+          echo provider_call=none
+          echo database_write=none
+          echo service_restart=none
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_1M_M1_RUNTIME_PRESENCE_DISCOVERY_OK
+          REMOTE
