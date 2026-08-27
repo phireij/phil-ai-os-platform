@@ -85,7 +85,6 @@ jobs:
           for a in audits:
               safe={k:a.get(k) for k in ('id','occurred_at','source','task_class','provider_id','model_id','route_path','response_id','compatibility_pass','execution_mode','outcome','approval_id','task_id')}
               detail=a.get('detail')
-              # Only retain a bounded semantic classification of detail; never dump arbitrary text.
               low=(detail or '').lower()
               if 'already_consumed' in low or 'replay' in low:
                   safe['detail_class']='replay_or_consumption_rejection'
@@ -107,9 +106,9 @@ jobs:
                   response_counts[rid]=c.execute('select count(*) from execution_audit where response_id=?',(rid,)).fetchone()[0]
           print('response_id_global_counts='+json.dumps(response_counts,sort_keys=True))
 
-          # Conservative disambiguation. A successful governed execution row must carry a response_id.
-          success=[a for a in audits if a.get('outcome')=='succeeded' and a.get('response_id')]
-          rejection=[a for a in audits if a.get('outcome') in {'rejected','failed','cancelled'}]
+          # Match the established production execution_audit vocabulary.
+          success=[a for a in audits if a.get('outcome')=='success' and a.get('response_id')]
+          rejection=[a for a in audits if a.get('outcome') in {'approval_rejected','rejected','failed','cancelled'}]
           same_approval=(len({a.get('approval_id') for a in audits if a.get('approval_id')})==1)
           unique_success=(len(success)==1 and response_counts.get(success[0]['response_id'])==1)
           consumed=(len(approvals)==1 and approvals[0].get('consumed_at') is not None and approvals[0].get('consumed_by') is not None)
@@ -123,7 +122,7 @@ jobs:
           if unique_success and same_approval and consumed and replay_like:
               classification='closed_proven'
               reason='one_unique_success_plus_replay_rejection'
-          print('disambiguation='+json.dumps({
+          result={
               'classification':classification,
               'reason':reason,
               'audit_row_count':len(audits),
@@ -138,7 +137,9 @@ jobs:
               'automatic_retry':False,
               'automatic_reroute':False,
               'automatic_execution':False,
-          },sort_keys=True))
+          }
+          print('disambiguation='+json.dumps(result,sort_keys=True))
+          assert result['classification']=='closed_proven', result
           PY
 
           curl -fsS http://127.0.0.1:4881/api/read-model >/tmp/o5-model.json
