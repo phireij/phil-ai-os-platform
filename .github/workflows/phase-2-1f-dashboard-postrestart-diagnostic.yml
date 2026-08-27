@@ -1,0 +1,101 @@
+name: Phase 2.1F Dashboard Post-Restart Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1f-dashboard-postrestart-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Diagnose current dashboard state read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          SERVICE=phil-ai-os-mission-control-operator.service
+          HOSTNAME=hermes-agent-whow.srv1833510.hstgr.cloud
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.1-phase21f'
+          echo service_state="$(systemctl is-active "$SERVICE" 2>/dev/null || true)"
+          ENV_LINE="$(systemctl show "$SERVICE" -p Environment --value)"
+          read READ_MODEL DASH_HOST < <(python3 - "$ENV_LINE" <<'PY'
+          import shlex,sys
+          env={}
+          for item in shlex.split(sys.argv[1]):
+              if '=' in item:
+                  k,v=item.split('=',1); env[k]=v
+          print(env.get('PHIL_AI_OS_MC_READ_MODEL',''), env.get('PHIL_AI_OS_MC_HOST',''))
+          PY
+          )
+          test -n "$READ_MODEL"; test -n "$DASH_HOST"
+          echo read_model_present=$([ -f "$READ_MODEL" ] && echo true || echo false)
+          if grep -q 'SCHEMA_VERSION = "2.1f.v1"' "$READ_MODEL"; then echo read_model_schema_marker=2.1f.v1; else echo read_model_schema_marker=unexpected; fi
+          ROOT_STATUS="$(curl -s -o /tmp/philaios-current-dashboard.html -w '%{http_code}' --max-time 5 "http://$DASH_HOST:4881/" || true)"
+          API_STATUS="$(curl -s -o /tmp/philaios-current-dashboard.json -w '%{http_code}' --max-time 8 "http://$DASH_HOST:4881/api/read-model" || true)"
+          echo local_root_status="$ROOT_STATUS"
+          echo local_api_status="$API_STATUS"
+          if [ "$ROOT_STATUS" = 200 ]; then
+            grep -q 'READ ONLY · Phase 2.1E' /tmp/philaios-current-dashboard.html && echo html_badge=Phase_2.1E || true
+            grep -q 'READ ONLY · Phase 2.1F' /tmp/philaios-current-dashboard.html && echo html_badge=Phase_2.1F || true
+            grep -q 'Canonical task persistence is active' /tmp/philaios-current-dashboard.html && echo html_new_footer=present || echo html_new_footer=absent
+            grep -q 'Canonical persistence' /tmp/philaios-current-dashboard.html && echo html_canonical_metric=present || echo html_canonical_metric=absent
+          fi
+          if [ "$API_STATUS" = 200 ]; then
+            python3 - /tmp/philaios-current-dashboard.json <<'PY'
+          import json,sys
+          m=json.load(open(sys.argv[1]))
+          print('api_schema='+str(m.get('schema_version')))
+          s=m.get('durable_correlation_summary') or {}
+          print('api_canonical_persistence='+str(s.get('canonical_task_persistence')))
+          print('api_task_id_mismatch_count='+str(s.get('task_id_mismatch_count')))
+          print('api_overall_state='+str(m.get('overall_state')))
+          PY
+          fi
+          OP_STATUS="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "https://$HOSTNAME/phil-ai-os/operator/" || true)"
+          echo public_operator_status="$OP_STATUS"
+          for method in POST PUT PATCH DELETE; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -X "$method" --max-time 5 "http://$DASH_HOST:4881/")"
+            echo "mutation_${method}_status=$code"
+          done
+          rm -f /tmp/philaios-current-dashboard.html /tmp/philaios-current-dashboard.json
+          echo production_change=none
+          echo database_write=none
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo PHIL_AI_OS_PHASE_2_1F_DASHBOARD_POSTRESTART_DIAGNOSTIC_OK
+          REMOTE
