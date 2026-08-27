@@ -1,0 +1,73 @@
+name: Phase 2.1H Lifecycle Writer Hook Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/phase-2-1h-writer-hook-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Discover writer hooks read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.20.1-phase21f'
+          BEFORE="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0])")"
+          docker exec "$CONTROL" python3 -c "import ast,json; s=open('/app/app.py',encoding='utf-8').read(); t=ast.parse(s); names=[]; wanted=('approval','execute','execution','route','classif','policy');
+for n in ast.walk(t):
+    if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and any(x in n.name.lower() for x in wanted): names.append({'name':n.name,'args':[a.arg for a in n.args.args],'lineno':n.lineno,'end_lineno':getattr(n,'end_lineno',None)})
+print(json.dumps(sorted(names,key=lambda x:x['lineno']),separators=(',',':')))" | tr -d '\n' | sed 's/^/writer_hook_functions=/'
+          docker exec "$CONTROL" python3 -c "import ast,json; s=open('/app/app.py',encoding='utf-8').read(); t=ast.parse(s); targets={'approval_create','approval_consume','execution_audit_write'}; out={};
+for n in ast.walk(t):
+    if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name in targets:
+        calls=sorted({x.func.id if isinstance(x.func,ast.Name) else x.func.attr if isinstance(x.func,ast.Attribute) else 'other' for x in ast.walk(n) if isinstance(x,ast.Call)}); out[n.name]={'calls':calls,'returns':sum(isinstance(x,ast.Return) for x in ast.walk(n)),'raises':sum(isinstance(x,ast.Raise) for x in ast.walk(n))}
+print(json.dumps(out,sort_keys=True,separators=(',',':')))" | tr -d '\n' | sed 's/^/writer_hook_callshape=/'
+          AFTER="$(docker exec "$CONTROL" python3 -c "import sqlite3; c=sqlite3.connect('/app/state/control-plane.db'); print(c.execute('select count(*) from approval_requests').fetchone()[0],c.execute('select count(*) from execution_audit').fetchone()[0])")"
+          test "$BEFORE" = "$AFTER"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST --max-time 5 http://127.0.0.1:4881/)" = 405
+          echo approval_execution_counts_unchanged=true
+          echo application_patch=none
+          echo database_write=none
+          echo provider_call=none
+          echo execution_call=none
+          echo approval_mutation=none
+          echo assignment_mutation=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1H_WRITER_HOOK_DISCOVERY_OK
+          REMOTE
