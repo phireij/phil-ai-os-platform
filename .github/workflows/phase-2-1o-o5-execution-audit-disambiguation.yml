@@ -1,0 +1,172 @@
+name: Phase 2.1O O5 Execution Audit Disambiguation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1o-o5-execution-audit-disambiguation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Read-only execution audit disambiguation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          TARGET=tsk_e9694565de884bc9afa550d57db32426
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+
+          docker exec -i "$CONTROL" env TARGET="$TARGET" python3 - <<'PY'
+          import sqlite3,json,os
+          c=sqlite3.connect('/app/state/control-plane.db')
+          c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          tid=os.environ['TARGET']
+          reg=[tuple(r) for r in c.execute('select agent_id,authority_ceiling,enabled,assignable from agent_registry order by agent_id')]
+          assert reg==[('hermes','L3',1,1)]
+
+          approvals=[dict(r) for r in c.execute('''
+            select approval_id,state,decision_by,decision_at,consumed_at,consumed_by,task_id
+            from approval_requests where task_id=? order by created_at
+          ''',(tid,))]
+          audits=[dict(r) for r in c.execute('''
+            select id,occurred_at,source,task_class,provider_id,model_id,route_path,response_id,
+                   compatibility_pass,execution_mode,outcome,detail,approval_id,task_id
+            from execution_audit where task_id=? order by occurred_at,id
+          ''',(tid,))]
+          lifecycle=[dict(r) for r in c.execute('''
+            select event_id,stage,occurred_at,source_component,actor_id,assigned_agent_id,previous_stage,reason_code,correlation_id
+            from task_lifecycle_events where task_id=? order by occurred_at,event_id
+          ''',(tid,))]
+          plans=[dict(r) for r in c.execute('''
+            select plan_ref,created_at,created_by,plan_kind,status,supersedes_plan_ref
+            from task_plans where task_id=? order by created_at,plan_ref
+          ''',(tid,))]
+
+          # Print metadata only; do not emit task text, secrets, credentials or provider payloads.
+          print('target_task='+tid)
+          print('approval_evidence='+json.dumps(approvals,sort_keys=True))
+          safe_audits=[]
+          for a in audits:
+              safe={k:a.get(k) for k in ('id','occurred_at','source','task_class','provider_id','model_id','route_path','response_id','compatibility_pass','execution_mode','outcome','approval_id','task_id')}
+              detail=a.get('detail')
+              # Only retain a bounded semantic classification of detail; never dump arbitrary text.
+              low=(detail or '').lower()
+              if 'already_consumed' in low or 'replay' in low:
+                  safe['detail_class']='replay_or_consumption_rejection'
+              elif 'success' in low or 'ok' in low:
+                  safe['detail_class']='success_like'
+              elif detail:
+                  safe['detail_class']='other_nonempty'
+              else:
+                  safe['detail_class']='empty'
+              safe_audits.append(safe)
+          print('execution_audit_evidence='+json.dumps(safe_audits,sort_keys=True))
+          print('lifecycle_evidence='+json.dumps(lifecycle,sort_keys=True))
+          print('plan_evidence='+json.dumps(plans,sort_keys=True))
+
+          response_counts={}
+          for a in audits:
+              rid=a.get('response_id')
+              if rid:
+                  response_counts[rid]=c.execute('select count(*) from execution_audit where response_id=?',(rid,)).fetchone()[0]
+          print('response_id_global_counts='+json.dumps(response_counts,sort_keys=True))
+
+          # Conservative disambiguation. A successful governed execution row must carry a response_id.
+          success=[a for a in audits if a.get('outcome')=='succeeded' and a.get('response_id')]
+          rejection=[a for a in audits if a.get('outcome') in {'rejected','failed','cancelled'}]
+          same_approval=(len({a.get('approval_id') for a in audits if a.get('approval_id')})==1)
+          unique_success=(len(success)==1 and response_counts.get(success[0]['response_id'])==1)
+          consumed=(len(approvals)==1 and approvals[0].get('consumed_at') is not None and approvals[0].get('consumed_by') is not None)
+          replay_like=False
+          if len(audits)==2 and len(success)==1 and len(rejection)==1:
+              d=(rejection[0].get('detail') or '').lower()
+              replay_like=('already_consumed' in d or 'replay' in d)
+
+          classification='closure_indeterminate'
+          reason='audit_rows_not_safely_disambiguated'
+          if unique_success and same_approval and consumed and replay_like:
+              classification='closed_proven'
+              reason='one_unique_success_plus_replay_rejection'
+          print('disambiguation='+json.dumps({
+              'classification':classification,
+              'reason':reason,
+              'audit_row_count':len(audits),
+              'successful_response_rows':len(success),
+              'rejection_rows':len(rejection),
+              'same_approval_id':same_approval,
+              'unique_success_response_id':unique_success,
+              'matching_approval_consumed':consumed,
+              'replay_like_second_row':replay_like,
+              'authority_effect':'none',
+              'automatic_assignment':False,
+              'automatic_retry':False,
+              'automatic_reroute':False,
+              'automatic_execution':False,
+          },sort_keys=True))
+          PY
+
+          curl -fsS http://127.0.0.1:4881/api/read-model >/tmp/o5-model.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/o5-model.json'))
+          assert d['schema_version']=='2.1n.v1'
+          r=d['worker_readiness']
+          assert r['authority_effect']=='none'
+          assert r['automatic_assignment'] is False
+          assert r['automatic_retry'] is False
+          assert r['automatic_reroute'] is False
+          assert r['automatic_execution'] is False
+          print('current_worker_readiness='+r['readiness'])
+          print('current_readiness_reason='+r['reason_code'])
+          PY
+          rm -f /tmp/o5-model.json
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+
+          echo production_change=none
+          echo lifecycle_mutation=none
+          echo assignment_mutation=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo authority_expansion=none
+          echo execution_allowlist=general
+          echo agent_registry=hermes_L3_only
+          echo PHIL_AI_OS_PHASE_2_1O_O5_EXECUTION_AUDIT_DISAMBIGUATION_OK
+          REMOTE
