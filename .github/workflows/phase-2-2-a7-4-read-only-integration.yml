@@ -1,0 +1,80 @@
+name: Phase 2.2 A7.4 Read-Only Mission Control Integration
+
+on:
+  push:
+    paths:
+      - '.github/workflows/phase-2-2-a7-4-read-only-integration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate activation package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/phase2_2_a7_4_multi_agent_read_model.py
+          bash -n scripts/phase2_2_a7_4_activate_read_model.sh
+
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3 4 5 6; do
+            if ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=12 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+
+      - name: Stage audited A7.4 files
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -4 -P "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes \
+            scripts/phase2_2_a7_4_multi_agent_read_model.py \
+            "$VPS_USER@$VPS_HOST:/tmp/phase2_2_a7_4_multi_agent_read_model.py"
+          scp -4 -P "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes \
+            scripts/phase2_2_a7_4_activate_read_model.sh \
+            "$VPS_USER@$VPS_HOST:/tmp/phase2_2_a7_4_activate_read_model.sh"
+
+      - name: Activate bounded read-only integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'chmod 700 /tmp/phase2_2_a7_4_activate_read_model.sh && /tmp/phase2_2_a7_4_activate_read_model.sh' \
+            | tee phase-2-2-a7-4-integration.txt
+
+      - name: Cleanup staged activation script
+        if: always()
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'rm -f /tmp/phase2_2_a7_4_activate_read_model.sh /tmp/phase2_2_a7_4_multi_agent_read_model.py /tmp/a7-preinstall-projection.json /tmp/a7-live-projection.json /tmp/a7-state-before.json' || true
+
+      - name: Upload integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a7-4-read-only-integration-evidence
+          path: phase-2-2-a7-4-integration.txt
+          if-no-files-found: warn
+          retention-days: 30
