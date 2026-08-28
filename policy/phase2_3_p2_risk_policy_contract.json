@@ -1,0 +1,84 @@
+{
+  "schema_version": "2.3-p2.v1",
+  "authority_effect": "none",
+  "current_production": {
+    "autonomy_ceiling": "A0",
+    "execution_allowed_task_classes": ["general"],
+    "mission_control_authority": "read_only_observer",
+    "self_approval_allowed": false,
+    "direct_provider_bypass_allowed": false,
+    "automatic_task_class_expansion": false,
+    "automatic_autonomy_expansion": false
+  },
+  "risk_tiers": {
+    "R0": {"meaning": "observation_read_only_no_external_side_effect", "default_decision": "allow_prepare"},
+    "R1": {"meaning": "bounded_low_impact_reversible_action", "default_decision": "require_human"},
+    "R2": {"meaning": "governed_execution_or_external_bounded_action", "default_decision": "require_human"},
+    "R3": {"meaning": "sensitive_high_impact_privileged_or_scope_expanding", "default_decision": "escalate"},
+    "R4": {"meaning": "prohibited_unbounded_bypass_or_self_authorizing", "default_decision": "deny"}
+  },
+  "autonomy_levels": {
+    "A0": "no_autonomous_side_effect",
+    "A1": "bounded_reversible_side_effect_future_candidate_not_authorized",
+    "A2": "bounded_governed_execution_future_candidate_not_authorized",
+    "A3": "broader_bounded_workflow_autonomy_future_candidate_not_authorized"
+  },
+  "allowed_decisions": [
+    "allow_prepare",
+    "require_human",
+    "eligible_for_execution_boundary",
+    "escalate",
+    "deny"
+  ],
+  "decision_object_required_fields": [
+    "policy_decision_id",
+    "policy_version",
+    "evaluated_at",
+    "task_id",
+    "task_class",
+    "action_type",
+    "subject_agent_id",
+    "subject_authority_ceiling",
+    "risk_tier",
+    "required_authority",
+    "configured_autonomy_ceiling",
+    "requested_autonomy_level",
+    "human_approval_required",
+    "approval_consumption_required",
+    "scope_constraints",
+    "evidence_refs",
+    "decision",
+    "reason_codes",
+    "execution_preconditions_satisfied",
+    "authority_effect"
+  ],
+  "invariants": {
+    "risk_authority_autonomy_are_separate": true,
+    "authority_ceiling_is_never_grant": true,
+    "readiness_is_never_permission": true,
+    "policy_evaluation_can_execute": false,
+    "policy_evaluation_can_consume_approval": false,
+    "human_approval_required_for_current_side_effects": true,
+    "approval_is_expiring": true,
+    "execution_approval_is_one_time": true,
+    "replay_rejected_before_second_provider_call": true,
+    "kill_switch_preserved": true,
+    "control_api_execution_boundary_required": true,
+    "missing_or_conflicting_evidence_fails_closed": true,
+    "handoff_authorization_is_execution_approval": false
+  },
+  "static_cases": [
+    {"name": "r0_observe", "risk_tier": "R0", "requested_autonomy_level": "A0", "expected": "allow_prepare"},
+    {"name": "r1_side_effect_current_a0", "risk_tier": "R1", "requested_autonomy_level": "A1", "expected": "require_human"},
+    {"name": "r2_execution_unapproved", "risk_tier": "R2", "requested_autonomy_level": "A0", "expected": "require_human"},
+    {"name": "r3_sensitive", "risk_tier": "R3", "requested_autonomy_level": "A0", "expected": "escalate"},
+    {"name": "r4_prohibited", "risk_tier": "R4", "requested_autonomy_level": "A0", "expected": "deny"},
+    {"name": "routine_execution_not_allowlisted", "task_class": "routine", "requested_execution": true, "expected": "deny"},
+    {"name": "self_approval", "self_approval": true, "expected": "deny"},
+    {"name": "expired_approval", "approval_state": "expired", "expected": "deny"},
+    {"name": "consumed_approval_replay", "approval_consumed": true, "expected": "deny"},
+    {"name": "kill_switch_active_execution", "requested_execution": true, "kill_switch": true, "expected": "deny"},
+    {"name": "authority_ceiling_violation", "authority_violation": true, "expected": "escalate_or_deny"},
+    {"name": "missing_policy_evidence", "evidence_complete": false, "expected": "deny_or_escalate"}
+  ]
+}
