@@ -1,0 +1,224 @@
+name: Phase 2.2 A5 Approved Activation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/PHASE_2_2_A5_CEO_APPROVAL_2026-08-28.md'
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify explicit CEO approval receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          RECEIPT='docs/PHASE_2_2_A5_CEO_APPROVAL_2026-08-28.md'
+          test -f "$RECEIPT"
+          grep -Fxq 'Authorization: APPROVE_PHASE_2_2_A5' "$RECEIPT"
+          grep -Fxq 'Approved by: CEO' "$RECEIPT"
+          grep -Fxq 'Scope: one disabled, non-assignable L1 registry identity only' "$RECEIPT"
+
+      - name: Configure direct SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3 4; do
+            if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=12 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true; then
+              exit 0
+            fi
+            sleep $((attempt*5))
+          done
+          exit 1
+
+      - name: Execute bounded A5 registration with containment rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE' | tee phase22-a5-approved-evidence.txt
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          CANDIDATE='specialist-worker-01'
+          INSERTED=0
+
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          for m in POST PUT PATCH DELETE; do
+            test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405
+          done
+
+          echo preflight=green
+
+          # Fresh protected backup immediately before the sole authorized mutation.
+          systemctl start phil-ai-os-backup.service
+          test "$(systemctl is-failed phil-ai-os-backup.service || true)" != failed
+          echo prechange_backup_service=completed
+
+          # Capture immutable baseline.
+          docker exec -i "$CONTROL" python3 - <<'PY' >/tmp/phase22-a5-baseline.json
+          import sqlite3,json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          reg=[dict(r) for r in c.execute('select * from agent_registry order by agent_id')]
+          assert len(reg)==1
+          h=reg[0]
+          assert h['agent_id']=='hermes'
+          assert h['authority_ceiling']=='L3'
+          assert int(h['enabled'])==1
+          assert int(h['assignable'])==1
+          assert c.execute("select count(*) from agent_registry where agent_id='specialist-worker-01'").fetchone()[0]==0
+          tracked=['agent_registry','task_lifecycle_events','task_plans','approval_requests','execution_audit']
+          counts={t:c.execute(f'select count(*) from {t}').fetchone()[0] for t in tracked}
+          print(json.dumps({'hermes':h,'counts':counts},sort_keys=True,separators=(',',':'),default=str))
+          PY
+          echo baseline_captured=true
+
+          rollback_candidate() {
+            if [ "$INSERTED" = 1 ]; then
+              echo rollback_attempted=true
+              docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('/app/state/control-plane.db',timeout=5,isolation_level=None)
+          c.execute('pragma busy_timeout=5000')
+          c.execute('begin immediate')
+          refs=c.execute("select count(*) from task_lifecycle_events where assigned_agent_id='specialist-worker-01'").fetchone()[0]
+          if refs != 0:
+              c.execute('rollback')
+              raise SystemExit('rollback blocked: candidate has lifecycle references')
+          cur=c.execute("delete from agent_registry where agent_id='specialist-worker-01' and role='specialist_worker' and authority_ceiling='L1' and enabled=0 and assignable=0")
+          assert cur.rowcount == 1
+          c.execute('commit')
+          assert c.execute("select count(*) from agent_registry where agent_id='specialist-worker-01'").fetchone()[0]==0
+          PY
+              echo rollback_completed=true
+            fi
+          }
+
+          trap 'rc=$?; if [ "$rc" -ne 0 ]; then rollback_candidate || true; fi; exit "$rc"' EXIT
+
+          # Sole authorized production mutation.
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,datetime
+          c=sqlite3.connect('/app/state/control-plane.db',timeout=5,isolation_level=None)
+          c.row_factory=sqlite3.Row
+          c.execute('pragma busy_timeout=5000')
+          c.execute('begin immediate')
+          reg=[dict(r) for r in c.execute('select * from agent_registry order by agent_id')]
+          assert len(reg)==1
+          h=reg[0]
+          assert h['agent_id']=='hermes' and h['authority_ceiling']=='L3'
+          assert int(h['enabled'])==1 and int(h['assignable'])==1
+          assert c.execute("select count(*) from agent_registry where agent_id='specialist-worker-01'").fetchone()[0]==0
+          stamp=datetime.datetime.now(datetime.timezone.utc).isoformat()
+          c.execute(
+              'insert into agent_registry(agent_id,display_name,role,authority_ceiling,enabled,assignable,created_at,source_component) values(?,?,?,?,?,?,?,?)',
+              ('specialist-worker-01','Specialist Worker 01','specialist_worker','L1',0,0,stamp,'phase-2.2-a5-approved-registration')
+          )
+          c.execute('commit')
+          PY
+          INSERTED=1
+          echo candidate_registry_insert=committed
+
+          # Capture and validate final state.
+          docker exec -i "$CONTROL" python3 - <<'PY' >/tmp/phase22-a5-final.json
+          import sqlite3,json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          reg=[dict(r) for r in c.execute('select * from agent_registry order by agent_id')]
+          assert len(reg)==2
+          h=next(r for r in reg if r['agent_id']=='hermes')
+          s=next(r for r in reg if r['agent_id']=='specialist-worker-01')
+          assert h['authority_ceiling']=='L3' and int(h['enabled'])==1 and int(h['assignable'])==1
+          assert s['role']=='specialist_worker'
+          assert s['authority_ceiling']=='L1'
+          assert int(s['enabled'])==0
+          assert int(s['assignable'])==0
+          assert c.execute("select count(*) from task_lifecycle_events where assigned_agent_id='specialist-worker-01'").fetchone()[0]==0
+          tracked=['agent_registry','task_lifecycle_events','task_plans','approval_requests','execution_audit']
+          counts={t:c.execute(f'select count(*) from {t}').fetchone()[0] for t in tracked}
+          print(json.dumps({'hermes':h,'candidate':s,'counts':counts},sort_keys=True,separators=(',',':'),default=str))
+          PY
+
+          python3 - <<'PY'
+          import json
+          b=json.load(open('/tmp/phase22-a5-baseline.json'))
+          f=json.load(open('/tmp/phase22-a5-final.json'))
+          assert f['hermes']==b['hermes']
+          assert f['counts']['agent_registry']==b['counts']['agent_registry']+1
+          for t in ('task_lifecycle_events','task_plans','approval_requests','execution_audit'):
+              assert f['counts'][t]==b['counts'][t], (t,b['counts'][t],f['counts'][t])
+          c=f['candidate']
+          assert c['agent_id']=='specialist-worker-01'
+          assert c['authority_ceiling']=='L1'
+          assert int(c['enabled'])==0 and int(c['assignable'])==0
+          PY
+
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          for m in POST PUT PATCH DELETE; do
+            test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405
+          done
+
+          trap - EXIT
+          rm -f /tmp/phase22-a5-baseline.json /tmp/phase22-a5-final.json
+
+          echo candidate_agent_id=specialist-worker-01
+          echo candidate_authority_ceiling=L1
+          echo candidate_enabled=false
+          echo candidate_assignable=false
+          echo candidate_runtime_started=false
+          echo candidate_provider_credentials=none
+          echo lifecycle_delta=0
+          echo plan_delta=0
+          echo approval_delta=0
+          echo execution_audit_delta=0
+          echo execution_allowlist=general
+          echo mission_control_mutations=405
+          echo provider_call=none
+          echo execution_call=none
+          echo automatic_assignment=false
+          echo automatic_retry=false
+          echo automatic_reroute=false
+          echo automatic_execution=false
+          echo PHIL_AI_OS_PHASE_2_2_A5_BOUNDED_SECOND_WORKER_REGISTRATION_OK
+          REMOTE
+
+      - name: Upload A5 approval activation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a5-approved-activation-evidence
+          path: phase22-a5-approved-evidence.txt
+          if-no-files-found: error
+          retention-days: 30
