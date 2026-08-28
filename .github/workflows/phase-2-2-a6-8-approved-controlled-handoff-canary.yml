@@ -1,7 +1,7 @@
 name: Phase 2.2 A6.8 Approved Controlled Handoff Canary
 
-# Retry 2 uses root-owned 0644 non-secret canary policy/readiness evidence so the
-# non-root Control API can read the existing host runtime-state bind read-only.
+# Retry 3 retains root-owned 0644 non-secret canary evidence and adds bounded
+# post-accept replay diagnostics; authority scope is unchanged.
 on:
   push:
     branches: [main]
