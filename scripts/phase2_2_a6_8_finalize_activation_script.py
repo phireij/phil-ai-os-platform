@@ -24,6 +24,12 @@ t=t.replace(old2,new2,1)
 mode_anchor="os.chmod(tmp,0o600)"
 assert t.count(mode_anchor)==3, t.count(mode_anchor)
 t=t.replace(mode_anchor,"os.chmod(tmp,0o644)")
+# The two production replay-count probes execute a Python program from stdin inside
+# the container and therefore require docker exec -i. Without -i Python exits with
+# an empty program and the count is blank even though the handoff itself succeeded.
+probe='docker exec "$CONTROL" python3 - "$TASK_ID"'
+assert t.count(probe)==2, t.count(probe)
+t=t.replace(probe,'docker exec -i "$CONTROL" python3 - "$TASK_ID"')
 # Production-only replay diagnostics. Candidate replay remains strict. These lines
 # expose the exact post-accept proof state before an assertion can trigger rollback.
 anchor='test "$BEFORE_REPLAY" = 1'
