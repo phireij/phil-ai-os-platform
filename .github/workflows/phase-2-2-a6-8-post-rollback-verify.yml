@@ -1,5 +1,6 @@
 name: Phase 2.2 A6.8 Post-Rollback Verify
 
+# Verification attempt 2 after contained A6.8 retry.
 on:
   push:
     branches: [main]
