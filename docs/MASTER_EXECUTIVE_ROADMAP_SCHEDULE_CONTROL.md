@@ -13,9 +13,9 @@
 | Control item | Current status |
 |---|---|
 | **Overall schedule health** | **AHEAD OF ORIGINAL 2-MONTH PLAN** |
-| **Executive roadmap position** | **Sprint 3 — WooCommerce Foundation, entry ready** |
-| **Current engineering gate** | **Sprint 3 bounded design/isolated foundation work; production WooCommerce identity/credentials/connectivity remain separately gated** |
-| **Last completed milestone** | **Sprint 2 CLOSED GREEN / Phase 2.3 CLOSED GREEN / Architecture Specification v1.0 frozen** |
+| **Executive roadmap position** | **Sprint 4 — Customer Experience, early bounded entry** |
+| **Current engineering gate** | **Sprint 4 mobile/PWA/SEO/product-page/checkout/pickup/bilingual CX implementation using isolated/read-side contracts; WooCommerce production activation remains separately gated** |
+| **Last completed milestone** | **Sprint 3 WooCommerce Foundation CLOSED GREEN — 2026-08-28; 59 tests GREEN; isolated WooCommerce `wc/v3` runtime proven; PR #5 merged safely to `main`** |
 | **Mission Control** | Multi-agent read model operational; V1 UX North Star formalized; mutation authority intentionally bounded |
 | **Multi-agent capability** | Foundation proven; governed handoff demonstrated; normal specialist execution intentionally disabled |
 | **Current production autonomy ceiling** | **A0** |
@@ -25,9 +25,9 @@
 | **Working target** | **2026-09-27 to 2026-09-30** |
 | **Safety target / latest planned launch** | **2026-10-02** |
 | **Original 2-month target** | Approximately **2026-10-19** from the 2026-08-19 start |
-| **Schedule variance** | Approximately **one sprint or more ahead of the original sequential plan** |
-| **Immediate next action** | Begin Sprint 3 WooCommerce contracts, Docker/dev foundation, schemas, mocks, bilingual catalog/inventory modeling and isolated tests; prepare CX/Operations interfaces in parallel |
-| **Next explicit approval boundary** | Before WooCommerce production credentials/connectivity, new production integration identity, live commerce mutations, specialist enablement, new execution class or other authority expansion |
+| **Schedule variance** | **Sprint 3 completed before its planned 2026-09-01 start; Sprint 4 entered early while launch targets remain unchanged** |
+| **Immediate next action** | Build Sprint 4 Customer Experience foundation: mobile-first/PWA shell, bilingual product/catalog views, SEO contracts, pickup/checkout readiness and isolated customer-flow QA; continue Operations interface preparation in parallel |
+| **Next explicit approval boundary** | Before WooCommerce production credentials/connectivity, new production integration identity, live catalog/order/checkout mutations, payment/DNS activation, specialist enablement, new execution class or other authority expansion |
 
 **Current classification: AHEAD.**
 
@@ -155,10 +155,11 @@ Formal records:
 
 ## Sprint 3 — WooCommerce Foundation
 
-**Status:** **READY TO START / CURRENT EXECUTIVE SPRINT**  
-**Target window:** **2026-09-01 to 2026-09-07**
+**Status:** **CLOSED GREEN — 2026-08-28 / COMPLETED EARLY**  
+**Original target window:** **2026-09-01 to 2026-09-07**  
+**Actual bounded foundation closure:** **2026-08-28**
 
-### Deliverables
+### Deliverables completed
 
 - Docker/development foundation;
 - products;
@@ -172,28 +173,37 @@ Formal records:
 - isolated test coverage;
 - bounded production activation gate preparation.
 
-Detailed backlog:
+### Validation evidence
 
-`docs/SPRINT_3_WOOCOMMERCE_FOUNDATION_BACKLOG_2026-08-28.md`
+- **59 isolated Python tests GREEN**;
+- contract/fixture validation GREEN;
+- Docker Compose topology and loopback-only boundary GREEN;
+- local WordPress + MariaDB bootstrap GREEN;
+- WooCommerce installation/activation GREEN;
+- official `wc/v3` REST surface registration GREEN;
+- isolated HTTP smoke and teardown GREEN;
+- credential-pattern scan GREEN;
+- merge-safety review GREEN;
+- PR #5 merged to `main` as repository integration only;
+- post-merge Actions check: zero workflows fired on the merge commit.
 
-### Work permitted before next production gate
+Formal records:
 
-- contracts and schemas;
-- Docker/dev design and isolated scaffolding;
-- fixtures/mocks;
-- adapter implementation without live credentials;
-- bilingual catalog/inventory modeling;
-- isolated automated testing;
-- production readiness/security/rollback planning.
+- `docs/SPRINT_3_WOOCOMMERCE_FOUNDATION_BACKLOG_2026-08-28.md`
+- `docs/SPRINT_3_WOOCOMMERCE_FOUNDATION_SLICE_3_2026-08-28.md`
+- `docs/SPRINT_3_WOOCOMMERCE_FOUNDATION_READINESS_MATRIX_2026-08-28.md`
+- `docs/SPRINT_3_WOOCOMMERCE_SECURITY_ACTIVATION_CHECKLIST_2026-08-28.md`
+- `docs/SPRINT_3_MAIN_MERGE_SAFETY_REVIEW_2026-08-28.md`
 
-### Hard stop boundary
+### Sprint 3 exit boundary
 
-Separate explicit CEO approval is required before:
+The bounded foundation is GREEN, but this does **not** authorize production WooCommerce activation. Separate explicit CEO approval remains required before:
 
 - WooCommerce production credentials/secrets;
 - live WooCommerce connectivity under a new production identity;
 - live product/category/image/inventory/order mutations;
 - checkout/order production execution;
+- payment or DNS/site cutover;
 - specialist enablement;
 - new execution task class;
 - higher autonomy/automatic production action;
@@ -203,9 +213,10 @@ Separate explicit CEO approval is required before:
 
 ## Sprint 4 — Customer Experience
 
-**Target window:** **2026-09-08 to 2026-09-14**
+**Status:** **ACTIVE / EARLY BOUNDED ENTRY — 2026-08-28**  
+**Original target window:** **2026-09-08 to 2026-09-14**
 
-Deliverables:
+### Deliverables
 
 - mobile-first experience;
 - PWA;
@@ -215,7 +226,31 @@ Deliverables:
 - pickup;
 - bilingual customer experience.
 
-CX contract/interface work may proceed in parallel once Sprint 3 commerce contracts stabilize.
+Sprint 3 commerce/API contracts are now stable enough for Sprint 4 to begin materially ahead of the original window.
+
+### Work permitted under the current authority baseline
+
+- customer-facing read models and view-model composition;
+- mobile-first/PWA shell and installability scaffolding in isolated development;
+- EN/JA locale selection and bilingual presentation behavior;
+- product/catalog/detail pages driven by synthetic or verified fixture data;
+- SEO metadata/schema contracts and isolated rendering tests;
+- checkout intent/readiness UX that remains non-authorizing;
+- pickup selection/validation UX using isolated contracts;
+- accessibility, responsiveness, negative-path and customer-flow QA;
+- mocks/fixtures and local-only customer experience previews.
+
+### Hard stop boundary
+
+Sprint 4 work must not by itself introduce:
+
+- production WooCommerce credentials or live API connectivity;
+- live cart/order/checkout mutations;
+- payment activation;
+- DNS/site cutover;
+- unverified Ruby’s Cake Delights production catalog data;
+- specialist execution or higher autonomy;
+- Mission Control mutation authority.
 
 ---
 
@@ -288,9 +323,11 @@ A significant portion of late-stage safety work was completed early: monitoring,
 | Window | Executive objective | Status |
 |---|---|---|
 | **Aug 19–28** | Architecture + core infrastructure + AI infrastructure | **Completed / ahead** |
-| **Aug 28** | Phase 2.3 + Sprint 2 closure; Architecture v1.0 freeze; Supabase disposition; Sprint 3 preparation | **Completed** |
-| **Sep 1–7** | Sprint 3 — WooCommerce Foundation | **Current / ready to start early** |
-| **Sep 8–14** | Sprint 4 — Customer Experience | Planned; may overlap Sprint 3 |
+| **Aug 28** | Phase 2.3 + Sprint 2 closure; Architecture v1.0 freeze; Supabase disposition | **Completed** |
+| **Aug 28** | Sprint 3 — bounded WooCommerce Foundation | **CLOSED GREEN / completed before Sep 1 planned start** |
+| **Aug 28 onward** | Sprint 4 — Customer Experience bounded implementation | **ACTIVE EARLY / ahead of Sep 8–14 planned window** |
+| **Sep 1–7** | Original Sprint 3 window / CX acceleration and commerce hardening reserve | **Lead-time reserve; production Woo gate remains closed** |
+| **Sep 8–14** | Original Sprint 4 — Customer Experience window | **Entered early; remaining convergence/QA reserve** |
 | **Sep 15–20** | Sprint 5 — Operations Hub | Planned; discovery/contracts may begin earlier |
 | **Sep 21–25** | Sprint 6 — Full Automation | Planned |
 | **Sep 25–30** | Sprint 7 — testing, production, security, docs, training, launch | Stretch/working window |
@@ -367,13 +404,13 @@ V1 is complete only when the platform can demonstrate end-to-end:
 
 ## Current
 
-**Sprint 3 — WooCommerce Foundation: bounded entry work is authorized by existing roadmap scope.**
+**Sprint 4 — Customer Experience: bounded early-entry work is authorized by the existing roadmap scope.**
 
-No additional approval is required for design/contracts/mocks/isolated implementation/testing within the documented Sprint 3 boundary.
+No additional approval is required for mobile-first/PWA/SEO/product-page/read-side checkout/pickup/bilingual design, contracts, mocks, isolated implementation or QA that does not cross a production mutation/identity boundary.
 
 ## Next production authorization
 
-A new explicit CEO gate must be prepared before introducing WooCommerce production credentials/connectivity or crossing any new production identity/authority boundary.
+A new explicit CEO gate must be prepared before introducing WooCommerce production credentials/connectivity, live cart/order/checkout mutations, payment/DNS activation, a new production integration identity, or any other new authority boundary.
 
 ---
 
@@ -385,7 +422,7 @@ A new explicit CEO gate must be prepared before introducing WooCommerce producti
 
 > **Safety target: October 2, 2026.**
 
-These targets remain unchanged after the Mission Control UX refinement and Sprint 2 closure.
+These targets remain unchanged after Sprint 3’s early bounded GREEN closure and Sprint 4’s early entry. The newly earned lead time is reserved for parallel CX/Operations work, convergence and QA rather than bypassing production gates.
 
 ---
 
@@ -396,6 +433,7 @@ These targets remain unchanged after the Mission Control UX refinement and Sprin
 | **2026-08-28** | Reconciled Phase 2.x engineering work with original 8-Sprint roadmap and established canonical schedule control. | Stretch Sep 25; working Sep 27–30; safety Oct 2. |
 | **2026-08-28** | Added Mission Control V1 UX North Star: 10-second situational awareness; Executive/Operations/Governance views; advanced polish bounded post-V1. | **0 days; targets unchanged.** |
 | **2026-08-28** | Phase 2.3 P5 independently verified GREEN; Phase 2.3 formally closed; Architecture Specification v1.0 frozen; Supabase deferred from Core V1 critical path; Sprint 2 formally CLOSED GREEN; Sprint 3 backlog and CX/Operations parallel interface concept prepared. | **Sprint 3 becomes current executive sprint; schedule remains AHEAD and all launch targets unchanged.** |
+| **2026-08-28** | Sprint 3 bounded WooCommerce Foundation completed GREEN ahead of its Sep 1–7 window: 59 isolated tests, local WordPress/WooCommerce `wc/v3` runtime smoke, auth/localization/reconciliation/audit/rollback boundaries and merge-safety proof GREEN; PR #5 merged safely to `main` with zero post-merge Actions runs. Production WooCommerce gate remains closed. | **Sprint 4 enters early on Aug 28; schedule lead increases while Sep 25 / Sep 27–30 / Oct 2 launch targets remain unchanged.** |
 
 ---
 
