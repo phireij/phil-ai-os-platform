@@ -8,6 +8,8 @@ on:
       - "apps/operations-hub/**"
       - "apps/automation-hub/**"
       - "contracts/**"
+      - "ops/readiness/**"
+      - "scripts/validate_sprint7_*.py"
       - "docs/SPRINT_7_**"
       - ".github/workflows/sprint-7-integrated-readiness-ci.yml"
   push:
@@ -19,6 +21,8 @@ on:
       - "apps/operations-hub/**"
       - "apps/automation-hub/**"
       - "contracts/**"
+      - "ops/readiness/**"
+      - "scripts/validate_sprint7_*.py"
       - "docs/SPRINT_7_**"
       - ".github/workflows/sprint-7-integrated-readiness-ci.yml"
 
@@ -80,11 +84,14 @@ jobs:
       - name: Integrated authority and credential regression
         run: |
           set -euo pipefail
-          ! grep -RInE '(^|[^A-Za-z])(ck_[A-Za-z0-9]{20,}|cs_[A-Za-z0-9]{20,})' commerce/woocommerce apps contracts
-          ! grep -RInE '\bEAA[A-Za-z0-9]{24,}\b|\bAIza[A-Za-z0-9_-]{30,}\b' apps/operations-hub contracts/operations
-          ! grep -R -E 'automatic_execution["[:space:]]*:[[:space:]]*true|execution_authorized["[:space:]]*:[[:space:]]*true|channel_reply_authorized["[:space:]]*:[[:space:]]*true|mutation_authorized["[:space:]]*:[[:space:]]*true' apps/operations-hub apps/automation-hub contracts/operations contracts/automation
+          ! grep -RInE '(^|[^A-Za-z])(ck_[A-Za-z0-9]{20,}|cs_[A-Za-z0-9]{20,})' commerce/woocommerce apps contracts ops/readiness docs/SPRINT_7_*.md
+          ! grep -RInE '\bEAA[A-Za-z0-9]{24,}\b|\bAIza[A-Za-z0-9_-]{30,}\b' apps/operations-hub contracts/operations ops/readiness docs/SPRINT_7_*.md
+          ! grep -R -E 'automatic_execution["[:space:]]*:[[:space:]]*true|execution_authorized["[:space:]]*:[[:space:]]*true|channel_reply_authorized["[:space:]]*:[[:space:]]*true|mutation_authorized["[:space:]]*:[[:space:]]*true' apps/operations-hub apps/automation-hub contracts/operations contracts/automation ops/readiness
           ! grep -R -E 'payment_execution_authorized["[:space:]]*:[[:space:]]*true|live_mode_authorized["[:space:]]*:[[:space:]]*true|order_creation_authorized["[:space:]]*:[[:space:]]*true' apps/customer-experience contracts/cx
           echo PHIL_AI_OS_SPRINT_7_INTEGRATED_AUTHORITY_REGRESSION_GREEN
+
+      - name: Validate security and recovery readiness
+        run: python scripts/validate_sprint7_security_recovery.py
 
       - name: Verify executive Sprint 7 entry and closure records
         run: |
