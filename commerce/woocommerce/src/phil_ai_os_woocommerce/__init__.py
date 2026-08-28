@@ -23,8 +23,14 @@ from .inventory_guard import (
     MemoryInventoryRevisionStore,
     StaleInventoryRevision,
 )
-from .media_plan import MediaPlanError, build_product_media_plan
+from .media_plan import (
+    MediaPlanError,
+    MediaReconciliationPlan,
+    build_product_media_plan,
+    plan_media_reconciliation,
+)
 from .models import CategoryRecord, InventoryRecord, LocalizedText, MediaRecord, ProductRecord
+from .orchestration import AuditedReconciliation, reconcile_with_audit
 from .resilience import (
     FailureInjectingTransport,
     HTTPStatusFailure,
@@ -35,6 +41,7 @@ from .retry import RetryDecision, retry_decision
 from .reconciliation import MemoryIdempotencyStore, ReconciliationResult
 
 __all__ = [
+    "AuditedReconciliation",
     "CategoryHierarchyError",
     "CategoryPlanItem",
     "CategoryRecord",
@@ -46,6 +53,7 @@ __all__ = [
     "InventoryRevisionState",
     "LocalizedText",
     "MediaPlanError",
+    "MediaReconciliationPlan",
     "MediaRecord",
     "MemoryAuditSink",
     "MemoryIdempotencyStore",
@@ -61,6 +69,8 @@ __all__ = [
     "build_product_media_plan",
     "execute_with_retry",
     "plan_category_hierarchy",
+    "plan_media_reconciliation",
     "project_category_payload",
+    "reconcile_with_audit",
     "retry_decision",
 ]
