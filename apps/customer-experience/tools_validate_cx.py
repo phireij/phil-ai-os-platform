@@ -45,9 +45,27 @@ def fail(message: str) -> None:
     raise SystemExit(f"PHIL_AI_OS_SPRINT_4_CX_VALIDATION_FAILED: {message}")
 
 
+def audit_html(relative: str) -> None:
+    html = (ROOT / relative).read_text(encoding="utf-8")
+    audit = CXHTMLAudit()
+    audit.feed(html)
+    if audit.html_lang not in {"en", "ja"}:
+        fail(f"{relative}: html lang baseline is required")
+    if not audit.has_viewport or not audit.has_main or not audit.has_skip_link:
+        fail(f"{relative}: mobile viewport, main landmark and skip link are required")
+    if audit.robots_content != "noindex,nofollow":
+        fail(f"{relative}: isolated preview must default to noindex,nofollow")
+    if audit.buttons_without_type:
+        fail(f"{relative}: all buttons require explicit type")
+    if not audit.control_ids.issubset(audit.labels_for | {"locale-select"}):
+        missing = sorted(audit.control_ids - (audit.labels_for | {"locale-select"}))
+        fail(f"{relative}: form controls require labels: {missing}")
+
+
 def main() -> None:
     required = [
         "index.html",
+        "cart-preview.html",
         "styles.css",
         "manifest.webmanifest",
         "app-icon.svg",
@@ -55,6 +73,7 @@ def main() -> None:
         "src/app.mjs",
         "src/core.mjs",
         "src/cart.mjs",
+        "src/cart-preview.mjs",
         "src/flow.mjs",
         "src/payment.mjs",
         "src/pickup.mjs",
@@ -71,10 +90,11 @@ def main() -> None:
     if fixture.get("fixture_only") is not True:
         fail("catalog must be fixture_only")
     products = fixture.get("products")
-    if not isinstance(products, list) or len(products) < 2:
-        fail("catalog requires at least two synthetic products for responsive CX testing")
+    if not isinstance(products, list) or len(products) < 3:
+        fail("catalog requires at least three synthetic products for catalog/cart CX testing")
     seen_keys: set[str] = set()
     seen_skus: set[str] = set()
+    in_stock_count = 0
     for product in products:
         key = product.get("product_key")
         sku = product.get("sku")
@@ -82,6 +102,8 @@ def main() -> None:
             fail("product keys and SKUs must be present and unique")
         seen_keys.add(key)
         seen_skus.add(sku)
+        if product.get("availability") == "in_stock":
+            in_stock_count += 1
         for field in ("name", "short_description", "description"):
             value = product.get(field, {})
             if not value.get("en") or not value.get("ja"):
@@ -96,6 +118,8 @@ def main() -> None:
             fail(f"{sku}: bilingual pickup contract required")
         if not product.get("media") or product.get("primary_media_ref") != product["media"][0].get("ref"):
             fail(f"{sku}: deterministic primary media fixture required")
+    if in_stock_count < 2:
+        fail("multi-item GREEN path requires at least two synthetic in-stock products")
 
     pickup_policy = json.loads((ROOT / "fixtures/pickup-policy.json").read_text(encoding="utf-8"))
     if pickup_policy.get("fixture_only") is not True:
@@ -126,19 +150,12 @@ def main() -> None:
     if not manifest.get("icons"):
         fail("PWA manifest requires an icon")
 
-    html = (ROOT / "index.html").read_text(encoding="utf-8")
-    audit = CXHTMLAudit()
-    audit.feed(html)
-    if audit.html_lang not in {"en", "ja"}:
-        fail("html lang baseline is required")
-    if not audit.has_viewport or not audit.has_main or not audit.has_skip_link:
-        fail("mobile viewport, main landmark and skip link are required")
-    if audit.robots_content != "noindex,nofollow":
-        fail("isolated preview must default to noindex,nofollow")
-    if audit.buttons_without_type:
-        fail("all buttons require explicit type")
-    if not audit.control_ids.issubset(audit.labels_for | {"locale-select"}):
-        fail("form controls require labels")
+    audit_html("index.html")
+    audit_html("cart-preview.html")
+
+    index_html = (ROOT / "index.html").read_text(encoding="utf-8")
+    if "./cart-preview.html" not in index_html:
+        fail("catalog preview must link the isolated cart/payment handoff preview")
 
     combined = "\n".join((ROOT / path).read_text(encoding="utf-8") for path in required if path != "app-icon.svg")
     forbidden = {
@@ -164,14 +181,19 @@ def main() -> None:
         fail(f"unexpected external URL in runtime foundation: {unexpected_urls[0]}")
 
     app = (ROOT / "src/app.mjs").read_text(encoding="utf-8")
-    if "fixture_only !== true" not in app:
-        fail("app must refuse non-fixture data")
+    cart_preview = (ROOT / "src/cart-preview.mjs").read_text(encoding="utf-8")
+    if "fixture_only !== true" not in app or "fixture_only !== true" not in cart_preview:
+        fail("all customer previews must refuse non-fixture data")
     if 'serviceWorker.register("./sw.js")' not in app:
         fail("PWA service worker registration missing")
+    if "buildPaymentHandoffIntent" not in cart_preview:
+        fail("cart preview must compose the inert payment handoff through the tested boundary")
 
     service_worker = (ROOT / "sw.js").read_text(encoding="utf-8")
     for cached_path in (
+        "./cart-preview.html",
         "./src/cart.mjs",
+        "./src/cart-preview.mjs",
         "./src/flow.mjs",
         "./src/payment.mjs",
         "./src/pickup.mjs",
