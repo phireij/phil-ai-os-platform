@@ -1,0 +1,127 @@
+name: Phase 2.2 A7.4 Post-Success Verify
+
+on:
+  push:
+    paths:
+      - '.github/workflows/phase-2-2-a7-4-post-success-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3 4 5 6; do
+            if ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=12 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+
+      - name: Independently verify A7.4 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="$(sha256sum scripts/phase2_2_a7_4_multi_agent_read_model.py | awk '{print $1}')"
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" "EXPECTED='$EXPECTED' bash -s" <<'REMOTE' | tee phase-2-2-a7-4-post-success.txt
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test -n "$CONTROL"
+          test "$(sha256sum /opt/phil-ai-os/mission-control/read-model.py | awk '{print $1}')" = "$EXPECTED"
+          echo installed_read_model_matches_repo_candidate=true
+
+          STATUS="$(curl -sS -o /tmp/a7-verify.json -w '%{http_code}' http://127.0.0.1:4881/api/read-model)"
+          test "$STATUS" = 200
+          echo mission_control_read_model_http=200
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/a7-verify.json'))
+          assert d['schema_version']=='2.2-a7.v1'
+          ma=d['multi_agent']; assert ma['registered_agent_count']==2
+          a={x['agent_id']:x for x in ma['agents']}
+          assert set(a)=={'hermes','specialist-worker-01'}
+          h=a['hermes']; s=a['specialist-worker-01']
+          assert h['authority_ceiling']=='L3' and h['registry']['enabled'] is True and h['registry']['assignable'] is True
+          assert s['authority_ceiling']=='L1' and s['registry']['enabled'] is False and s['registry']['assignable'] is False
+          assert s['readiness']['state']=='unassignable' and s['readiness']['grants_authority'] is False
+          assert s['presence']['identity_verified'] is True
+          assert s['workload']['active_task_count']==0
+          assert s['runtime']['execution_runtime']=='none'
+          assert ma['handoff_count']==1
+          ho=ma['handoffs'][0]
+          assert ho['handoff_id']=='hof_ba25bd0fdfea401c9894d6520099b4cf'
+          assert ho['state']=='accepted' and ho['required_authority']=='L1'
+          assert ho['task_latest_stage']=='COMPLETED' and ho['active_ownership'] is False
+          assert ho['execution_approval_consumed'] is False
+          assert ho['evidence_complete'] is True
+          g=d['governance']; assert g['mission_control_authority']=='read_only_observer'
+          for k in ('automatic_assignment','automatic_retry','automatic_reroute','automatic_delegation','automatic_execution'):
+              assert g[k] is False
+          assert {x['agent_id'] for x in d['coordinator']['agent_registry']}=={'hermes','specialist-worker-01'}
+          print('schema=2.2-a7.v1')
+          print('registered_agents=2')
+          print('specialist=L1_disabled_nonassignable')
+          print('specialist_active_workload=0')
+          print('handoff=accepted_completed_historical')
+          print('execution_approval_consumed=false')
+          print('mission_control_authority=read_only_observer')
+          PY
+
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          reg=[dict(r) for r in c.execute('select agent_id,authority_ceiling,enabled,assignable from agent_registry order by agent_id')]
+          assert reg==[
+            {'agent_id':'hermes','authority_ceiling':'L3','enabled':1,'assignable':1},
+            {'agent_id':'specialist-worker-01','authority_ceiling':'L1','enabled':0,'assignable':0},
+          ]
+          hs=[dict(r) for r in c.execute("select handoff_id,state,required_authority from task_handoffs where handoff_id='hof_ba25bd0fdfea401c9894d6520099b4cf'")]
+          assert hs==[{'handoff_id':'hof_ba25bd0fdfea401c9894d6520099b4cf','state':'accepted','required_authority':'L1'}]
+          assert c.execute("select count(*) from task_lifecycle_events where task_id='tsk_a68_082b86212fc944b0a45f6c43395cb6f1' and stage='ASSIGNED' and assigned_agent_id='specialist-worker-01'").fetchone()[0]==1
+          latest=c.execute("select stage from task_lifecycle_events where task_id='tsk_a68_082b86212fc944b0a45f6c43395cb6f1' order by occurred_at desc,event_id desc limit 1").fetchone()
+          assert latest and latest[0]=='COMPLETED'
+          print('database_quick_check=ok')
+          print('specialist_assignment_events_for_canary=1')
+          print('canary_latest_stage=COMPLETED')
+          PY
+
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.21.1-phase22a68'
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          for unit in phil-ai-os-agent-heartbeat.timer phil-ai-os-specialist-worker-01-presence.timer phil-ai-os-monitor.service phil-ai-os-backup.timer phil-ai-os-backup-self-heal.timer; do systemctl is-active --quiet "$unit"; done
+          echo control_api_image=0.21.1-phase22a68
+          echo execution_allowlist=general
+          echo mission_control_mutations=405
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_2_A7_4_POST_SUCCESS_VERIFY_OK
+          rm -f /tmp/a7-verify.json
+          REMOTE
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a7-4-post-success-verification
+          path: phase-2-2-a7-4-post-success.txt
+          if-no-files-found: warn
+          retention-days: 30
