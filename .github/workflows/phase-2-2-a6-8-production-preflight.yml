@@ -1,0 +1,175 @@
+name: Phase 2.2 A6.8 Controlled Canary Production Preflight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-2-a6-8-production-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true
+      - name: Read-only A6.8 production preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE' | tee phase22-a6-8-preflight.txt
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test -n "$CONTROL"
+          RUNTIME_STATE=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core/runtime/state
+          SECRETS=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core/secrets
+          APP=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/services/core/control-api/app.py
+
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-specialist-worker-01-presence.timer
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.21.0-phase22a67'
+          test "$(docker exec "$CONTROL" sha256sum /app/app.py | awk '{print $1}')" = 'faa727987e087e2540fec7be0c9d709f7cc57dd51ddc767a3d8b39e0a6474b55'
+          test "$(sha256sum "$APP" | awk '{print $1}')" = 'faa727987e087e2540fec7be0c9d709f7cc57dd51ddc767a3d8b39e0a6474b55'
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          assert c.execute("select count(*) from sqlite_master where type='table' and name='task_handoffs'").fetchone()[0]==1
+          handoffs=c.execute('select count(*) from task_handoffs').fetchone()[0]
+          assert handoffs==0, handoffs
+          reg=[dict(r) for r in c.execute('select * from agent_registry order by agent_id')]
+          h=next(r for r in reg if r['agent_id']=='hermes'); s=next(r for r in reg if r['agent_id']=='specialist-worker-01')
+          assert len(reg)==2
+          assert h['authority_ceiling']=='L3' and int(h['enabled'])==1 and int(h['assignable'])==1
+          assert s['authority_ceiling']=='L1' and int(s['enabled'])==0 and int(s['assignable'])==0
+          refs=c.execute("select count(*) from task_lifecycle_events where assigned_agent_id='specialist-worker-01'").fetchone()[0]
+          assert refs==0
+          print('registry='+json.dumps(reg,separators=(',',':'),default=str))
+          print('task_handoffs_rows=0')
+          print('specialist_assignment_refs=0')
+          PY
+
+          # Specialist signed presence validation, read-only.
+          python3 - <<'PY'
+          import base64,datetime,json,pathlib,subprocess,tempfile
+          ep=pathlib.Path('/var/lib/phil-ai-os/agent-presence/specialist-worker-01.json')
+          pub='/var/lib/phil-ai-os/agent-identities/specialist-worker-01/public.pem'
+          e=json.loads(ep.read_text()); pl=e['payload']
+          assert pl['agent_id']=='specialist-worker-01' and pl['authority_ceiling']=='L1'
+          assert pl['enabled'] is False and pl['assignable'] is False
+          age=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(pl['observed_at'])).total_seconds()
+          assert 0 <= age <= 120, age
+          canonical=json.dumps(pl,sort_keys=True,separators=(',',':')).encode()
+          with tempfile.TemporaryDirectory() as td:
+              msg=pathlib.Path(td)/'msg'; sig=pathlib.Path(td)/'sig'
+              msg.write_bytes(canonical); sig.write_bytes(base64.b64decode(e['signature_base64'],validate=True))
+              subprocess.run(['openssl','pkeyutl','-verify','-pubin','-inkey',pub,'-sigfile',str(sig),'-rawin','-in',str(msg)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+          print('specialist_presence_signature_verified=true')
+          print('specialist_presence_age_seconds='+str(round(age,3)))
+          PY
+
+          # Existing Hermes authenticated presence surface is present/fresh; print only bounded structure.
+          test -f /var/lib/phil-ai-os/agent-presence/hermes.json
+          python3 - <<'PY'
+          import datetime,json,pathlib
+          p=pathlib.Path('/var/lib/phil-ai-os/agent-presence/hermes.json')
+          d=json.loads(p.read_text())
+          print('hermes_presence_keys='+','.join(sorted(d.keys())))
+          for candidate in ('observed_at','timestamp','updated_at'):
+              if candidate in d:
+                  ts=datetime.datetime.fromisoformat(str(d[candidate]).replace('Z','+00:00')); break
+          else:
+              raise SystemExit('Hermes presence timestamp missing')
+          age=(datetime.datetime.now(datetime.timezone.utc)-ts).total_seconds()
+          assert 0 <= age <= 120, age
+          print('hermes_presence_age_seconds='+str(round(age,3)))
+          print('hermes_presence_observation_type='+str(d.get('observation_type')))
+          PY
+
+          test -d "$RUNTIME_STATE"
+          test -w "$RUNTIME_STATE"
+          test ! -e "$RUNTIME_STATE/phase2_2_a6_8_canary_policy.json"
+          test ! -e "$RUNTIME_STATE/phase2_2_a6_8_canary_readiness.json"
+          echo runtime_state_mode="$(stat -c %a "$RUNTIME_STATE")"
+          echo runtime_state_owner="$(stat -c %U:%G "$RUNTIME_STATE")"
+          echo canary_policy_path_available=true
+          echo canary_readiness_path_available=true
+
+          # The existing bearer credential is verified present without printing its value.
+          test -f "$SECRETS/hermes_control_api_token"
+          test -s "$SECRETS/hermes_control_api_token"
+          echo control_token_mode="$(stat -c %a "$SECRETS/hermes_control_api_token")"
+          echo control_token_owner="$(stat -c %U:%G "$SECRETS/hermes_control_api_token")"
+
+          # Verify the existing task-create/assign and A6.7 handoff anchors in source.
+          python3 - "$APP" <<'PY'
+          import pathlib,sys
+          t=pathlib.Path(sys.argv[1]).read_text()
+          checks={
+            'approval_create_function':'def approval_create(' in t,
+            'approval_request_route':'/v1/approvals/request' in t,
+            'coordinator_assign_function':'def coordinator_assign(' in t,
+            'task_assign_route':'/v1/tasks/assign' in t,
+            'lifecycle_insert_function':'def lifecycle_event_insert(' in t,
+            'handoff_request_route':'/v1/tasks/handoff/request' in t,
+            'handoff_accept_route':'/v1/tasks/handoff/accept' in t,
+            'handoff_reject_route':'/v1/tasks/handoff/reject' in t,
+            'a67_required_authority_fail_closed':'return None' in t and 'coordinator_required_authority' in t,
+          }
+          for k,v in checks.items():
+              assert v,k
+              print(k+'=true')
+          PY
+
+          # Capture bounded approval_create/request source snippets for response-shape planning.
+          python3 - "$APP" <<'PY'
+          import pathlib,sys
+          lines=pathlib.Path(sys.argv[1]).read_text().splitlines()
+          needles=('def approval_create(','if path=="/v1/approvals/request"','def coordinator_assign(')
+          for needle in needles:
+              hit=next(i for i,l in enumerate(lines) if needle in l)
+              print('---'+needle+'---')
+              for l in lines[hit:hit+45]: print(l)
+          PY
+
+          echo a6_8_required_authority=L1
+          echo a6_8_specialist_eligibility=temporary_only
+          echo a6_8_provider_execution=none
+          echo a6_8_handoff_count=exactly_one
+          echo a6_8_post_canary_specialist_state=disabled_nonassignable
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_2_A6_8_PRODUCTION_PREFLIGHT_OK
+          REMOTE
+      - name: Upload A6.8 preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a6-8-production-preflight-evidence
+          path: phase22-a6-8-preflight.txt
+          if-no-files-found: error
+          retention-days: 14
