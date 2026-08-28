@@ -54,10 +54,13 @@ def main() -> None:
         "sw.js",
         "src/app.mjs",
         "src/core.mjs",
+        "src/cart.mjs",
         "src/flow.mjs",
+        "src/payment.mjs",
         "src/pickup.mjs",
         "src/seo.mjs",
         "fixtures/catalog.json",
+        "fixtures/payment-provider.json",
         "fixtures/pickup-policy.json",
     ]
     for relative in required:
@@ -102,6 +105,21 @@ def main() -> None:
     if not isinstance(pickup_policy.get("max_advance_days"), int) or pickup_policy["max_advance_days"] < 1:
         fail("pickup policy requires positive max_advance_days")
 
+    payment_provider = json.loads((ROOT / "fixtures/payment-provider.json").read_text(encoding="utf-8"))
+    expected_payment_boundary = {
+        "fixture_only": True,
+        "provider": "komoju",
+        "integration_mode": "woocommerce_plugin",
+        "connection_mode": "account_sign_in",
+        "connection_state": "not_configured",
+        "test_mode_required_before_live": True,
+        "live_mode_authorized": False,
+        "payment_execution_authorized": False,
+    }
+    for key, expected in expected_payment_boundary.items():
+        if payment_provider.get(key) != expected:
+            fail(f"payment provider boundary mismatch: {key}")
+
     manifest = json.loads((ROOT / "manifest.webmanifest").read_text(encoding="utf-8"))
     if manifest.get("display") != "standalone" or manifest.get("scope") != "./":
         fail("PWA manifest must remain local standalone scope")
@@ -127,7 +145,13 @@ def main() -> None:
         "production Ruby domain": r"rubyscakedelights\.shop",
         "WooCommerce consumer key": r"\bck_[A-Za-z0-9]{8,}",
         "WooCommerce consumer secret": r"\bcs_[A-Za-z0-9]{8,}",
+        "KOMOJU live secret": r"\bsk_live_[A-Za-z0-9_-]{6,}",
+        "KOMOJU test secret": r"\bsk_test_[A-Za-z0-9_-]{6,}",
+        "KOMOJU live publishable key": r"\bpk_live_[A-Za-z0-9_-]{6,}",
+        "KOMOJU test publishable key": r"\bpk_test_[A-Za-z0-9_-]{6,}",
         "authorizing mutation flag": r"mutation_authorized\s*[:=]\s*true",
+        "authorizing payment flag": r"payment_execution_authorized\s*[:=]\s*true",
+        "authorizing live mode flag": r"live_mode_authorized\s*[:=]\s*true",
     }
     for label, pattern in forbidden.items():
         if re.search(pattern, combined, flags=re.IGNORECASE):
@@ -146,7 +170,15 @@ def main() -> None:
         fail("PWA service worker registration missing")
 
     service_worker = (ROOT / "sw.js").read_text(encoding="utf-8")
-    for cached_path in ("./src/flow.mjs", "./src/pickup.mjs", "./src/seo.mjs", "./fixtures/pickup-policy.json"):
+    for cached_path in (
+        "./src/cart.mjs",
+        "./src/flow.mjs",
+        "./src/payment.mjs",
+        "./src/pickup.mjs",
+        "./src/seo.mjs",
+        "./fixtures/payment-provider.json",
+        "./fixtures/pickup-policy.json",
+    ):
         if cached_path not in service_worker:
             fail(f"offline app shell missing {cached_path}")
 
