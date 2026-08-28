@@ -4,8 +4,10 @@ import {
   evaluateCheckoutReadiness,
   normalizeLocale,
   productDetailViewModel,
-  productStructuredData,
 } from "./core.mjs";
+import { createCustomerFlow, transitionCustomerFlow } from "./flow.mjs";
+import { evaluatePickupSelection } from "./pickup.mjs";
+import { catalogMetadata, productMetadata } from "./seo.mjs";
 
 const copy = {
   en: {
@@ -13,6 +15,7 @@ const copy = {
     heroCopy: "Synthetic data only. This preview proves customer flow without production WooCommerce connectivity.",
     catalogTitle: "Products",
     catalogCount: (count) => `${count} synthetic items`,
+    empty: "No fixture products are available in this preview.",
     view: "View",
     in_stock: "In stock",
     out_of_stock: "Out of stock",
@@ -29,12 +32,14 @@ const copy = {
     noOrder: "No order was created. mutation_authorized remains false.",
     safetyTitle: "Checkout remains an intent",
     safetyCopy: "This Sprint 4 preview can compose and evaluate checkout intent locally. It cannot create an order, charge a payment, or mutate WooCommerce.",
+    unavailable: "Customer experience preview unavailable",
   },
   ja: {
     heroTitle: "モバイルファーストのバイリンガルストア基盤",
     heroCopy: "合成データのみを使用しています。本プレビューは本番WooCommerceへ接続せずに顧客フローを検証します。",
     catalogTitle: "商品",
     catalogCount: (count) => `合成商品 ${count} 件`,
+    empty: "このプレビューで利用できるフィクスチャ商品はありません。",
     view: "見る",
     in_stock: "在庫あり",
     out_of_stock: "在庫切れ",
@@ -51,12 +56,15 @@ const copy = {
     noOrder: "注文は作成されていません。mutation_authorized は false のままです。",
     safetyTitle: "チェックアウトはインテントのままです",
     safetyCopy: "Sprint 4プレビューはチェックアウトインテントの作成と準備評価のみをローカルで行います。注文作成、決済、WooCommerce変更はできません。",
+    unavailable: "カスタマーエクスペリエンスのプレビューを利用できません",
   },
 };
 
 const state = {
   locale: normalizeLocale(new URLSearchParams(location.search).get("lang"), navigator.language?.startsWith("ja") ? "ja" : "en"),
   catalog: [],
+  pickupPolicy: null,
+  flow: createCustomerFlow(),
 };
 
 const localeSelect = document.querySelector("#locale-select");
@@ -78,6 +86,31 @@ function setDocumentLocale() {
   document.querySelector("#safety-copy").textContent = copy[state.locale].safetyCopy;
 }
 
+function applyMetadata(metadata) {
+  document.title = metadata.title;
+  const description = document.querySelector('meta[name="description"]');
+  const robots = document.querySelector('meta[name="robots"]');
+  description.setAttribute("content", metadata.description);
+  robots.setAttribute("content", metadata.robots);
+
+  document.querySelector('link[rel="canonical"]')?.remove();
+  if (metadata.canonical) {
+    const canonical = document.createElement("link");
+    canonical.rel = "canonical";
+    canonical.href = metadata.canonical;
+    document.head.append(canonical);
+  }
+
+  document.querySelector("#product-jsonld")?.remove();
+  if (metadata.structuredData) {
+    const script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.id = "product-jsonld";
+    script.textContent = JSON.stringify(metadata.structuredData);
+    document.head.append(script);
+  }
+}
+
 function updateLocaleUrl() {
   const url = new URL(location.href);
   url.searchParams.set("lang", state.locale);
@@ -85,10 +118,20 @@ function updateLocaleUrl() {
 }
 
 function renderCatalog() {
+  state.flow = createCustomerFlow();
   productSection.hidden = true;
   catalogSection.hidden = false;
   catalogGrid.replaceChildren();
   catalogSummary.textContent = copy[state.locale].catalogCount(state.catalog.length);
+  applyMetadata(catalogMetadata(state.locale));
+
+  if (state.catalog.length === 0) {
+    const empty = document.createElement("p");
+    empty.setAttribute("role", "status");
+    empty.textContent = copy[state.locale].empty;
+    catalogGrid.append(empty);
+    return;
+  }
 
   for (const product of state.catalog) {
     const vm = catalogCardViewModel(product, state.locale);
@@ -115,20 +158,13 @@ function localDateTimeToIso(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function installStructuredData(product) {
-  document.querySelector("#product-jsonld")?.remove();
-  const script = document.createElement("script");
-  script.type = "application/ld+json";
-  script.id = "product-jsonld";
-  script.textContent = JSON.stringify(productStructuredData(product, state.locale));
-  document.head.append(script);
-}
-
 function renderDetail(product) {
+  state.flow = transitionCustomerFlow(createCustomerFlow(), "select_product");
   const vm = productDetailViewModel(product, state.locale);
   catalogSection.hidden = true;
   productSection.hidden = false;
   productDetail.replaceChildren();
+  applyMetadata(productMetadata(product, state.locale));
 
   const wrapper = document.createElement("div");
   wrapper.className = "detail-layout";
@@ -160,10 +196,13 @@ function renderDetail(product) {
     </div>`;
   productDetail.append(wrapper);
 
-  document.title = `${vm.name} — Phil AI OS CX`;
-  installStructuredData(product);
   document.querySelector("#checkout-form").addEventListener("submit", (event) => {
     event.preventDefault();
+    if (["ready", "blocked"].includes(state.flow.state)) {
+      state.flow = transitionCustomerFlow(state.flow, "edit_product");
+    }
+    state.flow = transitionCustomerFlow(state.flow, "start_checkout");
+
     const quantity = Number(document.querySelector("#quantity").value);
     const requestedPickupAt = localDateTimeToIso(document.querySelector("#pickup-at").value);
     const intent = buildCheckoutIntent({
@@ -173,12 +212,25 @@ function renderDetail(product) {
       quantity,
       requestedPickupAt,
     });
+    const evaluatedAt = new Date().toISOString();
+    const pickupReadiness = evaluatePickupSelection(requestedPickupAt, evaluatedAt, state.pickupPolicy);
     const catalogBySku = new Map(state.catalog.map((item) => [item.sku, item]));
-    const readiness = evaluateCheckoutReadiness(intent, catalogBySku, new Date().toISOString());
+    const baseReadiness = evaluateCheckoutReadiness(intent, catalogBySku, evaluatedAt);
+    const blockers = new Set(baseReadiness.blockers);
+    if (!pickupReadiness.valid) blockers.add("pickup_time");
+    const readiness = {
+      ...baseReadiness,
+      ready: baseReadiness.ready && pickupReadiness.valid,
+      blockers: [...blockers].sort(),
+      customer_action_required: blockers.has("pickup_time") ? ["select_pickup_time"] : baseReadiness.customer_action_required,
+      mutation_authorized: false,
+    };
+    state.flow = transitionCustomerFlow(state.flow, readiness.ready ? "readiness_ready" : "readiness_blocked");
+
     const output = document.querySelector("#intent-output");
     output.hidden = false;
     output.innerHTML = `<strong>${escapeHtml(readiness.ready ? copy[state.locale].ready : copy[state.locale].blocked)}</strong><p>${escapeHtml(copy[state.locale].noOrder)}</p><pre></pre>`;
-    output.querySelector("pre").textContent = JSON.stringify({ intent, readiness }, null, 2);
+    output.querySelector("pre").textContent = JSON.stringify({ flow: state.flow, intent, pickup_readiness: pickupReadiness, readiness }, null, 2);
   });
 }
 
@@ -196,8 +248,6 @@ function renderRoute() {
   const params = new URLSearchParams(location.search);
   const productKey = params.get("product");
   if (!productKey) {
-    document.title = "Phil AI OS — Customer Experience Foundation";
-    document.querySelector("#product-jsonld")?.remove();
     renderCatalog();
     return;
   }
@@ -210,12 +260,21 @@ function renderRoute() {
   renderDetail(product);
 }
 
-async function boot() {
-  const response = await fetch("./fixtures/catalog.json", { cache: "no-store" });
-  if (!response.ok) throw new Error(`catalog fixture failed: ${response.status}`);
+async function fetchFixture(path) {
+  const response = await fetch(path, { cache: "no-store" });
+  if (!response.ok) throw new Error(`fixture failed: ${response.status}`);
   const payload = await response.json();
-  if (payload.fixture_only !== true) throw new Error("Sprint 4 preview requires fixture_only catalog data");
-  state.catalog = payload.products;
+  if (payload.fixture_only !== true) throw new Error("Sprint 4 preview requires fixture_only data");
+  return payload;
+}
+
+async function boot() {
+  const [catalogPayload, pickupPolicy] = await Promise.all([
+    fetchFixture("./fixtures/catalog.json"),
+    fetchFixture("./fixtures/pickup-policy.json"),
+  ]);
+  state.catalog = catalogPayload.products;
+  state.pickupPolicy = pickupPolicy;
   renderRoute();
 
   localeSelect.addEventListener("change", () => {
@@ -231,5 +290,7 @@ async function boot() {
 }
 
 boot().catch((error) => {
-  catalogGrid.innerHTML = `<p role="alert">Customer experience preview unavailable: ${escapeHtml(error.message)}</p>`;
+  state.flow = transitionCustomerFlow(createCustomerFlow(), "fail");
+  applyMetadata(catalogMetadata(state.locale));
+  catalogGrid.innerHTML = `<p role="alert"><strong>${escapeHtml(copy[state.locale].unavailable)}</strong><br>${escapeHtml(error.message)}</p>`;
 });
