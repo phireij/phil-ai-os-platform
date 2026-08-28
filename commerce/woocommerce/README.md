@@ -5,10 +5,20 @@ This directory is the **bounded, inert Sprint 3 commerce foundation**.
 ## Safety boundary
 
 - No production WooCommerce consumer key/secret is stored here.
-- No production store URL is stored here.
+- The public Ruby's customer domain may be documented as architecture/migration planning data, but no production WooCommerce API base URL is configured in runtime code.
 - No live network transport is shipped in the Python adapter.
 - Adapter mutations default to disabled and must be explicitly enabled only for isolated mock tests.
 - Live connectivity, a production integration identity, and live commerce mutations remain CEO-gated.
+
+## Production deployment decision
+
+Ruby's customer-facing WordPress + WooCommerce production storefront is targeted for **Hostinger managed web hosting** using the existing public domain `https://www.rubyscakedelights.shop/`.
+
+Phil AI OS remains on the **Hostinger VPS**. The VPS WooCommerce adapter will eventually communicate with the managed-hosting WooCommerce instance through a separately authorized API/webhook boundary.
+
+The existing Hostinger Website Builder site is reference-only. Only store information, contact information, and policies are copy candidates, and every copied value requires verification. Existing test products and categories are explicitly excluded from migration.
+
+See `docs/SPRINT_3_RUBYS_COMMERCE_DEPLOYMENT_DECISION_2026-08-28.md`.
 
 ## Contract strategy
 

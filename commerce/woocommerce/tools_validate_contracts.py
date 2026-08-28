@@ -17,6 +17,11 @@ def main() -> int:
         assert payload.get("$schema") == "https://json-schema.org/draft/2020-12/schema", schema
         assert payload.get("type") == "object", schema
 
+    shared_contract = ROOT.parents[1] / "contracts" / "commerce" / "site-migration-source.schema.json"
+    shared_payload = json.loads(shared_contract.read_text(encoding="utf-8"))
+    assert shared_payload.get("$schema") == "https://json-schema.org/draft/2020-12/schema"
+    assert shared_payload.get("type") == "object"
+
     fixture = json.loads((ROOT / "fixtures" / "catalog.json").read_text(encoding="utf-8"))
     assert fixture.get("fixture_only") is True
     categories = [CategoryRecord.from_mapping(v) for v in fixture["categories"]]
@@ -33,6 +38,15 @@ def main() -> int:
         assert set(product.category_keys).issubset(category_keys)
         assert set(product.media_keys).issubset(media_keys)
     assert inventory_skus.issubset(product_skus)
+
+    migration = json.loads((ROOT / "fixtures" / "site-migration-plan.json").read_text(encoding="utf-8"))
+    assert migration["public_domain"] == "https://www.rubyscakedelights.shop/"
+    assert migration["source_platform"] == "hostinger-website-builder"
+    assert migration["source_role"] == "reference-only"
+    assert set(migration["copy_sections"]) == {"store_information", "contact_information", "policies"}
+    assert set(migration["exclude_sections"]) == {"products", "categories"}
+    assert migration["verification_required"] is True
+    assert migration["production_authority"] is False
 
     ops_fixture = ROOT.parents[1] / "contracts" / "operations" / "fixtures" / "order-intent.sample.json"
     ops = json.loads(ops_fixture.read_text(encoding="utf-8"))
