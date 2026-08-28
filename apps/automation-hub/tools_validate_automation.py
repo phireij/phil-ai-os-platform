@@ -10,7 +10,12 @@ REPO = ROOT.parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(REPO / "apps/operations-hub/src"))
 
-from automation_hub import ApprovalReplayError, ApprovalSimulationStore, build_automation_plan  # noqa: E402
+from automation_hub import (  # noqa: E402
+    ApprovalReplayError,
+    ApprovalSimulationStore,
+    build_automation_plan,
+    build_dry_run_boundary_request,
+)
 from operations_hub import evaluate_governance, normalize_channel_event  # noqa: E402
 
 
@@ -21,6 +26,7 @@ def fail(message: str) -> None:
 def main() -> None:
     schema = json.loads((REPO / "contracts/automation/automation-plan.schema.json").read_text(encoding="utf-8"))
     release_schema = json.loads((REPO / "contracts/automation/simulation-release.schema.json").read_text(encoding="utf-8"))
+    boundary_schema = json.loads((REPO / "contracts/automation/dry-run-boundary-request.schema.json").read_text(encoding="utf-8"))
     props = schema["properties"]
     required_consts = {
         "task_class": "general",
@@ -44,6 +50,26 @@ def main() -> None:
             fail(f"simulation release {field} must remain false")
     if release_props["authority_effect"].get("const") != "none":
         fail("simulation release authority_effect must remain none")
+
+    boundary_props = boundary_schema["properties"]
+    expected_boundary = {
+        "target": "execution_boundary",
+        "operation": "preview_request",
+        "mode": "dry_run",
+        "task_class": "general",
+        "assigned_agent": "hermes",
+        "dry_run": True,
+        "dispatch": False,
+        "network_call": False,
+        "automatic_execution": False,
+        "execution_authorized": False,
+        "channel_reply_authorized": False,
+        "mutation_authorized": False,
+        "authority_effect": "none",
+    }
+    for field, expected in expected_boundary.items():
+        if boundary_props[field].get("const") != expected:
+            fail(f"dry-run request {field} must remain {expected!r}")
 
     sources = ("facebook", "instagram", "telegram", "whatsapp", "google_business")
     plans = []
@@ -91,9 +117,20 @@ def main() -> None:
     if direct_release["approval_state"] != "not_required" or direct_release["execution_authorized"] is not False:
         fail("not-required plan simulation release invalid")
 
+    approved_request = build_dry_run_boundary_request(complaint_plan, release)
+    direct_request = build_dry_run_boundary_request(low_risk_plan, direct_release)
+    for request in (approved_request, direct_request):
+        if request["dry_run"] is not True or request["dispatch"] is not False or request["network_call"] is not False:
+            fail("dry-run boundary request can dispatch or call network")
+        if any(request[field] is not False for field in ("automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized")):
+            fail("dry-run boundary request gained authority")
+        if request["authority_effect"] != "none":
+            fail("dry-run boundary request authority effect changed")
+
     print(f"PHIL_AI_OS_SPRINT_6_AUTOMATION_VALIDATION_GREEN sources={len(plans)} blocked={blocked} ready={ready}")
     print("PHIL_AI_OS_SPRINT_6_AUTHORITY_BOUNDARY_GREEN task_class=general assigned_agent=hermes authority_effect=none")
     print("PHIL_AI_OS_SPRINT_6_APPROVAL_SIMULATION_GREEN replay_protected=true authority_effect=none")
+    print("PHIL_AI_OS_SPRINT_6_DRY_RUN_BOUNDARY_GREEN dispatch=false network_call=false authority_effect=none")
 
 
 if __name__ == "__main__":
