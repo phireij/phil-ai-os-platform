@@ -75,18 +75,24 @@ PR #9 merged safely to `main` as `fb7866b770e1e034cff3aabdc6ae902d0fbde0b1`.
 
 Post-merge Actions check: **zero workflows fired on the merge commit**.
 
+## Production-preparation progress after bounded closure
+
+- Verified Ruby Business Profile framework merged through PR #10.
+- Business phone verified by the business owner as **050-1785-0575** and merged through PR #11.
+- The phone verification blocker is therefore **CLOSED**.
+- The overall Verified Ruby Business Profile remains incomplete until the remaining store/contact/policy fields are resolved.
+
 ## Remaining live-production blockers
 
 Bounded readiness does not satisfy the following live gates:
 
 1. **Verified Ruby Business Profile is incomplete.**
-2. **Contact phone number remains unverified for production publication.**
-3. **Fresh launch-time backup/restore verification has not yet been performed.**
-4. **WooCommerce production activation/credentials/connectivity are not approved or configured by this closure.**
-5. **KOMOJU Test Mode has not yet been activated/validated; Live Mode remains separately gated.**
-6. **External channel live identities/connectivity/replies remain separately gated.**
-7. **Public production cutover/DNS/site changes are not authorized by this closure.**
-8. **CEO/CTO live-launch sign-off has not been recorded.**
+2. **Fresh launch-time backup/restore verification has not yet been performed.**
+3. **WooCommerce production activation/credentials/connectivity are not approved or configured by this closure.**
+4. **KOMOJU Test Mode has not yet been activated/validated; Live Mode remains separately gated.**
+5. **External channel live identities/connectivity/replies remain separately gated.**
+6. **Public production cutover/DNS/site changes are not authorized by this closure.**
+7. **CEO/CTO live-launch sign-off has not been recorded.**
 
 ## Authority baseline remains unchanged
 
@@ -99,6 +105,6 @@ Bounded readiness does not satisfy the following live gates:
 
 ## Next program stage
 
-Move from bounded engineering/readiness into **serialized production preparation and activation**, beginning with verified Ruby business/contact/policy data and a staging WordPress/WooCommerce environment. Each live integration/cutover remains an explicit governed gate.
+Continue serialized production preparation and activation. The immediate business-data gate is completion of the remaining verified Ruby business/store/contact/policy fields; after that, proceed to staging WordPress/WooCommerce preparation. Each live integration/cutover remains an explicit governed gate.
 
 `PHIL_AI_OS_SPRINT_7_BOUNDED_READINESS_GREEN_LIVE_LAUNCH_PENDING`
