@@ -9,6 +9,7 @@ from phil_ai_os_woocommerce import (
     ProductRecord,
     build_product_media_plan,
     plan_category_hierarchy,
+    plan_media_reconciliation,
     project_category_payload,
 )
 
@@ -33,10 +34,10 @@ class PlanningTests(unittest.TestCase):
             media_keys=tuple(media_keys),
         )
 
-    def media(self, key, role, position):
+    def media(self, key, role, position, source_ref=None):
         return MediaRecord(
             key=key,
-            source_ref=f"fixture://{key}.jpg",
+            source_ref=source_ref or f"fixture://{key}.jpg",
             alt=LocalizedText(en=f"{key} alt", ja=f"{key} 代替"),
             role=role,
             position=position,
@@ -113,6 +114,60 @@ class PlanningTests(unittest.TestCase):
                 product,
                 [self.media("primary-1", "primary", 0), self.media("gallery-1", "gallery", 0)],
             )
+
+    def desired_media_plan(self):
+        product = self.product(("primary-1", "gallery-1"))
+        return build_product_media_plan(
+            product,
+            [self.media("primary-1", "primary", 0), self.media("gallery-1", "gallery", 1)],
+        )
+
+    def test_media_reconciliation_noop(self):
+        desired = self.desired_media_plan()
+        diff = plan_media_reconciliation(desired, desired)
+        self.assertEqual(diff.action, "noop")
+
+    def test_media_reconciliation_detects_source_replacement(self):
+        desired = self.desired_media_plan()
+        observed = [dict(item) for item in desired]
+        observed[1]["source_ref"] = "fixture://old-gallery.jpg"
+        diff = plan_media_reconciliation(desired, observed)
+        self.assertEqual(diff.action, "replace")
+        self.assertEqual(diff.replacement_keys, ("gallery-1",))
+
+    def test_media_reconciliation_detects_removal_and_addition(self):
+        desired = self.desired_media_plan()
+        observed = [dict(desired[0]), {
+            "key": "old-gallery",
+            "source_ref": "fixture://old-gallery.jpg",
+            "alt": "old",
+            "role": "gallery",
+            "position": 1,
+        }]
+        diff = plan_media_reconciliation(desired, observed)
+        self.assertEqual(diff.replacement_keys, ("gallery-1",))
+        self.assertEqual(diff.removed_keys, ("old-gallery",))
+
+    def test_media_reconciliation_detects_reorder(self):
+        desired = self.desired_media_plan()
+        observed = [dict(desired[1]), dict(desired[0])]
+        diff = plan_media_reconciliation(desired, observed)
+        self.assertTrue(diff.reordered)
+        self.assertIn(diff.action, {"reorder", "metadata_and_reorder"})
+
+    def test_media_reconciliation_detects_metadata_change(self):
+        desired = self.desired_media_plan()
+        observed = [dict(item) for item in desired]
+        observed[1]["alt"] = "old alt"
+        diff = plan_media_reconciliation(desired, observed)
+        self.assertEqual(diff.action, "metadata")
+        self.assertEqual(diff.metadata_update_keys, ("gallery-1",))
+
+    def test_media_reconciliation_rejects_duplicate_observed_keys(self):
+        desired = self.desired_media_plan()
+        observed = [dict(desired[0]), dict(desired[0])]
+        with self.assertRaises(MediaPlanError):
+            plan_media_reconciliation(desired, observed)
 
 
 if __name__ == "__main__":
