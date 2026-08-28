@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = ROOT / "contracts/commerce/verified-ruby-business-profile.schema.json"
 TEMPLATE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
 FORM = ROOT / "docs/RUBY_BUSINESS_PROFILE_VERIFICATION_FORM_2026-08-28.md"
+DRAFTS = ROOT / "docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md"
 
 
 def fail(message: str) -> None:
@@ -50,6 +51,7 @@ def main() -> None:
     field_count = 0
     resolved_count = 0
     verified_count = 0
+    not_applicable_count = 0
     for section, fields in required_sections.items():
         actual = template.get(section)
         if not isinstance(actual, dict) or set(actual) != fields:
@@ -80,21 +82,64 @@ def main() -> None:
                 verified_count += 1
                 resolved_count += 1
             elif status == "not_applicable":
-                if not verified_at or not verified_by or not notes:
-                    fail(f"not_applicable field requires explicit verification metadata and reason: {section}.{field}")
+                if source == "not_provided" or not verified_at or not verified_by or not notes:
+                    fail(f"not_applicable field requires explicit source, verification metadata and reason: {section}.{field}")
+                not_applicable_count += 1
                 resolved_count += 1
             else:
                 fail(f"unsupported verification status: {section}.{field}={status!r}")
 
-    phone = template["contact_information"]["phone"]
-    if phone.get("value") != "050-1785-0575":
-        fail("verified business phone drift")
-    if phone.get("source") != "user_confirmed":
-        fail("business phone must remain user-confirmed unless re-verified through another approved source")
-    if phone.get("verification_status") != "verified":
-        fail("business phone must remain verified")
-    if not phone.get("verified_at") or not phone.get("verified_by"):
-        fail("business phone verification metadata missing")
+    expected_verified = {
+        ("store_information", "business_name"): "Ruby's Cake Delights",
+        ("store_information", "address"): "〒272-0034 千葉県市川市市川1-26-15花亀ビル1F-B (Chiba-ken, Ichikawa-shi, Ichikawa 1-26-15 Hanakame Bldg. 1F-B)",
+        ("store_information", "operating_hours"): "Wednesday to Saturday: 14:00-20:00. Pickup hours are the same as operating hours.",
+        ("contact_information", "phone"): "050-1785-0575",
+        ("contact_information", "email"): "Primary: info@rubyscakedelights.shop; Alias: order@rubyscakedelights.shop",
+        ("contact_information", "instagram"): "@rubyscakedelights",
+        ("contact_information", "facebook"): "https://www.facebook.com/RubysCakeDelights",
+    }
+    for (section, field), expected_value in expected_verified.items():
+        record = template[section][field]
+        if record.get("value") != expected_value:
+            fail(f"verified value drift: {section}.{field}")
+        if record.get("source") != "user_confirmed" or record.get("verification_status") != "verified":
+            fail(f"verified source/status drift: {section}.{field}")
+        if not record.get("verified_at") or not record.get("verified_by"):
+            fail(f"verified metadata missing: {section}.{field}")
+
+    for section, field in (
+        ("store_information", "pickup_instructions"),
+        ("contact_information", "other_contact"),
+    ):
+        record = template[section][field]
+        if record.get("verification_status") != "not_applicable" or record.get("source") != "user_confirmed":
+            fail(f"not-applicable business decision drift: {section}.{field}")
+
+    if "mid-September 2026" not in template["store_information"]["operating_hours"].get("notes", ""):
+        fail("operating hours must retain mid-September 2026 re-verification note")
+
+    for field in ("business_description",):
+        record = template["store_information"][field]
+        if record.get("verification_status") != "unverified" or record.get("value") is not None:
+            fail(f"draft field must remain unverified until approval: store_information.{field}")
+
+    for field in ("cancellation_refund_policy", "pickup_order_policy", "allergen_disclaimer"):
+        record = template["policies"][field]
+        if record.get("verification_status") != "unverified" or record.get("value") is not None:
+            fail(f"policy draft must remain unverified until approval: policies.{field}")
+        if "RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md" not in record.get("notes", ""):
+            fail(f"policy draft evidence reference missing: policies.{field}")
+
+    for field in ("privacy_policy", "terms_conditions"):
+        record = template["policies"][field]
+        if record.get("verification_status") != "unverified" or record.get("value") is not None:
+            fail(f"undrafted policy must remain unverified: policies.{field}")
+
+    if (verified_count, not_applicable_count, resolved_count, field_count) != (7, 2, 9, 15):
+        fail(
+            "verification progress drift "
+            f"verified={verified_count} not_applicable={not_applicable_count} resolved={resolved_count} fields={field_count}"
+        )
 
     expected_complete = resolved_count == field_count
     if template.get("profile_complete") is not expected_complete:
@@ -105,31 +150,49 @@ def main() -> None:
 
     form_text = FORM.read_text(encoding="utf-8")
     required_form_phrases = (
-        "PARTIAL BUSINESS VERIFICATION — PHONE CONFIRMED",
+        "PARTIAL BUSINESS VERIFICATION — CORE DETAILS CONFIRMED / DRAFT POLICIES PENDING",
+        "Ruby's Cake Delights",
+        "050-1785-0575",
+        "info@rubyscakedelights.shop",
+        "order@rubyscakedelights.shop",
+        "@rubyscakedelights",
+        "https://www.facebook.com/RubysCakeDelights",
+        "Resolved: **9 / 15**",
+        "mid-September 2026",
         "Existing test products — **DO NOT MIGRATE**",
         "Existing test categories — **DO NOT MIGRATE**",
-        "Phone — VERIFIED",
-        "050-1785-0575",
         "production_publish_authorized` remains **false**",
-        "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_PARTIAL_VERIFICATION",
+        "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_CORE_DETAILS_VERIFIED_DRAFTS_PENDING",
     )
     for phrase in required_form_phrases:
         if phrase not in form_text:
-            fail(f"verification form missing safeguard: {phrase}")
+            fail(f"verification form missing safeguard/detail: {phrase}")
+
+    draft_text = DRAFTS.read_text(encoding="utf-8")
+    required_draft_phrases = (
+        "DRAFT — AWAITING CEO / BUSINESS OWNER APPROVAL",
+        "## 1. Business Description — Draft",
+        "## 2. Cancellation & Refund Policy — Draft",
+        "## 3. Pickup & Order Policy — Draft",
+        "## 4. Allergen Information & Disclaimer — Draft",
+        "48 hours or more",
+        "50% of the order total",
+        "100% of the order total",
+        "cross-contact with allergens may occur",
+        "PHIL_AI_OS_RUBY_CUSTOMER_CONTENT_DRAFTS_AWAITING_APPROVAL",
+    )
+    for phrase in required_draft_phrases:
+        if phrase not in draft_text:
+            fail(f"customer-content draft missing safeguard/content: {phrase}")
 
     print(
         "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_TEMPLATE_GREEN "
-        f"fields={field_count} verified={verified_count} resolved={resolved_count} "
-        f"profile_complete={str(expected_complete).lower()} publish_authorized=false"
+        f"fields={field_count} verified={verified_count} not_applicable={not_applicable_count} "
+        f"resolved={resolved_count} profile_complete={str(expected_complete).lower()} publish_authorized=false"
     )
-    print(
-        "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_PHONE_VERIFIED_GREEN "
-        "phone=050-1785-0575 source=user_confirmed"
-    )
-    print(
-        "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_MIGRATION_BOUNDARY_GREEN "
-        "copy=store_contact_policies exclude=products_categories"
-    )
+    print("PHIL_AI_OS_RUBY_BUSINESS_PROFILE_CORE_DETAILS_GREEN resolved=9/15 hours_recheck=mid_september_2026")
+    print("PHIL_AI_OS_RUBY_BUSINESS_PROFILE_DRAFT_BOUNDARY_GREEN drafts=4 approved=false")
+    print("PHIL_AI_OS_RUBY_BUSINESS_PROFILE_MIGRATION_BOUNDARY_GREEN copy=store_contact_policies exclude=products_categories")
 
 
 if __name__ == "__main__":
