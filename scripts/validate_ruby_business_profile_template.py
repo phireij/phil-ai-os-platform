@@ -26,7 +26,7 @@ def main() -> None:
     if props["excluded_migration_sections"].get("const") != ["products", "categories"]:
         fail("product/category migration exclusion drift")
     if props["profile_complete"].get("type") != "boolean":
-        fail("profile_complete must be a boolean state, not permanently locked")
+        fail("profile_complete must remain a boolean completion state")
     if props["production_publish_authorized"].get("const") is not False:
         fail("business-profile verification must not grant publication authority")
 
@@ -38,8 +38,6 @@ def main() -> None:
         fail("template source role drift")
     if template.get("excluded_migration_sections") != ["products", "categories"]:
         fail("template migration exclusions drift")
-    if template.get("profile_complete") is not False:
-        fail("unverified template must remain incomplete")
     if template.get("production_publish_authorized") is not False:
         fail("template must not authorize production publication")
 
@@ -48,34 +46,72 @@ def main() -> None:
         "contact_information": {"phone", "email", "instagram", "facebook", "other_contact"},
         "policies": {"privacy_policy", "terms_conditions", "cancellation_refund_policy", "pickup_order_policy", "allergen_disclaimer"},
     }
+
     field_count = 0
+    resolved_count = 0
+    verified_count = 0
     for section, fields in required_sections.items():
         actual = template.get(section)
         if not isinstance(actual, dict) or set(actual) != fields:
             fail(f"{section} field set drift")
+
         for field, record in actual.items():
             field_count += 1
-            if field == "phone":
-                if record.get("verification_status") != "replace_required":
-                    fail("phone must remain replace_required until CEO verification")
-                if record.get("value") is not None:
-                    fail("unverified phone value must not be populated")
+            status = record.get("verification_status")
+            value = record.get("value")
+            source = record.get("source")
+            verified_at = record.get("verified_at")
+            verified_by = record.get("verified_by")
+            notes = record.get("notes")
+
+            if status == "unverified":
+                if value is not None or verified_at is not None or verified_by is not None:
+                    fail(f"unverified field contains asserted data or verification metadata: {section}.{field}")
+            elif status == "replace_required":
+                if verified_at is not None or verified_by is not None:
+                    fail(f"replace_required field must not carry verification metadata: {section}.{field}")
+            elif status == "verified":
+                if not isinstance(value, str) or not value.strip():
+                    fail(f"verified field requires a non-empty value: {section}.{field}")
+                if source == "not_provided":
+                    fail(f"verified field requires a real source: {section}.{field}")
+                if not verified_at or not verified_by:
+                    fail(f"verified field requires verification metadata: {section}.{field}")
+                verified_count += 1
+                resolved_count += 1
+            elif status == "not_applicable":
+                if not verified_at or not verified_by or not notes:
+                    fail(f"not_applicable field requires explicit verification metadata and reason: {section}.{field}")
+                resolved_count += 1
             else:
-                if record.get("verification_status") != "unverified":
-                    fail(f"unverified template field must remain unverified: {section}.{field}")
-            if record.get("verified_at") is not None or record.get("verified_by") is not None:
-                fail(f"template must not contain fake verification metadata: {section}.{field}")
-            if record.get("value") is not None:
-                fail(f"template must not invent business data: {section}.{field}")
+                fail(f"unsupported verification status: {section}.{field}={status!r}")
+
+    phone = template["contact_information"]["phone"]
+    if phone.get("value") != "050-1785-0575":
+        fail("verified business phone drift")
+    if phone.get("source") != "user_confirmed":
+        fail("business phone must remain user-confirmed unless re-verified through another approved source")
+    if phone.get("verification_status") != "verified":
+        fail("business phone must remain verified")
+    if not phone.get("verified_at") or not phone.get("verified_by"):
+        fail("business phone verification metadata missing")
+
+    expected_complete = resolved_count == field_count
+    if template.get("profile_complete") is not expected_complete:
+        fail(
+            "profile_complete must be true iff every required field is verified or explicitly not_applicable "
+            f"(resolved={resolved_count}/{field_count})"
+        )
 
     form_text = FORM.read_text(encoding="utf-8")
     required_form_phrases = (
-        "AWAITING CEO / BUSINESS VERIFICATION",
+        "PARTIAL BUSINESS VERIFICATION — PHONE CONFIRMED",
         "Existing test products — **DO NOT MIGRATE**",
         "Existing test categories — **DO NOT MIGRATE**",
-        "Phone — REQUIRED UPDATE/VERIFICATION",
+        "Phone — VERIFIED",
+        "050-1785-0575",
         "production_publish_authorized` remains **false**",
-        "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_FORM_AWAITING_VERIFICATION",
+        "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_PARTIAL_VERIFICATION",
     )
     for phrase in required_form_phrases:
         if phrase not in form_text:
@@ -83,11 +119,16 @@ def main() -> None:
 
     print(
         "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_TEMPLATE_GREEN "
-        f"fields={field_count} profile_complete=false publish_authorized=false"
+        f"fields={field_count} verified={verified_count} resolved={resolved_count} "
+        f"profile_complete={str(expected_complete).lower()} publish_authorized=false"
+    )
+    print(
+        "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_PHONE_VERIFIED_GREEN "
+        "phone=050-1785-0575 source=user_confirmed"
     )
     print(
         "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_MIGRATION_BOUNDARY_GREEN "
-        "copy=store_contact_policies exclude=products_categories phone=replace_required"
+        "copy=store_contact_policies exclude=products_categories"
     )
 
 

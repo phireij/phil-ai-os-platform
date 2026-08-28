@@ -37,16 +37,16 @@ jobs:
           python -m json.tool contracts/commerce/verified-ruby-business-profile.schema.json >/dev/null
           python -m json.tool ops/readiness/verified-ruby-business-profile.template.json >/dev/null
 
-      - name: Validate verification template and migration boundary
+      - name: Validate incremental verification and migration boundary
         run: python scripts/validate_ruby_business_profile_template.py
 
-      - name: Assert no populated or authorized production profile
+      - name: Assert no false full completion or publication authority
         run: |
           set -euo pipefail
           ! grep -R -E '"profile_complete"[[:space:]]*:[[:space:]]*true' ops/readiness/verified-ruby-business-profile.template.json
           ! grep -R -E '"production_publish_authorized"[[:space:]]*:[[:space:]]*true' contracts/commerce/verified-ruby-business-profile.schema.json ops/readiness/verified-ruby-business-profile.template.json
-          ! grep -R -E '"verification_status"[[:space:]]*:[[:space:]]*"verified"' ops/readiness/verified-ruby-business-profile.template.json
-          echo PHIL_AI_OS_RUBY_BUSINESS_PROFILE_NO_FALSE_VERIFICATION_GREEN
+          grep -F '"phone": {"value": "050-1785-0575", "source": "user_confirmed", "verification_status": "verified"' ops/readiness/verified-ruby-business-profile.template.json
+          echo PHIL_AI_OS_RUBY_BUSINESS_PROFILE_PARTIAL_VERIFICATION_GREEN
 
       - name: Assert no WooCommerce credential material
         run: |

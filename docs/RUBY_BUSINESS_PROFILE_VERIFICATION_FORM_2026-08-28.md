@@ -1,7 +1,7 @@
 # Ruby’s Cake Delights — Verified Business Profile Form
 
 Date prepared: 2026-08-28  
-Status: **AWAITING CEO / BUSINESS VERIFICATION**  
+Status: **PARTIAL BUSINESS VERIFICATION — PHONE CONFIRMED**  
 Purpose: establish the verified production source for store information, contact information and policies before WordPress/WooCommerce staging and publication.
 
 ## Important rules
@@ -9,7 +9,7 @@ Purpose: establish the verified production source for store information, contact
 - The existing Hostinger Website Builder site is **reference-only**.
 - Do not assume an existing value is correct merely because it appears on the current website.
 - Existing test **products and categories are excluded** from migration and are not part of this form.
-- The current website phone value must **not** be reused until the correct production phone is confirmed.
+- Business values are added only when directly verified.
 - Completing this form verifies business information; it does **not** authorize production publication, DNS changes, WooCommerce activation or payment activation.
 
 ---
@@ -73,15 +73,18 @@ Notes:
 
 ## B. Contact Information
 
-### B1. Phone — REQUIRED UPDATE/VERIFICATION
+### B1. Phone — VERIFIED
 
 **Correct production phone number:**  
-`____________________________________________`
+`050-1785-0575`
 
-- [ ] Verified by CEO/business owner
-- [ ] Approved for customer publication
+- [x] Verified by CEO/business owner
+- [ ] Production publication/cutover authorized
 
-**Do not publish the old website phone value unless this verification confirms it.**
+Verification recorded: 2026-08-28  
+Source: direct business-owner confirmation
+
+**The previous website phone value is superseded by this verified number for production preparation. Overall production publication remains separately gated.**
 
 ### B2. Customer email
 
@@ -198,8 +201,8 @@ The machine-readable profile may be set to `profile_complete: true` only when ev
 - `verified`; or
 - explicitly `not_applicable` with a reason;
 
-and the phone field is no longer `replace_required` or `unverified`.
+and the phone field remains verified or is replaced through a separately verified update.
 
 `production_publish_authorized` remains **false** even after profile completion until the separate staging/cutover gate is approved.
 
-`PHIL_AI_OS_RUBY_BUSINESS_PROFILE_FORM_AWAITING_VERIFICATION`
+`PHIL_AI_OS_RUBY_BUSINESS_PROFILE_PARTIAL_VERIFICATION`
