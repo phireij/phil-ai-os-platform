@@ -1,0 +1,42 @@
+{
+  "version": "sprint7-launch-acceptance-v1",
+  "date": "2026-08-28",
+  "bounded_engineering_readiness": {
+    "integrated_regression_baseline_tests": 165,
+    "security_recovery_package_ready": true,
+    "deployment_migration_runbooks_ready": true,
+    "channel_activation_runbooks_ready": true,
+    "operator_documentation_ready": true,
+    "final_current_head_ci_required": true
+  },
+  "live_launch_gates": {
+    "verified_ruby_business_profile_complete": false,
+    "contact_phone_verified": false,
+    "fresh_launch_time_backup_restore_check_green": false,
+    "woocommerce_production_activation_approved": false,
+    "woocommerce_production_credentials_configured": false,
+    "komoju_test_mode_validated": false,
+    "komoju_live_mode_approved": false,
+    "external_channel_live_activation_approved": false,
+    "production_cutover_approved": false,
+    "ceo_signoff_recorded": false,
+    "cto_signoff_recorded": false
+  },
+  "authority_baseline": {
+    "autonomy": "A0",
+    "task_class_allowlist": ["general"],
+    "assigned_agent": "hermes",
+    "specialists_enabled": false,
+    "mission_control_mutation_authorized": false,
+    "live_launch_authorized": false
+  },
+  "evidence": [
+    "docs/SPRINT_7_TESTING_PRODUCTION_READINESS_BACKLOG_2026-08-28.md",
+    "docs/SPRINT_7_SECURITY_RECOVERY_READINESS_MATRIX_2026-08-28.md",
+    "docs/SPRINT_7_WOOCOMMERCE_STAGING_CUTOVER_RUNBOOK_2026-08-28.md",
+    "docs/SPRINT_7_KOMOJU_ACTIVATION_RUNBOOK_2026-08-28.md",
+    "docs/SPRINT_7_CHANNEL_ACTIVATION_RUNBOOKS_2026-08-28.md",
+    "docs/SPRINT_7_OPERATOR_QUICK_START_2026-08-28.md",
+    "docs/SPRINT_7_LAUNCH_ACCEPTANCE_MATRIX_2026-08-28.md"
+  ]
+}
