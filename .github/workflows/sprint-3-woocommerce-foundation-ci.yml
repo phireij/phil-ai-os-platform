@@ -1,0 +1,45 @@
+name: Sprint 3 WooCommerce Foundation CI
+
+on:
+  pull_request:
+    paths:
+      - "commerce/woocommerce/**"
+      - "contracts/cx/**"
+      - "contracts/operations/**"
+      - ".github/workflows/sprint-3-woocommerce-foundation-ci.yml"
+  push:
+    branches:
+      - "sprint3/**"
+    paths:
+      - "commerce/woocommerce/**"
+      - "contracts/cx/**"
+      - "contracts/operations/**"
+      - ".github/workflows/sprint-3-woocommerce-foundation-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-contract-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate schemas and fixtures
+        run: python commerce/woocommerce/tools_validate_contracts.py
+      - name: Run isolated unit tests
+        env:
+          PYTHONPATH: commerce/woocommerce/src
+        run: python -m unittest discover -s commerce/woocommerce/tests -v
+      - name: Assert no production WooCommerce secrets are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInE '(^|[^A-Za-z])(ck_[A-Za-z0-9]{20,}|cs_[A-Za-z0-9]{20,})' commerce/woocommerce contracts; then
+            echo "Potential WooCommerce credential material detected"
+            exit 1
+          fi
+          echo "PHIL_AI_OS_SPRINT_3_SECRET_SCAN_GREEN"

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/woocommerce/category.schema.json",
+  "title": "Phil AI OS Commerce Category",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["key", "name", "slug"],
+  "properties": {
+    "key": {"type": "string", "minLength": 1},
+    "name": {"$ref": "#/$defs/localizedText"},
+    "slug": {"$ref": "#/$defs/localizedText"},
+    "parent_key": {"type": ["string", "null"]}
+  },
+  "$defs": {
+    "localizedText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "ja"],
+      "properties": {"en": {"type": "string", "minLength": 1}, "ja": {"type": "string", "minLength": 1}}
+    }
+  }
+}

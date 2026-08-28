@@ -1,0 +1,9 @@
+[project]
+name = "phil-ai-os-woocommerce"
+version = "0.1.0"
+description = "Inert WooCommerce foundation contracts and adapter for Phil AI OS Sprint 3"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

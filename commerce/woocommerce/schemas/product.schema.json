@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/woocommerce/product.schema.json",
+  "title": "Phil AI OS Commerce Product",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sku", "name", "description", "slug", "regular_price", "currency", "status", "visibility", "category_keys", "media_keys", "source"],
+  "properties": {
+    "sku": {"type": "string", "minLength": 1},
+    "name": {"$ref": "#/$defs/localizedText"},
+    "description": {"$ref": "#/$defs/localizedText"},
+    "slug": {"$ref": "#/$defs/localizedText"},
+    "regular_price": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]{1,2})?$"},
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "status": {"enum": ["draft", "publish", "private"]},
+    "visibility": {"enum": ["visible", "catalog", "search", "hidden"]},
+    "category_keys": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "media_keys": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "source": {"type": "string", "minLength": 1},
+    "source_updated_at": {"type": ["string", "null"], "format": "date-time"}
+  },
+  "$defs": {
+    "localizedText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "ja"],
+      "properties": {
+        "en": {"type": "string", "minLength": 1},
+        "ja": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

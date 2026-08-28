@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/woocommerce/inventory.schema.json",
+  "title": "Phil AI OS Commerce Inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sku", "quantity", "stock_status", "source_of_truth", "revision"],
+  "properties": {
+    "sku": {"type": "string", "minLength": 1},
+    "quantity": {"type": "integer", "minimum": 0},
+    "stock_status": {"enum": ["instock", "outofstock", "onbackorder"]},
+    "source_of_truth": {"type": "string", "minLength": 1},
+    "revision": {"type": "integer", "minimum": 0}
+  }
+}
