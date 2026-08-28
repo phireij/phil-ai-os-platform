@@ -18,5 +18,11 @@ assert active==0
 print('active_specialist_workload=0')"""
 assert t.count(old2)==1
 t=t.replace(old2,new2,1)
+# Canary policy/readiness files are non-secret evidence. They remain root-owned on
+# the host and the Control API mount is read-only, but the non-root container user
+# must be able to read them.
+mode_anchor="os.chmod(tmp,0o600)"
+assert t.count(mode_anchor)==3, t.count(mode_anchor)
+t=t.replace(mode_anchor,"os.chmod(tmp,0o644)")
 p.write_text(t)
 print('PHIL_AI_OS_PHASE_2_2_A6_8_ACTIVATION_SCRIPT_FINALIZED_OK')
