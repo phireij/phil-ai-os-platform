@@ -10,11 +10,14 @@ from .adapter import (
     ProductionConnectivityBlocked,
     WooCommerceAdapter,
 )
+from .audit import CommerceSyncAuditEvent
 from .models import CategoryRecord, InventoryRecord, LocalizedText, MediaRecord, ProductRecord
+from .retry import RetryDecision, retry_decision
 from .reconciliation import MemoryIdempotencyStore, ReconciliationResult
 
 __all__ = [
     "CategoryRecord",
+    "CommerceSyncAuditEvent",
     "InventoryRecord",
     "LocalizedText",
     "MediaRecord",
@@ -23,5 +26,7 @@ __all__ = [
     "ProductRecord",
     "ProductionConnectivityBlocked",
     "ReconciliationResult",
+    "RetryDecision",
     "WooCommerceAdapter",
+    "retry_decision",
 ]

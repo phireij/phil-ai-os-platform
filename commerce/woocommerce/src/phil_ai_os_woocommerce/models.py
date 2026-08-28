@@ -48,6 +48,14 @@ class CategoryRecord:
             parent_key=value.get("parent_key"),
         )
 
+    def to_wc_payload(self, locale: str = "en") -> dict[str, Any]:
+        if locale not in {"en", "ja"}:
+            raise ContractValidationError(f"unsupported locale: {locale}")
+        return {
+            "name": self.name.en if locale == "en" else self.name.ja,
+            "slug": self.slug.en if locale == "en" else self.slug.ja,
+        }
+
 
 @dataclass(frozen=True)
 class MediaRecord:
@@ -74,6 +82,17 @@ class MediaRecord:
             role=str(value.get("role", "gallery")),
             position=int(value.get("position", 0)),
         )
+
+    def upload_manifest(self, locale: str = "en") -> dict[str, Any]:
+        if locale not in {"en", "ja"}:
+            raise ContractValidationError(f"unsupported locale: {locale}")
+        return {
+            "key": self.key,
+            "source_ref": self.source_ref,
+            "alt": self.alt.en if locale == "en" else self.alt.ja,
+            "role": self.role,
+            "position": self.position,
+        }
 
 
 @dataclass(frozen=True)
@@ -105,6 +124,13 @@ class InventoryRecord:
             source_of_truth=str(value.get("source_of_truth", "")),
             revision=int(value.get("revision", -1)),
         )
+
+    def to_wc_payload(self) -> dict[str, Any]:
+        return {
+            "manage_stock": True,
+            "stock_quantity": self.quantity,
+            "stock_status": self.stock_status,
+        }
 
 
 @dataclass(frozen=True)

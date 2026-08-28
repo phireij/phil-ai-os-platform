@@ -34,6 +34,12 @@ def main() -> int:
         assert set(product.media_keys).issubset(media_keys)
     assert inventory_skus.issubset(product_skus)
 
+    ops_fixture = ROOT.parents[1] / "contracts" / "operations" / "fixtures" / "order-intent.sample.json"
+    ops = json.loads(ops_fixture.read_text(encoding="utf-8"))
+    assert ops.get("fixture_only") is True
+    assert ops.get("mutation_authorized") is False
+    assert 0 <= float(ops.get("confidence", -1)) <= 1
+
     print("PHIL_AI_OS_SPRINT_3_CONTRACT_VALIDATION_GREEN")
     return 0
 

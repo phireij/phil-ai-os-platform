@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Mapping, Protocol
 
-from .models import ProductRecord
+from .models import CategoryRecord, InventoryRecord, MediaRecord, ProductRecord
 from .reconciliation import (
     MemoryIdempotencyStore,
     ReconciliationResult,
@@ -42,7 +42,9 @@ class MockWooCommerceTransport:
 
     def __init__(self) -> None:
         self._products: dict[int, dict[str, Any]] = {}
+        self._categories: dict[int, dict[str, Any]] = {}
         self._next_id = 1
+        self._next_category_id = 1
         self.calls: list[dict[str, Any]] = []
 
     def request(
@@ -62,6 +64,30 @@ class MockWooCommerceTransport:
             if sku is not None:
                 products = [p for p in products if p.get("sku") == sku]
             return deepcopy(products)
+
+        if method == "GET" and path == "/products/categories":
+            slug = (params or {}).get("slug")
+            categories = list(self._categories.values())
+            if slug is not None:
+                categories = [c for c in categories if c.get("slug") == slug]
+            return deepcopy(categories)
+
+        if method == "POST" and path == "/products/categories":
+            payload = dict(json_body or {})
+            if any(c.get("slug") == payload.get("slug") for c in self._categories.values()):
+                raise ValueError("duplicate category slug in mock WooCommerce")
+            category_id = self._next_category_id
+            self._next_category_id += 1
+            payload["id"] = category_id
+            self._categories[category_id] = payload
+            return deepcopy(payload)
+
+        if method == "PUT" and path.startswith("/products/categories/"):
+            category_id = int(path.rsplit("/", 1)[1])
+            if category_id not in self._categories:
+                raise KeyError(category_id)
+            self._categories[category_id].update(dict(json_body or {}))
+            return deepcopy(self._categories[category_id])
 
         if method == "POST" and path == "/products":
             payload = dict(json_body or {})
@@ -163,3 +189,69 @@ class WooCommerceAdapter:
         )
         self.idempotency_store.put(result)
         return result
+
+    def get_category_by_slug(self, slug: str) -> dict[str, Any] | None:
+        result = self.transport.request("GET", "/products/categories", params={"slug": slug})
+        if not result:
+            return None
+        if len(result) > 1:
+            raise ValueError(f"ambiguous WooCommerce category slug: {slug}")
+        return result[0]
+
+    def reconcile_category(self, category: CategoryRecord, *, locale: str = "en") -> ReconciliationResult:
+        desired = category.to_wc_payload(locale)
+        current = self.get_category_by_slug(desired["slug"])
+        key = idempotency_key("sync", "category", category.key, desired)
+        replay = self.idempotency_store.get(key)
+        if replay is not None:
+            return ReconciliationResult("replay", replay.entity_key, replay.idempotency_key, replay.remote_id, replay.before_fingerprint, replay.after_fingerprint)
+
+        if current is not None:
+            before = {"name": current.get("name"), "slug": current.get("slug")}
+            if before == desired:
+                result = ReconciliationResult("noop", category.key, key, int(current["id"]), fingerprint(before), fingerprint(desired))
+                self.idempotency_store.put(result)
+                return result
+
+        if not self.allow_mutations:
+            raise ProductionConnectivityBlocked("WooCommerce category mutation is disabled")
+        if current is None:
+            response = self.transport.request("POST", "/products/categories", json_body=desired)
+            before_fp = None
+            action = "create"
+        else:
+            before = {"name": current.get("name"), "slug": current.get("slug")}
+            before_fp = fingerprint(before)
+            response = self.transport.request("PUT", f"/products/categories/{int(current['id'])}", json_body=desired)
+            action = "update"
+        result = ReconciliationResult(action, category.key, key, int(response["id"]), before_fp, fingerprint(desired))
+        self.idempotency_store.put(result)
+        return result
+
+    def reconcile_inventory(self, inventory: InventoryRecord) -> ReconciliationResult:
+        current = self.get_product_by_sku(inventory.sku)
+        if current is None:
+            raise ValueError(f"inventory product not found for SKU: {inventory.sku}")
+        desired = inventory.to_wc_payload()
+        key_material = dict(desired)
+        key_material["source_of_truth"] = inventory.source_of_truth
+        key_material["revision"] = inventory.revision
+        key = idempotency_key("sync", "inventory", inventory.sku, key_material)
+        replay = self.idempotency_store.get(key)
+        if replay is not None:
+            return ReconciliationResult("replay", replay.entity_key, replay.idempotency_key, replay.remote_id, replay.before_fingerprint, replay.after_fingerprint)
+        before = {field: current.get(field) for field in ("manage_stock", "stock_quantity", "stock_status")}
+        if before == desired:
+            result = ReconciliationResult("noop", inventory.sku, key, int(current["id"]), fingerprint(before), fingerprint(desired))
+            self.idempotency_store.put(result)
+            return result
+        if not self.allow_mutations:
+            raise ProductionConnectivityBlocked("WooCommerce inventory mutation is disabled")
+        response = self.transport.request("PUT", f"/products/{int(current['id'])}", json_body=desired)
+        result = ReconciliationResult("update", inventory.sku, key, int(response["id"]), fingerprint(before), fingerprint(desired))
+        self.idempotency_store.put(result)
+        return result
+
+    def plan_media(self, media: MediaRecord, *, locale: str = "en") -> dict[str, Any]:
+        """Return a deterministic media manifest without performing an upload."""
+        return media.upload_manifest(locale)

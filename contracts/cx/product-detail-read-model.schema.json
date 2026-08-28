@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/cx/product-detail-read-model.schema.json",
+  "title": "Phil AI OS CX Product Detail Read Model",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["product_key", "sku", "name", "description", "price", "availability", "media", "pickup"],
+  "properties": {
+    "product_key": {"type": "string", "minLength": 1},
+    "sku": {"type": "string", "minLength": 1},
+    "name": {"$ref": "#/$defs/localizedText"},
+    "description": {"$ref": "#/$defs/localizedText"},
+    "price": {"type": "object", "required": ["amount", "currency"], "properties": {"amount": {"type": "string"}, "currency": {"type": "string"}}},
+    "availability": {"enum": ["in_stock", "out_of_stock", "backorder", "unknown"]},
+    "media": {"type": "array", "items": {"type": "object", "required": ["ref", "alt", "position"], "properties": {"ref": {"type": "string"}, "alt": {"$ref": "#/$defs/localizedText"}, "position": {"type": "integer", "minimum": 0}}}},
+    "pickup": {"type": "object", "required": ["supported", "instructions"], "properties": {"supported": {"type": "boolean"}, "instructions": {"$ref": "#/$defs/localizedText"}}}
+  },
+  "$defs": {
+    "localizedText": {"type": "object", "additionalProperties": false, "required": ["en", "ja"], "properties": {"en": {"type": "string"}, "ja": {"type": "string"}}}
+  }
+}
