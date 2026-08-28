@@ -65,12 +65,20 @@ jobs:
       - name: Bootstrap isolated WordPress and WooCommerce
         shell: bash
         run: bash commerce/woocommerce/bootstrap-local.sh
-      - name: Verify isolated WooCommerce runtime
+      - name: Verify isolated WooCommerce runtime and wc/v3 surface
         shell: bash
         run: |
           set -euo pipefail
           compose=(docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml)
           "${compose[@]}" run --rm wpcli plugin is-active woocommerce
+          "${compose[@]}" run --rm wpcli eval '
+            $found = false;
+            foreach (array_keys(rest_get_server()->get_routes()) as $route) {
+              if (strpos($route, "/wc/v3") === 0) { $found = true; break; }
+            }
+            if (!$found) { fwrite(STDERR, "wc/v3 REST surface missing\n"); exit(1); }
+            echo "PHIL_AI_OS_SPRINT_3_WC_V3_SURFACE_GREEN\n";
+          '
           curl --fail --silent --show-error --retry 20 --retry-delay 2 --retry-connrefused \
             http://127.0.0.1:8088/ >/dev/null
           echo "PHIL_AI_OS_SPRINT_3_LOCAL_WOOCOMMERCE_RUNTIME_GREEN"
