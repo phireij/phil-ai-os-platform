@@ -1,0 +1,56 @@
+{
+  "fixture_only": true,
+  "catalog_snapshot_ref": "fixture:cx/synthetic-catalog-v1",
+  "products": [
+    {
+      "product_key": "sample-chocolate-cupcake",
+      "sku": "SAMPLE-CHOCO-001",
+      "name": {"en": "Sample Chocolate Cupcake", "ja": "サンプル・チョコレートカップケーキ"},
+      "short_description": {"en": "Synthetic fixture for isolated CX testing.", "ja": "CXの分離テスト用の合成フィクスチャです。"},
+      "description": {"en": "A synthetic product used only to prove the bilingual customer experience flow.", "ja": "バイリンガル顧客体験フローの検証専用に使用する合成商品です。"},
+      "price": {"amount": "500", "currency": "JPY"},
+      "availability": "in_stock",
+      "primary_media_ref": "fixture://media/sample-chocolate-primary.svg",
+      "media": [
+        {
+          "ref": "fixture://media/sample-chocolate-primary.svg",
+          "alt": {"en": "Synthetic chocolate cupcake illustration", "ja": "合成チョコレートカップケーキのイラスト"},
+          "position": 0
+        }
+      ],
+      "pickup": {
+        "supported": true,
+        "instructions": {"en": "Select a preferred pickup time. Final availability is confirmed separately.", "ja": "希望受取時間を選択してください。最終的な受取可否は別途確認されます。"}
+      },
+      "seo": {
+        "title": {"en": "Sample Chocolate Cupcake | CX Fixture", "ja": "サンプル・チョコレートカップケーキ | CXフィクスチャ"},
+        "description": {"en": "Synthetic product page for isolated Phil AI OS CX validation.", "ja": "Phil AI OS CX分離検証用の合成商品ページです。"}
+      }
+    },
+    {
+      "product_key": "sample-carrot-cupcake",
+      "sku": "SAMPLE-CARROT-001",
+      "name": {"en": "Sample Carrot Cupcake", "ja": "サンプル・キャロットカップケーキ"},
+      "short_description": {"en": "Second synthetic catalog item for responsive-grid testing.", "ja": "レスポンシブグリッド検証用の2つ目の合成商品です。"},
+      "description": {"en": "A second synthetic product used to test catalog, detail, availability and localization behavior.", "ja": "カタログ、詳細、在庫表示、ローカライズ動作を検証するための2つ目の合成商品です。"},
+      "price": {"amount": "500", "currency": "JPY"},
+      "availability": "out_of_stock",
+      "primary_media_ref": "fixture://media/sample-carrot-primary.svg",
+      "media": [
+        {
+          "ref": "fixture://media/sample-carrot-primary.svg",
+          "alt": {"en": "Synthetic carrot cupcake illustration", "ja": "合成キャロットカップケーキのイラスト"},
+          "position": 0
+        }
+      ],
+      "pickup": {
+        "supported": true,
+        "instructions": {"en": "Pickup intent is available only after inventory readiness is confirmed.", "ja": "受取インテントは在庫準備が確認された後に利用できます。"}
+      },
+      "seo": {
+        "title": {"en": "Sample Carrot Cupcake | CX Fixture", "ja": "サンプル・キャロットカップケーキ | CXフィクスチャ"},
+        "description": {"en": "Synthetic out-of-stock state for isolated CX validation.", "ja": "CX分離検証用の合成在庫切れ状態です。"}
+      }
+    }
+  ]
+}
