@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Phil AI OS CX">
+  <rect width="512" height="512" rx="112" fill="#fff7f5"/>
+  <circle cx="256" cy="256" r="168" fill="#8a3e50"/>
+  <path d="M166 185h180v48H214v48h108v46H214v78h-48z" fill="#fff"/>
+  <circle cx="344" cy="354" r="34" fill="#f3d3cf"/>
+</svg>
