@@ -1,0 +1,180 @@
+name: Phase 2.2 A6.3 Specialist Presence Production Preflight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-2-a6-3-specialist-presence-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure direct SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3 4; do
+            if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=12 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+      - name: Run read-only A6.3 preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE' | tee phase22-a6-3-evidence.txt
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          HEARTBEAT=/usr/local/sbin/philaios-agent-heartbeat
+          RUNTIME_MODEL=/opt/phil-ai-os/mission-control/agent-runtime-read-model.py
+
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+
+          python3 - <<'PY'
+          import re, pathlib, json
+          p=pathlib.Path('/usr/local/sbin/philaios-agent-heartbeat')
+          text=p.read_text()
+          facts={
+            'literal_hermes_refs': text.count('hermes'),
+            'docker_exec': 'docker exec' in text,
+            'mission_control_client_ref': 'philaios-mission-control' in text,
+            'execute_route_ref': '/v1/execute' in text or 'philaios-execute' in text,
+            'provider_ref': bool(re.search(r'openai|openrouter|anthropic|gemini',text,re.I)),
+            'token_path_refs': sorted(set(re.findall(r'/run/[A-Za-z0-9_./-]*token[A-Za-z0-9_./-]*',text,re.I))),
+            'presence_path_refs': sorted(set(re.findall(r'/var/lib/phil-ai-os/agent-presence/[A-Za-z0-9_.-]+',text))),
+            'container_literal_refs': sorted(set(re.findall(r'hermes-agent-[A-Za-z0-9_.-]+',text))),
+          }
+          print('heartbeat_structure='+json.dumps(facts,separators=(',',':')))
+          PY
+
+          if [ -f "$RUNTIME_MODEL" ]; then
+            echo runtime_model_present=true
+            echo runtime_model_sha256="$(sha256sum "$RUNTIME_MODEL" | awk '{print $1}')"
+            echo runtime_model_literal_hermes_refs="$(grep -o 'hermes' "$RUNTIME_MODEL" 2>/dev/null | wc -l | tr -d ' ')"
+            echo runtime_model_specialist_refs="$(grep -o 'specialist-worker-01' "$RUNTIME_MODEL" 2>/dev/null | wc -l | tr -d ' ')"
+          else
+            echo runtime_model_present=false
+          fi
+
+          HERMES="$(docker ps --format '{{.Names}}' | grep -m1 'hermes-agent-whow')"
+          test -n "$HERMES"
+          docker exec "$HERMES" sh -lc '
+            test -x /usr/local/bin/philaios-mission-control
+            test -r /run/philaios/hermes_control_api_token
+            printf "hermes_mc_client_sha256=%s\n" "$(sha256sum /usr/local/bin/philaios-mission-control | awk "{print \$1}")"
+            printf "hermes_control_token_mode=%s\n" "$(stat -c %a /run/philaios/hermes_control_api_token)"
+            printf "hermes_control_token_owner=%s:%s\n" "$(stat -c %U /run/philaios/hermes_control_api_token)" "$(stat -c %G /run/philaios/hermes_control_api_token)"
+          '
+
+          docker exec "$CONTROL" sh -lc '
+            printf "control_api_token_env_names=%s\n" "$(grep -RhoE "PHIL_AI_OS_[A-Z0-9_]*TOKEN[A-Z0-9_]*" /app --include="*.py" 2>/dev/null | sort -u | paste -sd, -)"
+            printf "control_api_execute_route_files=%s\n" "$(grep -RIl "/v1/execute" /app --include="*.py" 2>/dev/null | wc -l | tr -d " ")"
+            printf "control_api_auth_compare_files=%s\n" "$(grep -RIl -E "compare_digest|Authorization|Bearer" /app --include="*.py" 2>/dev/null | wc -l | tr -d " ")"
+          '
+
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import pathlib,re,json
+          rows=[]
+          for p in pathlib.Path('/app').rglob('*.py'):
+              try: t=p.read_text(errors='ignore')
+              except Exception: continue
+              if '/v1/execute' not in t: continue
+              pos=t.find('/v1/execute')
+              near=t[max(0,pos-5000):pos+5000]
+              rows.append({
+                'file':str(p),
+                'auth_signal':bool(re.search(r'Authorization|Bearer|token|auth',near,re.I)),
+                'control_token_signal':'PHIL_AI_OS_CONTROL_API_TOKEN' in near,
+                'execution_token_signal':'PHIL_AI_OS_EXECUTION_TOKEN' in near,
+              })
+          print('execute_route_auth_structure='+json.dumps(rows,separators=(',',':')))
+          PY
+
+          for unit in \
+            phil-ai-os-specialist-worker-01-presence.service \
+            phil-ai-os-specialist-worker-01-presence.timer \
+            phil-ai-os-specialist-worker-01.service; do
+            if systemctl list-unit-files --no-legend 2>/dev/null | awk '{print $1}' | grep -Fxq "$unit"; then
+              echo "unit_collision_${unit}=true"
+              exit 1
+            else
+              echo "unit_collision_${unit}=false"
+            fi
+          done
+
+          test ! -e /var/lib/phil-ai-os/agent-presence/specialist-worker-01.json
+          echo specialist_presence_path_available=true
+          echo presence_directory_mode="$(stat -c %a /var/lib/phil-ai-os/agent-presence)"
+          echo presence_directory_owner="$(stat -c %U:%G /var/lib/phil-ai-os/agent-presence)"
+
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          reg=[dict(r) for r in c.execute('select * from agent_registry order by agent_id')]
+          h=next(r for r in reg if r['agent_id']=='hermes')
+          s=next(r for r in reg if r['agent_id']=='specialist-worker-01')
+          assert len(reg)==2
+          assert h['authority_ceiling']=='L3' and int(h['enabled'])==1 and int(h['assignable'])==1
+          assert s['authority_ceiling']=='L1' and int(s['enabled'])==0 and int(s['assignable'])==0
+          assert c.execute("select count(*) from task_lifecycle_events where assigned_agent_id='specialist-worker-01'").fetchone()[0]==0
+          print('registry_state='+json.dumps(reg,separators=(',',':'),default=str))
+          PY
+
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+
+          echo a6_4_database_schema_change_required=false
+          echo a6_4_registry_change_required=false
+          echo a6_4_specialist_must_remain_disabled=true
+          echo a6_4_specialist_must_remain_nonassignable=true
+          echo a6_4_provider_credentials_allowed=false
+          echo a6_4_execution_capability_allowed=false
+          echo a6_4_identity_specific_presence_required=true
+          echo a6_4_separate_service_timer_required=true
+          echo a6_4_separate_presence_file_required=true
+          echo a6_4_hermes_heartbeat_must_remain_unchanged=true
+          echo control_api_health=green
+          echo control_api_readiness=green
+          echo execution_allowlist=general
+          echo mission_control_mutations=405
+          echo production_change=none
+          echo service_restart=none
+          echo registry_mutation=none
+          echo lifecycle_mutation=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_2_A6_3_SPECIALIST_PRESENCE_PREFLIGHT_OK
+          REMOTE
+      - name: Upload A6.3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a6-3-specialist-presence-preflight-evidence
+          path: phase22-a6-3-evidence.txt
+          if-no-files-found: error
+          retention-days: 14
