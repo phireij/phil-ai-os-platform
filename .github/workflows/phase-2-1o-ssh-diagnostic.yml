@@ -1,0 +1,83 @@
+name: Phase 2.1O SSH Connectivity Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1o-ssh-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate secret presence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          PORT="${VPS_PORT:-22}"
+          test -n "$PORT"
+          echo secrets_present=true
+          echo port_configured=true
+      - name: Resolve host
+        shell: bash
+        run: |
+          set -euo pipefail
+          getent ahosts "$VPS_HOST" | head -n 5
+          echo dns_resolution=ok
+      - name: Test TCP reachability
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          python3 - <<'PY'
+          import os,socket
+          host=os.environ['VPS_HOST']; port=int(os.environ.get('VPS_PORT') or '22')
+          s=socket.socket(); s.settimeout(15)
+          try:
+              s.connect((host,port))
+          finally:
+              s.close()
+          print('tcp_reachability=ok')
+          PY
+      - name: Scan SSH host key
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts
+          test -s ~/.ssh/known_hosts
+          echo host_key_scan=ok
+      - name: Test SSH authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ConnectionAttempts=1 "$VPS_USER@$VPS_HOST" 'printf "ssh_authentication=ok\n"'
+      - name: Confirm no production action
+        run: |
+          echo production_change=none
+          echo mission_control_restart=none
+          echo lifecycle_mutation=none
+          echo assignment_mutation=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_1O_SSH_DIAGNOSTIC_OK
