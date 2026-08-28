@@ -91,7 +91,8 @@ jobs:
           c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
           c.row_factory=sqlite3.Row
           assert c.execute('pragma quick_check').fetchone()[0]=='ok'
-          assert c.execute('select agent_id,authority_ceiling,enabled,assignable from agent_registry order by agent_id').fetchall()==[('hermes','L3',1,1)]
+          registry=[tuple(r) for r in c.execute('select agent_id,authority_ceiling,enabled,assignable from agent_registry order by agent_id').fetchall()]
+          assert registry==[('hermes','L3',1,1)]
           active=os.environ['ACTIVE']; closed=os.environ['CLOSED']
           aev=[dict(r) for r in c.execute("select stage,assigned_agent_id,occurred_at,event_id from task_lifecycle_events where task_id=? order by occurred_at,event_id",(active,))]
           assert any(x['stage']=='ASSIGNED' and x['assigned_agent_id']=='hermes' for x in aev)
