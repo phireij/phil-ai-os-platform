@@ -1,0 +1,23 @@
+name: Phase 2.2 A7.2 Isolated Read Model Validation
+
+on:
+  push:
+    paths:
+      - '.github/workflows/phase-2-2-a7-2-isolated-read-model-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate A7.2 contract
+        run: python3 scripts/phase2_2_a7_2_multi_agent_read_model_validator.py | tee phase-2-2-a7-2-validation.txt
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a7-2-isolated-read-model-validation
+          path: phase-2-2-a7-2-validation.txt
+          retention-days: 30
