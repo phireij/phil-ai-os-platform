@@ -1,0 +1,101 @@
+name: Phase 2.2 A6.8 Post-Success Verify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-2-a6-8-post-success-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3 4; do
+            if ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=10 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*4))
+          done
+          exit 1
+      - name: Independently verify durable A6.8 closure state
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE' | tee phase22-a6-8-post-success.txt
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test -n "$CONTROL"
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.21.1-phase22a68'
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          test ! -e /opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core/runtime/state/phase2_2_a6_8_canary_policy.json
+          test ! -e /opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core/runtime/state/phase2_2_a6_8_canary_readiness.json
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          reg=[dict(r) for r in c.execute('select * from agent_registry order by agent_id')]
+          h=next(r for r in reg if r['agent_id']=='hermes'); s=next(r for r in reg if r['agent_id']=='specialist-worker-01')
+          assert h['authority_ceiling']=='L3' and int(h['enabled'])==1 and int(h['assignable'])==1
+          assert s['authority_ceiling']=='L1' and int(s['enabled'])==0 and int(s['assignable'])==0
+          canaries=list(c.execute("select * from approval_requests where source='phase-2.2-a6.8-approved-canary' order by created_at"))
+          assert len(canaries)==1,len(canaries)
+          a=dict(canaries[0]); tid=a['task_id']
+          assert a['state']=='expired' and a['consumed_at'] is None and a['consumed_by'] is None
+          hs=[dict(r) for r in c.execute("select * from task_handoffs where task_id=?",(tid,))]
+          assert len(hs)==1,len(hs); ho=hs[0]
+          assert ho['state']=='accepted' and ho['source_agent_id']=='hermes' and ho['target_agent_id']=='specialist-worker-01'
+          assert ho['required_authority']=='L1' and ho['handoff_approval_state']=='approved'
+          assert c.execute("select count(*) from task_lifecycle_events where task_id=? and stage='ASSIGNED' and assigned_agent_id='specialist-worker-01'",(tid,)).fetchone()[0]==1
+          last=c.execute("select stage from task_lifecycle_events where task_id=? order by occurred_at desc,event_id desc limit 1",(tid,)).fetchone()
+          assert last and last[0]=='COMPLETED'
+          active=0
+          for r in c.execute("select distinct task_id from task_lifecycle_events where stage='ASSIGNED' and assigned_agent_id='specialist-worker-01'"):
+              last=c.execute("select stage from task_lifecycle_events where task_id=? order by occurred_at desc,event_id desc limit 1",(r[0],)).fetchone()
+              if last and last[0] not in ('COMPLETED','FAILED','CANCELLED','DENIED','EXPIRED'):
+                  active+=1
+          assert active==0
+          print('canary_task_id='+tid)
+          print('handoff_id='+ho['handoff_id'])
+          print('handoff_state=accepted')
+          print('handoff_required_authority=L1')
+          print('specialist_assignment_events_for_canary=1')
+          print('canary_latest_stage=COMPLETED')
+          print('execution_approval_consumed=false')
+          print('active_specialist_workload=0')
+          print('specialist_final_state=L1_disabled_nonassignable')
+          PY
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          for unit in phil-ai-os-agent-heartbeat.timer phil-ai-os-specialist-worker-01-presence.timer phil-ai-os-monitor.service phil-ai-os-backup.timer phil-ai-os-backup-self-heal.timer; do systemctl is-active --quiet "$unit"; done
+          echo canary_policy_evidence_absent=true
+          echo canary_readiness_evidence_absent=true
+          echo execution_allowlist=general
+          echo mission_control_mutations=405
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_2_A6_8_POST_SUCCESS_VERIFY_OK
+          REMOTE
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a6-8-post-success-verification
+          path: phase22-a6-8-post-success.txt
+          if-no-files-found: warn
+          retention-days: 30
