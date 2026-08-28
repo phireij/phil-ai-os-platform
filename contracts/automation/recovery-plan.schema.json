@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/automation/recovery-plan.schema.json",
+  "title": "Phil AI OS Simulation Recovery Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recovery_id", "request_id", "lifecycle_correlation_id", "error_code", "attempt", "max_attempts", "retryable", "retry_planned", "next_action", "automatic_retry", "retry_authorized", "rollback_required", "rollback_reason", "automatic_rollback", "rollback_authorized", "execution_authorized", "mutation_authorized", "authority_effect"],
+  "properties": {
+    "recovery_id": {"type": "string", "minLength": 1},
+    "request_id": {"type": "string", "minLength": 1},
+    "lifecycle_correlation_id": {"type": "string", "minLength": 1},
+    "error_code": {"type": "string", "minLength": 1},
+    "attempt": {"type": "integer", "minimum": 1},
+    "max_attempts": {"type": "integer", "minimum": 1},
+    "retryable": {"type": "boolean"},
+    "retry_planned": {"type": "boolean"},
+    "next_action": {"enum": ["retry_simulation", "stop_for_review"]},
+    "automatic_retry": {"const": false},
+    "retry_authorized": {"const": false},
+    "rollback_required": {"const": false},
+    "rollback_reason": {"const": "dry_run_no_side_effect"},
+    "automatic_rollback": {"const": false},
+    "rollback_authorized": {"const": false},
+    "execution_authorized": {"const": false},
+    "mutation_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}
