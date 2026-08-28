@@ -1,7 +1,7 @@
 # Sprint 5 — Operations Hub Slice 1
 
 Date: 2026-08-28
-Status: IMPLEMENTED / VALIDATION PENDING
+Status: GREEN
 Branch: `sprint5/operations-hub`
 
 ## Scope
@@ -16,6 +16,7 @@ Slice 1 establishes a fixture-only, provider-neutral normalization boundary for 
 - canonical raw-event SHA-256 fingerprints;
 - stable lifecycle correlation IDs;
 - intent classification for order, product, pickup, complaint, review and general inquiry paths;
+- explicit order-intent precedence over pickup fulfillment detail;
 - confidence-based review routing;
 - mandatory review for complaints and public reviews;
 - in-memory duplicate/replay rejection;
@@ -24,6 +25,24 @@ Slice 1 establishes a fixture-only, provider-neutral normalization boundary for 
 - raw channel event schema;
 - isolated unit tests;
 - Sprint 5 CI and channel-secret/live-endpoint boundary checks.
+
+## Validation evidence
+
+GitHub Actions run `33170238307` completed GREEN:
+
+- runtime compilation GREEN;
+- **14/14 isolated unit tests GREEN**;
+- five-channel validator GREEN;
+- duplicate/replay validation GREEN;
+- live-channel endpoint boundary GREEN;
+- mutation-authority boundary GREEN.
+
+Markers:
+
+- `PHIL_AI_OS_SPRINT_5_OPERATIONS_VALIDATION_GREEN sources=5 review_routed=2`
+- `PHIL_AI_OS_SPRINT_5_LIVE_CHANNEL_BOUNDARY_GREEN`
+
+An earlier run correctly caught ambiguous order/pickup precedence; the rule was corrected so explicit order intent takes precedence while pure pickup questions remain pickup inquiries.
 
 ## Deliberately absent
 
@@ -37,13 +56,4 @@ Slice 1 establishes a fixture-only, provider-neutral normalization boundary for 
 - autonomy above A0;
 - Mission Control mutation authority.
 
-## Validation target
-
-Expected markers after CI:
-
-- `PHIL_AI_OS_SPRINT_5_OPERATIONS_VALIDATION_GREEN`
-- `PHIL_AI_OS_SPRINT_5_LIVE_CHANNEL_BOUNDARY_GREEN`
-
-Final test count and workflow run ID must be recorded only after GitHub Actions completes successfully.
-
-`PHIL_AI_OS_SPRINT_5_OPERATIONS_SLICE_1_IMPLEMENTED`
+`PHIL_AI_OS_SPRINT_5_OPERATIONS_SLICE_1_GREEN`
