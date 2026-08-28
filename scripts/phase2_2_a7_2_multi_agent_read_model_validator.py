@@ -37,11 +37,20 @@ def presence_state(presence, now, identity_required=False):
     }
 
 
-def reconstruct_workloads(lifecycle, registered_ids):
+def accepted_transfer_pairs(handoffs):
+    out = {}
+    for h in handoffs:
+        if h.get("state") == "accepted":
+            out.setdefault(h.get("task_id"), set()).add((h.get("source_agent_id"), h.get("target_agent_id")))
+    return out
+
+
+def reconstruct_workloads(lifecycle, registered_ids, handoffs):
     by_task = {}
     for ev in lifecycle:
         by_task.setdefault(ev["task_id"], []).append(ev)
 
+    legal_transfers = accepted_transfer_pairs(handoffs)
     owned = {aid: [] for aid in registered_ids}
     conflicts = {aid: False for aid in registered_ids}
     assignment_counts = {}
@@ -64,16 +73,22 @@ def reconstruct_workloads(lifecycle, registered_ids):
                 "active": latest["stage"] not in TERMINAL,
                 "assignment_count": assignment_counts[(task_id, owner)],
             })
-        if len(set(owners)) > 1:
-            for aid in set(owners):
-                if aid in conflicts:
-                    conflicts[aid] = True
+
+        transitions = list(zip(owners, owners[1:]))
+        for source, target in transitions:
+            if source == target:
+                continue
+            if (source, target) not in legal_transfers.get(task_id, set()):
+                if source in conflicts:
+                    conflicts[source] = True
+                if target in conflicts:
+                    conflicts[target] = True
     return owned, conflicts
 
 
 def project(registry, presences, lifecycle, handoffs, now):
     reg = {r["agent_id"]: r for r in registry}
-    owned, conflicts = reconstruct_workloads(lifecycle, reg.keys())
+    owned, conflicts = reconstruct_workloads(lifecycle, reg.keys(), handoffs)
     agents = []
 
     for aid in sorted(reg):
@@ -222,11 +237,12 @@ def main():
     bs = agent(bad, "specialist-worker-01")
     assert bs["presence"]["state"] == "unknown"
     assert bs["evidence_complete"] is False
-    assert bs["readiness"]["state"] == "unassignable"  # registry precedence remains strongest
+    assert bs["readiness"]["state"] == "unassignable"
     assert bad["evidence_complete"] is False
 
     eligible_registry = [dict(x) for x in registry]
-    eligible_registry[1]["enabled"] = 1; eligible_registry[1]["assignable"] = 1
+    eligible_registry[1]["enabled"] = 1
+    eligible_registry[1]["assignable"] = 1
     conflict_lifecycle = lifecycle + [
         {"event_id": "e6", "task_id": "tsk_conflict", "stage": "ASSIGNED", "occurred_at": ts(45), "assigned_agent_id": "hermes"},
         {"event_id": "e7", "task_id": "tsk_conflict", "stage": "ASSIGNED", "occurred_at": ts(44), "assigned_agent_id": "specialist-worker-01"},
@@ -242,16 +258,18 @@ def main():
                 assert k.lower() not in secret_words
                 walk(v)
         elif isinstance(x, list):
-            for v in x: walk(v)
+            for v in x:
+                walk(v)
     walk(out)
 
     print("schema=2.2-a7.v1")
+    print("governed_transfer_reconciliation=verified")
     print("registry_precedence=verified")
     print("fresh_disabled_specialist=unassignable")
     print("terminal_handoff_history=visible_inactive")
     print("specialist_active_workload=0")
     print("missing_identity_evidence=fail_closed")
-    print("ownership_conflict=indeterminate")
+    print("unproven_ownership_conflict=indeterminate")
     print("secret_exclusion=verified")
     print("mission_control_authority=read_only_observer")
     print("PHIL_AI_OS_PHASE_2_2_A7_2_ISOLATED_READ_MODEL_CONTRACT_OK")
