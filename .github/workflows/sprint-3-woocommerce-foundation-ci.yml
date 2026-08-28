@@ -40,7 +40,7 @@ jobs:
           set -euo pipefail
           docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml config --quiet
           rendered="$(docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml config)"
-          grep -q '127.0.0.1:' <<<"${rendered}"
+          grep -qE 'host_ip:[[:space:]]*127\.0\.0\.1' <<<"${rendered}"
           if grep -q 'rubyscakedelights.shop' commerce/woocommerce/docker-compose.dev.yml commerce/woocommerce/bootstrap-local.sh; then
             echo "Production Ruby domain must not appear in local runtime files"
             exit 1
