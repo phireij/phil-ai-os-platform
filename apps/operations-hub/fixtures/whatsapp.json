@@ -1,0 +1,10 @@
+{
+  "fixture_only": true,
+  "source": "whatsapp",
+  "kind": "message",
+  "external_event_id": "wa-fixture-001",
+  "occurred_at": "2026-08-28T12:13:00Z",
+  "sender_ref": "fixture-whatsapp-customer",
+  "locale": "en",
+  "text": "I have a problem with my order because it arrived late."
+}
