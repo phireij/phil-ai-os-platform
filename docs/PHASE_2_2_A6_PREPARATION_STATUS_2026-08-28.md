@@ -1,7 +1,7 @@
 # Phil AI OS Platform — Phase 2.2 A6 Preparation Checkpoint
 
 **Date:** 2026-08-28  
-**Status:** PREPARATION GREEN / A6.4 APPROVAL REQUIRED
+**Status:** A6.4 GREEN / A6.7 APPROVAL REQUIRED
 
 ## Gate status
 
@@ -10,27 +10,31 @@
 | A6.1 Specialist presence discovery | GREEN | none |
 | A6.2 Specialist presence contract | GREEN | none |
 | A6.3 Specialist presence preflight | GREEN | none |
-| A6.4 Specialist presence activation | BLOCKED — CEO approval required | not executed |
+| A6.4 Specialist presence activation | GREEN / COMPLETE | signed presence-only runtime activated |
 | A6.5 Handoff persistence/writer isolated validation | GREEN | none |
 | A6.6 Handoff persistence/writer production preflight | GREEN | none |
-| A6.7 Inert handoff writer activation | BLOCKED — later CEO approval | not executed |
+| A6.7 Inert handoff writer activation | BLOCKED — CEO approval required | not executed |
 | A6.8 Eligibility + one handoff canary | BLOCKED — later CEO approval | not executed |
 
 ## Current production state
 
-- `hermes`: L3, enabled, assignable.
+- `hermes`: L3, enabled, assignable; existing heartbeat unchanged.
 - `specialist-worker-01`: L1, disabled, non-assignable.
+- specialist signed logical-presence runtime: active.
+- specialist presence timer: active.
+- specialist current authenticated presence: fresh at A6.4 validation.
 - specialist assignment references: zero.
-- specialist presence runtime: not activated.
+- specialist Control API bearer token: none.
 - specialist provider credentials: none.
+- specialist execution capability: none.
 - production `task_handoffs` table: absent.
 - production handoff writer routes: absent.
 - production execution allowlist: `general` only.
 - Mission Control remains read-only.
 
-## A6.4 prepared activation
+## A6.4 completed activation
 
-The prepared A6.4 design introduces only a signed presence primitive:
+A6.4 introduced only the approved signed presence primitive:
 
 - dedicated Ed25519 specialist presence identity;
 - local Control API health/readiness round-trip;
@@ -39,10 +43,11 @@ The prepared A6.4 design introduces only a signed presence primitive:
 - no Control API bearer token;
 - no provider credentials;
 - no execution capability;
-- no registry eligibility change;
-- rollback containment prepared.
+- no registry eligibility change.
 
-A6.4 cannot assign work because the specialist remains disabled/non-assignable.
+Activation run `33143031735` completed successfully. Signature and identity attribution were verified, the specialist remained disabled/non-assignable L1, all protected database counts were unchanged, Hermes heartbeat hashes were unchanged, and no rollback was needed.
+
+Canonical result: `docs/PHASE_2_2_A6_4_SPECIALIST_PRESENCE_ACTIVATION_RESULT.md`.
 
 ## A6.5 / A6.6 handoff preparation
 
@@ -59,4 +64,4 @@ A6.6 production preflight discovered the live coordinator integration anchors:
 
 ## Next required decision
 
-The next sequential production gate is **A6.4 Specialist Presence Activation**. It requires explicit CEO approval before the prepared workflow may be activated.
+The next sequential production gate is **A6.7 Inert Handoff Persistence/Writer Activation**. It requires a separate explicit CEO approval. A6.4 approval does not authorize A6.7 or A6.8.
