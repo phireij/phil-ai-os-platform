@@ -1,7 +1,7 @@
 # Ruby’s Cake Delights — Verified Business Profile Form
 
 Date prepared: 2026-08-28  
-Status: **PARTIAL BUSINESS VERIFICATION — CORE DETAILS + 3 POLICIES CONFIRMED**  
+Status: **PARTIAL BUSINESS VERIFICATION — BUSINESS DESCRIPTION + CORE DETAILS + 3 POLICIES CONFIRMED**  
 Purpose: establish the verified production source for store information, contact information and policies before WordPress/WooCommerce staging and publication.
 
 ## Important rules
@@ -9,7 +9,7 @@ Purpose: establish the verified production source for store information, contact
 - The existing Hostinger Website Builder site is **reference-only**.
 - Existing test **products and categories are excluded** from migration.
 - Business values are added only when directly verified.
-- Approved policy wording does **not** authorize production publication, DNS changes, WooCommerce activation or payment activation.
+- Approved business-description and policy wording does **not** authorize production publication, DNS changes, WooCommerce activation or payment activation.
 - The September 13 meal launch is a verified rollout fact only; it does not create production catalog records.
 
 ---
@@ -22,18 +22,20 @@ Purpose: establish the verified production source for store information, contact
 
 - [x] CEO/business owner confirmed
 
-### A2. Business description — REVISED DRAFT PENDING APPROVAL
+### A2. Business description — VERIFIED / APPROVED
 
-Draft prepared in:
-`docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md`
+Canonical bilingual wording:
+`docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md`, section 1.
 
-Proposed English description:
+Approved English description:
 
 > Ruby's Cake Delights is a neighborhood food and dessert shop in Ichikawa, Chiba, offering handcrafted cakes, pastries, desserts, and satisfying savory meals for everyday enjoyment and special occasions. Alongside our sweets, our growing food menu includes favorites such as Spaghetti, Palabok, Baked Macaroni, and Fried Chicken in a variety of flavors. We prepare our products with care and welcome customers for convenient pickup at our Ichikawa shop.
 
-- [ ] Verified / approved
+- [x] Verified / approved by CEO/business owner on 2026-08-28
 
 **Rollout fact confirmed by CEO/business owner:** expanded meals launch planned for **September 13, 2026**, beginning with Spaghetti, Palabok, Baked Macaroni, and Fried Chicken in different flavors.
+
+This rollout fact is not WooCommerce catalog authority. Product records, prices, SKUs, categories, inventory, media, ingredients and availability require separately verified catalog data.
 
 ### A3. Address — VERIFIED
 
@@ -56,7 +58,7 @@ Proposed English description:
 
 - [x] No special location-specific pickup instructions at present
 
-The general Pickup & Order Policy is now approved separately.
+The general Pickup & Order Policy is approved separately.
 
 ---
 
@@ -140,16 +142,15 @@ Production products, categories, prices, inventory and media require separately 
 ## E. Current Verification Progress
 
 Required profile fields: **15**  
-Verified: **10**  
+Verified: **11**  
 Explicitly not applicable: **2**  
-Resolved: **12 / 15**  
-Unresolved/pending approval: **3 / 15**
+Resolved: **13 / 15**  
+Unresolved/pending approval: **2 / 15**
 
 Remaining unresolved fields:
 
-1. Business description — revised draft pending approval
-2. Privacy policy — not yet drafted/approved
-3. Terms & conditions — not yet drafted/approved
+1. Privacy policy — not yet drafted/approved
+2. Terms & conditions — not yet drafted/approved
 
 ### Time-sensitive recheck
 
@@ -163,4 +164,4 @@ The machine-readable profile may be set to `profile_complete: true` only when ev
 
 `production_publish_authorized` remains **false** even after profile completion until the separate staging/cutover gate is approved.
 
-`PHIL_AI_OS_RUBY_BUSINESS_PROFILE_12_OF_15_RESOLVED_DESCRIPTION_PRIVACY_TERMS_PENDING`
+`PHIL_AI_OS_RUBY_BUSINESS_PROFILE_13_OF_15_RESOLVED_PRIVACY_TERMS_PENDING`
