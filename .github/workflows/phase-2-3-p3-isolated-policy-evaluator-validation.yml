@@ -1,0 +1,33 @@
+name: Phase 2.3 P3 Isolated Policy Evaluator Validation
+
+on:
+  push:
+    paths:
+      - 'scripts/phase2_3_p3_isolated_policy_evaluator.py'
+      - 'scripts/phase2_3_p3_isolated_policy_evaluator_validator.py'
+      - '.github/workflows/phase-2-3-p3-isolated-policy-evaluator-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile evaluator
+        run: python3 -m py_compile scripts/phase2_3_p3_isolated_policy_evaluator.py scripts/phase2_3_p3_isolated_policy_evaluator_validator.py
+      - name: Run isolated evaluator validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/phase2_3_p3_isolated_policy_evaluator_validator.py | tee phase-2-3-p3-validation.txt
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-3-p3-isolated-policy-evaluator-validation-evidence
+          path: phase-2-3-p3-validation.txt
+          if-no-files-found: warn
+          retention-days: 30
