@@ -1,0 +1,219 @@
+name: Phase 2.2 A7.3 Production Preflight
+
+on:
+  push:
+    paths:
+      - '.github/workflows/phase-2-2-a7-3-production-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Static candidate validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/phase2_2_a7_4_multi_agent_read_model.py
+          grep -Fq "schema_version'] = '2.2-a7.v1'" scripts/phase2_2_a7_4_multi_agent_read_model.py
+          grep -Fq "mission_control_authority':'read_only_observer'" scripts/phase2_2_a7_4_multi_agent_read_model.py
+          ! grep -Eiq '/v1/execute|Authorization:|Bearer |api[_-]?key|provider[_-]?key' scripts/phase2_2_a7_4_multi_agent_read_model.py
+
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3 4 5 6; do
+            if ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=12 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+
+      - name: Stage candidate temporarily
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -4 -P "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes scripts/phase2_2_a7_4_multi_agent_read_model.py "$VPS_USER@$VPS_HOST:/tmp/phase2_2_a7_4_multi_agent_read_model.py"
+
+      - name: Run read-only production preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE' | tee phase-2-2-a7-3-preflight.txt
+          set -euo pipefail
+          MC=/opt/phil-ai-os/mission-control
+          CAND=/tmp/phase2_2_a7_4_multi_agent_read_model.py
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test -n "$CONTROL"
+          test -f "$CAND"
+
+          echo '=== baseline ==='
+          echo control_api_image="$(docker inspect "$CONTROL" --format '{{.Config.Image}}')"
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          echo execution_allowlist=general
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null && echo control_health=ok
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null && echo control_ready=ok
+          for m in POST PUT PATCH DELETE; do
+            code="$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)"
+            test "$code" = 405
+            echo mission_control_${m}=405
+          done
+
+          SERVER_PID="$(pgrep -f '^/usr/bin/python3 /opt/phil-ai-os/mission-control/server.py$' | head -n1)"
+          test -n "$SERVER_PID"
+          echo mission_control_server_pid="$SERVER_PID"
+          tr '\0' '\n' < "/proc/$SERVER_PID/environ" | grep '^PHIL_AI_OS_MC_READ_MODEL=' || true
+          ss -lntp | grep -F '127.0.0.1:4881' >/dev/null
+          echo mission_control_listener=127.0.0.1:4881
+
+          LIVE_STATUS="$(curl -sS -o /tmp/a7-live-before.json -w '%{http_code}' http://127.0.0.1:4881/api/read-model || true)"
+          echo current_read_model_http="$LIVE_STATUS"
+          if [ -s /tmp/a7-live-before.json ]; then python3 -m json.tool /tmp/a7-live-before.json >/dev/null || true; fi
+
+          echo '=== immutable-state baseline ==='
+          LIVE_RM_HASH="$(sha256sum "$MC/read-model.py" | awk '{print $1}')"
+          SERVER_HASH="$(sha256sum "$MC/server.py" | awk '{print $1}')"
+          CONTROL_APP_HASH="$(docker exec "$CONTROL" sha256sum /app/app.py | awk '{print $1}')"
+          echo live_read_model_sha256="$LIVE_RM_HASH"
+          echo server_sha256="$SERVER_HASH"
+          echo control_app_sha256="$CONTROL_APP_HASH"
+          BEFORE="$(docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          tables=['agent_registry','task_lifecycle_events','task_plans','approval_requests','execution_audit','usage_ledger','task_handoffs']
+          counts={t:c.execute(f'select count(*) from {t}').fetchone()[0] for t in tables}
+          reg=[dict(r) for r in c.execute('select agent_id,authority_ceiling,enabled,assignable from agent_registry order by agent_id')]
+          handoffs=[dict(r) for r in c.execute('select handoff_id,task_id,source_agent_id,target_agent_id,correlation_id,state,required_authority,lifecycle_event_id from task_handoffs order by requested_at,handoff_id')]
+          print(json.dumps({'counts':counts,'registry':reg,'handoffs':handoffs},sort_keys=True,separators=(',',':')))
+          PY
+          )"
+          printf '%s\n' "$BEFORE" > /tmp/a7-before-state.json
+
+          echo '=== execute candidate without installation ==='
+          python3 "$CAND" > /tmp/a7-candidate.json
+          python3 -m json.tool /tmp/a7-candidate.json >/dev/null
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/a7-candidate.json'))
+          assert d['schema_version']=='2.2-a7.v1'
+          ma=d['multi_agent']
+          assert ma['registered_agent_count']==2
+          agents={a['agent_id']:a for a in ma['agents']}
+          assert set(agents)=={'hermes','specialist-worker-01'}
+          h=agents['hermes']; s=agents['specialist-worker-01']
+          assert h['authority_ceiling']=='L3'
+          assert h['registry']['enabled'] is True and h['registry']['assignable'] is True
+          assert h['readiness']['grants_authority'] is False
+          assert s['authority_ceiling']=='L1'
+          assert s['registry']['enabled'] is False and s['registry']['assignable'] is False
+          assert s['readiness']['state']=='unassignable'
+          assert s['readiness']['grants_authority'] is False
+          assert s['presence']['identity_verified'] is True
+          assert s['presence']['state']=='fresh'
+          assert s['workload']['active_task_count']==0
+          assert s['runtime']['type']=='presence_only' and s['runtime']['execution_runtime']=='none'
+          assert ma['handoff_count']==1
+          ho=ma['handoffs'][0]
+          assert ho['handoff_id']=='hof_ba25bd0fdfea401c9894d6520099b4cf'
+          assert ho['task_id']=='tsk_a68_082b86212fc944b0a45f6c43395cb6f1'
+          assert ho['source_agent_id']=='hermes' and ho['target_agent_id']=='specialist-worker-01'
+          assert ho['correlation_id']=='hofcorr_7dba30f92f2c46188c435aaea55bde67'
+          assert ho['required_authority']=='L1' and ho['state']=='accepted'
+          assert ho['task_latest_stage']=='COMPLETED'
+          assert ho['active_ownership'] is False
+          assert ho['execution_approval_consumed'] is False
+          assert ho['evidence_complete'] is True
+          g=d['governance']
+          assert g['mission_control_authority']=='read_only_observer'
+          for k in ('automatic_assignment','automatic_retry','automatic_reroute','automatic_delegation','automatic_execution'):
+              assert g[k] is False
+          assert d['worker_readiness']['agent_id']=='hermes'
+          assert len(d['worker_readiness_by_agent'])==2
+
+          forbidden={'token','secret','private_key','signature_base64','authorization','bearer','api_key','provider_key'}
+          def walk(x):
+              if isinstance(x,dict):
+                  for k,v in x.items():
+                      assert k.lower() not in forbidden, k
+                      walk(v)
+              elif isinstance(x,list):
+                  for v in x: walk(v)
+          walk(d)
+          print('candidate_schema=2.2-a7.v1')
+          print('registered_agents=2')
+          print('hermes=L3_enabled_assignable')
+          print('specialist=L1_disabled_nonassignable')
+          print('specialist_presence_signature_identity=verified')
+          print('specialist_readiness=unassignable')
+          print('specialist_active_workload=0')
+          print('a6_8_handoff=accepted_historical_inactive')
+          print('execution_approval_consumed=false')
+          print('secret_exclusion=verified')
+          print('mission_control_authority=read_only_observer')
+          PY
+
+          echo '=== no-mutation verification ==='
+          AFTER="$(docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          tables=['agent_registry','task_lifecycle_events','task_plans','approval_requests','execution_audit','usage_ledger','task_handoffs']
+          counts={t:c.execute(f'select count(*) from {t}').fetchone()[0] for t in tables}
+          reg=[dict(r) for r in c.execute('select agent_id,authority_ceiling,enabled,assignable from agent_registry order by agent_id')]
+          handoffs=[dict(r) for r in c.execute('select handoff_id,task_id,source_agent_id,target_agent_id,correlation_id,state,required_authority,lifecycle_event_id from task_handoffs order by requested_at,handoff_id')]
+          print(json.dumps({'counts':counts,'registry':reg,'handoffs':handoffs},sort_keys=True,separators=(',',':')))
+          PY
+          )"
+          printf '%s\n' "$AFTER" > /tmp/a7-after-state.json
+          cmp -s /tmp/a7-before-state.json /tmp/a7-after-state.json
+          test "$(sha256sum "$MC/read-model.py" | awk '{print $1}')" = "$LIVE_RM_HASH"
+          test "$(sha256sum "$MC/server.py" | awk '{print $1}')" = "$SERVER_HASH"
+          test "$(docker exec "$CONTROL" sha256sum /app/app.py | awk '{print $1}')" = "$CONTROL_APP_HASH"
+          echo durable_state_unchanged=true
+          echo mission_control_files_unchanged=true
+          echo control_api_app_unchanged=true
+
+          for unit in phil-ai-os-agent-heartbeat.timer phil-ai-os-specialist-worker-01-presence.timer phil-ai-os-monitor.service phil-ai-os-backup.timer phil-ai-os-backup-self-heal.timer; do
+            systemctl is-active --quiet "$unit"
+            echo "$unit=active"
+          done
+          echo server_restart_required=false
+          echo rollback_scope=read-model.py_only
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_2_A7_3_PREFLIGHT_OK
+          rm -f "$CAND" /tmp/a7-candidate.json /tmp/a7-before-state.json /tmp/a7-after-state.json /tmp/a7-live-before.json
+          REMOTE
+
+      - name: Cleanup staged candidate on failure
+        if: always()
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'rm -f /tmp/phase2_2_a7_4_multi_agent_read_model.py /tmp/a7-candidate.json /tmp/a7-before-state.json /tmp/a7-after-state.json /tmp/a7-live-before.json' || true
+
+      - name: Upload preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a7-3-production-preflight-evidence
+          path: phase-2-2-a7-3-preflight.txt
+          if-no-files-found: warn
+          retention-days: 30
