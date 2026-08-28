@@ -39,6 +39,9 @@ jobs:
       - name: Validate automation contracts and authority boundary
         run: python apps/automation-hub/tools_validate_automation.py
 
+      - name: Validate lifecycle audit and recovery planning
+        run: python apps/automation-hub/tools_validate_lifecycle.py
+
       - name: Assert no automation execution authority
         run: |
           set -euo pipefail
@@ -46,4 +49,8 @@ jobs:
           ! grep -R -E 'execution_authorized["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
           ! grep -R -E 'channel_reply_authorized["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
           ! grep -R -E 'mutation_authorized["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
+          ! grep -R -E 'automatic_retry["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
+          ! grep -R -E 'retry_authorized["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
+          ! grep -R -E 'automatic_rollback["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
+          ! grep -R -E 'rollback_authorized["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
           echo PHIL_AI_OS_SPRINT_6_NO_EXECUTION_AUTHORITY_GREEN
