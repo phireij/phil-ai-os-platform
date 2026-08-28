@@ -37,6 +37,9 @@ jobs:
       - name: Validate JavaScript syntax
         run: |
           node --check apps/customer-experience/src/core.mjs
+          node --check apps/customer-experience/src/flow.mjs
+          node --check apps/customer-experience/src/pickup.mjs
+          node --check apps/customer-experience/src/seo.mjs
           node --check apps/customer-experience/src/app.mjs
           node --check apps/customer-experience/sw.js
 
@@ -59,13 +62,14 @@ jobs:
           cat /tmp/phil-cx-http.log
           exit 1
 
-      - name: HTTP smoke app shell and fixture
+      - name: HTTP smoke app shell and fixtures
         run: |
           set -euo pipefail
           curl --fail --silent http://127.0.0.1:8094/ | grep -F "Customer Experience"
           curl --fail --silent http://127.0.0.1:8094/manifest.webmanifest | grep -F '"display": "standalone"'
           curl --fail --silent http://127.0.0.1:8094/fixtures/catalog.json | grep -F '"fixture_only": true'
-          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v1'
+          curl --fail --silent http://127.0.0.1:8094/fixtures/pickup-policy.json | grep -F '"fixture_only": true'
+          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v2'
 
       - name: Stop isolated server
         if: always()
