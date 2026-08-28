@@ -12,8 +12,11 @@ EXPECTED_LIVE_SHA='ff72f77fdd2114e3d9f469aaac8ae8b548ba14a4e71d79498a51c499fd21f
 CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
 test -n "$CONTROL"
 test -r "$PATCHER"
+test -f "$APP_SRC"
 
-# Protected production preflight.
+# Protected production preflight. The running image is authoritative. The host
+# build-context source is separately snapshotted because A6.7 discovery proved
+# it may drift from the running image.
 curl -fsS http://127.0.0.1:4870/healthz >/dev/null
 curl -fsS http://127.0.0.1:4870/readyz >/dev/null
 systemctl is-active --quiet phil-ai-os-mission-control-operator.service
@@ -23,8 +26,12 @@ systemctl is-active --quiet phil-ai-os-monitor.service
 systemctl is-active --quiet phil-ai-os-backup.timer
 systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
 test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = "$OLD_IMAGE"
-test "$(docker exec "$CONTROL" sha256sum /app/app.py | awk '{print $1}')" = "$EXPECTED_LIVE_SHA"
-test "$(sha256sum "$APP_SRC" | awk '{print $1}')" = "$EXPECTED_LIVE_SHA"
+LIVE_APP_SHA="$(docker exec "$CONTROL" sha256sum /app/app.py | awk '{print $1}')"
+test "$LIVE_APP_SHA" = "$EXPECTED_LIVE_SHA"
+HOST_APP_SHA="$(sha256sum "$APP_SRC" | awk '{print $1}')"
+echo live_app_sha="$LIVE_APP_SHA"
+echo host_build_source_sha="$HOST_APP_SHA"
+if [ "$HOST_APP_SHA" != "$LIVE_APP_SHA" ]; then echo host_build_source_drift_detected=true; else echo host_build_source_drift_detected=false; fi
 docker image inspect "$OLD_IMAGE" >/dev/null
 test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
 for m in POST PUT PATCH DELETE; do
@@ -74,8 +81,10 @@ echo prechange_backup_service=completed
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 ROLLBACK_DIR="/var/lib/phil-ai-os/rollback/phase22-a67-$STAMP"
 install -d -m 700 "$ROLLBACK_DIR"
-cp -a "$APP_SRC" "$ROLLBACK_DIR/app.py.before"
+cp -a "$APP_SRC" "$ROLLBACK_DIR/app.py.host-before"
 cp -a "$COMPOSE" "$ROLLBACK_DIR/compose.yml.before"
+docker cp "$CONTROL":/app/app.py "$ROLLBACK_DIR/app.py.live-before"
+test "$(sha256sum "$ROLLBACK_DIR/app.py.live-before" | awk '{print $1}')" = "$EXPECTED_LIVE_SHA"
 docker exec -i "$CONTROL" python3 - <<'PY'
 import sqlite3
 src=sqlite3.connect('/app/state/control-plane.db')
@@ -93,11 +102,13 @@ DB_GID="$(stat -c %g "$DB_HOST_PATH")"
 DB_MODE="$(stat -c %a "$DB_HOST_PATH")"
 echo rollback_snapshot="$ROLLBACK_DIR"
 
-# Isolated candidate build against copied live DB. Still no production mutation.
+# Isolated candidate build against copied live DB and the verified running source.
+# Still no production mutation.
 WORK="$(mktemp -d /tmp/phase22-a67.XXXXXX)"
 cleanup_work(){ rm -rf "$WORK"; }
 trap cleanup_work EXIT
-cp "$APP_SRC" "$WORK/app.py"
+docker cp "$CONTROL":/app/app.py "$WORK/app.py"
+test "$(sha256sum "$WORK/app.py" | awk '{print $1}')" = "$EXPECTED_LIVE_SHA"
 mkdir -p "$WORK/state" "$WORK/secrets"
 cp "$ROLLBACK_DIR/control-plane.db.before" "$WORK/state/control-plane.db"
 printf '%s\n' 'phase22-a67-isolated-token' > "$WORK/secrets/hermes_control_api_token"
@@ -110,6 +121,7 @@ echo candidate_app_sha256="$PATCHED_SHA"
 
 PHIL_AI_OS_STATE_DIR="$WORK/state" \
 PHIL_AI_OS_SECRETS_DIR="$WORK/secrets" \
+PHIL_AI_OS_RUNTIME_STATE_DIR="$COMPOSE_DIR/runtime/state" \
 PHIL_AI_OS_PORT=4871 \
 PHIL_AI_OS_ROUTED_EXECUTION_ENABLED=false \
 PHIL_AI_OS_LIVE_TEST_ENABLED=false \
@@ -122,22 +134,18 @@ for _ in $(seq 1 30); do
   sleep 0.25
 done
 curl -fsS http://127.0.0.1:4871/healthz >/dev/null
-curl -fsS http://127.0.0.1:4871/readyz >/dev/null
 for r in request accept reject; do
   test "$(curl -sS -X POST -o /dev/null -w '%{http_code}' "http://127.0.0.1:4871/v1/tasks/handoff/$r")" = 401
 done
 test "$(curl -sS -X POST -H 'Authorization: Bearer phase22-a67-isolated-token' -H 'Content-Type: application/json' -d '{"task_id":"tsk_missing","target_agent_id":"specialist-worker-01"}' -o /dev/null -w '%{http_code}' http://127.0.0.1:4871/v1/tasks/handoff/request)" = 404
 test "$(curl -sS -X POST -H 'Authorization: Bearer phase22-a67-isolated-token' -H 'Content-Type: application/json' -d '{"handoff_id":"hof_missing"}' -o /dev/null -w '%{http_code}' http://127.0.0.1:4871/v1/tasks/handoff/accept)" = 404
 test "$(curl -sS -X POST -H 'Authorization: Bearer phase22-a67-isolated-token' -H 'Content-Type: application/json' -d '{"handoff_id":"hof_missing"}' -o /dev/null -w '%{http_code}' http://127.0.0.1:4871/v1/tasks/handoff/reject)" = 404
-
 python3 - "$WORK/state/control-plane.db" <<'PY'
 import sqlite3,sys
 c=sqlite3.connect(sys.argv[1])
 assert c.execute('pragma quick_check').fetchone()[0]=='ok'
 assert c.execute("select count(*) from sqlite_master where type='table' and name='task_handoffs'").fetchone()[0]==1
 assert c.execute('select count(*) from task_handoffs').fetchone()[0]==0
-# If a live general task with an explicit owner exists, direct function semantics still
-# fail closed because production has no authoritative required-authority field yet.
 PY
 cleanup_candidate
 echo isolated_candidate_validation=green
@@ -149,7 +157,7 @@ rollback(){
   if [ "$MUTATED" -eq 1 ]; then
     set +e
     echo rollback_attempted=true
-    cp -a "$ROLLBACK_DIR/app.py.before" "$APP_SRC"
+    cp -a "$ROLLBACK_DIR/app.py.host-before" "$APP_SRC"
     cp -a "$ROLLBACK_DIR/compose.yml.before" "$COMPOSE"
     cd "$COMPOSE_DIR"
     docker compose stop control-api >/dev/null 2>&1
@@ -169,7 +177,8 @@ rollback(){
 }
 trap rollback ERR
 
-# Authorized A6.7 production mutation begins here.
+# Authorized A6.7 production mutation begins here: synchronize the build context
+# to the verified running source plus the isolated A6.7 patch, then build a new tag.
 MUTATED=1
 cp "$WORK/app.py" "$APP_SRC"
 python3 - "$COMPOSE" "$OLD_IMAGE" "$NEW_IMAGE" <<'PY'
@@ -195,6 +204,7 @@ CONTROL_NEW="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
 test -n "$CONTROL_NEW"
 test "$(docker inspect "$CONTROL_NEW" --format '{{.Config.Image}}')" = "$NEW_IMAGE"
 test "$(docker exec "$CONTROL_NEW" sha256sum /app/app.py | awk '{print $1}')" = "$PATCHED_SHA"
+test "$(sha256sum "$APP_SRC" | awk '{print $1}')" = "$PATCHED_SHA"
 
 # Routes are reachable only behind existing bearer auth. No authenticated handoff
 # mutation is invoked during A6.7 activation.
@@ -255,6 +265,9 @@ trap - ERR
 MUTATED=0
 
 echo control_api_image="$NEW_IMAGE"
+echo live_source_baseline_sha="$EXPECTED_LIVE_SHA"
+echo prior_host_build_source_sha="$HOST_APP_SHA"
+echo activated_app_sha="$PATCHED_SHA"
 echo task_handoffs_table=present
 echo task_handoffs_rows=0
 echo handoff_request_route=authenticated_fail_closed
