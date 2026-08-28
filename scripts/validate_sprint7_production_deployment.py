@@ -55,7 +55,8 @@ def main() -> None:
         fail("canonical phone verification drift")
 
     required_true = (
-        "staging_first_required",
+        "parallel_preproduction_first_required",
+        "native_hostinger_staging_requires_existing_wordpress",
         "ssl_verification_required",
         "checkout_qa_required",
         "backup_restore_gate_required",
@@ -64,8 +65,10 @@ def main() -> None:
     for key in required_true:
         if woo.get(key) is not True:
             fail(f"WooCommerce readiness gate must remain required: {key}")
-    if woo.get("staging_environment_created") is not False:
-        fail("staging environment must not be assumed created")
+    if woo.get("native_staging_plan_eligibility_verified") is not False:
+        fail("Hostinger native staging plan eligibility must not be assumed")
+    if woo.get("preproduction_environment_created") is not False:
+        fail("parallel WordPress preproduction environment must not be assumed created")
 
     for key in (
         "production_credentials_authorized",
@@ -91,13 +94,22 @@ def main() -> None:
     for key in ("tokushoho_publication_approved", "production_shipping_rates_verified", "production_payment_methods_verified"):
         if legal.get(key) is not False:
             fail(f"production legal/fulfillment gate must remain open: {key}")
-    if legal.get("store_pickup_supported") is not True or legal.get("legacy_yamato_cool_shipping_preserved_for_staging_verification") is not True:
+    if legal.get("store_pickup_supported") is not True or legal.get("legacy_yamato_cool_shipping_preserved_for_preproduction_verification") is not True:
         fail("pickup/shipping reconciliation drift")
 
     if staging["business_profile"].get("verified_profile_complete") is not True:
-        fail("staging record profile state drift")
-    if staging["storefront"].get("staging_environment_created") is not False:
-        fail("staging record must not assume Hostinger staging exists")
+        fail("preproduction record profile state drift")
+    sfront = staging["storefront"]
+    if sfront.get("current_public_platform") != "hostinger-website-builder":
+        fail("preproduction record current platform drift")
+    if sfront.get("parallel_preproduction_first_required") is not True:
+        fail("parallel preproduction requirement drift")
+    if sfront.get("native_hostinger_wordpress_staging_requires_existing_wordpress") is not True:
+        fail("Hostinger native staging prerequisite drift")
+    if sfront.get("native_staging_plan_eligibility_verified") is not False:
+        fail("Hostinger native staging plan eligibility must remain unverified")
+    if sfront.get("parallel_preproduction_environment_created") is not False:
+        fail("parallel preproduction environment must not be assumed created")
     if staging["komoju"].get("manual_api_key_entry_expected") is not False:
         fail("current official WooCommerce flow must not assume manual API-key entry")
     if staging["komoju"].get("test_mode_connection_authorized") is not False:
@@ -105,7 +117,7 @@ def main() -> None:
     if staging["komoju"].get("live_mode_authorized") is not False or staging["komoju"].get("payment_execution_authorized") is not False:
         fail("KOMOJU Live/payment authority drift")
     if staging.get("production_publish_authorized") is not False:
-        fail("staging record gained publication authority")
+        fail("preproduction record gained publication authority")
 
     for rel in data.get("evidence", []):
         if not (ROOT / rel).is_file():
@@ -144,8 +156,8 @@ def main() -> None:
         if marker not in (ROOT / rel).read_text(encoding="utf-8"):
             fail(f"missing runbook marker in {rel}")
 
-    print("PHIL_AI_OS_SPRINT_7_DEPLOYMENT_READINESS_GREEN staging_first=true verified_profile=true phone_verified=true")
-    print("PHIL_AI_OS_SPRINT_7_STAGING_GATE_OPEN environment_created=false checkout_green=false")
+    print("PHIL_AI_OS_SPRINT_7_DEPLOYMENT_READINESS_GREEN preproduction_first=true verified_profile=true phone_verified=true")
+    print("PHIL_AI_OS_SPRINT_7_PREPRODUCTION_GATE_OPEN environment_created=false checkout_green=false")
     print("PHIL_AI_OS_SPRINT_7_PRODUCTION_ACTIVATION_BOUNDARY_GREEN woo=false komoju=false dns=false")
 
 
