@@ -1,0 +1,63 @@
+name: Phase 2.2 A6.8 Live Canary Anchor Extract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-2-a6-8-live-canary-anchor-extract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true
+      - name: Extract bounded live canary anchors
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          for t in ('approval_requests','task_lifecycle_events','agent_registry','task_handoffs'):
+              print('---SCHEMA '+t+'---')
+              print(json.dumps(c.execute('pragma table_info('+t+')').fetchall(),separators=(',',':')))
+          print('approval_rows='+str(c.execute('select count(*) from approval_requests').fetchone()[0]))
+          print('lifecycle_rows='+str(c.execute('select count(*) from task_lifecycle_events').fetchone()[0]))
+          print('handoff_rows='+str(c.execute('select count(*) from task_handoffs').fetchone()[0]))
+          PY
+          docker exec "$CONTROL" python3 - <<'PY'
+          from pathlib import Path
+          t=Path('/app/app.py').read_text()
+          for start,end in [
+              ('def coordinator_agent_readiness(', 'def coordinator_handoff_request('),
+              ('def coordinator_handoff_accept(', 'def coordinator_handoff_reject('),
+              ('def approval_create(', 'def approval_decide('),
+          ]:
+              a=t.index(start); b=t.index(end,a)
+              print('---SOURCE '+start+'---')
+              print(t[a:b])
+          PY
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_2_A6_8_LIVE_CANARY_ANCHORS_OK
+          REMOTE
