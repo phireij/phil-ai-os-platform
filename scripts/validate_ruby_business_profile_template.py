@@ -9,6 +9,7 @@ SCHEMA = ROOT / "contracts/commerce/verified-ruby-business-profile.schema.json"
 TEMPLATE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
 FORM = ROOT / "docs/RUBY_BUSINESS_PROFILE_VERIFICATION_FORM_2026-08-28.md"
 DRAFTS = ROOT / "docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md"
+POLICY_DRAFTS = ROOT / "docs/RUBY_PRIVACY_POLICY_TERMS_DRAFTS_2026-08-29.md"
 
 APPROVED_DESCRIPTION = (
     "Ruby's Cake Delights is a neighborhood food and dessert shop in Ichikawa, Chiba, offering "
@@ -138,7 +139,12 @@ def main() -> None:
     for field in ("privacy_policy", "terms_conditions"):
         record = template["policies"][field]
         if record.get("verification_status") != "unverified" or record.get("value") is not None:
-            fail(f"undrafted policy must remain unverified: policies.{field}")
+            fail(f"drafted policy must remain unverified until approval: policies.{field}")
+        if record.get("source") != "draft_prepared_pending_approval":
+            fail(f"drafted policy source drift: policies.{field}")
+        notes = record.get("notes", "")
+        if "RUBY_PRIVACY_POLICY_TERMS_DRAFTS_2026-08-29.md" not in notes or "approval" not in notes.lower():
+            fail(f"drafted policy approval boundary missing: policies.{field}")
 
     if (verified_count, not_applicable_count, resolved_count, field_count) != (11, 2, 13, 15):
         fail(f"verification progress drift verified={verified_count} n/a={not_applicable_count} resolved={resolved_count} fields={field_count}")
@@ -149,21 +155,17 @@ def main() -> None:
 
     form_text = FORM.read_text(encoding="utf-8")
     for phrase in (
-        "BUSINESS DESCRIPTION + CORE DETAILS + 3 POLICIES CONFIRMED",
+        "13/15 RESOLVED / PRIVACY + TERMS DRAFTED PENDING APPROVAL",
         "Business description — VERIFIED / APPROVED",
+        "Privacy policy — DRAFTED / PENDING APPROVAL",
+        "Terms & conditions — DRAFTED / PENDING APPROVAL",
         "Resolved: **13 / 15**",
         "Verified: **11**",
-        "September 13, 2026",
-        "Spaghetti",
-        "Palabok",
-        "Baked Macaroni",
-        "Fried Chicken",
-        "Privacy policy — not yet drafted/approved",
-        "Terms & conditions — not yet drafted/approved",
+        "特定商取引法に基づく表記",
         "Existing test products — **DO NOT MIGRATE**",
         "Existing test categories — **DO NOT MIGRATE**",
         "production_publish_authorized` remains **false**",
-        "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_13_OF_15_RESOLVED_PRIVACY_TERMS_PENDING",
+        "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_13_OF_15_RESOLVED_PRIVACY_TERMS_DRAFTED_PENDING_APPROVAL",
     ):
         if phrase not in form_text:
             fail(f"verification form missing detail/safeguard: {phrase}")
@@ -174,25 +176,40 @@ def main() -> None:
         "## 1. Business Description — APPROVED",
         APPROVED_DESCRIPTION,
         "September 13, 2026",
-        "This rollout note records the business direction and launch date only",
         "## 2. Cancellation & Refund Policy — APPROVED",
         "## 3. Pickup & Order Policy — APPROVED",
         "## 4. Allergen Information & Disclaimer — APPROVED WORDING",
-        "48 hours or more",
-        "50% of the order total",
-        "100% of the order total",
-        "cross-contact with allergens may occur",
         "PHIL_AI_OS_RUBY_CUSTOMER_CONTENT_DESCRIPTION_AND_3_POLICIES_APPROVED",
     ):
         if phrase not in draft_text:
             fail(f"customer-content record missing content/safeguard: {phrase}")
+
+    policy_text = POLICY_DRAFTS.read_text(encoding="utf-8")
+    for phrase in (
+        "DRAFT — CEO / BUSINESS-OWNER APPROVAL REQUIRED",
+        "# 1. Privacy Policy — Draft",
+        "Act on the Protection of Personal Information (APPI)",
+        "KOMOJU",
+        "does not intend to store complete payment-card numbers or card security codes",
+        "non-essential advertising, behavioral tracking or analytics",
+        "# 2. Terms & Conditions — Draft",
+        "Nothing in these Terms is intended to exclude or restrict customer rights",
+        "48 hours or more before scheduled pickup",
+        "cross-contact may occur",
+        "特定商取引法に基づく表記",
+        "production_publish_authorized` must remain false",
+        "PHIL_AI_OS_RUBY_PRIVACY_TERMS_DRAFTS_PENDING_APPROVAL",
+    ):
+        if phrase not in policy_text:
+            fail(f"privacy/terms draft missing content/safeguard: {phrase}")
 
     print(
         "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_TEMPLATE_GREEN "
         f"fields={field_count} verified={verified_count} not_applicable={not_applicable_count} "
         f"resolved={resolved_count} profile_complete={str(expected_complete).lower()} publish_authorized=false"
     )
-    print("PHIL_AI_OS_RUBY_BUSINESS_PROFILE_PROGRESS_GREEN resolved=13/15 pending=privacy_terms")
+    print("PHIL_AI_OS_RUBY_BUSINESS_PROFILE_PROGRESS_GREEN resolved=13/15 pending=privacy_terms_approval")
+    print("PHIL_AI_OS_RUBY_PRIVACY_TERMS_DRAFT_BOUNDARY_GREEN approved=false profile_complete=false publish_authorized=false")
     print("PHIL_AI_OS_RUBY_BUSINESS_DESCRIPTION_APPROVAL_GREEN bilingual=true")
     print("PHIL_AI_OS_RUBY_POLICY_APPROVAL_GREEN approved=cancellation_refund,pickup_order,allergen")
     print("PHIL_AI_OS_RUBY_MEAL_ROLLOUT_NOTE_GREEN launch_date=2026-09-13 catalog_authority=false")
