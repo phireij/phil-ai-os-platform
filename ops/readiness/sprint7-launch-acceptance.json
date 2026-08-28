@@ -1,6 +1,6 @@
 {
   "version": "sprint7-launch-acceptance-v1",
-  "date": "2026-08-28",
+  "date": "2026-08-29",
   "bounded_engineering_readiness": {
     "integrated_regression_baseline_tests": 165,
     "security_recovery_package_ready": true,
@@ -10,13 +10,18 @@
     "final_current_head_ci_required": true
   },
   "live_launch_gates": {
-    "verified_ruby_business_profile_complete": false,
+    "verified_ruby_business_profile_complete": true,
     "contact_phone_verified": true,
+    "tokushoho_source_reconciled": true,
+    "tokushoho_publication_approved": false,
     "fresh_launch_time_backup_restore_check_green": false,
+    "woocommerce_preproduction_qa_green": false,
     "woocommerce_production_activation_approved": false,
     "woocommerce_production_credentials_configured": false,
     "komoju_test_mode_validated": false,
     "komoju_live_mode_approved": false,
+    "production_shipping_configuration_verified": false,
+    "production_payment_methods_verified": false,
     "external_channel_live_activation_approved": false,
     "production_cutover_approved": false,
     "ceo_signoff_recorded": false,
@@ -38,6 +43,9 @@
     "docs/SPRINT_7_CHANNEL_ACTIVATION_RUNBOOKS_2026-08-28.md",
     "docs/SPRINT_7_OPERATOR_QUICK_START_2026-08-28.md",
     "docs/SPRINT_7_LAUNCH_ACCEPTANCE_MATRIX_2026-08-28.md",
-    "ops/readiness/verified-ruby-business-profile.template.json"
+    "ops/readiness/verified-ruby-business-profile.template.json",
+    "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json",
+    "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md",
+    "docs/RUBY_WOOCOMMERCE_KOMOJU_STAGING_CONFIGURATION_PLAN_2026-08-29.md"
   ]
 }

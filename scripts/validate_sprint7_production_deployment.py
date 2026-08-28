@@ -6,6 +6,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 READINESS = ROOT / "ops/readiness/sprint7-production-deployment-readiness.json"
+PROFILE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
+STAGING = ROOT / "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json"
 
 
 def fail(message: str) -> None:
@@ -14,10 +16,13 @@ def fail(message: str) -> None:
 
 def main() -> None:
     data = json.loads(READINESS.read_text(encoding="utf-8"))
+    profile = json.loads(PROFILE.read_text(encoding="utf-8"))
+    staging = json.loads(STAGING.read_text(encoding="utf-8"))
     storefront = data["storefront"]
     migration = data["migration"]
     woo = data["woocommerce"]
     komoju = data["komoju"]
+    legal = data["legal_and_fulfillment"]
 
     expected_storefront = {
         "public_domain": "https://www.rubyscakedelights.shop/",
@@ -36,15 +41,22 @@ def main() -> None:
         fail("migration exclusion scope drift")
     if migration.get("field_verification_required") is not True:
         fail("migration verification must remain required")
-    if migration.get("verified_business_profile_complete") is not False:
-        fail("verified business profile must not be assumed complete")
-    if migration.get("contact_phone_verified") is not False:
-        fail("contact phone must remain unverified until explicitly updated")
+    if migration.get("verified_business_profile_complete") is not True:
+        fail("verified business profile completion must match 15/15 canonical profile")
+    if migration.get("contact_phone_verified") is not True:
+        fail("contact phone verification must remain complete")
     if migration.get("old_test_catalog_authoritative") is not False:
         fail("old test catalog must never become authoritative")
 
+    if profile.get("profile_complete") is not True or profile.get("production_publish_authorized") is not False:
+        fail("canonical profile must be complete but publication-gated")
+    phone = profile["contact_information"]["phone"]
+    if phone.get("value") != "050-1785-0575" or phone.get("verification_status") != "verified":
+        fail("canonical phone verification drift")
+
     required_true = (
-        "staging_first_required",
+        "parallel_preproduction_first_required",
+        "native_hostinger_staging_requires_existing_wordpress",
         "ssl_verification_required",
         "checkout_qa_required",
         "backup_restore_gate_required",
@@ -53,24 +65,59 @@ def main() -> None:
     for key in required_true:
         if woo.get(key) is not True:
             fail(f"WooCommerce readiness gate must remain required: {key}")
+    if woo.get("native_staging_plan_eligibility_verified") is not False:
+        fail("Hostinger native staging plan eligibility must not be assumed")
+    if woo.get("preproduction_environment_created") is not False:
+        fail("parallel WordPress preproduction environment must not be assumed created")
 
-    required_false = (
+    for key in (
         "production_credentials_authorized",
         "live_api_connectivity_authorized",
         "live_mutation_authorized",
         "dns_or_site_cutover_authorized",
-    )
-    for key in required_false:
+    ):
         if woo.get(key) is not False:
             fail(f"WooCommerce production authority drift: {key}")
 
     if komoju.get("provider") != "komoju" or komoju.get("integration_mode") != "woocommerce_plugin":
         fail("KOMOJU integration contract drift")
+    if komoju.get("connection_method") != "komoju-sign-in-oauth-style":
+        fail("KOMOJU WooCommerce connection method drift")
     if komoju.get("current_connection_state") != "not_configured":
         fail("KOMOJU connection state must remain not_configured")
-    for key in ("test_mode_activation_authorized", "live_mode_authorized", "payment_execution_authorized"):
+    for key in ("test_mode_activation_authorized", "test_mode_validated", "live_mode_authorized", "payment_execution_authorized"):
         if komoju.get(key) is not False:
-            fail(f"KOMOJU authority drift: {key}")
+            fail(f"KOMOJU authority/readiness drift: {key}")
+
+    if legal.get("tokushoho_source_reconciled") is not True:
+        fail("Tokushoho source reconciliation must remain recorded")
+    for key in ("tokushoho_publication_approved", "production_shipping_rates_verified", "production_payment_methods_verified"):
+        if legal.get(key) is not False:
+            fail(f"production legal/fulfillment gate must remain open: {key}")
+    if legal.get("store_pickup_supported") is not True or legal.get("legacy_yamato_cool_shipping_preserved_for_preproduction_verification") is not True:
+        fail("pickup/shipping reconciliation drift")
+
+    if staging["business_profile"].get("verified_profile_complete") is not True:
+        fail("preproduction record profile state drift")
+    sfront = staging["storefront"]
+    if sfront.get("current_public_platform") != "hostinger-website-builder":
+        fail("preproduction record current platform drift")
+    if sfront.get("parallel_preproduction_first_required") is not True:
+        fail("parallel preproduction requirement drift")
+    if sfront.get("native_hostinger_wordpress_staging_requires_existing_wordpress") is not True:
+        fail("Hostinger native staging prerequisite drift")
+    if sfront.get("native_staging_plan_eligibility_verified") is not False:
+        fail("Hostinger native staging plan eligibility must remain unverified")
+    if sfront.get("parallel_preproduction_environment_created") is not False:
+        fail("parallel preproduction environment must not be assumed created")
+    if staging["komoju"].get("manual_api_key_entry_expected") is not False:
+        fail("current official WooCommerce flow must not assume manual API-key entry")
+    if staging["komoju"].get("test_mode_connection_authorized") is not False:
+        fail("KOMOJU Test Mode remains a separate authorization gate")
+    if staging["komoju"].get("live_mode_authorized") is not False or staging["komoju"].get("payment_execution_authorized") is not False:
+        fail("KOMOJU Live/payment authority drift")
+    if staging.get("production_publish_authorized") is not False:
+        fail("preproduction record gained publication authority")
 
     for rel in data.get("evidence", []):
         if not (ROOT / rel).is_file():
@@ -106,11 +153,11 @@ def main() -> None:
         "docs/SPRINT_7_KOMOJU_ACTIVATION_RUNBOOK_2026-08-28.md": "PHIL_AI_OS_SPRINT_7_KOMOJU_RUNBOOK_READY_NOT_AUTHORIZED",
     }
     for rel, marker in marker_files.items():
-        text = (ROOT / rel).read_text(encoding="utf-8")
-        if marker not in text:
+        if marker not in (ROOT / rel).read_text(encoding="utf-8"):
             fail(f"missing runbook marker in {rel}")
 
-    print("PHIL_AI_OS_SPRINT_7_DEPLOYMENT_READINESS_GREEN staging_first=true verified_profile=false")
+    print("PHIL_AI_OS_SPRINT_7_DEPLOYMENT_READINESS_GREEN preproduction_first=true verified_profile=true phone_verified=true")
+    print("PHIL_AI_OS_SPRINT_7_PREPRODUCTION_GATE_OPEN environment_created=false checkout_green=false")
     print("PHIL_AI_OS_SPRINT_7_PRODUCTION_ACTIVATION_BOUNDARY_GREEN woo=false komoju=false dns=false")
 
 
