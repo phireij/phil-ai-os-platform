@@ -10,7 +10,7 @@
     "pickup_instructions": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Confirm the exact pickup instructions customers should see."}
   },
   "contact_information": {
-    "phone": {"value": null, "source": "existing_site_reference", "verification_status": "replace_required", "verified_at": null, "verified_by": null, "notes": "Known review flag: the existing website phone number requires verification/update before production publication."},
+    "phone": {"value": "050-1785-0575", "source": "user_confirmed", "verification_status": "verified", "verified_at": "2026-08-28T22:19:00+09:00", "verified_by": "CEO / business owner", "notes": "Confirmed directly by the business owner. Overall production publication remains separately gated."},
     "email": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Confirm the production customer-contact email."},
     "instagram": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Confirm the official customer-facing Instagram identity or mark not applicable."},
     "facebook": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Confirm the official customer-facing Facebook identity or mark not applicable."},
