@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from .models import CategoryRecord
 
@@ -68,3 +68,27 @@ def plan_category_hierarchy(categories: Iterable[CategoryRecord]) -> tuple[Categ
         visit(key)
 
     return tuple(ordered)
+
+
+def project_category_payload(
+    item: CategoryPlanItem,
+    *,
+    locale: str = "en",
+    remote_ids: Mapping[str, int] | None = None,
+) -> dict[str, object]:
+    """Project one planned category after any parent remote ID is known.
+
+    The function is pure and performs no transport call. Child categories fail
+    closed until a positive parent WooCommerce ID is explicitly supplied.
+    """
+    payload: dict[str, object] = item.category.to_wc_payload(locale)
+    if item.parent_key is None:
+        return payload
+
+    parent_id = (remote_ids or {}).get(item.parent_key)
+    if parent_id is None or int(parent_id) <= 0:
+        raise CategoryHierarchyError(
+            f"positive remote parent ID required for {item.key}: {item.parent_key}"
+        )
+    payload["parent"] = int(parent_id)
+    return payload
