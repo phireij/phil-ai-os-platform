@@ -29,8 +29,8 @@ def classify_intent(text: str, kind: str) -> tuple[str, float]:
     lowered = text.casefold()
     rules = (
         ("complaint", ("complaint", "wrong", "late", "problem", "issue", "問題", "遅", "間違"), 0.97),
+        ("order_inquiry", ("order", "reserve", "buy", "注文", "予約", "購入"), 0.96),
         ("pickup_inquiry", ("pickup", "pick up", "collect", "受取", "受け取"), 0.95),
-        ("order_inquiry", ("order", "reserve", "buy", "注文", "予約", "購入"), 0.94),
         ("product_inquiry", ("price", "menu", "product", "available", "価格", "メニュー", "商品", "ありますか"), 0.92),
     )
     for intent, tokens, confidence in rules:
