@@ -1,0 +1,30 @@
+name: Phase 2.2 A6.8 Isolated Canary Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-2-a6-8-isolated-canary-validation.yml'
+      - 'scripts/phase2_2_a6_8_controlled_handoff_canary_validator.py'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate isolated A6.8 controlled handoff canary contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/phase2_2_a6_8_controlled_handoff_canary_validator.py | tee phase22-a6-8-isolated.txt
+      - name: Upload A6.8 isolated evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a6-8-isolated-canary-evidence
+          path: phase22-a6-8-isolated.txt
+          if-no-files-found: error
+          retention-days: 14
