@@ -11,6 +11,12 @@ from .adapter import (
     WooCommerceAdapter,
 )
 from .audit import CommerceSyncAuditEvent
+from .inventory_guard import (
+    InventoryConflictError,
+    InventoryRevisionState,
+    MemoryInventoryRevisionStore,
+    StaleInventoryRevision,
+)
 from .models import CategoryRecord, InventoryRecord, LocalizedText, MediaRecord, ProductRecord
 from .retry import RetryDecision, retry_decision
 from .reconciliation import MemoryIdempotencyStore, ReconciliationResult
@@ -18,15 +24,19 @@ from .reconciliation import MemoryIdempotencyStore, ReconciliationResult
 __all__ = [
     "CategoryRecord",
     "CommerceSyncAuditEvent",
+    "InventoryConflictError",
     "InventoryRecord",
+    "InventoryRevisionState",
     "LocalizedText",
     "MediaRecord",
     "MemoryIdempotencyStore",
+    "MemoryInventoryRevisionStore",
     "MockWooCommerceTransport",
     "ProductRecord",
     "ProductionConnectivityBlocked",
     "ReconciliationResult",
     "RetryDecision",
+    "StaleInventoryRevision",
     "WooCommerceAdapter",
     "retry_decision",
 ]

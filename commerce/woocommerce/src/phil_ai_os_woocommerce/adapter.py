@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Mapping, Protocol
 
+from .inventory_guard import MemoryInventoryRevisionStore
 from .models import CategoryRecord, InventoryRecord, MediaRecord, ProductRecord
 from .reconciliation import (
     MemoryIdempotencyStore,
@@ -123,10 +124,12 @@ class WooCommerceAdapter:
         *,
         allow_mutations: bool = False,
         idempotency_store: MemoryIdempotencyStore | None = None,
+        inventory_revision_store: MemoryInventoryRevisionStore | None = None,
     ) -> None:
         self.transport = transport or BlockedNetworkTransport()
         self.allow_mutations = allow_mutations
         self.idempotency_store = idempotency_store or MemoryIdempotencyStore()
+        self.inventory_revision_store = inventory_revision_store or MemoryInventoryRevisionStore()
 
     def get_product_by_sku(self, sku: str) -> dict[str, Any] | None:
         result = self.transport.request("GET", "/products", params={"sku": sku})
@@ -236,20 +239,45 @@ class WooCommerceAdapter:
         key_material = dict(desired)
         key_material["source_of_truth"] = inventory.source_of_truth
         key_material["revision"] = inventory.revision
+        revision_payload_fingerprint = fingerprint(key_material)
+        self.inventory_revision_store.assert_accept(
+            sku=inventory.sku,
+            source_of_truth=inventory.source_of_truth,
+            revision=inventory.revision,
+            payload_fingerprint=revision_payload_fingerprint,
+        )
         key = idempotency_key("sync", "inventory", inventory.sku, key_material)
         replay = self.idempotency_store.get(key)
         if replay is not None:
+            self.inventory_revision_store.record(
+                sku=inventory.sku,
+                source_of_truth=inventory.source_of_truth,
+                revision=inventory.revision,
+                payload_fingerprint=revision_payload_fingerprint,
+            )
             return ReconciliationResult("replay", replay.entity_key, replay.idempotency_key, replay.remote_id, replay.before_fingerprint, replay.after_fingerprint)
         before = {field: current.get(field) for field in ("manage_stock", "stock_quantity", "stock_status")}
         if before == desired:
             result = ReconciliationResult("noop", inventory.sku, key, int(current["id"]), fingerprint(before), fingerprint(desired))
             self.idempotency_store.put(result)
+            self.inventory_revision_store.record(
+                sku=inventory.sku,
+                source_of_truth=inventory.source_of_truth,
+                revision=inventory.revision,
+                payload_fingerprint=revision_payload_fingerprint,
+            )
             return result
         if not self.allow_mutations:
             raise ProductionConnectivityBlocked("WooCommerce inventory mutation is disabled")
         response = self.transport.request("PUT", f"/products/{int(current['id'])}", json_body=desired)
         result = ReconciliationResult("update", inventory.sku, key, int(response["id"]), fingerprint(before), fingerprint(desired))
         self.idempotency_store.put(result)
+        self.inventory_revision_store.record(
+            sku=inventory.sku,
+            source_of_truth=inventory.source_of_truth,
+            revision=inventory.revision,
+            payload_fingerprint=revision_payload_fingerprint,
+        )
         return result
 
     def plan_media(self, media: MediaRecord, *, locale: str = "en") -> dict[str, Any]:
