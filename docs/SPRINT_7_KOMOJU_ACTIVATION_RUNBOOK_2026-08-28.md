@@ -29,7 +29,7 @@ Current KOMOJU WooCommerce documentation describes the supported setup as:
 5. use **Test Mode** for test payments or **Live Mode** only when the merchant account has been approved;
 6. enable each approved payment method individually in WooCommerce.
 
-The documented sign-in flow automatically configures the KOMOJU secret key and webhooks. Therefore the normal WooCommerce staging plan should **not request or paste manual API keys** unless a later verified integration requirement specifically requires them.
+The documented sign-in flow automatically configures the KOMOJU secret key and webhooks. Therefore the normal WooCommerce pre-production plan should **not request or paste manual API keys** unless a later verified integration requirement specifically requires them.
 
 KOMOJU also warns not to use the deprecated legacy `Komoju` payment method. The supported plugin/payment-method configuration should be used instead.
 
@@ -56,7 +56,7 @@ Official references checked 2026-08-29:
 
 ## Preconditions before any KOMOJU configuration
 
-- [ ] WooCommerce staging environment is ready;
+- [ ] parallel non-public WooCommerce pre-production environment is ready;
 - [ ] checkout, pickup and shipping flow are GREEN without live payment execution;
 - [ ] rollback/disable procedure exists;
 - [ ] merchant/account access is available to the authorized operator;
@@ -69,11 +69,11 @@ Official references checked 2026-08-29:
 
 Only after a separate approval to configure Test Mode:
 
-1. install/enable the supported **KOMOJU Payments** WooCommerce plugin in staging;
+1. install/enable the supported **KOMOJU Payments** WooCommerce plugin in the parallel non-public WordPress/WooCommerce environment;
 2. open `WooCommerce → Settings → KOMOJU` and use **Sign into KOMOJU**;
 3. select Ruby's authorized KOMOJU merchant account and choose **Test Mode**;
 4. confirm the plugin connection is Test Mode and not Live Mode;
-5. verify the payment methods available to the merchant account and record the intended staging subset;
+5. verify the payment methods available to the merchant account and record the intended pre-production subset;
 6. enable each intended payment method individually; do not enable the deprecated legacy `Komoju` method;
 7. verify checkout renders only the intended payment options without real-charge authority;
 8. run controlled test transactions using KOMOJU test facilities;
@@ -97,7 +97,7 @@ Official reference checked 2026-08-29: `https://doc.komoju.com/page/supported-pa
 KOMOJU Live Mode is a separate production authorization boundary. Do not enable it unless all of the following are complete:
 
 - Test Mode evidence GREEN;
-- production WooCommerce storefront/cutover readiness GREEN;
+- WooCommerce pre-production/cutover readiness GREEN;
 - merchant Live Mode approval verified in KOMOJU;
 - intended production payment-method subset verified;
 - charge/refund/reconciliation ownership defined;
