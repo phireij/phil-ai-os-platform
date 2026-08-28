@@ -10,9 +10,12 @@
   },
   "storefront": {
     "target": "hostinger-managed-wordpress-woocommerce",
+    "current_public_platform": "hostinger-website-builder",
     "public_domain": "https://www.rubyscakedelights.shop/",
-    "staging_first_required": true,
-    "staging_environment_created": false,
+    "parallel_preproduction_first_required": true,
+    "parallel_preproduction_environment_created": false,
+    "native_hostinger_wordpress_staging_requires_existing_wordpress": true,
+    "native_staging_plan_eligibility_verified": false,
     "wordpress_ready": false,
     "woocommerce_ready": false,
     "ssl_verified": false,
@@ -52,6 +55,6 @@
     "final_confirmation_screen_reviewed": false,
     "privacy_terms_implementation_reviewed": false
   },
-  "next_gate": "create_hostinger_wordpress_woocommerce_staging_without_public_cutover_or_live_payments",
+  "next_gate": "create_parallel_hostinger_wordpress_woocommerce_preproduction_site_without_public_domain_cutover",
   "production_publish_authorized": false
 }
