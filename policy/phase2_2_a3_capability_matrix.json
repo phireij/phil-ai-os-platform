@@ -1,0 +1,77 @@
+{
+  "schema_version": "2.2-a3.v1",
+  "production_execution_allowlist": ["general"],
+  "initial_cross_agent_handoff_requires_human_authorization": true,
+  "automatic_assignment": false,
+  "automatic_retry": false,
+  "automatic_reroute": false,
+  "automatic_execution": false,
+  "roles": {
+    "human_operator_ceo": {
+      "observe": true,
+      "plan": true,
+      "request_handoff": true,
+      "authorize_handoff": true,
+      "accept_work": false,
+      "provider_execute": false,
+      "request_escalation": true,
+      "close_when_policy_permits": true
+    },
+    "cto_office_advisory": {
+      "observe": true,
+      "plan_proposal": true,
+      "request_handoff_proposal": true,
+      "authorize_handoff": false,
+      "accept_work": false,
+      "provider_execute": false,
+      "request_escalation": true,
+      "close": false
+    },
+    "control_api_coordinator": {
+      "observe": true,
+      "persist_authorized_coordination": true,
+      "self_authorize_handoff": false,
+      "provider_execute_via_coordination_route": false,
+      "auto_close": false
+    },
+    "hermes_operational_worker": {
+      "authority_ceiling": "L3",
+      "observe_assigned_scope": true,
+      "bounded_plan": true,
+      "request_handoff": true,
+      "authorize_handoff": false,
+      "accept_explicit_validated_handoff": true,
+      "execute_only_via_governed_general_boundary": true,
+      "direct_provider_bypass": false,
+      "request_escalation": true,
+      "auto_close": false
+    },
+    "future_specialist_initial": {
+      "authority_ceiling_max": "L1",
+      "registered_in_production": false,
+      "assignable_at_registration_preference": false,
+      "accept_explicit_validated_handoff": true,
+      "provider_execution_capability": false,
+      "direct_provider_credentials": false,
+      "automatic_assignment": false,
+      "automatic_retry": false,
+      "automatic_reroute": false,
+      "automatic_execution": false,
+      "close": false
+    },
+    "mission_control": {
+      "observe": true,
+      "read_only": true,
+      "plan": false,
+      "request_handoff": false,
+      "authorize_handoff": false,
+      "accept_work": false,
+      "execute": false,
+      "mutate": false,
+      "close": false
+    }
+  },
+  "normal_handoff_authority_rule": "required_authority<=source_ceiling AND required_authority<=target_ceiling",
+  "execution_approval_separate_from_handoff_authorization": true,
+  "readiness_has_authority_effect": false
+}
