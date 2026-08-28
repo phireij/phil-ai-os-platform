@@ -10,6 +10,14 @@ TEMPLATE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
 FORM = ROOT / "docs/RUBY_BUSINESS_PROFILE_VERIFICATION_FORM_2026-08-28.md"
 DRAFTS = ROOT / "docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md"
 
+APPROVED_DESCRIPTION = (
+    "Ruby's Cake Delights is a neighborhood food and dessert shop in Ichikawa, Chiba, offering "
+    "handcrafted cakes, pastries, desserts, and satisfying savory meals for everyday enjoyment and "
+    "special occasions. Alongside our sweets, our growing food menu includes favorites such as "
+    "Spaghetti, Palabok, Baked Macaroni, and Fried Chicken in a variety of flavors. We prepare our "
+    "products with care and welcome customers for convenient pickup at our Ichikawa shop."
+)
+
 
 def fail(message: str) -> None:
     raise SystemExit(f"PHIL_AI_OS_RUBY_BUSINESS_PROFILE_VALIDATION_FAILED: {message}")
@@ -84,6 +92,7 @@ def main() -> None:
 
     expected_verified_values = {
         ("store_information", "business_name"): "Ruby's Cake Delights",
+        ("store_information", "business_description"): APPROVED_DESCRIPTION,
         ("store_information", "address"): "〒272-0034 千葉県市川市市川1-26-15花亀ビル1F-B (Chiba-ken, Ichikawa-shi, Ichikawa 1-26-15 Hanakame Bldg. 1F-B)",
         ("store_information", "operating_hours"): "Wednesday to Saturday: 14:00-20:00. Pickup hours are the same as operating hours.",
         ("contact_information", "phone"): "050-1785-0575",
@@ -95,6 +104,8 @@ def main() -> None:
         record = template[section][field]
         if record.get("value") != expected or record.get("source") != "user_confirmed" or record.get("verification_status") != "verified":
             fail(f"verified value/source/status drift: {section}.{field}")
+        if not record.get("verified_at") or not record.get("verified_by"):
+            fail(f"verified metadata missing: {section}.{field}")
 
     for section, field in (("store_information", "pickup_instructions"), ("contact_information", "other_contact")):
         record = template[section][field]
@@ -105,12 +116,10 @@ def main() -> None:
         fail("hours re-verification note missing")
 
     description = template["store_information"]["business_description"]
-    if description.get("verification_status") != "unverified" or description.get("value") is not None:
-        fail("revised business description must remain unverified until explicit approval")
     desc_notes = description.get("notes", "")
-    for phrase in ("September 13, 2026", "Spaghetti", "Palabok", "Baked Macaroni", "Fried Chicken", "not WooCommerce catalog authority"):
-        if phrase not in desc_notes:
-            fail(f"business expansion rollout note missing: {phrase}")
+    for phrase in ("approved", "September 13, 2026", "not WooCommerce catalog authority"):
+        if phrase.lower() not in desc_notes.lower():
+            fail(f"approved business description note missing: {phrase}")
 
     approved_policies = {
         "cancellation_refund_policy": "section 2",
@@ -131,7 +140,7 @@ def main() -> None:
         if record.get("verification_status") != "unverified" or record.get("value") is not None:
             fail(f"undrafted policy must remain unverified: policies.{field}")
 
-    if (verified_count, not_applicable_count, resolved_count, field_count) != (10, 2, 12, 15):
+    if (verified_count, not_applicable_count, resolved_count, field_count) != (11, 2, 13, 15):
         fail(f"verification progress drift verified={verified_count} n/a={not_applicable_count} resolved={resolved_count} fields={field_count}")
 
     expected_complete = resolved_count == field_count
@@ -140,30 +149,30 @@ def main() -> None:
 
     form_text = FORM.read_text(encoding="utf-8")
     for phrase in (
-        "CORE DETAILS + 3 POLICIES CONFIRMED",
-        "Resolved: **12 / 15**",
-        "Verified: **10**",
+        "BUSINESS DESCRIPTION + CORE DETAILS + 3 POLICIES CONFIRMED",
+        "Business description — VERIFIED / APPROVED",
+        "Resolved: **13 / 15**",
+        "Verified: **11**",
         "September 13, 2026",
         "Spaghetti",
         "Palabok",
         "Baked Macaroni",
         "Fried Chicken",
-        "Business description — revised draft pending approval",
         "Privacy policy — not yet drafted/approved",
         "Terms & conditions — not yet drafted/approved",
         "Existing test products — **DO NOT MIGRATE**",
         "Existing test categories — **DO NOT MIGRATE**",
         "production_publish_authorized` remains **false**",
-        "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_12_OF_15_RESOLVED_DESCRIPTION_PRIVACY_TERMS_PENDING",
+        "PHIL_AI_OS_RUBY_BUSINESS_PROFILE_13_OF_15_RESOLVED_PRIVACY_TERMS_PENDING",
     ):
         if phrase not in form_text:
             fail(f"verification form missing detail/safeguard: {phrase}")
 
     draft_text = DRAFTS.read_text(encoding="utf-8")
     for phrase in (
-        "PARTIALLY APPROVED",
-        "## 1. Business Description — Revised Draft",
-        "savory meals",
+        "BUSINESS DESCRIPTION + 3 POLICIES APPROVED",
+        "## 1. Business Description — APPROVED",
+        APPROVED_DESCRIPTION,
         "September 13, 2026",
         "This rollout note records the business direction and launch date only",
         "## 2. Cancellation & Refund Policy — APPROVED",
@@ -173,7 +182,7 @@ def main() -> None:
         "50% of the order total",
         "100% of the order total",
         "cross-contact with allergens may occur",
-        "PHIL_AI_OS_RUBY_CUSTOMER_CONTENT_PARTIAL_APPROVAL",
+        "PHIL_AI_OS_RUBY_CUSTOMER_CONTENT_DESCRIPTION_AND_3_POLICIES_APPROVED",
     ):
         if phrase not in draft_text:
             fail(f"customer-content record missing content/safeguard: {phrase}")
@@ -183,7 +192,8 @@ def main() -> None:
         f"fields={field_count} verified={verified_count} not_applicable={not_applicable_count} "
         f"resolved={resolved_count} profile_complete={str(expected_complete).lower()} publish_authorized=false"
     )
-    print("PHIL_AI_OS_RUBY_BUSINESS_PROFILE_PROGRESS_GREEN resolved=12/15 pending=description_privacy_terms")
+    print("PHIL_AI_OS_RUBY_BUSINESS_PROFILE_PROGRESS_GREEN resolved=13/15 pending=privacy_terms")
+    print("PHIL_AI_OS_RUBY_BUSINESS_DESCRIPTION_APPROVAL_GREEN bilingual=true")
     print("PHIL_AI_OS_RUBY_POLICY_APPROVAL_GREEN approved=cancellation_refund,pickup_order,allergen")
     print("PHIL_AI_OS_RUBY_MEAL_ROLLOUT_NOTE_GREEN launch_date=2026-09-13 catalog_authority=false")
     print("PHIL_AI_OS_RUBY_BUSINESS_PROFILE_MIGRATION_BOUNDARY_GREEN copy=store_contact_policies exclude=products_categories")
