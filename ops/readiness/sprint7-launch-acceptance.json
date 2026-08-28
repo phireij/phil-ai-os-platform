@@ -11,7 +11,7 @@
   },
   "live_launch_gates": {
     "verified_ruby_business_profile_complete": false,
-    "contact_phone_verified": false,
+    "contact_phone_verified": true,
     "fresh_launch_time_backup_restore_check_green": false,
     "woocommerce_production_activation_approved": false,
     "woocommerce_production_credentials_configured": false,
@@ -37,6 +37,7 @@
     "docs/SPRINT_7_KOMOJU_ACTIVATION_RUNBOOK_2026-08-28.md",
     "docs/SPRINT_7_CHANNEL_ACTIVATION_RUNBOOKS_2026-08-28.md",
     "docs/SPRINT_7_OPERATOR_QUICK_START_2026-08-28.md",
-    "docs/SPRINT_7_LAUNCH_ACCEPTANCE_MATRIX_2026-08-28.md"
+    "docs/SPRINT_7_LAUNCH_ACCEPTANCE_MATRIX_2026-08-28.md",
+    "ops/readiness/verified-ruby-business-profile.template.json"
   ]
 }
