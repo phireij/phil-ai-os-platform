@@ -1,15 +1,37 @@
-# Ruby's Cake Delights — WooCommerce + KOMOJU Staging Configuration Plan
+# Ruby's Cake Delights — WooCommerce + KOMOJU Pre-Production Configuration Plan
 
 Date: 2026-08-29  
-Status: **READY FOR STAGING PREPARATION / NO PUBLIC CUTOVER / NO PAYMENT ACTIVATION AUTHORIZED**
+Status: **READY FOR PARALLEL PRE-PRODUCTION / NO PUBLIC CUTOVER / NO PAYMENT ACTIVATION AUTHORIZED**
 
 ## 1. Objective
 
-Build and validate Ruby's replacement WordPress + WooCommerce storefront on Hostinger managed web hosting without changing the public Ruby domain and without enabling real payment authority.
+Build and validate Ruby's replacement WordPress + WooCommerce storefront on Hostinger managed web hosting **in parallel with the existing Hostinger Website Builder site**, without changing the public Ruby domain and without enabling real payment authority.
 
 The current public Hostinger Website Builder site remains the customer-facing production site until an explicit later cutover approval.
 
-## 2. Prerequisites already complete
+## 2. Hostinger environment model
+
+Ruby's current public storefront is **Hostinger Website Builder**, not WordPress.
+
+Current Hostinger guidance checked 2026-08-29 states that its native WordPress staging feature requires:
+
+- an existing WordPress installation detected in hPanel; and
+- a Business web-hosting plan or higher for the built-in staging feature.
+
+Therefore the existing Website Builder site cannot be directly cloned into Hostinger's native WordPress staging feature as the first migration step.
+
+### Correct first environment
+
+Create a **separate non-public WordPress + WooCommerce pre-production site** on Hostinger using a temporary domain/subdomain or another non-production address available in the hosting account. Do **not** point `rubyscakedelights.shop` to it yet.
+
+Once WordPress exists, verify the hosting plan's native staging eligibility. If available, Hostinger's WordPress staging feature can then be used for subsequent WordPress-to-WordPress testing/publish cycles.
+
+Hostinger references checked 2026-08-29:
+
+- `https://www.hostinger.com/support/2458059-how-to-create-a-website-in-hostinger/`
+- `https://www.hostinger.com/support/5720286-how-to-create-a-wordpress-staging-environment-in-hostinger/`
+
+## 3. Prerequisites already complete
 
 - Verified Ruby Business Profile: **15/15 resolved**.
 - Current business phone: **050-1785-0575**.
@@ -22,7 +44,7 @@ The current public Hostinger Website Builder site remains the customer-facing pr
 - Tokushoho publication candidate uses current email `info@rubyscakedelights.shop` and current phone.
 - Existing builder test products/categories remain excluded from production migration.
 
-## 3. Current fulfillment baseline
+## 4. Current fulfillment baseline
 
 ### Store pickup
 
@@ -42,25 +64,33 @@ The legacy legal disclosure confirms Yamato Transport Cool TA-Q-BIN delivery wit
 - other regions: ¥1,500–¥1,800;
 - actual charge may vary by order and destination and is shown at checkout.
 
-These values are **legacy disclosure evidence**, not automatically approved WooCommerce shipping-zone configuration. Staging must verify whether the rates/service remain current and whether WooCommerce can represent them accurately before publication.
+These values are **legacy disclosure evidence**, not automatically approved WooCommerce shipping-zone configuration. Pre-production must verify whether the rates/service remain current and whether WooCommerce can represent them accurately before publication.
 
-## 4. WooCommerce staging build sequence
+## 5. WooCommerce pre-production build sequence
 
-### Stage A — hosting and platform
+### Stage A — create the parallel Hostinger WordPress site
 
-1. Create a Hostinger managed WordPress staging/non-public site.
-2. Confirm it is not attached to the public Ruby production domain.
-3. Install/update WordPress and WooCommerce using supported Hostinger/WordPress mechanisms.
-4. Confirm HTTPS/SSL on staging.
-5. Confirm admin access and WooCommerce health.
-6. Record WordPress/WooCommerce versions and essential plugins.
+In hPanel, the authorized account owner should create a new website using WordPress/CMS installation while keeping the existing Ruby Website Builder site untouched.
+
+Target requirements:
+
+1. separate/non-public address for the WordPress build;
+2. no DNS/domain cutover for `rubyscakedelights.shop`;
+3. WordPress installed and detected in Hostinger;
+4. WooCommerce installed/activated;
+5. HTTPS/SSL available;
+6. WordPress admin access confirmed;
+7. WordPress/WooCommerce versions and essential plugins recorded;
+8. Hostinger plan/native-staging eligibility recorded after WordPress exists.
+
+Current Hostinger navigation reference for creating a CMS site: `Websites → Dashboard → Auto Installer` / WordPress, depending on the current hPanel flow.
 
 ### Stage B — controlled business content
 
 1. Load verified business name, description, address, phone, email and social links.
 2. Load approved Privacy Policy, Terms, Cancellation/Refund, Pickup/Order and Allergen content.
-3. Load the reconciled Tokushoho draft as staging-only content.
-4. Do not publish the Tokushoho page as final until payment/shipping/checkout values are synchronized and CEO approval is recorded.
+3. Load the reconciled Tokushoho draft as pre-production-only content.
+4. Do not treat the Tokushoho page as publication-approved until payment/shipping/checkout values are synchronized and CEO approval is recorded.
 5. Do not migrate the old builder test products/categories.
 
 ### Stage C — production catalog source
@@ -92,7 +122,7 @@ Configure and test:
 7. Order totals and customer-visible fee disclosure.
 8. Mid-September operating-hours update before launch if the schedule has changed.
 
-## 5. KOMOJU staging preparation
+## 6. KOMOJU pre-production preparation
 
 ### Official current integration model
 
@@ -105,7 +135,7 @@ Current KOMOJU documentation checked 2026-08-29 describes the WooCommerce flow a
 - enable payment methods individually;
 - the sign-in flow automatically configures the secret key and webhooks.
 
-Normal staging preparation therefore does not require manually collecting/pasting a KOMOJU API key.
+Normal WooCommerce preparation therefore does not require manually collecting/pasting a KOMOJU API key.
 
 Reference: `https://doc.komoju.com/docs/getting-started-with-woocommerce`
 
@@ -118,9 +148,9 @@ The following remain false:
 - KOMOJU Live Mode authorized: **false**;
 - payment execution authorized: **false**.
 
-Installing the plugin in staging may be prepared as part of the technical build, but signing into the merchant account / connecting Test Mode is a separate controlled gate.
+Installing the plugin can be prepared in the non-public WordPress environment, but signing into Ruby's merchant account / connecting Test Mode is a separate controlled gate.
 
-## 6. Payment-method reconciliation
+## 7. Payment-method reconciliation
 
 The legacy Ruby legal page disclosed:
 
@@ -132,7 +162,7 @@ The legacy Ruby legal page disclosed:
 
 KOMOJU currently supports many Japan payment types globally. **Do not infer that every globally supported method is approved for Ruby.** KOMOJU states that merchants may only use payment methods approved for their account.
 
-During the authorized Test Mode session:
+During the separately authorized Test Mode session:
 
 1. verify Ruby's merchant account;
 2. review merchant-available/approved payment methods;
@@ -147,7 +177,7 @@ References checked 2026-08-29:
 - `https://help.komoju.com/hc/en-us/articles/4747504478494-How-to-Check-the-Available-Payment-Methods-for-Your-Account`
 - `https://doc.komoju.com/page/supported-payment-methods`
 
-## 7. Test Mode evidence required
+## 8. Test Mode evidence required
 
 After separate Test Mode authorization:
 
@@ -165,9 +195,9 @@ After separate Test Mode authorization:
 - disable/disconnect path documented;
 - no real charge capability.
 
-## 8. Legal/checkout synchronization gate
+## 9. Legal/checkout synchronization gate
 
-Before Tokushoho publication approval, confirm the production candidate matches actual staging/approved launch configuration for:
+Before Tokushoho publication approval, confirm the production candidate matches actual pre-production/approved launch configuration for:
 
 - tax-inclusive prices;
 - additional customer charges;
@@ -180,10 +210,11 @@ Before Tokushoho publication approval, confirm the production candidate matches 
 - defect/damage reporting;
 - final order-confirmation screen disclosures.
 
-## 9. Staging acceptance checklist
+## 10. Pre-production acceptance checklist
 
-- [ ] Hostinger WordPress staging exists and is non-public.
+- [ ] Parallel Hostinger WordPress site exists and is not serving the Ruby public domain.
 - [ ] WordPress/WooCommerce healthy.
+- [ ] Hostinger native WordPress staging eligibility recorded after WordPress exists.
 - [ ] HTTPS/SSL GREEN.
 - [ ] Verified business/contact/policy content loaded.
 - [ ] Old test products/categories absent.
@@ -199,14 +230,14 @@ Before Tokushoho publication approval, confirm the production candidate matches 
 - [ ] Public domain/DNS unchanged.
 - [ ] KOMOJU Live Mode remains OFF.
 
-## 10. Next executable gate
+## 11. Next executable gate
 
-**Create the Hostinger WordPress/WooCommerce staging environment without public-domain cutover or live-payment activation.**
+**Create the parallel Hostinger WordPress + WooCommerce pre-production site while leaving `rubyscakedelights.shop` on the existing Website Builder site.**
 
-Once staging exists, populate verified business/legal content, configure/test pickup and shipping, then seek separate authorization to connect KOMOJU Test Mode.
+Once the WordPress environment exists, populate verified business/legal content, configure/test pickup and shipping, verify native staging eligibility, and then seek separate authorization to connect KOMOJU Test Mode.
 
-## 11. Explicit non-authorization
+## 12. Explicit non-authorization
 
 This plan does not authorize public site/DNS changes, production publication, KOMOJU Test Mode sign-in, KOMOJU Live Mode, real charges/refunds, production WooCommerce API mutation, or broader Phil AI OS authority.
 
-`PHIL_AI_OS_RUBY_WOOCOMMERCE_KOMOJU_STAGING_PLAN_READY_NEXT_GATE_CREATE_STAGING`
+`PHIL_AI_OS_RUBY_WOOCOMMERCE_KOMOJU_PREPRODUCTION_PLAN_READY_NEXT_GATE_CREATE_PARALLEL_WORDPRESS`
