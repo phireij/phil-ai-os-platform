@@ -4,18 +4,46 @@
   "title": "Phil AI OS Normalized Business Event",
   "type": "object",
   "additionalProperties": false,
-  "required": ["source", "external_event_id", "occurred_at", "normalized_intent", "confidence", "idempotency_key", "approval_state", "lifecycle_correlation_id"],
+  "required": [
+    "fixture_only",
+    "source",
+    "kind",
+    "external_event_id",
+    "occurred_at",
+    "normalized_intent",
+    "entities",
+    "confidence",
+    "idempotency_key",
+    "raw_event_fingerprint",
+    "review_required",
+    "approval_state",
+    "lifecycle_correlation_id",
+    "mutation_authorized"
+  ],
   "properties": {
-    "source": {"type": "string", "minLength": 1},
+    "fixture_only": {"const": true},
+    "source": {"enum": ["facebook", "instagram", "telegram", "whatsapp", "google_business"]},
+    "kind": {"enum": ["message", "comment", "review"]},
     "external_event_id": {"type": "string", "minLength": 1},
     "occurred_at": {"type": "string", "format": "date-time"},
     "sender_ref": {"type": ["string", "null"]},
-    "normalized_intent": {"type": "string", "minLength": 1},
-    "entities": {"type": "object"},
+    "normalized_intent": {"enum": ["order_inquiry", "product_inquiry", "pickup_inquiry", "complaint", "review_feedback", "general_inquiry"]},
+    "entities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locale", "text"],
+      "properties": {
+        "locale": {"enum": ["en", "ja", "unknown"]},
+        "text": {"type": "string", "minLength": 1}
+      }
+    },
     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-    "idempotency_key": {"type": "string", "minLength": 1},
-    "approval_state": {"enum": ["not_evaluated", "not_required", "required", "approved", "denied", "expired"]},
-    "lifecycle_correlation_id": {"type": "string", "minLength": 1},
+    "idempotency_key": {"type": "string", "pattern": "^channel:(facebook|instagram|telegram|whatsapp|google_business):.+$"},
+    "raw_event_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "review_required": {"type": "boolean"},
+    "review_reason": {"type": ["string", "null"]},
+    "approval_state": {"enum": ["not_evaluated", "required", "approved", "denied", "expired"]},
+    "lifecycle_correlation_id": {"type": "string", "pattern": "^ops:[a-f0-9]{24}$"},
     "mutation_authorized": {"const": false}
   }
 }
