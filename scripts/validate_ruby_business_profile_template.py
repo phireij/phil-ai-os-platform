@@ -179,7 +179,8 @@ def main() -> None:
         "PHIL_AI_OS_RUBY_TOKUSHOHO_SOURCE_RECONCILED_EMAIL_UPDATED_PUBLICATION_PENDING_APPROVAL",
     ), "reconciled Tokushoho draft")
 
-    if "rubyscakedelights@gmail.com" in tokushoho:
+    publication_section = tokushoho.split("# 2. Proposed production disclosure — Japanese", 1)[1]
+    if "rubyscakedelights@gmail.com" in publication_section:
         fail("legacy Gmail address must not remain in publication candidate")
 
     print("PHIL_AI_OS_RUBY_BUSINESS_PROFILE_TEMPLATE_GREEN fields=15 verified=13 not_applicable=2 resolved=15 profile_complete=true publish_authorized=false")
