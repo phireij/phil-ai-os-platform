@@ -1,7 +1,7 @@
 # Ruby’s Cake Delights — Verified Business Profile Form
 
 Date prepared: 2026-08-28  
-Status: **PARTIAL BUSINESS VERIFICATION — PHONE CONFIRMED**  
+Status: **PARTIAL BUSINESS VERIFICATION — CORE DETAILS CONFIRMED / DRAFT POLICIES PENDING**  
 Purpose: establish the verified production source for store information, contact information and policies before WordPress/WooCommerce staging and publication.
 
 ## Important rules
@@ -10,64 +10,64 @@ Purpose: establish the verified production source for store information, contact
 - Do not assume an existing value is correct merely because it appears on the current website.
 - Existing test **products and categories are excluded** from migration and are not part of this form.
 - Business values are added only when directly verified.
+- Draft customer-facing wording is not marked verified until approved by the business owner.
 - Completing this form verifies business information; it does **not** authorize production publication, DNS changes, WooCommerce activation or payment activation.
 
 ---
 
 ## A. Store Information
 
-### A1. Business name
+### A1. Business name — VERIFIED
 
 **Exact customer-facing business name:**  
-`____________________________________________`
+`Ruby's Cake Delights`
 
 Verification source:  
-- [ ] CEO confirmed
+- [x] CEO/business owner confirmed
 - [ ] Official record
 - [ ] Existing site reviewed and confirmed
 - [ ] New business decision
 
-Notes:  
-`____________________________________________`
+### A2. Business description — DRAFT PENDING APPROVAL
 
-### A2. Business description
+Draft prepared in:
+`docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md`
 
-**Approved short customer-facing description:**
+Proposed English short description:
 
-`__________________________________________________________________`
-
-`__________________________________________________________________`
+> Ruby's Cake Delights is a cake and sweets shop in Ichikawa, Chiba, creating handcrafted cakes, baked treats, and desserts for everyday enjoyment and special occasions. We prepare each order with care and welcome customers for pickup at our Ichikawa shop.
 
 - [ ] Verified / approved
 
-### A3. Address
+### A3. Address — VERIFIED
 
 **Approved customer-facing / pickup address:**
 
-`__________________________________________________________________`
+`〒272-0034 千葉県市川市市川1-26-15花亀ビル1F-B`
 
-- [ ] Verified
-- [ ] Not applicable for public display
+`Chiba-ken, Ichikawa-shi, Ichikawa 1-26-15 Hanakame Bldg. 1F-B`
 
-### A4. Operating hours
+- [x] Verified by CEO/business owner
+- [ ] Production publication/cutover authorized
 
-**Customer-facing operating/pickup hours:**
+### A4. Operating hours — VERIFIED CURRENT / RECHECK MID-SEPTEMBER
 
-`__________________________________________________________________`
+**Current customer-facing operating/pickup hours:**
 
-`__________________________________________________________________`
+`Wednesday to Saturday: 2:00 PM–8:00 PM`
 
-- [ ] Verified
+`Pickup hours: same as operating hours`
 
-### A5. Pickup instructions
+- [x] Verified current as of 2026-08-28
+- [x] Re-verification required around mid-September 2026 because the business owner expects an hours change
 
-**Instructions customers should receive for pickup:**
+### A5. Pickup instructions — CURRENTLY NOT APPLICABLE
 
-`__________________________________________________________________`
+**Special pickup instructions:** none at present.
 
-`__________________________________________________________________`
+- [x] Confirmed by CEO/business owner
 
-- [ ] Verified
+A general pickup/order policy draft has been prepared separately and is pending approval.
 
 ---
 
@@ -84,90 +84,85 @@ Notes:
 Verification recorded: 2026-08-28  
 Source: direct business-owner confirmation
 
-**The previous website phone value is superseded by this verified number for production preparation. Overall production publication remains separately gated.**
+### B2. Customer email — VERIFIED
 
-### B2. Customer email
+**Primary customer-contact email:**  
+`info@rubyscakedelights.shop`
 
-**Approved production customer-contact email:**  
-`____________________________________________`
+**Alias/order email:**  
+`order@rubyscakedelights.shop`
 
-- [ ] Verified
-- [ ] Not applicable
+- [x] Verified by CEO/business owner
 
-### B3. Instagram
+### B3. Instagram — VERIFIED
 
 **Official customer-facing Instagram account:**  
-`____________________________________________`
+`@rubyscakedelights`
 
-- [ ] Verified
-- [ ] Not applicable
+- [x] Verified by CEO/business owner
 
-### B4. Facebook
+### B4. Facebook — VERIFIED
 
 **Official customer-facing Facebook page/account:**  
-`____________________________________________`
+`https://www.facebook.com/RubysCakeDelights`
 
-- [ ] Verified
-- [ ] Not applicable
+- [x] Verified by CEO/business owner
 
-### B5. Other contact method
+### B5. Other contact method — NOT APPLICABLE
 
-Type/account:  
-`____________________________________________`
-
-- [ ] Verified
-- [ ] Not applicable
+- [x] No additional customer contact method required at present
 
 ---
 
 ## C. Customer Policies
 
-For each policy, either confirm existing text after review or supply revised production text. Do not silently copy the current Website Builder version.
+For each policy, either confirm existing text after review or approve revised production text. Do not silently copy the current Website Builder version.
 
-### C1. Privacy policy
-
-- [ ] Existing reference reviewed and approved as-is
-- [ ] Revised text required
-- [ ] New text supplied separately
-
-Notes / revision summary:  
-`__________________________________________________________________`
-
-### C2. Terms & conditions
+### C1. Privacy policy — NOT YET DRAFTED / VERIFIED
 
 - [ ] Existing reference reviewed and approved as-is
 - [ ] Revised text required
 - [ ] New text supplied separately
 
-Notes / revision summary:  
-`__________________________________________________________________`
-
-### C3. Cancellation / refund policy
+### C2. Terms & conditions — NOT YET DRAFTED / VERIFIED
 
 - [ ] Existing reference reviewed and approved as-is
 - [ ] Revised text required
 - [ ] New text supplied separately
 
-Approved business rule summary:  
-`__________________________________________________________________`
+### C3. Cancellation / refund policy — DRAFT PENDING APPROVAL
 
-### C4. Pickup / order policy
+Draft prepared in:
+`docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md`
 
-- [ ] Existing reference reviewed and approved as-is
-- [ ] Revised text required
-- [ ] New text supplied separately
+Proposed commercial structure:
 
-Approved rule summary:  
-`__________________________________________________________________`
+- 48+ hours before pickup: full refund
+- 24 to less than 48 hours: 50% cancellation fee
+- less than 24 hours / same-day cancellation / no-show: 100% cancellation fee
+- custom/special orders may specify an earlier deadline before confirmation
+- wrong/defective order or Ruby-initiated cancellation: replacement/refund path
 
-### C5. Allergen disclaimer
+- [ ] Approved by CEO/business owner
 
-- [ ] Existing reference reviewed and approved as-is
-- [ ] Revised text required
-- [ ] New text supplied separately
+### C4. Pickup / order policy — DRAFT PENDING APPROVAL
 
-Approved disclaimer / requirements:  
-`__________________________________________________________________`
+Draft prepared in:
+`docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md`
+
+Covers order confirmation, pickup window, short-notice availability, changes, late pickup/no-show, order identification, inspection, and post-pickup handling.
+
+- [ ] Approved by CEO/business owner
+
+### C5. Allergen disclaimer — DRAFT PENDING APPROVAL
+
+Draft prepared in:
+`docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md`
+
+Covers ingredient/allergen disclosure, shared-kitchen cross-contact risk, pre-order allergy contact, supplier/ingredient variability and severe-allergy caution.
+
+- [ ] Approved by CEO/business owner
+- [ ] Ingredient/process review completed before production publication
 
 ---
 
@@ -182,27 +177,40 @@ Production products, categories, prices, inventory and media will be created fro
 
 ---
 
-## E. Verification Sign-off
+## E. Current Verification Progress
 
-By completing this section, the information above is approved as the working verified business-information source for staging preparation. This does not authorize live publication or production cutover.
+Required profile fields: **15**  
+Verified: **7**  
+Explicitly not applicable: **2**  
+Resolved: **9 / 15**  
+Unresolved/pending approval: **6 / 15**
 
-**CEO / Business owner verification:**  
-Name: `____________________________`  
-Date: `____________________________`
+Remaining unresolved fields:
 
-**CTO data-control review:**  
-Name: `____________________________`  
-Date: `____________________________`
+1. Business description — draft pending approval
+2. Privacy policy — not yet drafted/approved
+3. Terms & conditions — not yet drafted/approved
+4. Cancellation/refund policy — draft pending approval
+5. Pickup/order policy — draft pending approval
+6. Allergen disclaimer — draft pending approval/process review
+
+### Time-sensitive recheck
+
+Operating/pickup hours are verified for the current business state but must be re-verified around **mid-September 2026** because a schedule change is expected.
+
+---
+
+## F. Verification Sign-off
+
+The information marked verified above is approved as working business-information source data for production preparation. This does not authorize live publication or production cutover.
 
 ### Completion rule
 
 The machine-readable profile may be set to `profile_complete: true` only when every required field is either:
 
 - `verified`; or
-- explicitly `not_applicable` with a reason;
-
-and the phone field remains verified or is replaced through a separately verified update.
+- explicitly `not_applicable` with a reason.
 
 `production_publish_authorized` remains **false** even after profile completion until the separate staging/cutover gate is approved.
 
-`PHIL_AI_OS_RUBY_BUSINESS_PROFILE_PARTIAL_VERIFICATION`
+`PHIL_AI_OS_RUBY_BUSINESS_PROFILE_CORE_DETAILS_VERIFIED_DRAFTS_PENDING`
