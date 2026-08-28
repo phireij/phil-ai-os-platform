@@ -16,6 +16,7 @@ class CXHTMLAudit(HTMLParser):
         self.has_viewport = False
         self.has_main = False
         self.has_skip_link = False
+        self.robots_content = None
         self.labels_for: set[str] = set()
         self.control_ids: set[str] = set()
         self.buttons_without_type = 0
@@ -26,6 +27,8 @@ class CXHTMLAudit(HTMLParser):
             self.html_lang = data.get("lang")
         if tag == "meta" and data.get("name") == "viewport":
             self.has_viewport = True
+        if tag == "meta" and data.get("name") == "robots":
+            self.robots_content = data.get("content")
         if tag == "main":
             self.has_main = True
         if tag == "a" and data.get("href") == "#main":
@@ -51,7 +54,11 @@ def main() -> None:
         "sw.js",
         "src/app.mjs",
         "src/core.mjs",
+        "src/flow.mjs",
+        "src/pickup.mjs",
+        "src/seo.mjs",
         "fixtures/catalog.json",
+        "fixtures/pickup-policy.json",
     ]
     for relative in required:
         if not (ROOT / relative).is_file():
@@ -76,12 +83,24 @@ def main() -> None:
             value = product.get(field, {})
             if not value.get("en") or not value.get("ja"):
                 fail(f"{sku}: {field} requires non-empty en and ja")
+        for seo_field in ("title", "description"):
+            value = product.get("seo", {}).get(seo_field, {})
+            if not value.get("en") or not value.get("ja"):
+                fail(f"{sku}: seo.{seo_field} requires non-empty en and ja")
         pickup = product.get("pickup", {})
         instructions = pickup.get("instructions", {})
         if pickup.get("supported") is not True or not instructions.get("en") or not instructions.get("ja"):
             fail(f"{sku}: bilingual pickup contract required")
         if not product.get("media") or product.get("primary_media_ref") != product["media"][0].get("ref"):
             fail(f"{sku}: deterministic primary media fixture required")
+
+    pickup_policy = json.loads((ROOT / "fixtures/pickup-policy.json").read_text(encoding="utf-8"))
+    if pickup_policy.get("fixture_only") is not True:
+        fail("pickup policy must be fixture_only")
+    if not isinstance(pickup_policy.get("min_lead_minutes"), int) or pickup_policy["min_lead_minutes"] < 0:
+        fail("pickup policy requires non-negative min_lead_minutes")
+    if not isinstance(pickup_policy.get("max_advance_days"), int) or pickup_policy["max_advance_days"] < 1:
+        fail("pickup policy requires positive max_advance_days")
 
     manifest = json.loads((ROOT / "manifest.webmanifest").read_text(encoding="utf-8"))
     if manifest.get("display") != "standalone" or manifest.get("scope") != "./":
@@ -96,6 +115,8 @@ def main() -> None:
         fail("html lang baseline is required")
     if not audit.has_viewport or not audit.has_main or not audit.has_skip_link:
         fail("mobile viewport, main landmark and skip link are required")
+    if audit.robots_content != "noindex,nofollow":
+        fail("isolated preview must default to noindex,nofollow")
     if audit.buttons_without_type:
         fail("all buttons require explicit type")
     if not audit.control_ids.issubset(audit.labels_for | {"locale-select"}):
@@ -107,17 +128,27 @@ def main() -> None:
         "WooCommerce consumer key": r"\bck_[A-Za-z0-9]{8,}",
         "WooCommerce consumer secret": r"\bcs_[A-Za-z0-9]{8,}",
         "authorizing mutation flag": r"mutation_authorized\s*[:=]\s*true",
-        "external API endpoint": r"https?://(?!schema\.org|example\.invalid)",
     }
     for label, pattern in forbidden.items():
         if re.search(pattern, combined, flags=re.IGNORECASE):
             fail(f"forbidden {label} found in runtime foundation")
 
+    allowed_url_prefixes = {"https://schema.org", "https://example.invalid"}
+    urls = set(re.findall(r"https?://[A-Za-z0-9.-]+", combined))
+    unexpected_urls = sorted(url for url in urls if url not in allowed_url_prefixes)
+    if unexpected_urls:
+        fail(f"unexpected external URL in runtime foundation: {unexpected_urls[0]}")
+
     app = (ROOT / "src/app.mjs").read_text(encoding="utf-8")
     if "fixture_only !== true" not in app:
-        fail("app must refuse non-fixture catalog data")
+        fail("app must refuse non-fixture data")
     if 'serviceWorker.register("./sw.js")' not in app:
         fail("PWA service worker registration missing")
+
+    service_worker = (ROOT / "sw.js").read_text(encoding="utf-8")
+    for cached_path in ("./src/flow.mjs", "./src/pickup.mjs", "./src/seo.mjs", "./fixtures/pickup-policy.json"):
+        if cached_path not in service_worker:
+            fail(f"offline app shell missing {cached_path}")
 
     print("PHIL_AI_OS_SPRINT_4_CX_VALIDATION_GREEN")
 
