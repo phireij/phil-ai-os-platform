@@ -1,0 +1,29 @@
+{
+  "profile_id": "ruby-business-profile-v1",
+  "public_domain": "https://www.rubyscakedelights.shop/",
+  "source_site_role": "reference-only",
+  "store_information": {
+    "business_name": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Confirm the exact customer-facing business name."},
+    "business_description": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Verify or replace the existing-site description before publication."},
+    "address": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Confirm the production storefront/pickup address as applicable."},
+    "operating_hours": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Confirm customer-facing hours and any pickup-specific schedule."},
+    "pickup_instructions": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Confirm the exact pickup instructions customers should see."}
+  },
+  "contact_information": {
+    "phone": {"value": null, "source": "existing_site_reference", "verification_status": "replace_required", "verified_at": null, "verified_by": null, "notes": "Known review flag: the existing website phone number requires verification/update before production publication."},
+    "email": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Confirm the production customer-contact email."},
+    "instagram": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Confirm the official customer-facing Instagram identity or mark not applicable."},
+    "facebook": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Confirm the official customer-facing Facebook identity or mark not applicable."},
+    "other_contact": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Add another approved contact method only if required."}
+  },
+  "policies": {
+    "privacy_policy": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Review the existing policy only as reference and approve the production text."},
+    "terms_conditions": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Approve customer-facing terms for the production WooCommerce storefront."},
+    "cancellation_refund_policy": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Confirm cancellation/refund rules appropriate to Ruby's actual operations."},
+    "pickup_order_policy": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Confirm pickup/order timing, changes, late pickup and related customer rules."},
+    "allergen_disclaimer": {"value": null, "source": "not_provided", "verification_status": "unverified", "verified_at": null, "verified_by": null, "notes": "Approve an allergen disclaimer appropriate to the actual products/processes."}
+  },
+  "excluded_migration_sections": ["products", "categories"],
+  "profile_complete": false,
+  "production_publish_authorized": false
+}
