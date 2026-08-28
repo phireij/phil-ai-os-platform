@@ -1,0 +1,21 @@
+{
+  "name": "Phil AI OS Customer Experience Foundation",
+  "short_name": "Phil CX",
+  "description": "Isolated Sprint 4 mobile-first bilingual customer experience foundation.",
+  "id": "./",
+  "start_url": "./?lang=en",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fff7f5",
+  "theme_color": "#fff7f5",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "./app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
