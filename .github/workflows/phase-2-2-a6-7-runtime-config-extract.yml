@@ -1,0 +1,48 @@
+name: Phase 2.2 A6.7 Runtime Config Extract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-2-a6-7-runtime-config-extract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true
+      - name: Read bounded runtime anchors
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE' | tee phase22-a6-7-runtime.txt
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          docker exec "$CONTROL" sh -lc 'sed -n "1,60p" /app/app.py'
+          echo '---INSPECT---'
+          docker inspect "$CONTROL" --format 'name={{.Name}} image={{.Config.Image}} cmd={{json .Config.Cmd}} entrypoint={{json .Config.Entrypoint}}'
+          docker inspect "$CONTROL" --format '{{range .Mounts}}mount type={{.Type}} source={{.Source}} dest={{.Destination}} rw={{.RW}}{{println}}{{end}}'
+          echo '---COMPOSE_CONTROL_API---'
+          cd /opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core
+          docker compose config | awk '/^  control-api:/{f=1} f{print} f&&/^  [A-Za-z0-9_.-]+:$/&&$1!="control-api:"{exit}' | head -120
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_2_A6_7_RUNTIME_CONFIG_EXTRACT_OK
+          REMOTE
