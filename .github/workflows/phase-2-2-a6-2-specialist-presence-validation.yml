@@ -1,0 +1,38 @@
+name: Phase 2.2 A6.2 Specialist Presence Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/PHASE_2_2_A6_2_SPECIALIST_PRESENCE_CONTRACT.md'
+      - 'scripts/phase2_2_a6_2_specialist_presence_validator.py'
+      - '.github/workflows/phase-2-2-a6-2-specialist-presence-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate specialist presence semantics in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/phase2_2_a6_2_specialist_presence_validator.py | tee phase22-a6-2-evidence.txt
+          grep -qx 'PHIL_AI_OS_PHASE_2_2_A6_2_SPECIALIST_PRESENCE_CONTRACT_OK' phase22-a6-2-evidence.txt
+          grep -qx 'authority_effect=none' phase22-a6-2-evidence.txt
+          grep -qx 'automatic_assignment=false' phase22-a6-2-evidence.txt
+          grep -qx 'automatic_execution=false' phase22-a6-2-evidence.txt
+          grep -qx 'production_change=none' phase22-a6-2-evidence.txt
+      - name: Upload A6.2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a6-2-specialist-presence-validation-evidence
+          path: phase22-a6-2-evidence.txt
+          if-no-files-found: error
+          retention-days: 14
