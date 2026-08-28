@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/commerce/verified-ruby-business-profile.schema.json",
+  "title": "Verified Ruby Business Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile_id",
+    "public_domain",
+    "source_site_role",
+    "store_information",
+    "contact_information",
+    "policies",
+    "excluded_migration_sections",
+    "profile_complete",
+    "production_publish_authorized"
+  ],
+  "$defs": {
+    "verifiedField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source", "verification_status", "verified_at", "verified_by", "notes"],
+      "properties": {
+        "value": {"type": ["string", "null"]},
+        "source": {
+          "enum": [
+            "existing_site_reference",
+            "user_confirmed",
+            "official_record",
+            "new_business_decision",
+            "not_provided"
+          ]
+        },
+        "verification_status": {
+          "enum": ["unverified", "verified", "replace_required", "not_applicable"]
+        },
+        "verified_at": {"type": ["string", "null"], "format": "date-time"},
+        "verified_by": {"type": ["string", "null"]},
+        "notes": {"type": ["string", "null"]}
+      }
+    }
+  },
+  "properties": {
+    "profile_id": {"const": "ruby-business-profile-v1"},
+    "public_domain": {"const": "https://www.rubyscakedelights.shop/"},
+    "source_site_role": {"const": "reference-only"},
+    "store_information": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["business_name", "business_description", "address", "operating_hours", "pickup_instructions"],
+      "properties": {
+        "business_name": {"$ref": "#/$defs/verifiedField"},
+        "business_description": {"$ref": "#/$defs/verifiedField"},
+        "address": {"$ref": "#/$defs/verifiedField"},
+        "operating_hours": {"$ref": "#/$defs/verifiedField"},
+        "pickup_instructions": {"$ref": "#/$defs/verifiedField"}
+      }
+    },
+    "contact_information": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phone", "email", "instagram", "facebook", "other_contact"],
+      "properties": {
+        "phone": {"$ref": "#/$defs/verifiedField"},
+        "email": {"$ref": "#/$defs/verifiedField"},
+        "instagram": {"$ref": "#/$defs/verifiedField"},
+        "facebook": {"$ref": "#/$defs/verifiedField"},
+        "other_contact": {"$ref": "#/$defs/verifiedField"}
+      }
+    },
+    "policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["privacy_policy", "terms_conditions", "cancellation_refund_policy", "pickup_order_policy", "allergen_disclaimer"],
+      "properties": {
+        "privacy_policy": {"$ref": "#/$defs/verifiedField"},
+        "terms_conditions": {"$ref": "#/$defs/verifiedField"},
+        "cancellation_refund_policy": {"$ref": "#/$defs/verifiedField"},
+        "pickup_order_policy": {"$ref": "#/$defs/verifiedField"},
+        "allergen_disclaimer": {"$ref": "#/$defs/verifiedField"}
+      }
+    },
+    "excluded_migration_sections": {
+      "type": "array",
+      "const": ["products", "categories"]
+    },
+    "profile_complete": {"const": false},
+    "production_publish_authorized": {"const": false}
+  }
+}
