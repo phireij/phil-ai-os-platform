@@ -1,0 +1,39 @@
+name: Phase 2.2 A6.5 Handoff Writer Isolated Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/PHASE_2_2_A6_5_HANDOFF_PERSISTENCE_WRITER_CONTRACT.md'
+      - 'scripts/phase2_2_a6_5_handoff_writer_validator.py'
+      - '.github/workflows/phase-2-2-a6-5-handoff-writer-isolated-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate A6.5 persistence and writer semantics in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/phase2_2_a6_5_handoff_writer_validator.py | tee phase22-a6-5-evidence.txt
+          grep -qx 'PHIL_AI_OS_PHASE_2_2_A6_5_HANDOFF_WRITER_ISOLATED_OK' phase22-a6-5-evidence.txt
+          grep -qx 'disabled_nonassignable_specialist_inert=ok' phase22-a6-5-evidence.txt
+          grep -qx 'atomic_failure_rollback_and_execution_approval_immutability=ok' phase22-a6-5-evidence.txt
+          grep -qx 'provider_call=none' phase22-a6-5-evidence.txt
+          grep -qx 'execution_call=none' phase22-a6-5-evidence.txt
+          grep -qx 'production_change=none' phase22-a6-5-evidence.txt
+      - name: Upload A6.5 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a6-5-handoff-writer-isolated-evidence
+          path: phase22-a6-5-evidence.txt
+          if-no-files-found: error
+          retention-days: 14
