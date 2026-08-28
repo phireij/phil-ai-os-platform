@@ -1,0 +1,17 @@
+{
+  "fixture_only": true,
+  "source": "synthetic-channel",
+  "external_event_id": "sample-event-001",
+  "occurred_at": "2026-08-28T00:00:00Z",
+  "sender_ref": "synthetic-customer-001",
+  "normalized_intent": "order_inquiry",
+  "entities": {
+    "items": [{"sku": "SAMPLE-CHOCO-001", "quantity": 2}],
+    "locale": "ja"
+  },
+  "confidence": 0.98,
+  "idempotency_key": "fixture:sample-event-001",
+  "approval_state": "not_evaluated",
+  "lifecycle_correlation_id": "fixture-correlation-001",
+  "mutation_authorized": false
+}

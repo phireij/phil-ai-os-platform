@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/woocommerce/media.schema.json",
+  "title": "Phil AI OS Commerce Media",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["key", "source_ref", "alt", "role", "position"],
+  "properties": {
+    "key": {"type": "string", "minLength": 1},
+    "source_ref": {"type": "string", "minLength": 1},
+    "alt": {"$ref": "#/$defs/localizedText"},
+    "role": {"enum": ["primary", "gallery"]},
+    "position": {"type": "integer", "minimum": 0}
+  },
+  "$defs": {
+    "localizedText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "ja"],
+      "properties": {"en": {"type": "string", "minLength": 1}, "ja": {"type": "string", "minLength": 1}}
+    }
+  }
+}

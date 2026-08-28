@@ -1,0 +1,19 @@
+{
+  "public_domain": "https://www.rubyscakedelights.shop/",
+  "source_platform": "hostinger-website-builder",
+  "source_role": "reference-only",
+  "copy_sections": [
+    "store_information",
+    "contact_information",
+    "policies"
+  ],
+  "exclude_sections": [
+    "products",
+    "categories"
+  ],
+  "verification_required": true,
+  "known_review_flags": [
+    "contact phone number requires verification/update before publication"
+  ],
+  "production_authority": false
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/woocommerce/commerce-sync-event.schema.json",
+  "title": "Phil AI OS Commerce Sync Audit Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["correlation_id", "entity_type", "entity_key", "action", "idempotency_key", "remote_id", "before_fingerprint", "after_fingerprint", "observed_at", "authority_effect"],
+  "properties": {
+    "correlation_id": {"type": "string", "minLength": 1},
+    "entity_type": {"enum": ["product", "category", "inventory", "media"]},
+    "entity_key": {"type": "string", "minLength": 1},
+    "action": {"enum": ["create", "update", "noop", "replay", "plan"]},
+    "idempotency_key": {"type": "string", "minLength": 1},
+    "remote_id": {"type": ["integer", "null"]},
+    "before_fingerprint": {"type": ["string", "null"]},
+    "after_fingerprint": {"type": "string", "minLength": 1},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "authority_effect": {"const": "none"}
+  }
+}

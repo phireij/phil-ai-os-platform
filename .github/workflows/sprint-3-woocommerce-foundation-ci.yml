@@ -1,0 +1,88 @@
+name: Sprint 3 WooCommerce Foundation CI
+
+on:
+  pull_request:
+    paths:
+      - "commerce/woocommerce/**"
+      - "contracts/cx/**"
+      - "contracts/operations/**"
+      - ".github/workflows/sprint-3-woocommerce-foundation-ci.yml"
+  push:
+    branches:
+      - "sprint3/**"
+    paths:
+      - "commerce/woocommerce/**"
+      - "contracts/cx/**"
+      - "contracts/operations/**"
+      - ".github/workflows/sprint-3-woocommerce-foundation-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-contract-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate schemas and fixtures
+        run: python commerce/woocommerce/tools_validate_contracts.py
+      - name: Run isolated unit tests
+        env:
+          PYTHONPATH: commerce/woocommerce/src
+        run: python -m unittest discover -s commerce/woocommerce/tests -v
+      - name: Validate local Compose topology
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml config --quiet
+          rendered="$(docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml config)"
+          grep -qE 'host_ip:[[:space:]]*127\.0\.0\.1' <<<"${rendered}"
+          if grep -q 'rubyscakedelights.shop' commerce/woocommerce/docker-compose.dev.yml commerce/woocommerce/bootstrap-local.sh; then
+            echo "Production Ruby domain must not appear in local runtime files"
+            exit 1
+          fi
+          bash -n commerce/woocommerce/bootstrap-local.sh
+          echo "PHIL_AI_OS_SPRINT_3_LOCAL_COMPOSE_CONFIG_GREEN"
+      - name: Assert no production WooCommerce secrets are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInE '(^|[^A-Za-z])(ck_[A-Za-z0-9]{20,}|cs_[A-Za-z0-9]{20,})' commerce/woocommerce contracts; then
+            echo "Potential WooCommerce credential material detected"
+            exit 1
+          fi
+          echo "PHIL_AI_OS_SPRINT_3_SECRET_SCAN_GREEN"
+
+  local-woocommerce-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap isolated WordPress and WooCommerce
+        shell: bash
+        run: bash commerce/woocommerce/bootstrap-local.sh
+      - name: Verify isolated WooCommerce runtime and wc/v3 surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          compose=(docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml)
+          "${compose[@]}" run --rm wpcli plugin is-active woocommerce
+          "${compose[@]}" run --rm wpcli eval '
+            $found = false;
+            foreach (array_keys(rest_get_server()->get_routes()) as $route) {
+              if (strpos($route, "/wc/v3") === 0) { $found = true; break; }
+            }
+            if (!$found) { fwrite(STDERR, "wc/v3 REST surface missing\n"); exit(1); }
+            echo "PHIL_AI_OS_SPRINT_3_WC_V3_SURFACE_GREEN\n";
+          '
+          curl --fail --silent --show-error --retry 20 --retry-delay 2 --retry-connrefused \
+            http://127.0.0.1:8088/ >/dev/null
+          echo "PHIL_AI_OS_SPRINT_3_LOCAL_WOOCOMMERCE_RUNTIME_GREEN"
+      - name: Destroy isolated WooCommerce runtime
+        if: always()
+        shell: bash
+        run: docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml down -v --remove-orphans

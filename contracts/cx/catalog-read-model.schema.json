@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/cx/catalog-read-model.schema.json",
+  "title": "Phil AI OS CX Catalog Read Model",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["product_key", "sku", "name", "price", "availability", "primary_media_ref"],
+  "properties": {
+    "product_key": {"type": "string", "minLength": 1},
+    "sku": {"type": "string", "minLength": 1},
+    "name": {"$ref": "#/$defs/localizedText"},
+    "short_description": {"$ref": "#/$defs/localizedText"},
+    "price": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount", "currency"],
+      "properties": {
+        "amount": {"type": "string", "minLength": 1},
+        "currency": {"type": "string", "pattern": "^[A-Z]{3}$"}
+      }
+    },
+    "availability": {"enum": ["in_stock", "out_of_stock", "backorder", "unknown"]},
+    "primary_media_ref": {"type": ["string", "null"]},
+    "seo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {"$ref": "#/$defs/localizedText"},
+        "description": {"$ref": "#/$defs/localizedText"}
+      }
+    }
+  },
+  "$defs": {
+    "localizedText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "ja"],
+      "properties": {"en": {"type": "string"}, "ja": {"type": "string"}}
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/commerce/site-migration-source.schema.json",
+  "title": "Ruby's Existing Site Migration Source Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["public_domain", "source_platform", "source_role", "copy_sections", "exclude_sections", "verification_required", "production_authority"],
+  "properties": {
+    "public_domain": {"type": "string", "const": "https://www.rubyscakedelights.shop/"},
+    "source_platform": {"type": "string", "const": "hostinger-website-builder"},
+    "source_role": {"type": "string", "const": "reference-only"},
+    "copy_sections": {
+      "type": "array",
+      "items": {"enum": ["store_information", "contact_information", "policies"]},
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true
+    },
+    "exclude_sections": {
+      "type": "array",
+      "items": {"enum": ["products", "categories"]},
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true
+    },
+    "verification_required": {"const": true},
+    "known_review_flags": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "production_authority": {"const": false}
+  }
+}

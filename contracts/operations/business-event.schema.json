@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/operations/business-event.schema.json",
+  "title": "Phil AI OS Normalized Business Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "external_event_id", "occurred_at", "normalized_intent", "confidence", "idempotency_key", "approval_state", "lifecycle_correlation_id"],
+  "properties": {
+    "source": {"type": "string", "minLength": 1},
+    "external_event_id": {"type": "string", "minLength": 1},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "sender_ref": {"type": ["string", "null"]},
+    "normalized_intent": {"type": "string", "minLength": 1},
+    "entities": {"type": "object"},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "idempotency_key": {"type": "string", "minLength": 1},
+    "approval_state": {"enum": ["not_evaluated", "not_required", "required", "approved", "denied", "expired"]},
+    "lifecycle_correlation_id": {"type": "string", "minLength": 1},
+    "mutation_authorized": {"const": false}
+  }
+}
