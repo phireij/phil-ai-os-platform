@@ -36,6 +36,24 @@ services:
       - wc_dev_wp:/var/www/html
     networks: [wc_dev]
 
+  wpcli:
+    image: ${WORDPRESS_CLI_IMAGE:-wordpress:cli}
+    profiles: ["local-tools"]
+    depends_on:
+      db:
+        condition: service_healthy
+      wordpress:
+        condition: service_started
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: local-development-only
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wc_dev_wp:/var/www/html
+    networks: [wc_dev]
+    entrypoint: ["wp"]
+
 volumes:
   wc_dev_db:
   wc_dev_wp:
