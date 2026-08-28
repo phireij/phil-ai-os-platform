@@ -38,6 +38,7 @@ jobs:
         run: |
           node --check apps/customer-experience/src/core.mjs
           node --check apps/customer-experience/src/cart.mjs
+          node --check apps/customer-experience/src/cart-preview.mjs
           node --check apps/customer-experience/src/flow.mjs
           node --check apps/customer-experience/src/payment.mjs
           node --check apps/customer-experience/src/pickup.mjs
@@ -50,6 +51,9 @@ jobs:
 
       - name: Validate CX fixture, PWA, accessibility and safety boundaries
         run: python apps/customer-experience/tools_validate_cx.py
+
+      - name: Validate cross-contract compatibility
+        run: python apps/customer-experience/tools_validate_contract_compatibility.py
 
       - name: Validate payment handoff contract is inert
         run: |
@@ -79,16 +83,20 @@ jobs:
           cat /tmp/phil-cx-http.log
           exit 1
 
-      - name: HTTP smoke app shell and fixtures
+      - name: HTTP smoke app shell, cart preview and fixtures
         run: |
           set -euo pipefail
           curl --fail --silent http://127.0.0.1:8094/ | grep -F "Customer Experience"
+          curl --fail --silent http://127.0.0.1:8094/ | grep -F "cart-preview.html"
+          curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "KOMOJU not connected"
+          curl --fail --silent http://127.0.0.1:8094/src/cart-preview.mjs | grep -F "buildPaymentHandoffIntent"
           curl --fail --silent http://127.0.0.1:8094/manifest.webmanifest | grep -F '"display": "standalone"'
           curl --fail --silent http://127.0.0.1:8094/fixtures/catalog.json | grep -F '"fixture_only": true'
+          curl --fail --silent http://127.0.0.1:8094/fixtures/catalog.json | grep -F '"SAMPLE-UBE-001"'
           curl --fail --silent http://127.0.0.1:8094/fixtures/pickup-policy.json | grep -F '"fixture_only": true'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"provider": "komoju"'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"connection_state": "not_configured"'
-          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v3'
+          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v4'
 
       - name: Stop isolated server
         if: always()
