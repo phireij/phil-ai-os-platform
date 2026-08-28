@@ -1,0 +1,74 @@
+name: Phase 2.2 A6.7 Pre-Mutation Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-2-a6-7-preflight-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true
+      - name: Diagnose exact A6.7 preflight invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -u
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          APP_SRC=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1/services/core/control-api/app.py
+          echo control="$CONTROL"
+          echo health_http="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4870/healthz)"
+          echo ready_http="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4870/readyz)"
+          for unit in phil-ai-os-mission-control-operator.service phil-ai-os-agent-heartbeat.timer phil-ai-os-specialist-worker-01-presence.timer phil-ai-os-monitor.service phil-ai-os-backup.timer phil-ai-os-backup-self-heal.timer; do
+            echo "$unit=$(systemctl is-active "$unit" 2>&1 || true)"
+          done
+          echo live_image="$(docker inspect "$CONTROL" --format '{{.Config.Image}}')"
+          echo live_app_sha="$(docker exec "$CONTROL" sha256sum /app/app.py | awk '{print $1}')"
+          if [ -f "$APP_SRC" ]; then echo host_app_sha="$(sha256sum "$APP_SRC" | awk '{print $1}')"; else echo host_app_sha=missing; fi
+          echo allowlist="$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')"
+          for m in POST PUT PATCH DELETE; do echo mc_${m}="$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)"; done
+          python3 - <<'PY'
+          import datetime,json,pathlib
+          p=pathlib.Path('/var/lib/phil-ai-os/agent-presence/specialist-worker-01.json')
+          try:
+              pl=json.loads(p.read_text())['payload']
+              age=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(pl['observed_at'])).total_seconds()
+              print('specialist_presence_agent='+str(pl.get('agent_id')))
+              print('specialist_presence_age='+str(round(age,3)))
+              print('specialist_presence_authority='+str(pl.get('authority_ceiling')))
+              print('specialist_presence_enabled='+str(pl.get('enabled')))
+              print('specialist_presence_assignable='+str(pl.get('assignable')))
+          except Exception as e:
+              print('specialist_presence_error='+repr(e))
+          PY
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          print('quick_check='+str(c.execute('pragma quick_check').fetchone()[0]))
+          print('handoff_table_count='+str(c.execute("select count(*) from sqlite_master where type='table' and name='task_handoffs'").fetchone()[0]))
+          print('registry='+json.dumps([dict(r) for r in c.execute('select * from agent_registry order by agent_id')],separators=(',',':'),default=str))
+          print('specialist_assignment_refs='+str(c.execute("select count(*) from task_lifecycle_events where assigned_agent_id='specialist-worker-01'").fetchone()[0]))
+          PY
+          echo production_change=none
+          REMOTE
