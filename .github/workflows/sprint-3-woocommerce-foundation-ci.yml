@@ -34,6 +34,19 @@ jobs:
         env:
           PYTHONPATH: commerce/woocommerce/src
         run: python -m unittest discover -s commerce/woocommerce/tests -v
+      - name: Validate local Compose topology
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml config --quiet
+          rendered="$(docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml config)"
+          grep -q '127.0.0.1:' <<<"${rendered}"
+          if grep -q 'rubyscakedelights.shop' commerce/woocommerce/docker-compose.dev.yml commerce/woocommerce/bootstrap-local.sh; then
+            echo "Production Ruby domain must not appear in local runtime files"
+            exit 1
+          fi
+          bash -n commerce/woocommerce/bootstrap-local.sh
+          echo "PHIL_AI_OS_SPRINT_3_LOCAL_COMPOSE_CONFIG_GREEN"
       - name: Assert no production WooCommerce secrets are present
         shell: bash
         run: |
