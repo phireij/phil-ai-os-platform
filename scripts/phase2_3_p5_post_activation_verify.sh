@@ -3,9 +3,10 @@ set -euo pipefail
 
 BASE=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1
 APP_SRC="$BASE/services/core/control-api/app.py"
-MC=/opt/phil-ai-os/mission-control
+ROLLBACK=/var/lib/phil-ai-os/rollback/phase23-p5-20260828T084838Z
 CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
 [[ -n "$CONTROL" ]]
+[[ -f "$ROLLBACK/protected-baseline.json" ]]
 
 curl -fsS http://127.0.0.1:4870/healthz >/dev/null
 curl -fsS http://127.0.0.1:4870/readyz >/dev/null
@@ -17,8 +18,8 @@ curl -fsS http://127.0.0.1:4870/readyz >/dev/null
 [[ "$(docker exec "$CONTROL" sh -lc "grep -c 'def policy_evaluate_pure' /app/app.py || true")" == 1 ]]
 
 # Durable policy schema plus preserved identity/approval/execution boundaries.
-docker exec -i "$CONTROL" python3 - <<'PY'
-import sqlite3
+CURRENT="$(docker exec -i "$CONTROL" python3 - <<'PY'
+import json,sqlite3
 c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
 assert c.execute('pragma quick_check').fetchone()[0]=='ok'
 assert c.execute("select count(*) from sqlite_master where type='table' and name='policy_decisions'").fetchone()[0]==1
@@ -30,19 +31,26 @@ tr={r[0] for r in c.execute("select name from sqlite_master where type='trigger'
 assert {'policy_decisions_no_update','policy_decisions_no_delete'}<=tr
 schema=c.execute("select sql from sqlite_master where type='table' and name='policy_decisions'").fetchone()[0]
 assert "CHECK(authority_effect='none')" in schema
+tracked=['agent_registry','approval_requests','execution_audit','usage_ledger','task_lifecycle_events','task_handoffs','route_policies']
+counts={t:c.execute(f'select count(*) from {t}').fetchone()[0] for t in tracked}
 reg=[dict(r) for r in c.execute('select agent_id,authority_ceiling,enabled,assignable from agent_registry order by agent_id')]
 assert reg==[
  {'agent_id':'hermes','authority_ceiling':'L3','enabled':1,'assignable':1},
  {'agent_id':'specialist-worker-01','authority_ceiling':'L1','enabled':0,'assignable':0},
 ]
-assert c.execute("select count(*) from execution_audit where task_class<>'general'").fetchone()[0]==0
-print('database_quick_check=ok')
-print('policy_ledger=present_empty')
-print('append_only_triggers=present')
-print('authority_effect_constraint=none')
-print('hermes=L3_enabled_assignable')
-print('specialist=L1_disabled_nonassignable')
+print(json.dumps({'counts':counts,'registry':reg},sort_keys=True,separators=(',',':')))
 PY
+)"
+BASELINE="$(cat "$ROLLBACK/protected-baseline.json")"
+[[ "$CURRENT" == "$BASELINE" ]]
+echo database_quick_check=ok
+echo policy_ledger=present_empty
+echo append_only_triggers=present
+echo authority_effect_constraint=none
+echo protected_state_matches_pre_p5=true
+echo approval_execution_audit_counts_unchanged=true
+echo hermes=L3_enabled_assignable
+echo specialist=L1_disabled_nonassignable
 
 curl -fsS http://127.0.0.1:4881/api/read-model > /tmp/phase23-p5-independent-read-model.json
 python3 - /tmp/phase23-p5-independent-read-model.json <<'PY'
