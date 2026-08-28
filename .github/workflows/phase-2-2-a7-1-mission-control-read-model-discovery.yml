@@ -1,0 +1,101 @@
+name: Phase 2.2 A7.1 Mission Control Read Model Discovery
+
+on:
+  push:
+    paths:
+      - '.github/workflows/phase-2-2-a7-1-mission-control-read-model-discovery.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3 4; do
+            if ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=10 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*4))
+          done
+          exit 1
+
+      - name: Read-only discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE' | tee phase-2-2-a7-1-discovery.txt
+          set -euo pipefail
+          echo '=== mission-control units/files ==='
+          systemctl is-active phil-ai-os-mission-control.service || true
+          systemctl status phil-ai-os-mission-control.service --no-pager -n 5 || true
+          find /opt/phil-ai-os/mission-control -maxdepth 2 -type f -printf '%m %u:%g %p\n' 2>/dev/null | sort || true
+          echo '=== read model source hash / structure ==='
+          RM=/opt/phil-ai-os/mission-control/agent-runtime-read-model.py
+          test -f "$RM"
+          sha256sum "$RM"
+          wc -l "$RM"
+          grep -nE 'SCHEMA|schema|hermes|specialist|agent_registry|task_handoffs|task_lifecycle_events|presence|readiness|workload|approval|execute|token|private' "$RM" || true
+          echo '=== read model source ==='
+          sed -n '1,420p' "$RM"
+          echo '=== current local read model ==='
+          curl -fsS http://127.0.0.1:4881/api/read-model
+          echo
+          echo '=== mutation boundary ==='
+          for m in POST PUT PATCH DELETE; do printf '%s=' "$m"; curl -sS -X "$m" -o /dev/null -w '%{http_code}\n' http://127.0.0.1:4881/api/read-model; done
+          echo '=== control api / durable state ==='
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test -n "$CONTROL"
+          echo control_api_image="$(docker inspect "$CONTROL" --format '{{.Config.Image}}')"
+          echo execution_allowlist="$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')"
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          print('quick_check='+c.execute('pragma quick_check').fetchone()[0])
+          print('agent_registry='+json.dumps([dict(r) for r in c.execute('select * from agent_registry order by agent_id')],sort_keys=True))
+          print('handoffs='+json.dumps([dict(r) for r in c.execute('select * from task_handoffs order by requested_at')],sort_keys=True))
+          rows=[dict(r) for r in c.execute("select task_id,stage,occurred_at,source_component,actor_id,assigned_agent_id,previous_stage,reason_code,correlation_id from task_lifecycle_events where assigned_agent_id='specialist-worker-01' or task_id in (select task_id from task_handoffs) order by occurred_at,event_id")]
+          print('specialist_or_handoff_lifecycle='+json.dumps(rows,sort_keys=True))
+          PY
+          echo '=== presence evidence metadata ==='
+          for f in /var/lib/phil-ai-os/agent-presence/hermes.json /var/lib/phil-ai-os/agent-presence/specialist-worker-01.json; do
+            echo file="$f"
+            stat -c '%a %U:%G %s %y' "$f" || true
+            python3 - "$f" <<'PY'
+          import json,sys
+          p=sys.argv[1]
+          try:
+              x=json.load(open(p))
+              safe={k:v for k,v in x.items() if k not in ('signature','private_key','token','secret')}
+              print(json.dumps(safe,sort_keys=True))
+          except Exception as e:
+              print('presence_read_error='+type(e).__name__)
+          PY
+          done
+          echo '=== operational invariants ==='
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null && echo control_health=ok
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null && echo control_ready=ok
+          for unit in phil-ai-os-agent-heartbeat.timer phil-ai-os-specialist-worker-01-presence.timer phil-ai-os-monitor.service phil-ai-os-backup.timer phil-ai-os-backup-self-heal.timer; do systemctl is-active --quiet "$unit" && echo "$unit=active"; done
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_2_A7_1_DISCOVERY_OK
+          REMOTE
+
+      - name: Upload discovery evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a7-1-mission-control-discovery-evidence
+          path: phase-2-2-a7-1-discovery.txt
+          retention-days: 30
