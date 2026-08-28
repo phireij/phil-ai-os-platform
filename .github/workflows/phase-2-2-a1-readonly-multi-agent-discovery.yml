@@ -1,0 +1,140 @@
+name: Phase 2.2 A1 Read-Only Multi-Agent Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-2-a1-readonly-multi-agent-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Discover current multi-agent and handoff surfaces read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+
+          curl -fsS http://127.0.0.1:4881/api/read-model >/tmp/phase22-a1-model.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/phase22-a1-model.json'))
+          print('mission_control_schema='+str(d.get('schema_version')))
+          print('mission_control_worker_readiness='+str((d.get('worker_readiness') or {}).get('readiness')))
+          print('mission_control_worker_reason='+str((d.get('worker_readiness') or {}).get('reason_code')))
+          print('mission_control_workload_source='+str((((d.get('agent_runtime') or {}).get('workload')) or {}).get('source')))
+          print('mission_control_workload_evidence_complete='+str((((d.get('agent_runtime') or {}).get('workload')) or {}).get('evidence_complete')).lower())
+          r=d.get('worker_readiness') or {}
+          assert r.get('authority_effect')=='none'
+          assert r.get('automatic_assignment') is False
+          assert r.get('automatic_retry') is False
+          assert r.get('automatic_reroute') is False
+          assert r.get('automatic_execution') is False
+          PY
+
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3, json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro', uri=True)
+          c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+
+          tables=[r[0] for r in c.execute("select name from sqlite_master where type='table' order by name")]
+          print('tables='+json.dumps(tables,separators=(',',':')))
+
+          registry=[dict(r) for r in c.execute('select * from agent_registry order by agent_id')]
+          print('agent_registry_rows='+json.dumps(registry,separators=(',',':'),default=str))
+          assert len(registry)==1
+          assert registry[0].get('agent_id')=='hermes'
+          assert registry[0].get('authority_ceiling')=='L3'
+          assert int(registry[0].get('enabled'))==1
+          assert int(registry[0].get('assignable'))==1
+
+          for table in ['agent_registry','task_lifecycle_events','task_plans','approval_requests','execution_audit']:
+              if table in tables:
+                  cols=[dict(r) for r in c.execute(f'pragma table_info({table})')]
+                  print(f'{table}_columns='+json.dumps(cols,separators=(',',':')))
+
+          lifecycle=[dict(r) for r in c.execute("select task_id,stage,assigned_agent_id,source_component,actor_id,correlation_id,occurred_at,event_id from task_lifecycle_events order by occurred_at,event_id")]
+          print('lifecycle_event_count='+str(len(lifecycle)))
+          print('lifecycle_assigned_agents='+json.dumps(sorted({x['assigned_agent_id'] for x in lifecycle if x['assigned_agent_id']})))
+          print('lifecycle_stages='+json.dumps(sorted({x['stage'] for x in lifecycle if x['stage']})))
+
+          assigned=[x for x in lifecycle if x.get('stage')=='ASSIGNED']
+          print('assignment_event_count='+str(len(assigned)))
+          print('assignment_events='+json.dumps(assigned,separators=(',',':'),default=str))
+
+          plan_rows=[dict(r) for r in c.execute('select * from task_plans order by created_at')]
+          print('plan_rows='+json.dumps(plan_rows,separators=(',',':'),default=str))
+
+          # Discover any existing handoff/delegation/coordinator surfaces by schema naming only.
+          handoff_tables=[t for t in tables if any(k in t.lower() for k in ('handoff','delegat','agent','assign','worker','coord'))]
+          print('candidate_handoff_tables='+json.dumps(handoff_tables,separators=(',',':')))
+
+          # No schema/data writes are performed in A1.
+          print('database_mode=read_only')
+          print('agent_registry=hermes_L3_only')
+          PY
+
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+
+          rm -f /tmp/phase22-a1-model.json
+          echo control_api_health=green
+          echo control_api_readiness=green
+          echo mission_control_operator=active
+          echo dashboard_mutations=405
+          echo operator_auth=401
+          echo execution_allowlist=general
+          echo production_change=none
+          echo mission_control_restart=none
+          echo schema_mutation=none
+          echo agent_registry_mutation=none
+          echo assignment_mutation=none
+          echo lifecycle_mutation=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_2_A1_READONLY_MULTI_AGENT_DISCOVERY_OK
+          REMOTE
