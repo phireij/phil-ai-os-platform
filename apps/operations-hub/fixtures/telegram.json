@@ -1,0 +1,10 @@
+{
+  "fixture_only": true,
+  "source": "telegram",
+  "kind": "message",
+  "external_event_id": "tg-fixture-001",
+  "occurred_at": "2026-08-28T12:12:00Z",
+  "sender_ref": "fixture-telegram-customer",
+  "locale": "en",
+  "text": "What time can I pickup my cake?"
+}
