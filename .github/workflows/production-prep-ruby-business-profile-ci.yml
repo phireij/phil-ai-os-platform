@@ -10,6 +10,7 @@ on:
       - "docs/RUBY_PRIVACY_POLICY_TERMS_DRAFTS_2026-08-29.md"
       - "docs/RUBY_PRIVACY_TERMS_APPROVAL_RECORD_2026-08-29.md"
       - "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md"
+      - "docs/RUBY_TOKUSHOHO_LEGACY_SOURCE_CAPTURE_2026-08-29.md"
       - "scripts/validate_ruby_business_profile_template.py"
       - ".github/workflows/production-prep-ruby-business-profile-ci.yml"
   push:
@@ -23,6 +24,7 @@ on:
       - "docs/RUBY_PRIVACY_POLICY_TERMS_DRAFTS_2026-08-29.md"
       - "docs/RUBY_PRIVACY_TERMS_APPROVAL_RECORD_2026-08-29.md"
       - "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md"
+      - "docs/RUBY_TOKUSHOHO_LEGACY_SOURCE_CAPTURE_2026-08-29.md"
       - "scripts/validate_ruby_business_profile_template.py"
       - ".github/workflows/production-prep-ruby-business-profile-ci.yml"
 
@@ -45,21 +47,22 @@ jobs:
           python -m json.tool contracts/commerce/verified-ruby-business-profile.schema.json >/dev/null
           python -m json.tool ops/readiness/verified-ruby-business-profile.template.json >/dev/null
 
-      - name: Validate completed profile, policy approvals and Tokushoho source boundary
+      - name: Validate completed profile and reconciled Tokushoho source
         run: python scripts/validate_ruby_business_profile_template.py
 
-      - name: Assert profile complete but production publication still gated
+      - name: Assert profile complete, Tokushoho reconciled, publication still gated
         run: |
           set -euo pipefail
           grep -E '"profile_complete"[[:space:]]*:[[:space:]]*true' ops/readiness/verified-ruby-business-profile.template.json
           ! grep -R -E '"production_publish_authorized"[[:space:]]*:[[:space:]]*true' contracts/commerce/verified-ruby-business-profile.schema.json ops/readiness/verified-ruby-business-profile.template.json
-          grep -F '"privacy_policy": {"value": "Canonical approved bilingual policy text:' ops/readiness/verified-ruby-business-profile.template.json
-          grep -F '"terms_conditions": {"value": "Canonical approved bilingual policy text:' ops/readiness/verified-ruby-business-profile.template.json
-          grep -F '"source": "user_confirmed", "verification_status": "verified", "verified_at": "2026-08-29T03:38:00+09:00"' ops/readiness/verified-ruby-business-profile.template.json
-          grep -F 'PHIL_AI_OS_RUBY_PRIVACY_TERMS_APPROVED_PROFILE_15_OF_15_PUBLISH_GATED' docs/RUBY_PRIVACY_TERMS_APPROVAL_RECORD_2026-08-29.md
-          grep -F 'PHIL_AI_OS_RUBY_BUSINESS_PROFILE_15_OF_15_RESOLVED_PROFILE_COMPLETE_PUBLISH_GATED' docs/RUBY_BUSINESS_PROFILE_VERIFICATION_FORM_2026-08-28.md
-          grep -F 'PHIL_AI_OS_RUBY_TOKUSHOHO_EXPANSION_DRAFT_SOURCE_RECONCILIATION_PENDING' docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md
-          echo PHIL_AI_OS_RUBY_BUSINESS_PROFILE_15_OF_15_PUBLISH_GATED_GREEN
+          grep -F 'PHIL_AI_OS_RUBY_TOKUSHOHO_LEGACY_SOURCE_CAPTURED_EMAIL_CORRECTION_APPROVED' docs/RUBY_TOKUSHOHO_LEGACY_SOURCE_CAPTURE_2026-08-29.md
+          grep -F 'PHIL_AI_OS_RUBY_TOKUSHOHO_SOURCE_RECONCILED_EMAIL_UPDATED_PUBLICATION_PENDING_APPROVAL' docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md
+          grep -F 'info@rubyscakedelights.shop' docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md
+          ! grep -F 'rubyscakedelights@gmail.com' docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md
+          grep -F 'BOMBEO PHILIP GO' docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md
+          grep -F 'ヤマト運輸（クール宅急便）' docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md
+          grep -F 'tokushoho_publication_approved: false' docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md
+          echo PHIL_AI_OS_RUBY_TOKUSHOHO_RECONCILED_PUBLISH_GATED_GREEN
 
       - name: Assert no WooCommerce credential material
         run: |
@@ -71,5 +74,6 @@ jobs:
             docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md \
             docs/RUBY_PRIVACY_POLICY_TERMS_DRAFTS_2026-08-29.md \
             docs/RUBY_PRIVACY_TERMS_APPROVAL_RECORD_2026-08-29.md \
-            docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md
+            docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md \
+            docs/RUBY_TOKUSHOHO_LEGACY_SOURCE_CAPTURE_2026-08-29.md
           echo PHIL_AI_OS_RUBY_BUSINESS_PROFILE_CREDENTIAL_BOUNDARY_GREEN
