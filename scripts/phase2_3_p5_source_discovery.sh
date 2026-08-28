@@ -3,26 +3,28 @@ set -euo pipefail
 
 BASE_DIR="${PHIL_AI_OS_BASE_DIR:-/opt/phil-ai-os-platform/phil-ai-os-platform-phase1}"
 CONTROL_DIR="$BASE_DIR/services/core/control-api"
-MC_DIR="$BASE_DIR/services/core/mission-control"
 CONTROL_APP="$CONTROL_DIR/app.py"
-MC_APP="$MC_DIR/app.py"
 DB="$CONTROL_DIR/control_plane.db"
+MC_DIR="${PHIL_AI_OS_MC_DIR:-/opt/phil-ai-os/mission-control}"
+MC_SERVER="$MC_DIR/server.py"
+MC_READ_MODEL="$MC_DIR/read-model.py"
 CONTROL_BASE="${CONTROL_BASE:-http://127.0.0.1:8000}"
 MC_BASE="${MC_BASE:-http://127.0.0.1:8080}"
 
-for path in "$CONTROL_APP" "$MC_APP" "$DB"; do
+for path in "$CONTROL_APP" "$MC_SERVER" "$MC_READ_MODEL" "$DB"; do
   test -e "$path" || { echo "PHIL_AI_OS_PHASE_2_3_P5_DISCOVERY_MISSING=$path"; exit 1; }
 done
 
 control_hash_before="$(sha256sum "$CONTROL_APP" | awk '{print $1}')"
-mc_hash_before="$(sha256sum "$MC_APP" | awk '{print $1}')"
+mc_server_hash_before="$(sha256sum "$MC_SERVER" | awk '{print $1}')"
+mc_read_model_hash_before="$(sha256sum "$MC_READ_MODEL" | awk '{print $1}')"
 
 curl -fsS "$CONTROL_BASE/health" >/dev/null
 curl -fsS "$CONTROL_BASE/ready" >/dev/null
 curl -fsS "$MC_BASE/health" >/dev/null
 curl -fsS "$MC_BASE/v1/mission-control/summary" >/dev/null
 
-python3 - "$CONTROL_APP" "$MC_APP" <<'PY'
+python3 - "$CONTROL_APP" "$MC_SERVER" "$MC_READ_MODEL" <<'PY'
 import ast
 import sys
 from pathlib import Path
@@ -74,7 +76,8 @@ def summarize(label, filename):
     print("routes_end")
 
 summarize("CONTROL_API", sys.argv[1])
-summarize("MISSION_CONTROL", sys.argv[2])
+summarize("MISSION_CONTROL_SERVER", sys.argv[2])
+summarize("MISSION_CONTROL_READ_MODEL", sys.argv[3])
 PY
 
 echo "=== SQLITE_SCHEMA_SUMMARY ==="
@@ -98,14 +101,17 @@ enabled_specialists="$(sqlite3 -readonly "$DB" "SELECT COUNT(*) FROM agent_regis
 [[ "$enabled_specialists" == "0" ]] || { echo "Unexpected enabled specialist count: $enabled_specialists"; exit 1; }
 
 control_hash_after="$(sha256sum "$CONTROL_APP" | awk '{print $1}')"
-mc_hash_after="$(sha256sum "$MC_APP" | awk '{print $1}')"
+mc_server_hash_after="$(sha256sum "$MC_SERVER" | awk '{print $1}')"
+mc_read_model_hash_after="$(sha256sum "$MC_READ_MODEL" | awk '{print $1}')"
 [[ "$control_hash_before" == "$control_hash_after" ]]
-[[ "$mc_hash_before" == "$mc_hash_after" ]]
+[[ "$mc_server_hash_before" == "$mc_server_hash_after" ]]
+[[ "$mc_read_model_hash_before" == "$mc_read_model_hash_after" ]]
 
 echo "execution_allowlist=$allowlist"
 echo "enabled_specialists=$enabled_specialists"
 echo "autonomy_ceiling=A0"
 echo "control_source_unchanged=true"
-echo "mission_control_source_unchanged=true"
+echo "mission_control_server_unchanged=true"
+echo "mission_control_read_model_unchanged=true"
 echo "production_change=none"
 echo "PHIL_AI_OS_PHASE_2_3_P5_SOURCE_DISCOVERY_OK"
