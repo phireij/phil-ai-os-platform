@@ -128,7 +128,7 @@ def main() -> None:
     ), "staging configuration plan")
 
     require(KOMOJU_RUNBOOK.read_text(encoding="utf-8"), (
-        "komoju-sign-in-oauth-style" if False else "Sign into KOMOJU",
+        "Sign into KOMOJU",
         "automatically configures the KOMOJU secret key and webhooks",
         "deprecated legacy `Komoju` payment method",
         "Test Mode",
