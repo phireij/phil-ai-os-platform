@@ -13,6 +13,11 @@ The CEO/business owner explicitly approved both customer-facing bilingual docume
 - **Section 1 — Privacy Policy:** APPROVED / VERIFIED
 - **Section 2 — Terms & Conditions:** APPROVED / VERIFIED
 
+Machine-readable approval statements:
+
+`Section 1 — Privacy Policy: APPROVED / VERIFIED`  
+`Section 2 — Terms & Conditions: APPROVED / VERIFIED`
+
 The text in that document is the approved working baseline even though its original filename and internal drafting labels preserve its preparation history.
 
 ## Governance effect
