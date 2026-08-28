@@ -1,0 +1,131 @@
+name: Phase 2.2 A6.1 Specialist Presence Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-2-a6-1-specialist-presence-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure direct SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3 4; do
+            if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=12 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+      - name: Discover presence surface read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE' | tee phase22-a6-1-evidence.txt
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+
+          echo heartbeat_timer_active=true
+          echo heartbeat_timer_fragment="$(systemctl show phil-ai-os-agent-heartbeat.timer -p FragmentPath --value)"
+          echo heartbeat_service_fragment="$(systemctl show phil-ai-os-agent-heartbeat.service -p FragmentPath --value)"
+          echo heartbeat_service_active_state="$(systemctl show phil-ai-os-agent-heartbeat.service -p ActiveState --value)"
+          echo heartbeat_timer_unit_state="$(systemctl show phil-ai-os-agent-heartbeat.timer -p UnitFileState --value)"
+
+          EXEC_RAW="$(systemctl show phil-ai-os-agent-heartbeat.service -p ExecStart --value)"
+          HEARTBEAT_SCRIPT="$(printf '%s\n' "$EXEC_RAW" | grep -oE 'path=[^ ;}]+' | head -n1 | cut -d= -f2 || true)"
+          if [ -z "$HEARTBEAT_SCRIPT" ]; then
+            HEARTBEAT_SCRIPT="$(printf '%s\n' "$EXEC_RAW" | grep -oE '/[^ ;}]+' | head -n1 || true)"
+          fi
+          echo heartbeat_exec_path="${HEARTBEAT_SCRIPT:-unknown}"
+
+          if [ -n "$HEARTBEAT_SCRIPT" ] && [ -f "$HEARTBEAT_SCRIPT" ]; then
+            echo heartbeat_script_present=true
+            echo heartbeat_script_sha256="$(sha256sum "$HEARTBEAT_SCRIPT" | awk '{print $1}')"
+            echo heartbeat_literal_hermes_refs="$(grep -o 'hermes' "$HEARTBEAT_SCRIPT" 2>/dev/null | wc -l | tr -d ' ')"
+            echo heartbeat_agent_id_refs="$(grep -E -o 'AGENT_ID|agent_id' "$HEARTBEAT_SCRIPT" 2>/dev/null | wc -l | tr -d ' ')"
+            echo heartbeat_presence_path_refs="$(grep -o 'agent-presence' "$HEARTBEAT_SCRIPT" 2>/dev/null | wc -l | tr -d ' ')"
+            echo heartbeat_execute_route_refs="$(grep -E -o '/v1/execute|philaios-execute' "$HEARTBEAT_SCRIPT" 2>/dev/null | wc -l | tr -d ' ')"
+            echo heartbeat_provider_refs="$(grep -E -i -o 'openai|openrouter|anthropic|gemini' "$HEARTBEAT_SCRIPT" 2>/dev/null | wc -l | tr -d ' ')"
+          else
+            echo heartbeat_script_present=false
+          fi
+
+          python3 - <<'PY'
+          import json, os
+          for aid in ('hermes','specialist-worker-01'):
+              p=f'/var/lib/phil-ai-os/agent-presence/{aid}.json'
+              print(f'{aid}_presence_file_exists='+str(os.path.exists(p)).lower())
+              if os.path.exists(p):
+                  d=json.load(open(p))
+                  safe={k:d.get(k) for k in ('agent_id','observation_type','observed_at','status') if k in d}
+                  print(f'{aid}_presence_safe='+json.dumps(safe,separators=(',',':'),default=str))
+          PY
+
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          reg=[dict(r) for r in c.execute('select * from agent_registry order by agent_id')]
+          assert len(reg)==2
+          h=next(r for r in reg if r['agent_id']=='hermes')
+          s=next(r for r in reg if r['agent_id']=='specialist-worker-01')
+          assert h['authority_ceiling']=='L3' and int(h['enabled'])==1 and int(h['assignable'])==1
+          assert s['authority_ceiling']=='L1' and int(s['enabled'])==0 and int(s['assignable'])==0
+          print('registry='+json.dumps(reg,separators=(',',':'),default=str))
+          print('specialist_lifecycle_assignment_refs='+str(c.execute("select count(*) from task_lifecycle_events where assigned_agent_id='specialist-worker-01'").fetchone()[0]))
+          PY
+
+          echo specialist_runtime_container_count="$(docker ps --format '{{.Names}}' | grep -Ec 'specialist-worker-01|specialist.*worker' || true)"
+          echo specialist_presence_service_exists="$(systemctl list-unit-files --type=service --no-legend 2>/dev/null | awk '{print $1}' | grep -Ec 'specialist.*presence|specialist.*heartbeat' || true)"
+          echo specialist_presence_timer_exists="$(systemctl list-unit-files --type=timer --no-legend 2>/dev/null | awk '{print $1}' | grep -Ec 'specialist.*presence|specialist.*heartbeat' || true)"
+
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+
+          echo control_api_health=green
+          echo control_api_readiness=green
+          echo execution_allowlist=general
+          echo mission_control_mutations=405
+          echo production_change=none
+          echo service_restart=none
+          echo registry_mutation=none
+          echo lifecycle_mutation=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_2_A6_1_SPECIALIST_PRESENCE_DISCOVERY_OK
+          REMOTE
+      - name: Upload A6.1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a6-1-specialist-presence-discovery-evidence
+          path: phase22-a6-1-evidence.txt
+          if-no-files-found: error
+          retention-days: 14
