@@ -1,17 +1,16 @@
 # Ruby’s Cake Delights — Verified Business Profile Form
 
 Date prepared: 2026-08-28  
-Status: **PARTIAL BUSINESS VERIFICATION — CORE DETAILS CONFIRMED / DRAFT POLICIES PENDING**  
+Status: **PARTIAL BUSINESS VERIFICATION — CORE DETAILS + 3 POLICIES CONFIRMED**  
 Purpose: establish the verified production source for store information, contact information and policies before WordPress/WooCommerce staging and publication.
 
 ## Important rules
 
 - The existing Hostinger Website Builder site is **reference-only**.
-- Do not assume an existing value is correct merely because it appears on the current website.
-- Existing test **products and categories are excluded** from migration and are not part of this form.
+- Existing test **products and categories are excluded** from migration.
 - Business values are added only when directly verified.
-- Draft customer-facing wording is not marked verified until approved by the business owner.
-- Completing this form verifies business information; it does **not** authorize production publication, DNS changes, WooCommerce activation or payment activation.
+- Approved policy wording does **not** authorize production publication, DNS changes, WooCommerce activation or payment activation.
+- The September 13 meal launch is a verified rollout fact only; it does not create production catalog records.
 
 ---
 
@@ -19,55 +18,45 @@ Purpose: establish the verified production source for store information, contact
 
 ### A1. Business name — VERIFIED
 
-**Exact customer-facing business name:**  
 `Ruby's Cake Delights`
 
-Verification source:  
 - [x] CEO/business owner confirmed
-- [ ] Official record
-- [ ] Existing site reviewed and confirmed
-- [ ] New business decision
 
-### A2. Business description — DRAFT PENDING APPROVAL
+### A2. Business description — REVISED DRAFT PENDING APPROVAL
 
 Draft prepared in:
 `docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md`
 
-Proposed English short description:
+Proposed English description:
 
-> Ruby's Cake Delights is a cake and sweets shop in Ichikawa, Chiba, creating handcrafted cakes, baked treats, and desserts for everyday enjoyment and special occasions. We prepare each order with care and welcome customers for pickup at our Ichikawa shop.
+> Ruby's Cake Delights is a neighborhood food and dessert shop in Ichikawa, Chiba, offering handcrafted cakes, pastries, desserts, and satisfying savory meals for everyday enjoyment and special occasions. Alongside our sweets, our growing food menu includes favorites such as Spaghetti, Palabok, Baked Macaroni, and Fried Chicken in a variety of flavors. We prepare our products with care and welcome customers for convenient pickup at our Ichikawa shop.
 
 - [ ] Verified / approved
 
-### A3. Address — VERIFIED
+**Rollout fact confirmed by CEO/business owner:** expanded meals launch planned for **September 13, 2026**, beginning with Spaghetti, Palabok, Baked Macaroni, and Fried Chicken in different flavors.
 
-**Approved customer-facing / pickup address:**
+### A3. Address — VERIFIED
 
 `〒272-0034 千葉県市川市市川1-26-15花亀ビル1F-B`
 
 `Chiba-ken, Ichikawa-shi, Ichikawa 1-26-15 Hanakame Bldg. 1F-B`
 
 - [x] Verified by CEO/business owner
-- [ ] Production publication/cutover authorized
 
 ### A4. Operating hours — VERIFIED CURRENT / RECHECK MID-SEPTEMBER
-
-**Current customer-facing operating/pickup hours:**
 
 `Wednesday to Saturday: 2:00 PM–8:00 PM`
 
 `Pickup hours: same as operating hours`
 
 - [x] Verified current as of 2026-08-28
-- [x] Re-verification required around mid-September 2026 because the business owner expects an hours change
+- [x] Re-verification required around **mid-September 2026** because a schedule change is expected
 
 ### A5. Pickup instructions — CURRENTLY NOT APPLICABLE
 
-**Special pickup instructions:** none at present.
+- [x] No special location-specific pickup instructions at present
 
-- [x] Confirmed by CEO/business owner
-
-A general pickup/order policy draft has been prepared separately and is pending approval.
+The general Pickup & Order Policy is now approved separately.
 
 ---
 
@@ -75,38 +64,20 @@ A general pickup/order policy draft has been prepared separately and is pending 
 
 ### B1. Phone — VERIFIED
 
-**Correct production phone number:**  
 `050-1785-0575`
-
-- [x] Verified by CEO/business owner
-- [ ] Production publication/cutover authorized
-
-Verification recorded: 2026-08-28  
-Source: direct business-owner confirmation
 
 ### B2. Customer email — VERIFIED
 
-**Primary customer-contact email:**  
-`info@rubyscakedelights.shop`
-
-**Alias/order email:**  
-`order@rubyscakedelights.shop`
-
-- [x] Verified by CEO/business owner
+Primary: `info@rubyscakedelights.shop`  
+Alias/order email: `order@rubyscakedelights.shop`
 
 ### B3. Instagram — VERIFIED
 
-**Official customer-facing Instagram account:**  
 `@rubyscakedelights`
-
-- [x] Verified by CEO/business owner
 
 ### B4. Facebook — VERIFIED
 
-**Official customer-facing Facebook page/account:**  
 `https://www.facebook.com/RubysCakeDelights`
-
-- [x] Verified by CEO/business owner
 
 ### B5. Other contact method — NOT APPLICABLE
 
@@ -116,83 +87,69 @@ Source: direct business-owner confirmation
 
 ## C. Customer Policies
 
-For each policy, either confirm existing text after review or approve revised production text. Do not silently copy the current Website Builder version.
-
 ### C1. Privacy policy — NOT YET DRAFTED / VERIFIED
 
-- [ ] Existing reference reviewed and approved as-is
-- [ ] Revised text required
-- [ ] New text supplied separately
+- [ ] New production policy required
 
 ### C2. Terms & conditions — NOT YET DRAFTED / VERIFIED
 
-- [ ] Existing reference reviewed and approved as-is
-- [ ] Revised text required
-- [ ] New text supplied separately
+- [ ] New production terms required
 
-### C3. Cancellation / refund policy — DRAFT PENDING APPROVAL
+### C3. Cancellation / refund policy — VERIFIED / APPROVED
 
-Draft prepared in:
-`docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md`
+Canonical bilingual text:
+`docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md`, section 2.
 
-Proposed commercial structure:
+Approved structure:
 
 - 48+ hours before pickup: full refund
 - 24 to less than 48 hours: 50% cancellation fee
 - less than 24 hours / same-day cancellation / no-show: 100% cancellation fee
-- custom/special orders may specify an earlier deadline before confirmation
+- custom/special orders may specify an earlier disclosed deadline
 - wrong/defective order or Ruby-initiated cancellation: replacement/refund path
 
-- [ ] Approved by CEO/business owner
+- [x] Approved by CEO/business owner on 2026-08-28
 
-### C4. Pickup / order policy — DRAFT PENDING APPROVAL
+### C4. Pickup / order policy — VERIFIED / APPROVED
 
-Draft prepared in:
-`docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md`
+Canonical bilingual text:
+`docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md`, section 3.
 
-Covers order confirmation, pickup window, short-notice availability, changes, late pickup/no-show, order identification, inspection, and post-pickup handling.
+- [x] Approved by CEO/business owner on 2026-08-28
+- [x] Current pickup-hour wording remains subject to the recorded mid-September hours recheck
 
-- [ ] Approved by CEO/business owner
+### C5. Allergen disclaimer — VERIFIED / APPROVED WORDING
 
-### C5. Allergen disclaimer — DRAFT PENDING APPROVAL
+Canonical bilingual text:
+`docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md`, section 4.
 
-Draft prepared in:
-`docs/RUBY_BUSINESS_PROFILE_CUSTOMER_CONTENT_DRAFTS_2026-08-28.md`
-
-Covers ingredient/allergen disclosure, shared-kitchen cross-contact risk, pre-order allergy contact, supplier/ingredient variability and severe-allergy caution.
-
-- [ ] Approved by CEO/business owner
-- [ ] Ingredient/process review completed before production publication
+- [x] Approved by CEO/business owner on 2026-08-28
+- [ ] Product-specific ingredient/allergen data and applicable process review remain launch-time requirements
 
 ---
 
 ## D. Migration Exclusions — Confirmed
 
-The following current Website Builder content is explicitly **not** a production source of truth:
-
 - [x] Existing test products — **DO NOT MIGRATE**
 - [x] Existing test categories — **DO NOT MIGRATE**
 
-Production products, categories, prices, inventory and media will be created from separately verified Ruby business/catalog data.
+Production products, categories, prices, inventory and media require separately verified catalog data.
 
 ---
 
 ## E. Current Verification Progress
 
 Required profile fields: **15**  
-Verified: **7**  
+Verified: **10**  
 Explicitly not applicable: **2**  
-Resolved: **9 / 15**  
-Unresolved/pending approval: **6 / 15**
+Resolved: **12 / 15**  
+Unresolved/pending approval: **3 / 15**
 
 Remaining unresolved fields:
 
-1. Business description — draft pending approval
+1. Business description — revised draft pending approval
 2. Privacy policy — not yet drafted/approved
 3. Terms & conditions — not yet drafted/approved
-4. Cancellation/refund policy — draft pending approval
-5. Pickup/order policy — draft pending approval
-6. Allergen disclaimer — draft pending approval/process review
 
 ### Time-sensitive recheck
 
@@ -200,17 +157,10 @@ Operating/pickup hours are verified for the current business state but must be r
 
 ---
 
-## F. Verification Sign-off
+## F. Production Authority Boundary
 
-The information marked verified above is approved as working business-information source data for production preparation. This does not authorize live publication or production cutover.
-
-### Completion rule
-
-The machine-readable profile may be set to `profile_complete: true` only when every required field is either:
-
-- `verified`; or
-- explicitly `not_applicable` with a reason.
+The machine-readable profile may be set to `profile_complete: true` only when every required field is either `verified` or explicitly `not_applicable` with a reason.
 
 `production_publish_authorized` remains **false** even after profile completion until the separate staging/cutover gate is approved.
 
-`PHIL_AI_OS_RUBY_BUSINESS_PROFILE_CORE_DETAILS_VERIFIED_DRAFTS_PENDING`
+`PHIL_AI_OS_RUBY_BUSINESS_PROFILE_12_OF_15_RESOLVED_DESCRIPTION_PRIVACY_TERMS_PENDING`
