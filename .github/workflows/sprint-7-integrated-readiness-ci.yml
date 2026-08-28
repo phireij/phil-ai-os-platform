@@ -93,6 +93,9 @@ jobs:
       - name: Validate security and recovery readiness
         run: python scripts/validate_sprint7_security_recovery.py
 
+      - name: Validate production deployment readiness
+        run: python scripts/validate_sprint7_production_deployment.py
+
       - name: Verify executive Sprint 7 entry and closure records
         run: |
           set -euo pipefail
