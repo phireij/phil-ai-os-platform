@@ -96,6 +96,9 @@ jobs:
       - name: Validate production deployment readiness
         run: python scripts/validate_sprint7_production_deployment.py
 
+      - name: Validate external channel activation readiness
+        run: python scripts/validate_sprint7_channel_activation.py
+
       - name: Verify executive Sprint 7 entry and closure records
         run: |
           set -euo pipefail
