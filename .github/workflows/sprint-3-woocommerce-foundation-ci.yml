@@ -56,3 +56,25 @@ jobs:
             exit 1
           fi
           echo "PHIL_AI_OS_SPRINT_3_SECRET_SCAN_GREEN"
+
+  local-woocommerce-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap isolated WordPress and WooCommerce
+        shell: bash
+        run: bash commerce/woocommerce/bootstrap-local.sh
+      - name: Verify isolated WooCommerce runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          compose=(docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml)
+          "${compose[@]}" run --rm wpcli plugin is-active woocommerce
+          curl --fail --silent --show-error --retry 20 --retry-delay 2 --retry-connrefused \
+            http://127.0.0.1:8088/ >/dev/null
+          echo "PHIL_AI_OS_SPRINT_3_LOCAL_WOOCOMMERCE_RUNTIME_GREEN"
+      - name: Destroy isolated WooCommerce runtime
+        if: always()
+        shell: bash
+        run: docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml down -v --remove-orphans
