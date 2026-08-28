@@ -13,23 +13,24 @@
 | Control item | Current status |
 |---|---|
 | **Overall schedule health** | **AHEAD OF ORIGINAL 2-MONTH PLAN** |
-| **Executive roadmap position** | **Sprint 5 — Operations Hub, early bounded entry** |
-| **Current engineering gate** | **Sprint 5 channel normalization, intent extraction, deduplication/idempotency, policy/approval and isolated Operations Hub flows; live external-channel credentials/connectivity remain separately gated** |
-| **Last completed milestone** | **Sprint 4 Customer Experience CLOSED GREEN — 2026-08-28; 36/36 tests GREEN; bilingual mobile/PWA/SEO/cart/pickup/KOMOJU handoff foundation proven; PR #6 merged safely to `main`** |
+| **Executive roadmap position** | **Sprint 7 — Testing, Production Readiness, Documentation & Launch Preparation — EARLY ENTRY** |
+| **Current engineering gate** | **Full-platform convergence, regression/security/recovery testing, production-readiness evidence, deployment/runbook preparation and launch acceptance planning. Production activations remain separately gated.** |
+| **Last completed milestone** | **Sprint 6 Automation CLOSED GREEN — 2026-08-28; 36/36 tests GREEN; simulation-only orchestration/approval/dry-run/audit/recovery foundation proven; PR #8 merged safely to `main`.** |
 | **Mission Control** | Multi-agent read model operational; V1 UX North Star formalized; mutation authority intentionally bounded |
 | **Multi-agent capability** | Foundation proven; governed handoff demonstrated; normal specialist execution intentionally disabled |
 | **Current production autonomy ceiling** | **A0** |
 | **Current execution task-class allowlist** | `general` only |
 | **Supabase** | **Deferred from Core V1 critical path; durable Control API SQLite remains canonical operational datastore** |
 | **Commerce production activation** | **GATED — WooCommerce production connectivity/mutations not authorized** |
-| **Payment merchant** | **KOMOJU selected; WooCommerce-plugin/account-sign-in boundary modeled; connection remains `not_configured`; payment execution/live mode gated** |
+| **Operations live-channel activation** | **GATED — Facebook/Instagram/WhatsApp/Google Business live connectivity and broader channel writes not authorized** |
+| **Payment merchant** | **KOMOJU selected; WooCommerce integration boundary modeled; account connection/payment execution/live mode remain gated** |
 | **Stretch full-platform target** | **2026-09-25** |
 | **Working target** | **2026-09-27 to 2026-09-30** |
 | **Safety target / latest planned launch** | **2026-10-02** |
 | **Original 2-month target** | Approximately **2026-10-19** from the 2026-08-19 start |
-| **Schedule variance** | **Sprints 3 and 4 both completed on Aug 28 before their original Sep 1–7 and Sep 8–14 windows; Sprint 5 entered early while launch targets remain unchanged** |
-| **Immediate next action** | Build Sprint 5 Operations Hub contracts/mocks for Facebook, Instagram, Telegram, WhatsApp and Google Business; normalize events, extract intent, prove deduplication/idempotency and policy/approval routing without live account access or writes |
-| **Next explicit approval boundary** | Before live external-channel credentials/connectivity, new production integration identity, WooCommerce/KOMOJU production connectivity, live catalog/order/payment/channel mutations, payment/DNS activation, specialist enablement, new execution class or other authority expansion |
+| **Schedule variance** | **Sprints 3–6 all reached bounded GREEN closure on 2026-08-28, materially ahead of their original September windows. Sprint 7 has entered early; launch targets remain unchanged.** |
+| **Immediate next action** | Execute Sprint 7 integrated regression/readiness work, security/recovery checks, deployment/runbook preparation, launch acceptance criteria and explicit production activation gates. |
+| **Next explicit approval boundary** | Before WooCommerce/KOMOJU production connectivity, live external-channel credentials/writes, live order/payment/catalog mutations, DNS/public-site cutover, specialist enablement, new execution class, autonomy increase, or Mission Control mutation authority. |
 
 **Current classification: AHEAD.**
 
@@ -65,20 +66,15 @@ A CEO/operator should be able to determine within approximately **10 seconds**:
 
 ### V1 information architecture
 
-- **Executive View — “Are we okay?”**  
-  Health, active work, approvals, agent status, major alerts, risks and relevant operational/cost signals.
-
-- **Operations View — “What is everyone doing?”**  
-  Tasks, queues, agents, handoffs, lifecycle state, failures, retries, priorities and activity history.
-
-- **Governance View — “What is allowed?”**  
-  Autonomy, task-class allowlist, agent authority, policy decisions, approvals, execution boundaries and audit evidence.
+- **Executive View — “Are we okay?”** — health, active work, approvals, agent status, major alerts, risks and relevant operational/cost signals.
+- **Operations View — “What is everyone doing?”** — tasks, queues, agents, handoffs, lifecycle state, failures, retries, priorities and activity history.
+- **Governance View — “What is allowed?”** — autonomy, task-class allowlist, agent authority, policy decisions, approvals, execution boundaries and audit evidence.
 
 ### V1 scope rule
 
 The V1 target is a clean, professional and practical operational cockpit—not an advanced analytics product. Highly customizable dashboards, deep historical analytics, elaborate visualization, animation-heavy interaction and nonessential visual polish are post-V1 unless they can be added without critical-path impact.
 
-**Schedule effect of this UX North Star: 0 days.** It is an acceptance/design requirement for already-planned Mission Control work, not a new sprint.
+**Schedule effect of this UX North Star: 0 days.**
 
 ---
 
@@ -87,8 +83,6 @@ The V1 target is a clean, professional and practical operational cockpit—not a
 ## Sprint 0 — Architecture Freeze
 
 **Status:** **CLOSED / CONSOLIDATED**
-
-Original scope included Hermes/Buzz/Mission Control/AI tooling evaluation and final architecture.
 
 Formal outcome:
 
@@ -112,7 +106,7 @@ Established:
 - backup/self-heal/restore;
 - audit/recovery controls.
 
-Supabase disposition is finalized: **deferred from Core V1 critical path**. The durable SQLite control plane behind Control API remains canonical for Core V1.
+Supabase remains **deferred from Core V1 critical path**. Durable SQLite behind Control API remains canonical for Core V1.
 
 ---
 
@@ -133,21 +127,14 @@ Completed/proven:
 - policy/risk framework;
 - Phase 2.3 P1–P5 GREEN;
 - inert append-only policy-decision ledger activation;
-- corrected independent P5 verification GREEN;
 - monitoring/backup/rollback/fail-closed controls.
-
-Formal records:
-
-- `docs/PHASE_2_3_P5_PRODUCTION_ACTIVATION_RESULT.md`
-- `docs/PHASE_2_3_FORMAL_CLOSURE.md`
-- `docs/SPRINT_2_FORMAL_CLOSURE_2026-08-28.md`
 
 ### Sprint 2 exit baseline
 
 - autonomy ceiling: **A0**;
 - execution allowlist: **`general` only**;
 - Hermes enabled/assignable within established authority;
-- `specialist-worker-01` disabled/non-assignable for normal execution;
+- specialist worker disabled/non-assignable for normal execution;
 - Mission Control read-only unless separately authorized;
 - Control API central system-of-record/governance boundary;
 - Execution Boundary sole authorized side-effect surface;
@@ -158,181 +145,130 @@ Formal records:
 ## Sprint 3 — WooCommerce Foundation
 
 **Status:** **CLOSED GREEN — 2026-08-28 / COMPLETED EARLY**  
-**Original target window:** **2026-09-01 to 2026-09-07**  
-**Actual bounded foundation closure:** **2026-08-28**
+**Original target window:** **2026-09-01 to 2026-09-07**
 
-### Deliverables completed
+Delivered/proven:
 
-- Docker/development foundation;
-- products;
-- categories;
-- images/media;
-- inventory;
-- Japanese localization;
-- English localization;
-- stable commerce adapter/interface contracts;
-- idempotency/reconciliation/error behavior;
-- isolated test coverage;
-- bounded production activation gate preparation.
-
-### Validation evidence
-
+- isolated Docker/development WordPress/WooCommerce foundation;
+- products/categories/media/inventory/localization contracts;
+- deterministic adapter, idempotency, reconciliation, audit and rollback boundaries;
+- inventory conflict/revision protection;
+- authentication/localization fail-closed contracts;
 - **59 isolated Python tests GREEN**;
-- contract/fixture validation GREEN;
-- Docker Compose topology and loopback-only boundary GREEN;
 - local WordPress + MariaDB bootstrap GREEN;
-- WooCommerce installation/activation GREEN;
-- official `wc/v3` REST surface registration GREEN;
-- isolated HTTP smoke and teardown GREEN;
+- WooCommerce installation/activation and `wc/v3` REST registration GREEN;
+- loopback HTTP smoke/teardown GREEN;
 - credential-pattern scan GREEN;
-- merge-safety review GREEN;
-- PR #5 merged to `main` as repository integration only;
-- post-merge Actions check: zero workflows fired on the merge commit.
+- PR #5 merged safely to `main`; zero Actions fired on merge commit.
 
-Formal records:
-
-- `docs/SPRINT_3_WOOCOMMERCE_FOUNDATION_BACKLOG_2026-08-28.md`
-- `docs/SPRINT_3_WOOCOMMERCE_FOUNDATION_SLICE_3_2026-08-28.md`
-- `docs/SPRINT_3_WOOCOMMERCE_FOUNDATION_READINESS_MATRIX_2026-08-28.md`
-- `docs/SPRINT_3_WOOCOMMERCE_SECURITY_ACTIVATION_CHECKLIST_2026-08-28.md`
-- `docs/SPRINT_3_MAIN_MERGE_SAFETY_REVIEW_2026-08-28.md`
-
-### Sprint 3 exit boundary
-
-The bounded foundation is GREEN, but this does **not** authorize production WooCommerce activation. Separate explicit CEO approval remains required before production credentials/connectivity or live commerce mutations.
+Production WooCommerce remains gated.
 
 ---
 
 ## Sprint 4 — Customer Experience
 
 **Status:** **CLOSED GREEN — 2026-08-28 / COMPLETED EARLY**  
-**Original target window:** **2026-09-08 to 2026-09-14**  
-**Actual bounded foundation closure:** **2026-08-28**
+**Original target window:** **2026-09-08 to 2026-09-14**
 
-### Deliverables completed
+Delivered/proven:
 
 - mobile-first experience;
-- PWA and offline app shell;
-- SEO preview/deployment contracts;
-- catalog/product pages;
-- single- and multi-item checkout intent;
-- pickup readiness and blocker handling;
-- bilingual English/Japanese customer experience;
+- PWA/offline shell;
+- SEO preview/deployment policy;
+- catalog/product detail experience;
+- bilingual EN/JA projection;
+- checkout/pickup intents and blockers;
+- multi-item synthetic cart;
+- deterministic JPY pricing;
 - accessibility/empty/error/offline baselines;
-- deterministic customer-flow state governance;
-- KOMOJU payment-handoff foundation through the WooCommerce integration boundary.
-
-### Validation evidence
-
-- **36/36 unit tests GREEN**;
-- PWA/accessibility/safety validation GREEN;
-- browser-visible synthetic catalog and multi-item cart preview GREEN;
-- deterministic JPY pricing and mixed-currency fail-closed behavior GREEN;
-- checkout/readiness/payment cross-contract compatibility GREEN;
-- deterministic 2-item **¥1,400** proof GREEN;
-- KOMOJU provider fixed to `komoju` and integration mode fixed to `woocommerce_plugin`;
-- KOMOJU connection state fixed to `not_configured`;
-- order creation, payment execution and live-mode authority hard-false;
-- WooCommerce/KOMOJU credential-pattern scans GREEN;
-- isolated HTTP smoke and teardown GREEN;
-- inherited Sprint 3 WooCommerce contract/runtime compatibility GREEN;
-- PR #6 merged to `main` as commit `ad301193c41bcfd81d2ac5fa66aaea1d149a5638`;
-- post-merge Actions check: zero workflows fired on the merge commit.
-
-Formal records:
-
-- `docs/SPRINT_4_CUSTOMER_EXPERIENCE_BACKLOG_2026-08-28.md`
-- `docs/SPRINT_4_CUSTOMER_EXPERIENCE_SLICE_1_2026-08-28.md`
-- `docs/SPRINT_4_CUSTOMER_EXPERIENCE_SLICE_2_2026-08-28.md`
-- `docs/SPRINT_4_CUSTOMER_EXPERIENCE_SLICE_3_2026-08-28.md`
-- `docs/SPRINT_4_CUSTOMER_EXPERIENCE_SLICE_4_2026-08-28.md`
-- `docs/SPRINT_4_CUSTOMER_EXPERIENCE_READINESS_MATRIX_2026-08-28.md`
-- `docs/SPRINT_4_FORMAL_CLOSURE_2026-08-28.md`
+- KOMOJU WooCommerce handoff contract;
+- **36/36 tests GREEN**;
+- deterministic 2-item **¥1,400** cross-contract proof GREEN;
+- order creation/payment/live-mode authority hard-false;
+- credential-pattern and HTTP/Woo compatibility checks GREEN;
+- PR #6 merged as `ad301193c41bcfd81d2ac5fa66aaea1d149a5638`; zero Actions fired on merge commit.
 
 ### KOMOJU disposition
 
-KOMOJU is the intended Ruby pilot payment merchant. The safe architecture is:
+KOMOJU is the intended Ruby pilot payment merchant. Safe architecture:
 
 **Customer CX → WooCommerce order boundary → KOMOJU WooCommerce integration**
 
-Phil AI OS may prepare/observe governed payment-handoff intent but does not gain payment authority from this design. The current connection remains `not_configured`.
-
-### Sprint 4 exit boundary
-
-Production WooCommerce/KOMOJU connectivity, live order/payment execution, production webhooks, merchant credentials and public-site/DNS cutover remain separately gated and are not authorized by Sprint 4 closure.
+Current account/payment activation remains gated.
 
 ---
 
 ## Sprint 5 — Operations Hub
 
-**Status:** **ACTIVE / EARLY BOUNDED ENTRY — 2026-08-28**  
+**Status:** **CLOSED GREEN — 2026-08-28 / COMPLETED EARLY**  
 **Original target window:** **2026-09-15 to 2026-09-20**
 
-### Planned channels
+Delivered/proven:
 
-- Facebook;
-- Instagram;
-- Telegram;
-- WhatsApp;
-- Google Business.
+- provider-neutral synthetic normalization for Facebook, Instagram, Telegram, WhatsApp and Google Business;
+- deterministic event identity, fingerprints, lifecycle correlation and duplicate/replay rejection;
+- intent/confidence classification;
+- complaint/public-review/low-confidence human-review routing;
+- read-only Operations queue/read model;
+- raw customer text omitted from Mission Control-facing projection;
+- governance risk/review/approval handoff contract;
+- `execution_authorized=false`, `channel_reply_authorized=false`, `mutation_authorized=false`, `authority_effect=none`;
+- mock-only provider ingestion adapters and synthetic failure/retry planning;
+- **34/34 isolated Operations tests GREEN**;
+- five-channel/live-boundary scans GREEN;
+- inherited commerce compatibility and isolated Woo runtime GREEN;
+- PR #7 merged as `7af81d97b1048e07bb8405f228d7faf1fcfa9f3c`; zero Actions fired on merge commit.
 
-### Expected flow
+Formal records include:
 
-**channel event → normalize → classify → policy/approval → governed execution → durable result/audit**
+- `docs/SPRINT_5_OPERATIONS_HUB_READINESS_MATRIX_2026-08-28.md`
+- `docs/SPRINT_5_FORMAL_CLOSURE_2026-08-28.md`
 
-### Work permitted under the current authority baseline
-
-- channel-neutral normalized event schemas;
-- synthetic channel fixtures and mock adapters;
-- deterministic event identity/deduplication/idempotency contracts;
-- message/order/task intent extraction contracts;
-- entity/reference normalization;
-- confidence and ambiguity handling;
-- policy/approval handoff contracts;
-- Mission Control read models for inbound work;
-- isolated Operations Hub queues/state machines;
-- failure/retry/dead-letter design and tests;
-- channel capability matrices and activation checklists;
-- no live external credentials required for bounded implementation/testing.
-
-### Hard stop boundary
-
-Sprint 5 bounded work must not by itself introduce:
-
-- live Facebook/Instagram/WhatsApp/Google Business credentials or account access;
-- a new Telegram production identity or broader Telegram authority;
-- live external-channel writes/replies/order creation;
-- production WooCommerce/KOMOJU connectivity or mutations;
-- specialist execution or higher autonomy;
-- a new execution task class;
-- Mission Control mutation authority.
-
-Parallel interface baseline:
-
-`docs/CX_OPERATIONS_INTERFACE_CONCEPT_2026-08-28.md`
+Live external-channel activation remains gated.
 
 ---
 
 ## Sprint 6 — Automation
 
-**Target window:** **2026-09-21 to 2026-09-25**
+**Status:** **CLOSED GREEN — 2026-08-28 / COMPLETED EARLY**  
+**Original target window:** **2026-09-21 to 2026-09-25**
 
-Target integrated chain:
+Target chain was modeled under bounded authority:
 
-**Mission Control → Buzz → Hermes/specialists → WooCommerce/Operations Hub → Telegram/approval surface → CEO**
+**Operations event → governance → approval state → Hermes/general routing → dry-run Execution Boundary preview → read-only lifecycle/audit preview**
 
-Deliverables:
+Delivered/proven:
 
-- governed cross-system orchestration;
-- bounded routing;
-- approval-aware execution;
-- end-to-end status/audit visibility;
-- controlled retry/recovery only where authorized;
-- no provider/system bypass.
+- deterministic simulation-only automation plans;
+- approval-blocked vs simulation-ready state;
+- one-time approval decision/replay protection;
+- simulation release with zero execution authority;
+- dry-run Execution Boundary request contract;
+- `dispatch=false` and `network_call=false`;
+- append-only simulated lifecycle/audit evidence;
+- Mission Control-compatible read-only audit projection;
+- planned-only retry/recovery behavior;
+- dry-run rollback disposition: no side effect to rollback;
+- `general` task class only and Hermes only;
+- specialists disabled;
+- automatic execution/reply/mutation/retry/rollback authority hard-false;
+- **36/36 Sprint 6 tests GREEN**;
+- all orchestration/approval/dry-run/lifecycle/recovery/authority markers GREEN;
+- PR #8 merged as `a7a67eace70f1beffe1d884d604208aefff67bd2`; zero Actions fired on merge commit.
+
+Formal records include:
+
+- `docs/SPRINT_6_AUTOMATION_BACKLOG_2026-08-28.md`
+- `docs/SPRINT_6_AUTOMATION_READINESS_MATRIX_2026-08-28.md`
+- `docs/SPRINT_6_FORMAL_CLOSURE_2026-08-28.md`
+
+Sprint 6 closure proves orchestration behavior in simulation; it does not authorize production automation.
 
 ---
 
-## Sprint 7 — Testing, Production, Documentation & Launch
+## Sprint 7 — Testing, Production Readiness, Documentation & Launch
+
+**Status:** **ACTIVE / EARLY ENTRY — 2026-08-28**
 
 **Targets:**
 
@@ -340,16 +276,35 @@ Deliverables:
 - **Working:** 2026-09-27 to 2026-09-30
 - **Safety:** 2026-10-02
 
-Deliverables:
+### Current bounded scope
 
-- end-to-end testing;
-- production validation;
-- security/performance;
-- deployment;
-- documentation/training;
-- launch acceptance.
+- full regression matrix across Control API, governance, commerce, CX, Operations and automation contracts;
+- cross-system contract compatibility and lifecycle/correlation checks;
+- security/credential/authority regression;
+- backup/restore/recovery evidence review;
+- performance/smoke baselines where safe and isolated;
+- deployment topology/runbook preparation;
+- Ruby business-data verification checklist;
+- Hostinger WordPress/WooCommerce migration/cutover preparation;
+- KOMOJU Test Mode activation checklist;
+- live-channel activation checklists;
+- operator/CEO documentation and training material;
+- launch acceptance criteria and rollback plan;
+- explicit production gate packages for CEO decision.
 
-A significant portion of late-stage safety work was completed early: monitoring, backups, self-heal, rollback, authentication boundaries, approval controls, auditability and negative-path fail-closed validation.
+### Hard stop boundary
+
+Sprint 7 preparation/testing does not itself authorize:
+
+- production WooCommerce credentials/connectivity or mutations;
+- KOMOJU account connection or payment execution;
+- live Facebook/Instagram/WhatsApp/Google Business access/writes;
+- DNS/public-site cutover;
+- automatic production execution;
+- specialists/new task classes/higher autonomy;
+- Mission Control mutation authority.
+
+These require explicit governed activation decisions.
 
 ---
 
@@ -359,14 +314,15 @@ A significant portion of late-stage safety work was completed early: monitoring,
 |---|---|---|
 | **Aug 19–28** | Architecture + core infrastructure + AI infrastructure | **Completed / ahead** |
 | **Aug 28** | Phase 2.3 + Sprint 2 closure; Architecture v1.0 freeze; Supabase disposition | **Completed** |
-| **Aug 28** | Sprint 3 — bounded WooCommerce Foundation | **CLOSED GREEN / completed before Sep 1 planned start** |
-| **Aug 28** | Sprint 4 — bounded Customer Experience foundation | **CLOSED GREEN / completed before Sep 8 planned start** |
-| **Aug 28 onward** | Sprint 5 — Operations Hub bounded implementation | **ACTIVE EARLY / ahead of Sep 15–20 planned window** |
-| **Sep 1–14** | Original Sprint 3–4 windows | **Lead-time reserve for Operations acceleration, convergence and QA; production gates remain closed** |
-| **Sep 15–20** | Original Sprint 5 — Operations Hub window | **Entered early; remaining convergence/QA reserve** |
-| **Sep 21–25** | Sprint 6 — Full Automation | Planned |
-| **Sep 25–30** | Sprint 7 — testing, production, security, docs, training, launch | Stretch/working window |
-| **Oct 2** | Safety launch deadline | Reserve |
+| **Aug 28** | Sprint 3 — bounded WooCommerce Foundation | **CLOSED GREEN / early** |
+| **Aug 28** | Sprint 4 — bounded Customer Experience | **CLOSED GREEN / early** |
+| **Aug 28** | Sprint 5 — bounded Operations Hub | **CLOSED GREEN / early** |
+| **Aug 28** | Sprint 6 — bounded Automation | **CLOSED GREEN / early** |
+| **Aug 28 onward** | Sprint 7 — integrated testing/readiness/documentation/launch preparation | **ACTIVE EARLY** |
+| **Sep 1–20** | Original Sprint 3–5 windows | **Lead-time reserve for convergence, production preparation and QA** |
+| **Sep 21–25** | Original Sprint 6 window / stretch launch target | **Lead-time reserve; production activation remains serialized/gated** |
+| **Sep 25–30** | Sprint 7 production/testing/docs/training/launch | **Stretch/working window retained** |
+| **Oct 2** | Safety launch deadline | **Reserve retained** |
 
 ---
 
@@ -405,11 +361,12 @@ Review/update this roadmap when:
 
 Mandatory reviews:
 
-- Sprint 3 midpoint/closure;
+- Sprint 3 closure;
 - Sprint 4 closure;
 - Sprint 5 closure;
-- before Sprint 6 production automation activation;
+- Sprint 6 closure;
 - Sprint 7 entry;
+- before each production activation package;
 - production launch acceptance.
 
 Schedule compression must never bypass production approval, rollback, audit, security or data-integrity gates.
@@ -439,13 +396,22 @@ V1 is complete only when the platform can demonstrate end-to-end:
 
 ## Current
 
-**Sprint 5 — Operations Hub: bounded early-entry work is authorized by the existing roadmap scope.**
+**Sprint 7 — integrated testing, production-readiness, documentation and launch preparation is authorized within existing read-only/simulation/isolated boundaries.**
 
-No additional approval is required for channel-neutral schemas, synthetic fixtures, mock adapters, normalization, intent extraction, deduplication/idempotency, policy/approval handoff, isolated read models or QA that does not access live external accounts or cross a production mutation/identity boundary.
+No additional approval is required for regression/security/recovery testing, isolated performance checks, runbooks/checklists, training material, migration planning, launch acceptance criteria or production gate preparation that does not introduce a live production identity, credential, mutation or authority expansion.
 
-## Next production authorization
+## Next production authorizations
 
-A new explicit CEO gate must be prepared before introducing live external-channel credentials/connectivity or account writes, WooCommerce/KOMOJU production connectivity, live order/payment/channel mutations, payment/DNS activation, a new production integration identity, specialist enablement, a new execution class or any other authority expansion.
+Explicit CEO gates must be prepared before any of the following:
+
+1. WooCommerce production identity/credentials/connectivity;
+2. KOMOJU account connection and Test Mode activation, followed later by a separate Live Mode decision;
+3. live external-channel account connectivity/webhooks/writes;
+4. verified Ruby production catalog/inventory/order activation;
+5. public WordPress/WooCommerce site cutover and DNS changes;
+6. specialist enablement/new task class/higher autonomy;
+7. Mission Control write/mutation authority;
+8. automatic production execution/retry/rollback.
 
 ---
 
@@ -457,7 +423,7 @@ A new explicit CEO gate must be prepared before introducing live external-channe
 
 > **Safety target: October 2, 2026.**
 
-These targets remain unchanged after Sprint 3 and Sprint 4 both closed GREEN on 2026-08-28. The earned lead time is reserved for Operations Hub acceleration, system convergence, integration QA and launch-risk reduction rather than bypassing production gates.
+These targets remain unchanged. The substantial lead time earned by closing Sprints 3–6 on 2026-08-28 is reserved for convergence, production readiness, migration, security/recovery verification, operator training and launch-risk reduction rather than bypassing production gates.
 
 ---
 
@@ -467,9 +433,11 @@ These targets remain unchanged after Sprint 3 and Sprint 4 both closed GREEN on 
 |---|---|---|
 | **2026-08-28** | Reconciled Phase 2.x engineering work with original 8-Sprint roadmap and established canonical schedule control. | Stretch Sep 25; working Sep 27–30; safety Oct 2. |
 | **2026-08-28** | Added Mission Control V1 UX North Star: 10-second situational awareness; Executive/Operations/Governance views; advanced polish bounded post-V1. | **0 days; targets unchanged.** |
-| **2026-08-28** | Phase 2.3 P5 independently verified GREEN; Phase 2.3 formally closed; Architecture Specification v1.0 frozen; Supabase deferred from Core V1 critical path; Sprint 2 formally CLOSED GREEN; Sprint 3 backlog and CX/Operations parallel interface concept prepared. | **Sprint 3 becomes current executive sprint; schedule remains AHEAD and all launch targets unchanged.** |
-| **2026-08-28** | Sprint 3 bounded WooCommerce Foundation completed GREEN ahead of its Sep 1–7 window: 59 isolated tests, local WordPress/WooCommerce `wc/v3` runtime smoke, auth/localization/reconciliation/audit/rollback boundaries and merge-safety proof GREEN; PR #5 merged safely to `main` with zero post-merge Actions runs. Production WooCommerce gate remains closed. | **Sprint 4 enters early on Aug 28; schedule lead increases while Sep 25 / Sep 27–30 / Oct 2 launch targets remain unchanged.** |
-| **2026-08-28** | Sprint 4 bounded Customer Experience completed GREEN ahead of its Sep 8–14 window: 36/36 tests, mobile/PWA/SEO/product/cart/pickup/bilingual flows, cross-contract 2-item ¥1,400 proof, KOMOJU WooCommerce handoff boundary, safety/credential scans and isolated HTTP/Woo compatibility GREEN; PR #6 merged as `ad301193...` with zero post-merge Actions runs. KOMOJU connection/payment/live mode and public-site deployment remain gated. | **Sprint 5 enters early on Aug 28; schedule lead increases again while all launch targets remain unchanged.** |
+| **2026-08-28** | Sprint 2 / Phase 2.3 closed GREEN; Architecture Specification v1.0 frozen; Supabase deferred from Core V1 critical path. | **Sprint 3 entered early; targets unchanged.** |
+| **2026-08-28** | Sprint 3 WooCommerce Foundation CLOSED GREEN: 59 tests, isolated WordPress/WooCommerce `wc/v3` runtime, safety/reconciliation/auth/localization/rollback and merge-safety proof GREEN. | **Sprint 4 entered early; targets unchanged.** |
+| **2026-08-28** | Sprint 4 Customer Experience CLOSED GREEN: 36 tests, mobile/PWA/SEO/product/cart/pickup/bilingual flows and inert KOMOJU handoff foundation GREEN. | **Sprint 5 entered early; targets unchanged.** |
+| **2026-08-28** | Sprint 5 Operations Hub CLOSED GREEN: 34 tests, five-channel normalization, queue/read model, governance bridge and mock adapter/recovery boundaries GREEN; PR #7 merged safely with zero post-merge Actions. | **Sprint 6 entered early; targets unchanged.** |
+| **2026-08-28** | Sprint 6 Automation CLOSED GREEN: 36 tests, simulation-only orchestration, one-time approval/replay protection, dry-run boundary, lifecycle audit and recovery planning GREEN; PR #8 merged as `a7a67eac...` with zero post-merge Actions. | **Sprint 7 enters early on Aug 28; substantial lead-time reserve retained and all launch targets unchanged.** |
 
 ---
 
