@@ -1,4 +1,4 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v1";
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,7 +7,11 @@ const APP_SHELL = [
   "./app-icon.svg",
   "./src/app.mjs",
   "./src/core.mjs",
+  "./src/flow.mjs",
+  "./src/pickup.mjs",
+  "./src/seo.mjs",
   "./fixtures/catalog.json",
+  "./fixtures/pickup-policy.json",
 ];
 
 self.addEventListener("install", (event) => {
