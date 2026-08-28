@@ -1,0 +1,109 @@
+name: Phase 2.2 A7.1b Mission Control Read Model Diagnostic
+
+on:
+  push:
+    paths:
+      - '.github/workflows/phase-2-2-a7-1b-read-model-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3 4 5 6; do
+            if ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+
+      - name: Diagnose read model without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE' | tee phase-2-2-a7-1b-diagnostic.txt
+          set -u
+          MC=/opt/phil-ai-os/mission-control
+          echo '=== process and listener discovery ==='
+          ps -ef | grep -E '[m]ission-control|[p]roxy.py|[s]erver.py|[r]ead-model.py' || true
+          ss -lntp | grep -E ':4880|:4881' || true
+          echo '=== file hashes ==='
+          for f in "$MC"/server.py "$MC"/proxy.py "$MC"/read-model.py "$MC"/agent-runtime-read-model.py; do test -f "$f" && sha256sum "$f"; done
+          echo '=== server.py ==='; sed -n '1,420p' "$MC/server.py" || true
+          echo '=== proxy.py ==='; sed -n '1,420p' "$MC/proxy.py" || true
+          echo '=== read-model.py ==='; sed -n '1,520p' "$MC/read-model.py" || true
+          echo '=== agent-runtime direct execution ==='
+          python3 "$MC/agent-runtime-read-model.py" > /tmp/a7-agent.out 2>/tmp/a7-agent.err; rc=$?
+          echo agent_runtime_rc=$rc
+          sed -n '1,80p' /tmp/a7-agent.err
+          sed -n '1,20p' /tmp/a7-agent.out
+          echo '=== aggregate read-model direct execution ==='
+          python3 "$MC/read-model.py" > /tmp/a7-read.out 2>/tmp/a7-read.err; rc=$?
+          echo read_model_rc=$rc
+          sed -n '1,120p' /tmp/a7-read.err
+          sed -n '1,40p' /tmp/a7-read.out
+          echo '=== endpoint probes ==='
+          for url in http://127.0.0.1:4880/api/read-model http://127.0.0.1:4881/api/read-model; do
+            printf 'url=%s status=' "$url"
+            curl -sS -o /tmp/a7-http.out -w '%{http_code}\n' "$url" || true
+            sed -n '1,20p' /tmp/a7-http.out || true
+          done
+          echo '=== durable control-plane state ==='
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          echo control_container="$CONTROL"
+          echo control_api_image="$(docker inspect "$CONTROL" --format '{{.Config.Image}}')"
+          echo execution_allowlist="$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')"
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          print('quick_check='+c.execute('pragma quick_check').fetchone()[0])
+          print('registry='+json.dumps([dict(r) for r in c.execute('select * from agent_registry order by agent_id')],sort_keys=True))
+          print('handoffs='+json.dumps([dict(r) for r in c.execute('select * from task_handoffs order by requested_at')],sort_keys=True))
+          print('handoff_lifecycle='+json.dumps([dict(r) for r in c.execute("select event_id,task_id,stage,occurred_at,source_component,actor_id,assigned_agent_id,previous_stage,reason_code,correlation_id from task_lifecycle_events where task_id in (select task_id from task_handoffs) order by occurred_at,event_id")],sort_keys=True))
+          PY
+          echo '=== presence evidence safe metadata ==='
+          for f in /var/lib/phil-ai-os/agent-presence/hermes.json /var/lib/phil-ai-os/agent-presence/specialist-worker-01.json; do
+            echo file="$f"
+            stat -c '%a %U:%G %s %y' "$f" || true
+            python3 - "$f" <<'PY'
+          import json,sys
+          try:
+              x=json.load(open(sys.argv[1]))
+              safe={k:v for k,v in x.items() if k not in {'signature','token','secret','private_key','authorization'}}
+              print(json.dumps(safe,sort_keys=True))
+          except Exception as e:
+              print('presence_error='+type(e).__name__)
+          PY
+          done
+          echo '=== governance probes ==='
+          for m in POST PUT PATCH DELETE; do printf '4881_%s=' "$m"; curl -sS -X "$m" -o /dev/null -w '%{http_code}\n' http://127.0.0.1:4881/api/read-model || true; done
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null && echo control_health=ok
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null && echo control_ready=ok
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_2_A7_1B_DIAGNOSTIC_OK
+          REMOTE
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a7-1b-read-model-diagnostic
+          path: phase-2-2-a7-1b-diagnostic.txt
+          if-no-files-found: warn
+          retention-days: 30
