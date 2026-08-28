@@ -18,7 +18,7 @@ Sprint 7 separates **bounded engineering readiness** from **live production auth
 | Production secret handling | **PLAN READY / NO PRODUCTION SECRETS AUTHORIZED**. | Block live integration until approved. |
 | WooCommerce deployment runbook | **READY / STAGING-FIRST**. | Production cutover blocked pending verified data, fresh recovery proof and approval. |
 | Ruby business profile | **INCOMPLETE**. | **BLOCKS production content/cutover.** |
-| Contact phone | **UNVERIFIED**. | **BLOCKS publication of the old phone value.** |
+| Contact phone | **VERIFIED — 050-1785-0575**. | Phone verification gate complete; overall publication/cutover remains separately gated. |
 | Old builder products/categories | **EXCLUDED / NOT AUTHORITATIVE**. | Must not be migrated as production catalog. |
 | WooCommerce production identity/credentials | **NOT AUTHORIZED / NOT CONFIGURED by Sprint 7 package**. | Blocks live API integration. |
 | KOMOJU integration | `not_configured`; Test Mode and Live Mode not authorized by the readiness package. | Blocks real payment launch until separately approved/validated. |
@@ -44,14 +44,15 @@ Can be marked GREEN when:
 
 Requires additional evidence not supplied by bounded engineering alone:
 
-- verified Ruby Business Profile;
-- verified contact phone;
+- completed Verified Ruby Business Profile;
 - approved production catalog/category source data;
 - Hostinger WordPress/WooCommerce staging QA;
 - SSL and checkout/pickup QA;
 - fresh pre-cutover backup/restore proof;
 - explicit production cutover authorization;
 - successful narrow launch/cutover checks.
+
+The production contact phone has already been verified as `050-1785-0575` and no longer blocks this category by itself.
 
 ### C. Payment acceptance
 
@@ -77,7 +78,7 @@ For each channel in launch scope:
 
 ## Current launch conclusion
 
-**Bounded Sprint 7 engineering is progressing, but live launch is not yet authorized.** The most important known live-launch blockers are the incomplete verified Ruby Business Profile, unverified phone value, fresh launch-time backup/restore recheck, production WooCommerce/KOMOJU activation decisions and final CEO/CTO sign-off.
+**Bounded Sprint 7 engineering is GREEN, but live launch is not yet authorized.** The most important remaining live-launch blockers are the incomplete Verified Ruby Business Profile, fresh launch-time backup/restore recheck, production WooCommerce/KOMOJU activation decisions and final CEO/CTO sign-off. The contact-phone verification blocker is closed with `050-1785-0575`.
 
 ## Sign-off record template
 
