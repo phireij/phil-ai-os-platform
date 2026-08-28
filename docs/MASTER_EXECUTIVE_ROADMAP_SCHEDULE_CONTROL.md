@@ -13,10 +13,10 @@
 | Control item | Current status |
 |---|---|
 | **Overall schedule health** | **AHEAD OF ORIGINAL 2-MONTH PLAN** |
-| **Executive roadmap position** | **Sprint 2 — AI Infrastructure, nearing completion** |
-| **Current engineering gate** | **Phase 2.3 P5 — Inert Policy Ledger Activation, awaiting explicit CEO authorization** |
-| **Last completed engineering checkpoint** | **Phase 2.3 P1–P4 GREEN** |
-| **Mission Control** | Multi-agent read model operational; operator/write authority intentionally bounded |
+| **Executive roadmap position** | **Sprint 2 — AI Infrastructure, formal closure/transition underway** |
+| **Current engineering gate** | **Phase 2.3 P5 — Inert Policy Ledger Activation independently verified GREEN; formal Phase 2.3 closure next** |
+| **Last completed engineering checkpoint** | **Phase 2.3 P5 corrected independent verification GREEN** |
+| **Mission Control** | Multi-agent read model operational; operator/write authority intentionally bounded; V1 UX North Star now formalized |
 | **Multi-agent capability** | Foundation proven; governed multi-agent handoff demonstrated; normal specialist execution still intentionally disabled |
 | **Current production autonomy ceiling** | **A0 — no autonomous production side-effect/execution expansion** |
 | **Current execution task-class allowlist** | `general` only |
@@ -25,7 +25,7 @@
 | **Safety target / latest planned launch** | **2026-10-02** |
 | **Original 2-month target** | Approximately **2026-10-19** from the 2026-08-19 start |
 | **Schedule variance** | Approximately **one sprint or more ahead of the original sequential plan** |
-| **Immediate next decision** | CEO authorization for Phase 2.3 P5, then complete Sprint 2 while preparing Sprint 3–5 parallel workstreams |
+| **Immediate next decision/action** | Formally close Phase 2.3 and Sprint 2, freeze Architecture Specification v1.0, finalize Supabase disposition, then enter Sprint 3 bounded WooCommerce Foundation work while preparing CX/Operations interfaces in parallel |
 
 ## Schedule health definitions
 
@@ -50,9 +50,60 @@ Deliver **Phil AI OS Platform Core V1 + Ruby’s Cake Delights operational pilot
 6. results and lifecycle evidence are visible in Mission Control;
 7. WooCommerce and business channels can participate in controlled workflows;
 8. monitoring, backup, rollback, audit, and recovery remain active;
-9. the CEO retains final authority for sensitive and newly expanded production scope.
+9. the CEO retains final authority for sensitive and newly expanded production scope;
+10. Mission Control gives the CEO/operator rapid situational awareness of system health, active work, required attention, and authority boundaries.
 
 The original project delivery model remains **8 Sprints**, with internal engineering phases/gates used as technical sub-milestones rather than replacements for the executive roadmap.
+
+## 1.1 Mission Control UI/UX North Star
+
+Mission Control is the **single operational cockpit for Phil AI OS**. Its V1 interface must prioritize clarity, governance, and rapid situational awareness rather than visual complexity.
+
+### Primary UX outcome
+
+A CEO/operator opening Mission Control should be able to determine, within approximately **10 seconds**:
+
+1. whether Phil AI OS is healthy;
+2. what work and agents are active;
+3. what requires human attention or approval;
+4. whether any task, agent, policy, or system state is outside its authorized boundary.
+
+### V1 information architecture
+
+Mission Control should converge toward three complementary views:
+
+- **Executive View — “Are we okay?”**  
+  System health, current work, pending approvals, agent status, major alerts, risks, and relevant operational/cost signals.
+
+- **Operations View — “What is everyone doing?”**  
+  Tasks, queues, agents, handoffs, lifecycle state, failures, retries, priorities, and activity history.
+
+- **Governance View — “What is allowed?”**  
+  Autonomy level, execution task-class allowlist, agent authority, policy decisions, approval state, execution boundaries, audit evidence, and controlled governance status.
+
+### V1 UX boundary
+
+The V1 objective is a **clean, professional, usable operational cockpit**, not an advanced analytics product. V1 includes:
+
+- clear hierarchy and status visibility;
+- agent/task/approval/governance visibility;
+- prominent exception and alert states;
+- practical responsive behavior for normal operator use;
+- traceability from work request through governed lifecycle/result;
+- read-only/observational behavior unless a separate production authority gate explicitly enables a mutation surface.
+
+The following are explicitly **post-V1 enhancements unless they can be added without critical-path impact**:
+
+- highly customizable dashboards;
+- advanced historical analytics and trend exploration;
+- elaborate visualization libraries;
+- animation-heavy interaction design;
+- deep layout personalization;
+- nonessential visual polish that delays launch acceptance.
+
+### Schedule rule
+
+Formalizing this UX North Star **does not move the current launch targets**. It is a design and acceptance requirement for already-planned Mission Control work, not a new standalone sprint. Any future proposal that materially expands Mission Control beyond this bounded V1 scope must be separately assessed for schedule effect before entering the critical path.
 
 ---
 
@@ -124,7 +175,7 @@ Mission Control can:
 **No WooCommerce yet.**
 
 ### Current status
-**Advanced / nearing completion.**
+**Technical gates complete through Phase 2.3 P5; formal closure underway.**
 
 Completed or proven foundations include:
 - deterministic task classification and routing;
@@ -136,10 +187,13 @@ Completed or proven foundations include:
 - governed multi-agent handoff;
 - Mission Control multi-agent read model;
 - policy/risk framework P1–P4;
+- P5 inert production policy-decision ledger activation;
+- corrected independent P5 verification GREEN;
 - monitoring, backup, rollback, and fail-closed behavior.
 
 ### Current engineering position
-**Phase 2.3 P5** is prepared but requires explicit CEO authorization because it introduces an inert production policy-decision ledger/writer surface.
+
+**Phase 2.3 P5 is GREEN.** Production activation completed within its bounded contract and a corrected standalone independent verifier re-proved the P5 invariants. Formal Phase 2.3 and Sprint 2 documentation closure is the remaining transition work before Sprint 3 becomes the primary executive sprint.
 
 ### Important boundary
 The platform is **multi-agent capable**, but not yet a fully autonomous multi-agent execution environment.
@@ -180,6 +234,16 @@ Nothing fancy; establish the stable commerce foundation first.
 
 ### Acceleration approach
 Start commerce architecture and isolated implementation as soon as Sprint 2 interfaces are stable; do not wait for every later AI OS enhancement.
+
+### Current entry boundary
+Sprint 3 may begin with **design, contracts, schemas, Docker/dev planning, fixtures, mocks, isolated implementation, bilingual content modeling, reconciliation/idempotency design, and QA/security preparation**.
+
+A separate explicit production authority gate remains required before any of the following:
+- WooCommerce credentials or secrets are introduced;
+- live WooCommerce connectivity is enabled;
+- a new production integration identity is created;
+- product, inventory, checkout, or order mutations are performed against production;
+- a new execution task class or autonomous production action is enabled.
 
 ---
 
@@ -293,8 +357,8 @@ Therefore Sprint 7 should focus primarily on full-system convergence, acceptance
 | Window | Executive objective | Primary status |
 |---|---|---|
 | **Aug 19–28** | Architecture + core infrastructure + advanced AI infrastructure | **Completed / ahead** |
-| **Aug 28–31** | Complete Sprint 2; Phase 2.3 policy activation/closure; Architecture Spec v1.0; Supabase final decision | **Current focus** |
-| **Sep 1–7** | Sprint 3 — WooCommerce Foundation | Planned |
+| **Aug 28–31** | Formal Sprint 2/Phase 2.3 closure; Architecture Spec v1.0; Supabase final decision; Sprint 3 entry preparation | **Current focus** |
+| **Sep 1–7** | Sprint 3 — WooCommerce Foundation | Planned; bounded preparation may begin early |
 | **Sep 8–14** | Sprint 4 — Customer Experience | Planned; may overlap Sprint 3 |
 | **Sep 15–20** | Sprint 5 — Operations Hub | Planned; discovery/connectors can start earlier |
 | **Sep 21–25** | Sprint 6 — Full Automation | Planned |
@@ -354,7 +418,8 @@ This document must be reviewed and updated whenever any of the following occurs:
 5. the working launch target moves by more than one day;
 6. a new business integration is added or removed from launch scope;
 7. a security, reliability, or data-integrity finding threatens delivery;
-8. additional agents/resources materially change delivery capacity.
+8. additional agents/resources materially change delivery capacity;
+9. a material UX requirement changes V1 acceptance scope or threatens the critical path.
 
 ## Mandatory review points
 
@@ -422,34 +487,41 @@ Sprint 7 / V1 is complete only when the platform can demonstrate, end-to-end:
 6. governed execution occurs through the Control API / approved integration boundary;
 7. outputs and durable evidence are recorded;
 8. Mission Control exposes lifecycle/result status to the CEO/operator;
-9. notification is delivered where appropriate;
-10. failure, replay, unauthorized access, and rollback controls are proven;
-11. commerce/customer workflows function reliably in both accepted languages/scopes;
-12. operational documentation and training are complete.
+9. Mission Control satisfies the bounded V1 UX North Star for rapid health/work/attention/governance awareness;
+10. notification is delivered where appropriate;
+11. failure, replay, unauthorized access, and rollback controls are proven;
+12. commerce/customer workflows function reliably in both accepted languages/scopes;
+13. operational documentation and training are complete.
 
 ---
 
 # 8. Current Decision Queue
 
-## Immediate
-**Phase 2.3 P5 — Inert Policy Ledger Activation**
+## Immediate closure sequence
 
-Status: **Prepared / blocked pending explicit CEO authorization.**
+1. **Formally close Phase 2.3** with P1–P5 GREEN.
+2. **Formally close Sprint 2.**
+3. **Freeze Architecture Specification v1.0.**
+4. **Finalize Supabase disposition.**
+5. **Enter Sprint 3 — WooCommerce Foundation** within the bounded development/preparation authority already defined.
+6. Prepare Sprint 4 CX and Sprint 5 Operations interface contracts in parallel.
 
-P5 remains intentionally bounded. It must not by itself:
-- expand autonomy above A0;
-- add a new execution task class;
-- enable specialist execution;
-- permit agent self-approval;
-- create Mission Control mutation authority;
-- bypass existing execution/approval controls.
+### P5 status
 
-## Immediately after Sprint 2 closure
-- freeze Architecture Specification v1.0;
-- finalize Supabase disposition;
-- launch parallel Sprint 3 workstream;
-- prepare CX and Operations contracts in parallel;
-- define governed expansion path for production specialist agents.
+**Phase 2.3 P5 — GREEN.**
+
+Its production activation and corrected independent verification did not authorize or introduce:
+- autonomy above A0;
+- a new execution task class;
+- specialist normal execution;
+- agent self-approval;
+- Mission Control mutation authority;
+- bypass of existing execution/approval controls;
+- automatic production action.
+
+### Next production authority boundary
+
+Sprint 3 planning and isolated implementation may proceed, but explicit CEO authorization is required before WooCommerce production credentials/connectivity, production integration identity, commerce mutations, specialist enablement, new execution classes, or any other authority expansion.
 
 ---
 
@@ -467,7 +539,7 @@ The current safety target is:
 
 > **October 2, 2026.**
 
-This remains materially ahead of the original approximately two-month completion objective while retaining governance, testing, rollback, and human-control requirements.
+This remains materially ahead of the original approximately two-month completion objective while retaining governance, testing, rollback, human-control requirements, and the bounded Mission Control V1 UX acceptance standard.
 
 ---
 
@@ -476,6 +548,7 @@ This remains materially ahead of the original approximately two-month completion
 | Date | Change | Schedule effect |
 |---|---|---|
 | **2026-08-28** | Reconciled internal engineering Phase 2.x work with the original 8-Sprint executive roadmap. Established this document as the master schedule-control artifact. | Stretch target set to Sep 25; working Sep 27–30; safety Oct 2. Current state classified AHEAD. |
+| **2026-08-28** | Updated Phase 2.3 P5 to independently verified GREEN; formalized the Mission Control V1 UI/UX North Star with Executive, Operations, and Governance views plus the ~10-second situational-awareness acceptance objective; documented Sprint 3 production-entry boundaries. | **No launch-date change.** UX requirement is absorbed into already-planned Mission Control work; Sep 25 / Sep 27–30 / Oct 2 remain unchanged. |
 
 ---
 
