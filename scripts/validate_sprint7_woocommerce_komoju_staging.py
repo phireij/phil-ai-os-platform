@@ -32,7 +32,7 @@ def main() -> None:
 
     business = data["business_profile"]
     if business.get("verified_profile_complete") is not True or business.get("resolved_fields") != 15:
-        fail("staging business-profile prerequisite drift")
+        fail("preproduction business-profile prerequisite drift")
     if business.get("contact_phone_verified") is not True:
         fail("phone verification drift")
     if business.get("tokushoho_source_reconciled") is not True:
@@ -41,15 +41,23 @@ def main() -> None:
         fail("Tokushoho publication must remain pending")
 
     storefront = data["storefront"]
-    if storefront.get("target") != "hostinger-managed-wordpress-woocommerce":
-        fail("storefront target drift")
-    if storefront.get("public_domain") != "https://www.rubyscakedelights.shop/":
-        fail("public-domain drift")
-    if storefront.get("staging_first_required") is not True:
-        fail("staging-first requirement drift")
-    for key in ("staging_environment_created", "wordpress_ready", "woocommerce_ready", "ssl_verified", "checkout_qa_green", "production_cutover_authorized"):
-        if storefront.get(key) is not False:
-            fail(f"staging/live gate must remain open: {key}")
+    expected_storefront = {
+        "target": "hostinger-managed-wordpress-woocommerce",
+        "current_public_platform": "hostinger-website-builder",
+        "public_domain": "https://www.rubyscakedelights.shop/",
+        "parallel_preproduction_first_required": True,
+        "parallel_preproduction_environment_created": False,
+        "native_hostinger_wordpress_staging_requires_existing_wordpress": True,
+        "native_staging_plan_eligibility_verified": False,
+        "wordpress_ready": False,
+        "woocommerce_ready": False,
+        "ssl_verified": False,
+        "checkout_qa_green": False,
+        "production_cutover_authorized": False,
+    }
+    for key, value in expected_storefront.items():
+        if storefront.get(key) != value:
+            fail(f"preproduction storefront gate drift: {key}={storefront.get(key)!r}")
 
     fulfillment = data["fulfillment"]
     if fulfillment.get("store_pickup_supported") is not True:
@@ -67,7 +75,7 @@ def main() -> None:
         fail("mid-September hours recheck safeguard missing")
 
     komoju = data["komoju"]
-    expected = {
+    expected_komoju = {
         "provider": "komoju",
         "integration": "official-woocommerce-plugin",
         "connection_method": "komoju-sign-in-oauth-style",
@@ -76,9 +84,9 @@ def main() -> None:
         "current_connection_state": "not_configured",
         "test_mode_required_before_live": True,
     }
-    for key, value in expected.items():
+    for key, value in expected_komoju.items():
         if komoju.get(key) != value:
-            fail(f"KOMOJU staging contract drift: {key}={komoju.get(key)!r}")
+            fail(f"KOMOJU preproduction contract drift: {key}={komoju.get(key)!r}")
     if komoju.get("legacy_disclosed_card_brands") != ["Visa", "Mastercard", "JCB", "American Express", "Diners Club"]:
         fail("legacy disclosed card brands drift")
     for key in (
@@ -93,18 +101,16 @@ def main() -> None:
         if komoju.get(key) is not False:
             fail(f"KOMOJU gate must remain open: {key}")
 
-    legal = data["legal_checkout_sync"]
-    for key, value in legal.items():
+    for key, value in data["legal_checkout_sync"].items():
         if value is not False:
             fail(f"legal/checkout sync must remain incomplete: {key}")
 
-    if data.get("next_gate") != "create_hostinger_wordpress_woocommerce_staging_without_public_cutover_or_live_payments":
+    if data.get("next_gate") != "create_parallel_hostinger_wordpress_woocommerce_preproduction_site_without_public_domain_cutover":
         fail("next executable gate drift")
     if data.get("production_publish_authorized") is not False:
-        fail("staging readiness gained production publication authority")
+        fail("preproduction readiness gained production publication authority")
 
-    tokushoho = TOKUSHOHO.read_text(encoding="utf-8")
-    require(tokushoho, (
+    require(TOKUSHOHO.read_text(encoding="utf-8"), (
         "BOMBEO PHILIP GO",
         "050-1785-0575",
         "info@rubyscakedelights.shop",
@@ -115,17 +121,17 @@ def main() -> None:
         "production_publish_authorized: false",
     ), "Tokushoho reconciled draft")
 
-    plan = PLAN.read_text(encoding="utf-8")
-    require(plan, (
-        "READY FOR STAGING PREPARATION / NO PUBLIC CUTOVER / NO PAYMENT ACTIVATION AUTHORIZED",
+    require(PLAN.read_text(encoding="utf-8"), (
+        "READY FOR PARALLEL PRE-PRODUCTION / NO PUBLIC CUTOVER / NO PAYMENT ACTIVATION AUTHORIZED",
+        "current public storefront is **Hostinger Website Builder**, not WordPress",
+        "native WordPress staging feature requires",
+        "separate non-public WordPress + WooCommerce pre-production site",
         "KOMOJU Payments",
         "Sign into KOMOJU",
-        "Test Mode",
-        "legacy Ruby legal page disclosed",
         "Yamato Transport Cool TA-Q-BIN",
-        "Create the Hostinger WordPress/WooCommerce staging environment",
-        "PHIL_AI_OS_RUBY_WOOCOMMERCE_KOMOJU_STAGING_PLAN_READY_NEXT_GATE_CREATE_STAGING",
-    ), "staging configuration plan")
+        "Create the parallel Hostinger WordPress + WooCommerce pre-production site",
+        "PHIL_AI_OS_RUBY_WOOCOMMERCE_KOMOJU_PREPRODUCTION_PLAN_READY_NEXT_GATE_CREATE_PARALLEL_WORDPRESS",
+    ), "preproduction configuration plan")
 
     require(KOMOJU_RUNBOOK.read_text(encoding="utf-8"), (
         "Sign into KOMOJU",
@@ -136,17 +142,19 @@ def main() -> None:
     ), "KOMOJU runbook")
 
     require(WOO_RUNBOOK.read_text(encoding="utf-8"), (
+        "parallel non-public WordPress/WooCommerce pre-production site",
         "Verified Ruby Business Profile complete — **15/15 resolved**",
         "Yamato Transport Cool TA-Q-BIN",
         "store pickup",
-        "production shipping configuration/rates are verified",
+        "native WordPress staging feature",
         "PHIL_AI_OS_SPRINT_7_WOOCOMMERCE_CUTOVER_RUNBOOK_READY_NOT_AUTHORIZED",
-    ), "WooCommerce staging runbook")
+    ), "WooCommerce preproduction runbook")
 
-    print("PHIL_AI_OS_RUBY_WOO_KOMOJU_STAGING_READINESS_GREEN profile=15of15 tokushoho_reconciled=true")
+    print("PHIL_AI_OS_RUBY_WOO_KOMOJU_PREPRODUCTION_READINESS_GREEN profile=15of15 tokushoho_reconciled=true")
+    print("PHIL_AI_OS_RUBY_HOSTINGER_ENVIRONMENT_MODEL_GREEN current=website_builder next=parallel_wordpress native_staging_requires_wordpress=true")
     print("PHIL_AI_OS_RUBY_FULFILLMENT_RECONCILIATION_GREEN pickup=true yamato_legacy=true shipping_production_verified=false")
     print("PHIL_AI_OS_RUBY_KOMOJU_CURRENT_INTEGRATION_GREEN connection=sign_in_oauth_style test_mode_authorized=false live_mode=false")
-    print("PHIL_AI_OS_RUBY_STAGING_NEXT_GATE_GREEN action=create_hostinger_wordpress_woocommerce_staging publish=false")
+    print("PHIL_AI_OS_RUBY_PREPRODUCTION_NEXT_GATE_GREEN action=create_parallel_hostinger_wordpress publish=false")
 
 
 if __name__ == "__main__":
