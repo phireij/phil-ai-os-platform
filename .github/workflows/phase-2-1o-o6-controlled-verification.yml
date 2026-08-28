@@ -1,0 +1,129 @@
+name: Phase 2.1O O6 Controlled Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-1o-o6-controlled-verification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"; : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts; sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then rm -f "$TMP"; exit 0; fi
+            fi
+            rm -f "$TMP"; sleep $((attempt*10))
+          done
+          exit 1
+      - name: Verify active and terminal evidence paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          ACTIVE=tsk_9cf154fca7fb4a74a4632b6af069fa89
+          CLOSED=tsk_e9694565de884bc9afa550d57db32426
+
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+
+          curl -fsS http://127.0.0.1:4881/api/read-model >/tmp/o6-model.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/o6-model.json'))
+          assert d['schema_version']=='2.1o.v1'
+          w=d['agent_runtime']['workload']
+          r=d['worker_readiness']
+          assert w['source']=='durable_lifecycle_plus_execution_audit_correlation'
+          assert w['evidence_complete'] is True
+          assert w['active_task_count']==1
+          assert w['active_states']==['PLANNED']
+          assert w['active_tasks']==[{'task_id':'tsk_9cf154fca7fb4a74a4632b6af069fa89','stage':'PLANNED'}]
+          assert w['indeterminate_tasks']==[]
+          assert r['readiness']=='busy'
+          assert r['reason_code']=='durable_active_workload_present'
+          assert r['authority_effect']=='none'
+          assert r['automatic_assignment'] is False
+          assert r['automatic_retry'] is False
+          assert r['automatic_reroute'] is False
+          assert r['automatic_execution'] is False
+          print('mission_control_active_path=proven')
+          print('worker_readiness=busy')
+          print('active_task_count=1')
+          print('active_state=PLANNED')
+          PY
+
+          docker exec -i "$CONTROL" env ACTIVE="$ACTIVE" CLOSED="$CLOSED" python3 - <<'PY'
+          import sqlite3,os,json
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          c.row_factory=sqlite3.Row
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          active=os.environ['ACTIVE']; closed=os.environ['CLOSED']
+
+          aev=[dict(r) for r in c.execute("select stage,assigned_agent_id,occurred_at,event_id from task_lifecycle_events where task_id=? order by occurred_at,event_id",(active,))]
+          assert any(x['stage']=='ASSIGNED' and x['assigned_agent_id']=='hermes' for x in aev)
+          assert aev[-1]['stage']=='PLANNED'
+          assert not any(x['stage'] in {'SUCCEEDED','FAILED','BLOCKED','CANCELLED','DENIED','EXPIRED','REJECTED','CLOSED'} for x in aev)
+          print('durable_active_assignment_path=proven')
+
+          approvals=[dict(r) for r in c.execute("select approval_id,state,consumed_at,consumed_by from approval_requests where task_id=? order by created_at",(closed,))]
+          audits=[dict(r) for r in c.execute("select id,approval_id,response_id,outcome,detail from execution_audit where task_id=? order by occurred_at,id",(closed,))]
+          assert len(approvals)==1 and approvals[0]['state']=='approved' and approvals[0]['consumed_at'] and approvals[0]['consumed_by']=='hermes'
+          success=[x for x in audits if x['outcome']=='success' and x['response_id']]
+          reject=[x for x in audits if x['outcome']=='approval_rejected']
+          assert len(success)==1 and len(reject)==1
+          assert c.execute("select count(*) from execution_audit where response_id=?",(success[0]['response_id'],)).fetchone()[0]==1
+          detail=(reject[0]['detail'] or '').lower()
+          assert 'already_consumed' in detail or 'replay' in detail
+          assert success[0]['approval_id']==reject[0]['approval_id']==approvals[0]['approval_id']
+          print('durable_terminal_closure_path=proven')
+          print('terminal_closure_reason=one_unique_success_plus_replay_rejection')
+          PY
+
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://hermes-agent-whow.srv1833510.hstgr.cloud/phil-ai-os/operator/)" = 401
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          assert c.execute('select agent_id,authority_ceiling,enabled,assignable from agent_registry order by agent_id').fetchall()==[('hermes','L3',1,1)]
+          PY
+
+          rm -f /tmp/o6-model.json
+          echo production_change=none
+          echo mission_control_restart=none
+          echo lifecycle_mutation=none
+          echo assignment_mutation=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo authority_expansion=none
+          echo execution_allowlist=general
+          echo agent_registry=hermes_L3_only
+          echo PHIL_AI_OS_PHASE_2_1O_O6_CONTROLLED_VERIFICATION_OK
+          REMOTE
