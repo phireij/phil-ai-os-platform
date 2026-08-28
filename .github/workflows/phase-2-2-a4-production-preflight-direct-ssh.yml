@@ -1,0 +1,159 @@
+name: Phase 2.2 A4 Production Preflight Direct SSH
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-2-a4-production-preflight-direct-ssh.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure and verify direct SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3 4; do
+            if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=12 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+      - name: Run A4 preflight without production mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE' | tee phase22-a4-direct-evidence.txt
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          systemctl is-active --quiet phil-ai-os-mission-control-operator.service
+          systemctl is-active --quiet phil-ai-os-agent-heartbeat.timer
+          systemctl is-active --quiet phil-ai-os-monitor.service
+          systemctl is-active --quiet phil-ai-os-backup.timer
+          systemctl is-active --quiet phil-ai-os-backup-self-heal.timer
+          test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
+
+          curl -fsS http://127.0.0.1:4881/api/read-model >/tmp/phase22-a4-direct-model.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/phase22-a4-direct-model.json'))
+          r=d.get('worker_readiness') or {}
+          assert d.get('schema_version')=='2.1o.v1'
+          assert r.get('authority_effect')=='none'
+          for k in ('automatic_assignment','automatic_retry','automatic_reroute','automatic_execution'):
+              assert r.get(k) is False
+          print('mission_control_schema='+d['schema_version'])
+          print('mission_control_handoff_surface='+('present' if any('handoff' in str(k).lower() for k in d.keys()) else 'absent'))
+          PY
+          for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
+
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3, os, json, datetime
+          uri='file:/app/state/control-plane.db?mode=ro'
+          src=sqlite3.connect(uri,uri=True); src.row_factory=sqlite3.Row
+          assert src.execute('pragma quick_check').fetchone()[0]=='ok'
+          tables=[r[0] for r in src.execute("select name from sqlite_master where type='table' order by name")]
+          assert 'task_handoffs' not in tables
+          reg=[dict(r) for r in src.execute('select * from agent_registry order by agent_id')]
+          assert len(reg)==1 and reg[0]['agent_id']=='hermes' and reg[0]['authority_ceiling']=='L3' and int(reg[0]['enabled'])==1 and int(reg[0]['assignable'])==1
+          tracked=['agent_registry','task_lifecycle_events','task_plans','approval_requests','execution_audit']
+          base={t:src.execute(f'select count(*) from {t}').fetchone()[0] for t in tracked}
+          print('production_baseline_counts='+json.dumps(base,separators=(',',':')))
+          print('production_registry='+json.dumps(reg,separators=(',',':'),default=str))
+          cp='/tmp/phase22-a4-direct-copy.db'
+          try: os.remove(cp)
+          except FileNotFoundError: pass
+          dst=sqlite3.connect(cp); src.backup(dst); dst.row_factory=sqlite3.Row
+          assert dst.execute('pragma quick_check').fetchone()[0]=='ok'
+          assert {t:dst.execute(f'select count(*) from {t}').fetchone()[0] for t in tracked}==base
+
+          stamp=datetime.datetime.now(datetime.timezone.utc).isoformat()
+          dst.execute('insert into agent_registry(agent_id,display_name,role,authority_ceiling,enabled,assignable,created_at,source_component) values(?,?,?,?,?,?,?,?)',('specialist-worker-01','Specialist Worker 01','specialist_worker','L1',0,0,stamp,'phase-2.2-a4-isolated-preflight'))
+          cand=dict(dst.execute("select * from agent_registry where agent_id='specialist-worker-01'").fetchone())
+          assert cand['authority_ceiling']=='L1' and int(cand['enabled'])==0 and int(cand['assignable'])==0
+          print('a5_candidate='+json.dumps(cand,separators=(',',':'),default=str))
+          print('a5_schema_change_required=false')
+
+          dst.executescript('''
+          create table task_handoffs(
+            handoff_id text primary key, handoff_version text not null, task_id text not null,
+            source_agent_id text not null, target_agent_id text not null, task_class text not null,
+            required_authority text not null, source_authority_ceiling text not null,
+            target_authority_ceiling text not null, reason_code text not null,
+            correlation_id text not null unique, requested_by text not null, requested_at text not null,
+            expires_at text not null, handoff_approval_required integer not null,
+            handoff_approval_state text not null, execution_approval_state text,
+            source_readiness text, target_readiness text, state text not null, decided_by text,
+            decided_at text, containment_reason text, lifecycle_event_id text unique
+          );
+          create index idx_task_handoffs_task_time on task_handoffs(task_id,requested_at,handoff_id);
+          create index idx_task_handoffs_state_expiry on task_handoffs(state,expires_at);
+          ''')
+          assert dst.execute('pragma quick_check').fetchone()[0]=='ok'
+          print('a6_candidate_schema_change=additive_task_handoffs_only')
+          dst.close(); src.close(); os.remove(cp)
+
+          v=sqlite3.connect(uri,uri=True)
+          assert v.execute('pragma quick_check').fetchone()[0]=='ok'
+          assert {t:v.execute(f'select count(*) from {t}').fetchone()[0] for t in tracked}==base
+          assert v.execute("select count(*) from sqlite_master where type='table' and name='task_handoffs'").fetchone()[0]==0
+          v.close()
+          print('production_counts_unchanged=true')
+          print('production_handoff_table_created=false')
+          PY
+
+          docker exec "$CONTROL" sh -lc '
+            printf "agent_registry_code_refs=%s\n" "$(grep -R -l "agent_registry" /app --include="*.py" 2>/dev/null | wc -l | tr -d " ")"
+            printf "handoff_code_refs=%s\n" "$(grep -R -i -l "handoff" /app --include="*.py" 2>/dev/null | wc -l | tr -d " ")"
+          '
+
+          rm -f /tmp/phase22-a4-direct-model.json
+          echo control_api_health=green
+          echo control_api_readiness=green
+          echo mission_control_operator=active
+          echo monitor=active
+          echo backup_timer=active
+          echo backup_self_heal=active
+          echo execution_allowlist=general
+          echo dashboard_mutations=405
+          echo a5_minimum_change=one_disabled_nonassignable_L1_registry_row
+          echo a5_rollback_boundary=registry_row_plus_prechange_database_backup
+          echo mission_control_a7_read_model_update_required=true
+          echo production_change=none
+          echo service_restart=none
+          echo schema_mutation_production=none
+          echo registry_mutation_production=none
+          echo assignment_mutation=none
+          echo lifecycle_mutation=none
+          echo approval_mutation=none
+          echo execution_call=none
+          echo provider_call=none
+          echo authority_expansion=none
+          echo PHIL_AI_OS_PHASE_2_2_A4_PRODUCTION_PREFLIGHT_OK
+          REMOTE
+      - name: Upload A4 direct preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a4-production-preflight-direct-evidence
+          path: phase22-a4-direct-evidence.txt
+          if-no-files-found: error
+          retention-days: 14
