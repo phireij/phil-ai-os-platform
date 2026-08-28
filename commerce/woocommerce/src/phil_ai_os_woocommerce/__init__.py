@@ -11,6 +11,14 @@ from .adapter import (
     WooCommerceAdapter,
 )
 from .audit import CommerceSyncAuditEvent, MemoryAuditSink
+from .auth import (
+    AuthenticationBoundary,
+    CredentialBoundaryError,
+    CredentialReference,
+    CredentialReferenceProvider,
+    NoCredentialsProvider,
+    SPRINT3_AUTH_BOUNDARY,
+)
 from .category_plan import (
     CategoryHierarchyError,
     CategoryPlanItem,
@@ -22,6 +30,12 @@ from .inventory_guard import (
     InventoryRevisionState,
     MemoryInventoryRevisionStore,
     StaleInventoryRevision,
+)
+from .localization import (
+    DEFAULT_LOCALIZATION_POLICY,
+    LocalizationPolicy,
+    SUPPORTED_LOCALES,
+    project_localized,
 )
 from .media_plan import (
     MediaPlanError,
@@ -39,18 +53,25 @@ from .resilience import (
 )
 from .retry import RetryDecision, retry_decision
 from .reconciliation import MemoryIdempotencyStore, ReconciliationResult
+from .rollback import MockCommerceSnapshot, MockRollbackError, capture_mock_snapshot, restore_mock_snapshot
 
 __all__ = [
     "AuditedReconciliation",
+    "AuthenticationBoundary",
     "CategoryHierarchyError",
     "CategoryPlanItem",
     "CategoryRecord",
     "CommerceSyncAuditEvent",
+    "CredentialBoundaryError",
+    "CredentialReference",
+    "CredentialReferenceProvider",
+    "DEFAULT_LOCALIZATION_POLICY",
     "FailureInjectingTransport",
     "HTTPStatusFailure",
     "InventoryConflictError",
     "InventoryRecord",
     "InventoryRevisionState",
+    "LocalizationPolicy",
     "LocalizedText",
     "MediaPlanError",
     "MediaReconciliationPlan",
@@ -58,19 +79,27 @@ __all__ = [
     "MemoryAuditSink",
     "MemoryIdempotencyStore",
     "MemoryInventoryRevisionStore",
+    "MockCommerceSnapshot",
+    "MockRollbackError",
     "MockWooCommerceTransport",
+    "NoCredentialsProvider",
     "ProductRecord",
     "ProductionConnectivityBlocked",
     "ReconciliationResult",
     "RetryDecision",
     "RetryExecutionResult",
+    "SPRINT3_AUTH_BOUNDARY",
+    "SUPPORTED_LOCALES",
     "StaleInventoryRevision",
     "WooCommerceAdapter",
     "build_product_media_plan",
+    "capture_mock_snapshot",
     "execute_with_retry",
     "plan_category_hierarchy",
     "plan_media_reconciliation",
     "project_category_payload",
+    "project_localized",
     "reconcile_with_audit",
+    "restore_mock_snapshot",
     "retry_decision",
 ]
