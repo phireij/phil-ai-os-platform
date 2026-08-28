@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/automation/simulation-release.schema.json",
+  "title": "Phil AI OS Simulation Release",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["plan_id", "approval_state", "simulation_release", "automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized", "authority_effect"],
+  "properties": {
+    "plan_id": {"type": "string", "minLength": 1},
+    "approval_state": {"enum": ["approved", "not_required"]},
+    "simulation_release": {"const": true},
+    "automatic_execution": {"const": false},
+    "execution_authorized": {"const": false},
+    "channel_reply_authorized": {"const": false},
+    "mutation_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}
