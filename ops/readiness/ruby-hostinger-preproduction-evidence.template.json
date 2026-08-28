@@ -1,0 +1,16 @@
+{
+  "version": "ruby-hostinger-preproduction-evidence-v1",
+  "date": "2026-08-29",
+  "public_domain_unchanged": true,
+  "current_public_platform": "hostinger-website-builder",
+  "preproduction_url": null,
+  "wordpress_admin_reachable": false,
+  "woocommerce_active": false,
+  "https_ssl_green": false,
+  "hostinger_native_wordpress_staging_menu_available": null,
+  "hosting_plan_name": null,
+  "komoju_test_mode_connected": false,
+  "komoju_live_mode_connected": false,
+  "production_cutover_authorized": false,
+  "evidence_complete": false
+}
