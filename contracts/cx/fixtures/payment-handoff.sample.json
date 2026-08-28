@@ -1,0 +1,19 @@
+{
+  "handoff_id": "payment-handoff:fixture-cart-intent-001",
+  "checkout_intent_id": "fixture-cart-intent-001",
+  "provider": "komoju",
+  "integration_mode": "woocommerce_plugin",
+  "connection_state": "not_configured",
+  "locale": "en",
+  "amount": {"amount": "1400", "currency": "JPY"},
+  "line_items": [
+    {"sku": "SAMPLE-CHOCO-001", "quantity": 1, "unit_amount": "500", "line_amount": "500", "currency": "JPY"},
+    {"sku": "SAMPLE-UBE-001", "quantity": 2, "unit_amount": "450", "line_amount": "900", "currency": "JPY"}
+  ],
+  "fulfillment": "pickup",
+  "requested_pickup_at": "2026-09-01T03:00:00Z",
+  "external_order_reference": null,
+  "order_creation_authorized": false,
+  "payment_execution_authorized": false,
+  "live_mode_authorized": false
+}

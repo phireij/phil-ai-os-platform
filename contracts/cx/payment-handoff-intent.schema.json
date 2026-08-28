@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/cx/payment-handoff-intent.schema.json",
+  "title": "Phil AI OS CX Payment Handoff Intent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "handoff_id",
+    "checkout_intent_id",
+    "provider",
+    "integration_mode",
+    "connection_state",
+    "locale",
+    "amount",
+    "line_items",
+    "fulfillment",
+    "order_creation_authorized",
+    "payment_execution_authorized",
+    "live_mode_authorized"
+  ],
+  "properties": {
+    "handoff_id": {"type": "string", "minLength": 1},
+    "checkout_intent_id": {"type": "string", "minLength": 1},
+    "provider": {"const": "komoju"},
+    "integration_mode": {"const": "woocommerce_plugin"},
+    "connection_state": {"const": "not_configured"},
+    "locale": {"enum": ["en", "ja"]},
+    "amount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount", "currency"],
+      "properties": {
+        "amount": {"type": "string", "pattern": "^[0-9]+$"},
+        "currency": {"const": "JPY"}
+      }
+    },
+    "line_items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sku", "quantity", "unit_amount", "line_amount", "currency"],
+        "properties": {
+          "sku": {"type": "string", "minLength": 1},
+          "quantity": {"type": "integer", "minimum": 1},
+          "unit_amount": {"type": "string", "pattern": "^[0-9]+$"},
+          "line_amount": {"type": "string", "pattern": "^[0-9]+$"},
+          "currency": {"const": "JPY"}
+        }
+      }
+    },
+    "fulfillment": {"const": "pickup"},
+    "requested_pickup_at": {"type": ["string", "null"], "format": "date-time"},
+    "external_order_reference": {"type": ["string", "null"]},
+    "order_creation_authorized": {"const": false},
+    "payment_execution_authorized": {"const": false},
+    "live_mode_authorized": {"const": false}
+  }
+}

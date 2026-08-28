@@ -1,0 +1,11 @@
+{
+  "intent_id": "fixture-cart-intent-001",
+  "locale": "en",
+  "items": [
+    {"sku": "SAMPLE-CHOCO-001", "quantity": 1},
+    {"sku": "SAMPLE-UBE-001", "quantity": 2}
+  ],
+  "fulfillment": "pickup",
+  "requested_pickup_at": "2026-09-01T03:00:00Z",
+  "mutation_authorized": false
+}

@@ -1,0 +1,11 @@
+{
+  "fixture_only": true,
+  "provider": "komoju",
+  "integration_mode": "woocommerce_plugin",
+  "connection_mode": "account_sign_in",
+  "connection_state": "not_configured",
+  "test_mode_required_before_live": true,
+  "live_mode_authorized": false,
+  "payment_execution_authorized": false,
+  "note": "Architecture fixture only. Contains no account identifier, API key, secret, webhook token, live connection or payment authority."
+}
