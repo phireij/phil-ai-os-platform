@@ -39,6 +39,7 @@ services:
   wpcli:
     image: ${WORDPRESS_CLI_IMAGE:-wordpress:cli}
     profiles: ["local-tools"]
+    user: "0:0"
     depends_on:
       db:
         condition: service_healthy
@@ -52,7 +53,7 @@ services:
     volumes:
       - wc_dev_wp:/var/www/html
     networks: [wc_dev]
-    entrypoint: ["wp"]
+    entrypoint: ["wp", "--allow-root"]
 
 volumes:
   wc_dev_db:
