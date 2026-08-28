@@ -1,0 +1,77 @@
+name: Phase 2.2 A6.7 Live Coordinator Source Extract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-2-a6-7-live-coordinator-source-extract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3 4; do
+            if ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=10 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*4))
+          done
+          exit 1
+      - name: Extract bounded live coordinator source
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE' | tee phase22-a6-7-live-source.txt
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test -n "$CONTROL"
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import pathlib
+          p=pathlib.Path('/app/app.py')
+          t=p.read_text()
+          print('app_sha256=__COMPUTE_EXTERNALLY__')
+          lines=t.splitlines()
+          needles=['/v1/tasks/assign','/v1/tasks/plan','def _auth','Authorization','Bearer','task_lifecycle_events','agent_registry','approval_requests','class Handler','do_POST','_json']
+          hits=[]
+          for i,line in enumerate(lines,1):
+              if any(n in line for n in needles): hits.append(i)
+          spans=[]
+          for h in hits:
+              a=max(1,h-35); b=min(len(lines),h+70)
+              if spans and a<=spans[-1][1]+1: spans[-1]=(spans[-1][0],max(spans[-1][1],b))
+              else: spans.append((a,b))
+          for a,b in spans:
+              print(f'---SOURCE_LINES_{a}_{b}---')
+              for n in range(a,b+1): print(f'{n:05d}: {lines[n-1]}')
+          PY
+          docker exec "$CONTROL" sha256sum /app/app.py
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_2_A6_7_LIVE_SOURCE_EXTRACT_OK
+          REMOTE
+      - name: Upload bounded source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a6-7-live-coordinator-source
+          path: phase22-a6-7-live-source.txt
+          if-no-files-found: error
+          retention-days: 14
