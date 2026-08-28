@@ -77,7 +77,7 @@ jobs:
           assert ho['source_agent_id']=='hermes' and ho['target_agent_id']=='specialist-worker-01'
           assert ho['source_authority_ceiling']=='L3' and ho['target_authority_ceiling']=='L1'
           assert ho['task_class']=='general' and ho['required_authority']=='L1'
-          assert ho['reason_code']=='phase_2_2_a6_8_controlled_canary'
+          assert ho['reason_code']=='a6_8_ceo_approved_canary'
           assert ho['correlation_id']=='hofcorr_7dba30f92f2c46188c435aaea55bde67'
           assert ho['handoff_approval_required'] is True and ho['handoff_approval_state']=='approved'
           assert ho['task_latest_stage']=='COMPLETED' and ho['active_ownership'] is False
@@ -112,7 +112,7 @@ jobs:
           assert h['source_agent_id']=='hermes' and h['target_agent_id']=='specialist-worker-01'
           assert h['source_authority_ceiling']=='L3' and h['target_authority_ceiling']=='L1'
           assert h['task_class']=='general' and h['required_authority']=='L1'
-          assert h['reason_code']=='phase_2_2_a6_8_controlled_canary'
+          assert h['reason_code']=='a6_8_ceo_approved_canary'
           assert h['correlation_id']=='hofcorr_7dba30f92f2c46188c435aaea55bde67'
           assert h['state']=='accepted' and h['handoff_approval_state']=='approved'
           assert h['lifecycle_event_id']
