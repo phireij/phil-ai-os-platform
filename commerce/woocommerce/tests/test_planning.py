@@ -1,0 +1,99 @@
+import unittest
+
+from phil_ai_os_woocommerce import (
+    CategoryHierarchyError,
+    CategoryRecord,
+    LocalizedText,
+    MediaPlanError,
+    MediaRecord,
+    ProductRecord,
+    build_product_media_plan,
+    plan_category_hierarchy,
+)
+
+
+class PlanningTests(unittest.TestCase):
+    def category(self, key, parent_key=None):
+        return CategoryRecord(
+            key=key,
+            name=LocalizedText(en=key.title(), ja=f"{key}-ja"),
+            slug=LocalizedText(en=key, ja=f"{key}-ja"),
+            parent_key=parent_key,
+        )
+
+    def product(self, media_keys=()):
+        return ProductRecord(
+            sku="SKU-PLAN-1",
+            name=LocalizedText(en="Cake", ja="ケーキ"),
+            description=LocalizedText(en="Description", ja="説明"),
+            slug=LocalizedText(en="cake-plan", ja="cake-plan-ja"),
+            regular_price="500",
+            currency="JPY",
+            media_keys=tuple(media_keys),
+        )
+
+    def media(self, key, role, position):
+        return MediaRecord(
+            key=key,
+            source_ref=f"fixture://{key}.jpg",
+            alt=LocalizedText(en=f"{key} alt", ja=f"{key} 代替"),
+            role=role,
+            position=position,
+        )
+
+    def test_category_parent_precedes_child(self):
+        plan = plan_category_hierarchy([
+            self.category("cupcakes", "baked-goods"),
+            self.category("baked-goods"),
+        ])
+        self.assertEqual([item.key for item in plan], ["baked-goods", "cupcakes"])
+        self.assertEqual([item.depth for item in plan], [0, 1])
+
+    def test_category_missing_parent_fails_closed(self):
+        with self.assertRaises(CategoryHierarchyError):
+            plan_category_hierarchy([self.category("cupcakes", "missing")])
+
+    def test_category_cycle_fails_closed(self):
+        with self.assertRaises(CategoryHierarchyError):
+            plan_category_hierarchy([
+                self.category("a", "b"),
+                self.category("b", "a"),
+            ])
+
+    def test_category_duplicate_key_fails_closed(self):
+        with self.assertRaises(CategoryHierarchyError):
+            plan_category_hierarchy([self.category("a"), self.category("a")])
+
+    def test_media_primary_is_first_and_locale_is_projected(self):
+        product = self.product(("gallery-1", "primary-1"))
+        plan = build_product_media_plan(
+            product,
+            [self.media("gallery-1", "gallery", 1), self.media("primary-1", "primary", 0)],
+            locale="ja",
+        )
+        self.assertEqual([item["key"] for item in plan], ["primary-1", "gallery-1"])
+        self.assertEqual(plan[0]["alt"], "primary-1 代替")
+
+    def test_media_missing_reference_fails_closed(self):
+        with self.assertRaises(MediaPlanError):
+            build_product_media_plan(self.product(("missing",)), [])
+
+    def test_media_requires_exactly_one_primary(self):
+        product = self.product(("gallery-1", "gallery-2"))
+        with self.assertRaises(MediaPlanError):
+            build_product_media_plan(
+                product,
+                [self.media("gallery-1", "gallery", 0), self.media("gallery-2", "gallery", 1)],
+            )
+
+    def test_media_duplicate_positions_fail_closed(self):
+        product = self.product(("primary-1", "gallery-1"))
+        with self.assertRaises(MediaPlanError):
+            build_product_media_plan(
+                product,
+                [self.media("primary-1", "primary", 0), self.media("gallery-1", "gallery", 0)],
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()
