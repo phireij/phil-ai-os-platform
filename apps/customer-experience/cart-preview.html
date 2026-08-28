@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#fff7f5">
+  <meta name="description" content="Phil AI OS isolated multi-item checkout and KOMOJU handoff preview">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <title>Phil AI OS — Cart & KOMOJU Handoff Preview</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">Phil AI OS · Sprint 4</p>
+      <a class="brand" href="./">Customer Experience</a>
+    </div>
+    <div class="header-actions">
+      <label class="locale-label" for="locale-select">Language</label>
+      <select id="locale-select" aria-label="Language">
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+      </select>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="hero" aria-labelledby="hero-title">
+      <p class="status-pill">Isolated preview · KOMOJU not connected</p>
+      <h1 id="hero-title">Multi-item checkout and payment handoff</h1>
+      <p id="hero-copy">Synthetic data only. This page prepares a non-authorizing KOMOJU handoff intent after local checkout readiness succeeds.</p>
+      <p><a class="text-link" href="./">← Catalog preview</a></p>
+    </section>
+
+    <section class="detail-panel" aria-labelledby="cart-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Cart lab</p>
+          <h2 id="cart-title">Synthetic cart</h2>
+        </div>
+        <p id="cart-summary" aria-live="polite"></p>
+      </div>
+
+      <form id="cart-form">
+        <div id="cart-items" class="product-grid" aria-live="polite"></div>
+        <div class="checkout-card">
+          <div class="form-field">
+            <label id="pickup-label" for="pickup-at">Preferred pickup time</label>
+            <input id="pickup-at" name="pickup-at" type="datetime-local" required>
+          </div>
+          <p><button id="evaluate-button" class="primary-button" type="submit">Evaluate checkout & KOMOJU handoff</button></p>
+        </div>
+      </form>
+    </section>
+
+    <section class="detail-panel" aria-labelledby="result-title">
+      <p class="eyebrow">Readiness result</p>
+      <h2 id="result-title">No handoff prepared yet</h2>
+      <div id="result" class="intent-output" aria-live="polite">
+        <p id="result-copy">Choose quantities and a pickup time. This preview never creates an order or executes a payment.</p>
+      </div>
+    </section>
+
+    <section class="safety-panel" aria-labelledby="safety-title">
+      <p class="eyebrow">Authority boundary</p>
+      <h2 id="safety-title">KOMOJU is configured as intent only</h2>
+      <p id="safety-copy">Provider: KOMOJU · integration: WooCommerce plugin · connection: not configured · order creation: false · payment execution: false · live mode: false.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Phil AI OS · Sprint 4 · synthetic cart/payment-handoff environment</p>
+  </footer>
+
+  <script type="module" src="./src/cart-preview.mjs"></script>
+</body>
+</html>
