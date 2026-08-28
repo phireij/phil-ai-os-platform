@@ -1,0 +1,10 @@
+{
+  "fixture_only": true,
+  "source": "instagram",
+  "kind": "comment",
+  "external_event_id": "ig-fixture-001",
+  "occurred_at": "2026-08-28T12:11:00Z",
+  "sender_ref": "fixture-instagram-customer",
+  "locale": "ja",
+  "text": "この商品の価格はいくらですか？"
+}
