@@ -1,9 +1,9 @@
 # Phil AI OS Platform — Phase 2.3 Status Checkpoint
 
 **Date:** 2026-08-28  
-**Overall:** P1–P4 GREEN / P5 PREPARED — EXPLICIT CEO AUTHORIZATION REQUIRED
+**Overall:** **P1–P5 GREEN / PHASE 2.3 CLOSED GREEN**
 
-## Completed
+## Completed gates
 
 - **P1 — Read-Only Approval & Policy Surface Discovery:** GREEN  
   Run `33148733258`; artifact `9676817881`.
@@ -13,34 +13,34 @@
   Run `33150789546`; artifact `9677600705`.
 - **P4 — Production Preflight:** GREEN  
   Run `33150904998`; artifact `9677651307`.
+- **P5 — Inert Policy Ledger Activation:** GREEN  
+  Activation run `33156789472`, job `98801359294`; corrected independent verification run `33157054546`, job `98802230583` PASSED.
 
-## Current production state
+## Accepted production state
 
-Unchanged by Phase 2.3 P1–P4:
-
-- Control API image `phil-ai-os/control-api:0.21.1-phase22a68`;
+- Control API image `phil-ai-os/control-api:0.21.2-phase23p5`;
 - execution allowlist exactly `general`;
-- autonomy ceiling remains A0 by Phase 2.3 contract;
-- Hermes L3 enabled/assignable;
+- autonomy ceiling A0;
+- Hermes L3 enabled/assignable within existing authority;
 - `specialist-worker-01` L1 disabled/non-assignable and non-executing;
-- Mission Control GET read model 200, mutation methods 405;
-- no `policy_decisions` table in production yet;
-- no reusable production policy-decision writer or policy API route;
+- Mission Control GET/read model available and mutations remain blocked;
+- durable append-only `policy_decisions` table present and empty at closure;
+- `authority_effect` constrained to `none`;
+- no external reusable policy writer/evaluate route;
 - approval expiry/one-time consumption/replay controls unchanged;
-- monitoring, backup and self-heal active;
-- no Phase 2.3 provider or execution call;
+- monitoring, backup, restore, rollback and self-heal active;
+- no P5 provider or execution call;
 - no authority expansion.
 
-## P5 prepared gate
+## Evidence
 
-`docs/PHASE_2_3_P5_INERT_POLICY_LEDGER_ACTIVATION_GATE.md`
+See:
 
-P5 is intentionally limited to an append-only policy-decision ledger, internal inert writer/pure evaluator packaging and read-only Mission Control projection. It does not authorize an external policy writer route, approval consumption, provider execution, new task class or autonomy above A0.
+- `docs/PHASE_2_3_P5_PRODUCTION_ACTIVATION_RESULT.md`
+- `docs/PHASE_2_3_FORMAL_CLOSURE.md`
 
-## Blocker / required authorization
+## Closure
 
-Production P5 activation is blocked until the CEO explicitly authorizes:
+Phase 2.3 has met its bounded objective and is formally **CLOSED GREEN**.
 
-`APPROVE_PHASE_2_3_P5`
-
-`PHIL_AI_OS_PHASE_2_3_P1_P4_GREEN_P5_AWAITING_AUTHORIZATION`
+`PHIL_AI_OS_PHASE_2_3_CLOSED_GREEN`
