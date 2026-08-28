@@ -1,0 +1,16 @@
+{
+  "fixture_only": true,
+  "lifecycle_correlation_id": "fixture-correlation-001",
+  "source_event_id": "sample-event-001",
+  "intent_type": "order_inquiry",
+  "locale": "ja",
+  "items": [
+    {"sku": "SAMPLE-CHOCO-001", "quantity": 2}
+  ],
+  "fulfillment": "pickup",
+  "requested_pickup_at": null,
+  "customer_contact_ref": "synthetic-customer-001",
+  "confidence": 0.98,
+  "approval_state": "not_evaluated",
+  "mutation_authorized": false
+}
