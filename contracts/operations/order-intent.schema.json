@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/operations/order-intent.schema.json",
+  "title": "Phil AI OS Normalized Order Intent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["lifecycle_correlation_id", "source_event_id", "intent_type", "locale", "items", "fulfillment", "confidence", "approval_state", "mutation_authorized"],
+  "properties": {
+    "lifecycle_correlation_id": {"type": "string", "minLength": 1},
+    "source_event_id": {"type": "string", "minLength": 1},
+    "intent_type": {"enum": ["order_inquiry", "order_request", "availability_check"]},
+    "locale": {"enum": ["en", "ja"]},
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sku", "quantity"],
+        "properties": {
+          "sku": {"type": "string", "minLength": 1},
+          "quantity": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "fulfillment": {"enum": ["pickup"]},
+    "requested_pickup_at": {"type": ["string", "null"], "format": "date-time"},
+    "customer_contact_ref": {"type": ["string", "null"]},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "approval_state": {"enum": ["not_evaluated", "not_required", "required", "approved", "denied", "expired"]},
+    "mutation_authorized": {"const": false}
+  }
+}
