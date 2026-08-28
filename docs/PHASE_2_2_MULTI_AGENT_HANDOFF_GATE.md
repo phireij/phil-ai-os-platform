@@ -1,26 +1,30 @@
 # Phil AI OS Platform — Phase 2.2 Multi-Agent Handoff Gate
 
-**Phase:** 2.2 — Multi-Agent Handoff Foundation
-**Status:** OPEN / GOVERNED DISCOVERY
-**Opened:** 2026-08-28
+**Phase:** 2.2 — Multi-Agent Handoff Foundation  
+**Status:** GREEN / FORMALLY CLOSED  
+**Opened:** 2026-08-28  
+**Closed:** 2026-08-28  
+**Formal closure:** `docs/PHASE_2_2_FORMAL_CLOSURE.md`
 
 ## Purpose
 
-Phase 2.2 begins the governed path toward multi-agent coordination and handoff. The phase is intentionally split so that discovery and contract work can proceed before any new worker, authority, task class, automatic delegation, or execution capability is activated.
+Phase 2.2 establishes the governed foundation for multi-agent coordination and handoff. The phase was intentionally split so discovery and contract work could precede every bounded production activation.
 
 ## Entry conditions inherited from Phase 2.1O
 
-- Mission Control remains read-only.
-- Production execution allowlist remains `general` only.
-- Hermes remains the only registered/assignable worker and retains authority ceiling L3.
-- Human approval boundaries remain authoritative.
-- Workload/readiness evidence remains durable and fail-closed.
-- No readiness state grants authority or triggers action.
-- No direct provider bypass is permitted.
+These were the conditions at Phase 2.2 entry:
+
+- Mission Control remained read-only.
+- Production execution allowlist remained `general` only.
+- Hermes was the only registered/assignable worker and retained authority ceiling L3.
+- Human approval boundaries remained authoritative.
+- Workload/readiness evidence remained durable and fail-closed.
+- No readiness state granted authority or triggered action.
+- No direct provider bypass was permitted.
 
 ## Non-negotiable safety boundary
 
-Opening Phase 2.2 does **not** itself authorize:
+Opening Phase 2.2 did **not** itself authorize:
 
 - registration or activation of a second production worker;
 - assignment to a new agent;
@@ -31,37 +35,37 @@ Opening Phase 2.2 does **not** itself authorize:
 - provider/model/credential changes;
 - approval bypass or weakening of one-time approval consumption.
 
-Any production activation that introduces one of the above must pass a separate bounded activation gate with explicit evidence and rollback.
+Every bounded production activation that crossed one of these boundaries required its own governed gate, evidence, rollback, and where applicable explicit CEO authorization.
 
-## Gate sequence
+## Gate sequence and closure state
 
-### A1 — Read-Only Multi-Agent Surface Discovery
-Inspect current production schemas, routes, registry semantics, assignment history, planning data, lifecycle correlation fields, approval boundaries, and Mission Control read model. Determine what already exists and what is missing for safe handoff. No mutation.
+### A1 — Read-Only Multi-Agent Surface Discovery — GREEN / COMPLETE
+Inspected production schemas, routes, registry semantics, assignment history, planning data, lifecycle correlation fields, approval boundaries, and Mission Control read model with no mutation.
 
-### A2 — Isolated Handoff Contract
-Define the canonical handoff contract off-production: source agent, target agent, task identity, authority ceiling, task class, reason, correlation ID, lifecycle transition, approval requirement, timeout/expiry, rollback/containment, and audit evidence. Missing or conflicting evidence must fail closed.
+### A2 — Isolated Handoff Contract — GREEN / COMPLETE
+Defined and validated the canonical handoff contract off-production, including task/source/target identity, authority, class, reason, correlation, lifecycle, approval, expiry, containment, replay and audit semantics.
 
-### A3 — Capability / Authority Matrix
-Define which agent roles may observe, plan, request handoff, accept work, execute, escalate, and close work. No production authority expansion. The matrix must preserve human approval where required and prevent privilege escalation through delegation.
+### A3 — Capability / Authority Matrix — GREEN / COMPLETE
+Defined bounded observe/plan/request/accept/execute/escalate/close capabilities without production authority expansion and preserved the separation of request, authorization, acceptance and execution.
 
-### A4 — Production Preflight
-Prove the minimum additive production change, compatibility with current Hermes-only L3 operation, rollback boundary, database migration needs, read-model impact, and monitoring/backup readiness.
+### A4 — Production Preflight — GREEN / COMPLETE
+Proved the additive production path, rollback boundary, compatibility and monitoring/backup readiness.
 
-### A5 — Bounded Second-Worker Registration
-Only after explicit activation authorization and successful A1–A4. Register the smallest non-executing or tightly constrained second worker first. No automatic assignment; no provider execution unless separately approved by an existing governed execution boundary.
+### A5 — Bounded Second-Worker Registration — GREEN / COMPLETE
+Registered `specialist-worker-01` at L1, disabled and non-assignable, with no execution capability or provider credentials.
 
-### A6 — Controlled Handoff Verification
-Verify one bounded handoff path with durable evidence, explicit source/target identity, authority containment, approval behavior, lifecycle correlation, auditability, replay protection, and rollback. Avoid provider execution if the handoff semantics can be proven without it.
+### A6 — Controlled Handoff Verification — GREEN / COMPLETE
+Activated signed specialist presence and durable fail-closed handoff persistence, then completed exactly one CEO-authorized, non-executing Hermes -> specialist canary. Acceptance created exactly one specialist assignment, replay was idempotent, the task completed, and the specialist returned to L1 disabled/non-assignable with zero active workload.
 
-### A7 — Mission Control Read Model Integration
-Expose multi-agent state read-only: registered workers, authority ceilings, presence, workload, handoff state, and evidence completeness. Mission Control must remain observational and non-authoritative.
+### A7 — Mission Control Read Model Integration — GREEN / COMPLETE
+Activated schema `2.2-a7.v1`, exposing both workers, authority ceilings, registry state, identity-specific presence, workload, readiness and durable handoff history read-only. Mission Control remains observational and non-authoritative; mutation methods remain `405`.
 
-### A8 — Closure
-Revalidate governance invariants, fail-closed behavior, backup/monitoring, approval boundaries, and absence of unintended authority. Close Phase 2.2 only when handoff is durable, attributable, auditable, bounded, and safe.
+### A8 — Closure — GREEN / COMPLETE
+Revalidated governance invariants, fail-closed authentication boundaries, durable handoff attribution, approval non-consumption, backup/monitoring health, temporary-evidence cleanup, and absence of unintended authority/execution changes.
 
-## Required handoff evidence
+## Required handoff evidence — satisfied
 
-A trustworthy handoff must be able to prove at minimum:
+The production A6.8 canary proves:
 
 - canonical task ID;
 - source agent identity;
@@ -71,13 +75,31 @@ A trustworthy handoff must be able to prove at minimum:
 - explicit handoff reason;
 - durable correlation ID;
 - legal lifecycle transition;
-- approval requirement and decision state where applicable;
-- acceptance/rejection/expiry state;
+- approval requirement and decision state;
+- accepted state;
 - no duplicate ownership ambiguity;
 - no authority escalation by delegation;
 - durable audit trail sufficient to reconstruct the decision and outcome.
 
-## Fail-closed rules
+Canonical identifiers:
+
+```text
+task_id = tsk_a68_082b86212fc944b0a45f6c43395cb6f1
+handoff_id = hof_ba25bd0fdfea401c9894d6520099b4cf
+correlation_id = hofcorr_7dba30f92f2c46188c435aaea55bde67
+source = hermes
+target = specialist-worker-01
+source authority ceiling = L3
+target authority ceiling = L1
+task class = general
+required authority = L1
+reason = a6_8_ceo_approved_canary
+state = accepted
+latest stage = COMPLETED
+active ownership = false
+```
+
+## Fail-closed rules — retained
 
 - Missing target identity => no handoff.
 - Missing authority evidence => no handoff.
@@ -88,6 +110,31 @@ A trustworthy handoff must be able to prove at minimum:
 - Stale/offline target presence alone never causes reroute or reassignment.
 - A worker becoming `ready` never grants permission to receive work automatically.
 
-## Current authorization level
+A8 additionally proved unauthenticated handoff request/accept/reject, task assignment, planning and execution calls all return `401` with zero durable-state delta.
 
-The CEO instruction to continue authorizes Phase 2.2 discovery, contract design, read-only validation, and preparatory engineering. It does not by itself broaden production authority or enable a second executing worker. Production authority expansion remains a separately governed activation decision.
+## Closure production state
+
+- `hermes`: L3, enabled, assignable.
+- `specialist-worker-01`: L1, disabled, non-assignable, presence-only, active workload zero.
+- Control API image: `phil-ai-os/control-api:0.21.1-phase22a68`.
+- execution allowlist: `general` only.
+- durable accepted handoff rows: one controlled A6.8 historical proof.
+- specialist A6.8 target assignment events: exactly one.
+- A6.8 task latest stage: `COMPLETED`.
+- A6.8 execution approval: expired and unconsumed.
+- Mission Control read model: `2.2-a7.v1`, HTTP `200`.
+- Mission Control mutations: HTTP `405`.
+- automatic assignment/retry/reroute/delegation/execution: false.
+- backup, backup self-heal, monitoring and presence/heartbeat timers: healthy.
+
+## Authorization boundary after closure
+
+Phase 2.2 closure does not authorize permanent specialist eligibility, recurring or automatic handoff, autonomous delegation, new execution capability, provider credentials, broader task classes, generalized authority/readiness grants, Mission Control mutation, or additional workers.
+
+Any such expansion belongs to a separately defined and governed future phase/gate.
+
+## Closure decision
+
+**PHASE 2.2 — GREEN / FORMALLY CLOSED.**
+
+Canonical closure record: `docs/PHASE_2_2_FORMAL_CLOSURE.md`.
