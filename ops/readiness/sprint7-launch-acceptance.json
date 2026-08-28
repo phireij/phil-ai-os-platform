@@ -15,7 +15,7 @@
     "tokushoho_source_reconciled": true,
     "tokushoho_publication_approved": false,
     "fresh_launch_time_backup_restore_check_green": false,
-    "woocommerce_staging_qa_green": false,
+    "woocommerce_preproduction_qa_green": false,
     "woocommerce_production_activation_approved": false,
     "woocommerce_production_credentials_configured": false,
     "komoju_test_mode_validated": false,
@@ -45,6 +45,7 @@
     "docs/SPRINT_7_LAUNCH_ACCEPTANCE_MATRIX_2026-08-28.md",
     "ops/readiness/verified-ruby-business-profile.template.json",
     "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json",
-    "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md"
+    "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md",
+    "docs/RUBY_WOOCOMMERCE_KOMOJU_STAGING_CONFIGURATION_PLAN_2026-08-29.md"
   ]
 }
