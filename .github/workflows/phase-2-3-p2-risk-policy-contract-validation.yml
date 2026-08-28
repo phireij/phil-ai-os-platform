@@ -1,0 +1,32 @@
+name: Phase 2.3 P2 Risk Policy Contract Validation
+
+on:
+  push:
+    paths:
+      - 'docs/PHASE_2_3_P2_RISK_TIER_POLICY_DECISION_CONTRACT.md'
+      - 'policy/phase2_3_p2_risk_policy_contract.json'
+      - 'scripts/phase2_3_p2_risk_policy_contract_validator.py'
+      - '.github/workflows/phase-2-3-p2-risk-policy-contract-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate P2 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/phase2_3_p2_risk_policy_contract_validator.py | tee phase-2-3-p2-validation.txt
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-3-p2-risk-policy-contract-validation-evidence
+          path: phase-2-3-p2-validation.txt
+          if-no-files-found: warn
+          retention-days: 30
