@@ -1,3 +1,4 @@
+from .governance import GovernanceEvaluationError, evaluate_governance
 from .normalizer import (
     InMemoryDeduplicator,
     NormalizationError,
@@ -8,10 +9,12 @@ from .normalizer import (
 from .queue import OperationsQueue
 
 __all__ = [
+    "GovernanceEvaluationError",
     "InMemoryDeduplicator",
     "NormalizationError",
     "OperationsQueue",
     "SUPPORTED_SOURCES",
     "classify_intent",
+    "evaluate_governance",
     "normalize_channel_event",
 ]
