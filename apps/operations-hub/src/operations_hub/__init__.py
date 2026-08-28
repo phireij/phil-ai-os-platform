@@ -1,15 +1,17 @@
 from .normalizer import (
+    InMemoryDeduplicator,
     NormalizationError,
     SUPPORTED_SOURCES,
-    InMemoryDeduplicator,
     classify_intent,
     normalize_channel_event,
 )
+from .queue import OperationsQueue
 
 __all__ = [
-    "NormalizationError",
-    "SUPPORTED_SOURCES",
     "InMemoryDeduplicator",
+    "NormalizationError",
+    "OperationsQueue",
+    "SUPPORTED_SOURCES",
     "classify_intent",
     "normalize_channel_event",
 ]
