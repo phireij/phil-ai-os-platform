@@ -1,0 +1,64 @@
+name: Phase 2.3 P5 Source Discovery
+
+on:
+  push:
+    paths:
+      - 'scripts/phase2_3_p5_source_discovery.sh'
+      - '.github/workflows/phase-2-3-p5-source-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate discovery script
+        run: bash -n scripts/phase2_3_p5_source_discovery.sh
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3 4 5 6; do
+            if ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=12 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*5))
+          done
+          exit 1
+      - name: Stage audited discovery script
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -4 -P "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes scripts/phase2_3_p5_source_discovery.sh "$VPS_USER@$VPS_HOST:/tmp/phase2_3_p5_source_discovery.sh"
+      - name: Run read-only production discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'chmod 700 /tmp/phase2_3_p5_source_discovery.sh && /tmp/phase2_3_p5_source_discovery.sh' | tee phase-2-3-p5-source-discovery.txt
+      - name: Cleanup staged script
+        if: always()
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'rm -f /tmp/phase2_3_p5_source_discovery.sh' || true
+      - name: Upload discovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-3-p5-source-discovery-evidence
+          path: phase-2-3-p5-source-discovery.txt
+          if-no-files-found: warn
+          retention-days: 30
