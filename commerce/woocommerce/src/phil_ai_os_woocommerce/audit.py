@@ -43,3 +43,19 @@ class CommerceSyncAuditEvent:
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+class MemoryAuditSink:
+    """Isolated audit collector that rejects any authority-bearing event."""
+
+    def __init__(self) -> None:
+        self._events: list[CommerceSyncAuditEvent] = []
+
+    def emit(self, event: CommerceSyncAuditEvent) -> None:
+        if event.authority_effect != "none":
+            raise ValueError("Sprint 3 audit events must have authority_effect=none")
+        self._events.append(event)
+
+    @property
+    def events(self) -> tuple[CommerceSyncAuditEvent, ...]:
+        return tuple(self._events)
