@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/cx/checkout-readiness.schema.json",
+  "title": "Phil AI OS CX Checkout Readiness",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intent_id", "evaluated_at", "items", "ready", "blockers", "mutation_authorized"],
+  "properties": {
+    "intent_id": {"type": "string", "minLength": 1},
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "catalog_snapshot_ref": {"type": ["string", "null"]},
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sku", "requested_quantity", "availability"],
+        "properties": {
+          "sku": {"type": "string", "minLength": 1},
+          "requested_quantity": {"type": "integer", "minimum": 1},
+          "availability": {"enum": ["available", "insufficient", "unavailable", "unknown"]},
+          "available_quantity": {"type": ["integer", "null"], "minimum": 0}
+        }
+      }
+    },
+    "ready": {"type": "boolean"},
+    "blockers": {
+      "type": "array",
+      "items": {"enum": ["inventory", "pickup_time", "contact", "policy_acknowledgement", "pricing", "system_unavailable", "other"]}
+    },
+    "customer_action_required": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "mutation_authorized": {"const": false}
+  }
+}
