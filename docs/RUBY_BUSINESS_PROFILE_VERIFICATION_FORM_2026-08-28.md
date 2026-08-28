@@ -1,7 +1,7 @@
 # Ruby’s Cake Delights — Verified Business Profile Form
 
 Date prepared: 2026-08-28  
-Status: **PARTIAL BUSINESS VERIFICATION — BUSINESS DESCRIPTION + CORE DETAILS + 3 POLICIES CONFIRMED**  
+Status: **PARTIAL BUSINESS VERIFICATION — 13/15 RESOLVED / PRIVACY + TERMS DRAFTED PENDING APPROVAL**  
 Purpose: establish the verified production source for store information, contact information and policies before WordPress/WooCommerce staging and publication.
 
 ## Important rules
@@ -11,6 +11,7 @@ Purpose: establish the verified production source for store information, contact
 - Business values are added only when directly verified.
 - Approved business-description and policy wording does **not** authorize production publication, DNS changes, WooCommerce activation or payment activation.
 - The September 13 meal launch is a verified rollout fact only; it does not create production catalog records.
+- Drafted Privacy Policy and Terms & Conditions remain **unverified** until explicit CEO/business-owner approval.
 
 ---
 
@@ -89,13 +90,55 @@ Alias/order email: `order@rubyscakedelights.shop`
 
 ## C. Customer Policies
 
-### C1. Privacy policy — NOT YET DRAFTED / VERIFIED
+### C1. Privacy policy — DRAFTED / PENDING APPROVAL
 
-- [ ] New production policy required
+Canonical bilingual draft:
+`docs/RUBY_PRIVACY_POLICY_TERMS_DRAFTS_2026-08-29.md`, section 1.
 
-### C2. Terms & conditions — NOT YET DRAFTED / VERIFIED
+The draft covers:
 
-- [ ] New production terms required
+- categories of customer/order/contact/technical information;
+- specific purposes of use;
+- essential WooCommerce cookie/session behavior;
+- KOMOJU payment-processing boundary;
+- service providers and possible overseas processing;
+- third-party disclosure principles;
+- retention/deletion;
+- security measures;
+- customer access/correction/deletion/suspension requests;
+- social-media/external-service handling; and
+- policy changes.
+
+- [x] Draft prepared using current Japanese APPI/PPC guidance and verified Ruby business data
+- [ ] CEO/business-owner approval required
+- [ ] Launch-time WooCommerce cookie/plugin and provider inventory review required before publication
+
+### C2. Terms & conditions — DRAFTED / PENDING APPROVAL
+
+Canonical bilingual draft:
+`docs/RUBY_PRIVACY_POLICY_TERMS_DRAFTS_2026-08-29.md`, section 2.
+
+The draft covers:
+
+- seller/contact information;
+- product availability and catalog accuracy;
+- prices and final-order confirmation;
+- order formation/acceptance;
+- KOMOJU payment boundary;
+- pickup rules;
+- incorporation of the approved cancellation/refund policy;
+- custom/special orders;
+- allergen and food-safety rules;
+- customer responsibilities/prohibited conduct;
+- website operation;
+- intellectual property;
+- liability wording that preserves mandatory consumer rights;
+- privacy; and
+- Japanese governing law.
+
+- [x] Draft prepared using current Japanese mail-order/consumer-contract guidance and Ruby's approved policies
+- [ ] CEO/business-owner approval required
+- [ ] Separate **特定商取引法に基づく表記** page still required before production launch; these Terms do not replace it
 
 ### C3. Cancellation / refund policy — VERIFIED / APPROVED
 
@@ -145,16 +188,20 @@ Required profile fields: **15**
 Verified: **11**  
 Explicitly not applicable: **2**  
 Resolved: **13 / 15**  
-Unresolved/pending approval: **2 / 15**
+Drafted but unresolved pending approval: **2 / 15**
 
 Remaining unresolved fields:
 
-1. Privacy policy — not yet drafted/approved
-2. Terms & conditions — not yet drafted/approved
+1. Privacy policy — drafted; CEO/business-owner approval pending
+2. Terms & conditions — drafted; CEO/business-owner approval pending
 
 ### Time-sensitive recheck
 
 Operating/pickup hours are verified for the current business state but must be re-verified around **mid-September 2026** because a schedule change is expected.
+
+### Launch-time policy implementation checks
+
+Before production publication, verify the actual WooCommerce cookie/plugin inventory, Hostinger production setup, KOMOJU Test Mode configuration, any analytics/marketing tools, product/catalog display rules, and the separate **特定商取引法に基づく表記** page.
 
 ---
 
@@ -162,6 +209,8 @@ Operating/pickup hours are verified for the current business state but must be r
 
 The machine-readable profile may be set to `profile_complete: true` only when every required field is either `verified` or explicitly `not_applicable` with a reason.
 
+The existence of drafts does **not** count as verification.
+
 `production_publish_authorized` remains **false** even after profile completion until the separate staging/cutover gate is approved.
 
-`PHIL_AI_OS_RUBY_BUSINESS_PROFILE_13_OF_15_RESOLVED_PRIVACY_TERMS_PENDING`
+`PHIL_AI_OS_RUBY_BUSINESS_PROFILE_13_OF_15_RESOLVED_PRIVACY_TERMS_DRAFTED_PENDING_APPROVAL`
