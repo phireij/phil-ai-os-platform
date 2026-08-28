@@ -1,17 +1,21 @@
 {
   "fixture_only": true,
-  "source": "synthetic-channel",
+  "source": "facebook",
+  "kind": "message",
   "external_event_id": "sample-event-001",
   "occurred_at": "2026-08-28T00:00:00Z",
   "sender_ref": "synthetic-customer-001",
   "normalized_intent": "order_inquiry",
   "entities": {
-    "items": [{"sku": "SAMPLE-CHOCO-001", "quantity": 2}],
-    "locale": "ja"
+    "locale": "ja",
+    "text": "ケーキを注文できますか？"
   },
-  "confidence": 0.98,
-  "idempotency_key": "fixture:sample-event-001",
+  "confidence": 0.94,
+  "idempotency_key": "channel:facebook:sample-event-001",
+  "raw_event_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "review_required": false,
+  "review_reason": null,
   "approval_state": "not_evaluated",
-  "lifecycle_correlation_id": "fixture-correlation-001",
+  "lifecycle_correlation_id": "ops:0123456789abcdef01234567",
   "mutation_authorized": false
 }
