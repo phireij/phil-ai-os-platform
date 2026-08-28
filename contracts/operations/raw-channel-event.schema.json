@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/operations/raw-channel-event.schema.json",
+  "title": "Phil AI OS Synthetic Raw Channel Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["fixture_only", "source", "kind", "external_event_id", "occurred_at", "locale", "text"],
+  "properties": {
+    "fixture_only": {"const": true},
+    "source": {"enum": ["facebook", "instagram", "telegram", "whatsapp", "google_business"]},
+    "kind": {"enum": ["message", "comment", "review"]},
+    "external_event_id": {"type": "string", "minLength": 1},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "sender_ref": {"type": ["string", "null"]},
+    "locale": {"enum": ["en", "ja", "unknown"]},
+    "text": {"type": "string", "minLength": 1}
+  }
+}

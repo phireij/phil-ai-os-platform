@@ -1,0 +1,49 @@
+name: Sprint 5 Operations Hub CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/operations-hub/**"
+      - "contracts/operations/**"
+      - "docs/SPRINT_5_**"
+      - ".github/workflows/sprint-5-operations-hub-ci.yml"
+  push:
+    branches:
+      - "sprint5/**"
+    paths:
+      - "apps/operations-hub/**"
+      - "contracts/operations/**"
+      - "docs/SPRINT_5_**"
+      - ".github/workflows/sprint-5-operations-hub-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  operations-foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile operations runtime
+        run: python -m compileall -q apps/operations-hub/src
+
+      - name: Run isolated operations unit tests
+        run: python -m unittest discover -s apps/operations-hub/tests -p 'test_*.py' -v
+
+      - name: Validate five-channel contracts, fixtures and safety boundary
+        run: python apps/operations-hub/tools_validate_operations.py
+
+      - name: Assert no live channel configuration or authority
+        run: |
+          set -euo pipefail
+          ! grep -R -E 'https://graph\.facebook\.com|https://graph\.instagram\.com|https://api\.telegram\.org|https://graph\.facebook\.com/.*/messages|https://mybusinessbusinessinformation\.googleapis\.com' apps/operations-hub contracts/operations
+          ! grep -R -E 'mutation_authorized["[:space:]]*:[[:space:]]*true' apps/operations-hub contracts/operations
+          ! grep -R -E 'channel_reply_authorized["[:space:]]*:[[:space:]]*true' apps/operations-hub contracts/operations
+          ! grep -R -E 'execution_authorized["[:space:]]*:[[:space:]]*true' apps/operations-hub contracts/operations
+          echo PHIL_AI_OS_SPRINT_5_LIVE_CHANNEL_BOUNDARY_GREEN

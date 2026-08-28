@@ -1,0 +1,10 @@
+{
+  "fixture_only": true,
+  "source": "google_business",
+  "kind": "review",
+  "external_event_id": "gb-fixture-001",
+  "occurred_at": "2026-08-28T12:14:00Z",
+  "sender_ref": "fixture-google-reviewer",
+  "locale": "ja",
+  "text": "ケーキがとても美味しかったです。"
+}

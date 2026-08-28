@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/operations/governance-evaluation.schema.json",
+  "title": "Phil AI OS Operations Governance Evaluation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source",
+    "external_event_id",
+    "normalized_intent",
+    "risk_level",
+    "human_review_required",
+    "approval_required",
+    "approval_state",
+    "lifecycle_correlation_id",
+    "execution_authorized",
+    "channel_reply_authorized",
+    "mutation_authorized",
+    "authority_effect"
+  ],
+  "properties": {
+    "source": {"enum": ["facebook", "instagram", "telegram", "whatsapp", "google_business"]},
+    "external_event_id": {"type": "string", "minLength": 1},
+    "normalized_intent": {"enum": ["general_inquiry", "product_inquiry", "pickup_inquiry", "order_inquiry", "review_feedback", "complaint"]},
+    "risk_level": {"enum": ["low", "medium", "high"]},
+    "human_review_required": {"type": "boolean"},
+    "approval_required": {"type": "boolean"},
+    "approval_reason": {"type": ["string", "null"]},
+    "approval_state": {"enum": ["not_required", "required"]},
+    "lifecycle_correlation_id": {"type": "string", "minLength": 1},
+    "execution_authorized": {"const": false},
+    "channel_reply_authorized": {"const": false},
+    "mutation_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}

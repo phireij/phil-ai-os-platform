@@ -1,0 +1,10 @@
+{
+  "fixture_only": true,
+  "source": "facebook",
+  "kind": "message",
+  "external_event_id": "fb-fixture-001",
+  "occurred_at": "2026-08-28T12:10:00Z",
+  "sender_ref": "fixture-facebook-customer",
+  "locale": "en",
+  "text": "Can I order two cupcakes for pickup tomorrow?"
+}
