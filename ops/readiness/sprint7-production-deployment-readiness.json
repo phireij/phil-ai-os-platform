@@ -1,0 +1,46 @@
+{
+  "version": "sprint7-production-deployment-readiness-v1",
+  "date": "2026-08-28",
+  "storefront": {
+    "public_domain": "https://www.rubyscakedelights.shop/",
+    "current_platform": "hostinger-website-builder",
+    "current_source_role": "reference-only",
+    "target_platform": "hostinger-managed-wordpress-woocommerce",
+    "phil_ai_os_runtime": "hostinger-vps-separate-control-plane"
+  },
+  "migration": {
+    "copy_sections": ["store_information", "contact_information", "policies"],
+    "exclude_sections": ["products", "categories"],
+    "field_verification_required": true,
+    "verified_business_profile_complete": false,
+    "contact_phone_verified": false,
+    "old_test_catalog_authoritative": false
+  },
+  "woocommerce": {
+    "staging_first_required": true,
+    "ssl_verification_required": true,
+    "checkout_qa_required": true,
+    "backup_restore_gate_required": true,
+    "rollback_plan_required": true,
+    "production_credentials_authorized": false,
+    "live_api_connectivity_authorized": false,
+    "live_mutation_authorized": false,
+    "dns_or_site_cutover_authorized": false
+  },
+  "komoju": {
+    "provider": "komoju",
+    "integration_mode": "woocommerce_plugin",
+    "current_connection_state": "not_configured",
+    "test_mode_activation_authorized": false,
+    "live_mode_authorized": false,
+    "payment_execution_authorized": false
+  },
+  "evidence": [
+    "docs/SPRINT_3_RUBYS_COMMERCE_DEPLOYMENT_DECISION_2026-08-28.md",
+    "docs/SPRINT_3_WOOCOMMERCE_SECURITY_ACTIVATION_CHECKLIST_2026-08-28.md",
+    "contracts/commerce/site-migration-source.schema.json",
+    "contracts/cx/payment-handoff-intent.schema.json",
+    "docs/SPRINT_7_WOOCOMMERCE_STAGING_CUTOVER_RUNBOOK_2026-08-28.md",
+    "docs/SPRINT_7_KOMOJU_ACTIVATION_RUNBOOK_2026-08-28.md"
+  ]
+}

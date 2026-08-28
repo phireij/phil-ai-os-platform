@@ -1,0 +1,161 @@
+name: Sprint 7 Integrated Readiness CI
+
+on:
+  pull_request:
+    paths:
+      - "commerce/woocommerce/**"
+      - "apps/customer-experience/**"
+      - "apps/operations-hub/**"
+      - "apps/automation-hub/**"
+      - "contracts/**"
+      - "ops/readiness/**"
+      - "scripts/validate_sprint7_*.py"
+      - "docs/SPRINT_7_**"
+      - ".github/workflows/sprint-7-integrated-readiness-ci.yml"
+  push:
+    branches:
+      - "sprint7/**"
+    paths:
+      - "commerce/woocommerce/**"
+      - "apps/customer-experience/**"
+      - "apps/operations-hub/**"
+      - "apps/automation-hub/**"
+      - "contracts/**"
+      - "ops/readiness/**"
+      - "scripts/validate_sprint7_*.py"
+      - "docs/SPRINT_7_**"
+      - ".github/workflows/sprint-7-integrated-readiness-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  integrated-contract-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Commerce contracts and 59-test foundation
+        env:
+          PYTHONPATH: commerce/woocommerce/src
+        run: |
+          python commerce/woocommerce/tools_validate_contracts.py
+          python -m unittest discover -s commerce/woocommerce/tests -v
+          docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml config --quiet
+          bash -n commerce/woocommerce/bootstrap-local.sh
+
+      - name: Customer Experience 36-test foundation
+        run: |
+          node --check apps/customer-experience/src/core.mjs
+          node --check apps/customer-experience/src/cart.mjs
+          node --check apps/customer-experience/src/cart-preview.mjs
+          node --check apps/customer-experience/src/flow.mjs
+          node --check apps/customer-experience/src/payment.mjs
+          node --check apps/customer-experience/src/pickup.mjs
+          node --check apps/customer-experience/src/seo.mjs
+          node --check apps/customer-experience/src/app.mjs
+          node --check apps/customer-experience/sw.js
+          node --test apps/customer-experience/tests/*.test.mjs
+          python apps/customer-experience/tools_validate_cx.py
+          python apps/customer-experience/tools_validate_contract_compatibility.py
+
+      - name: Operations Hub 34-test foundation
+        run: |
+          python -m compileall -q apps/operations-hub/src
+          python -m unittest discover -s apps/operations-hub/tests -p 'test_*.py' -v
+          python apps/operations-hub/tools_validate_operations.py
+
+      - name: Automation 36-test foundation
+        run: |
+          python -m compileall -q apps/automation-hub/src
+          python -m unittest discover -s apps/automation-hub/tests -p 'test_*.py' -v
+          python apps/automation-hub/tools_validate_automation.py
+          python apps/automation-hub/tools_validate_lifecycle.py
+
+      - name: Integrated authority and credential regression
+        run: |
+          set -euo pipefail
+          ! grep -RInE '(^|[^A-Za-z])(ck_[A-Za-z0-9]{20,}|cs_[A-Za-z0-9]{20,})' commerce/woocommerce apps contracts ops/readiness docs/SPRINT_7_*.md
+          ! grep -RInE '\bEAA[A-Za-z0-9]{24,}\b|\bAIza[A-Za-z0-9_-]{30,}\b' apps/operations-hub contracts/operations ops/readiness docs/SPRINT_7_*.md
+          ! grep -R -E 'automatic_execution["[:space:]]*:[[:space:]]*true|execution_authorized["[:space:]]*:[[:space:]]*true|channel_reply_authorized["[:space:]]*:[[:space:]]*true|mutation_authorized["[:space:]]*:[[:space:]]*true' apps/operations-hub apps/automation-hub contracts/operations contracts/automation ops/readiness
+          ! grep -R -E 'payment_execution_authorized["[:space:]]*:[[:space:]]*true|live_mode_authorized["[:space:]]*:[[:space:]]*true|order_creation_authorized["[:space:]]*:[[:space:]]*true' apps/customer-experience contracts/cx
+          echo PHIL_AI_OS_SPRINT_7_INTEGRATED_AUTHORITY_REGRESSION_GREEN
+
+      - name: Validate security and recovery readiness
+        run: python scripts/validate_sprint7_security_recovery.py
+
+      - name: Validate production deployment readiness
+        run: python scripts/validate_sprint7_production_deployment.py
+
+      - name: Validate external channel activation readiness
+        run: python scripts/validate_sprint7_channel_activation.py
+
+      - name: Validate operator documentation and launch acceptance
+        run: python scripts/validate_sprint7_launch_acceptance.py
+
+      - name: Verify executive Sprint 7 entry and closure records
+        run: |
+          set -euo pipefail
+          grep -F 'Sprint 7 — Testing, Production Readiness, Documentation & Launch' docs/MASTER_EXECUTIVE_ROADMAP_SCHEDULE_CONTROL.md
+          grep -F 'PHIL_AI_OS_SPRINT_5_FORMAL_CLOSURE_GREEN' docs/SPRINT_5_FORMAL_CLOSURE_2026-08-28.md
+          grep -F 'PHIL_AI_OS_SPRINT_6_FORMAL_CLOSURE_GREEN' docs/SPRINT_6_FORMAL_CLOSURE_2026-08-28.md
+          echo PHIL_AI_OS_SPRINT_7_DOCUMENT_CONTROL_GREEN
+
+      - name: Integrated regression marker
+        run: echo PHIL_AI_OS_SPRINT_7_INTEGRATED_REGRESSION_GREEN
+
+  isolated-runtime-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bootstrap isolated WordPress and WooCommerce
+        shell: bash
+        run: bash commerce/woocommerce/bootstrap-local.sh
+
+      - name: Verify isolated WooCommerce runtime and wc/v3 surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          compose=(docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml)
+          "${compose[@]}" run --rm wpcli plugin is-active woocommerce
+          "${compose[@]}" run --rm wpcli eval '
+            $found = false;
+            foreach (array_keys(rest_get_server()->get_routes()) as $route) {
+              if (strpos($route, "/wc/v3") === 0) { $found = true; break; }
+            }
+            if (!$found) { fwrite(STDERR, "wc/v3 REST surface missing\n"); exit(1); }
+            echo "PHIL_AI_OS_SPRINT_7_WC_V3_RUNTIME_GREEN\n";
+          '
+          curl --fail --silent --show-error --retry 20 --retry-delay 2 --retry-connrefused http://127.0.0.1:8088/ >/dev/null
+
+      - name: Serve and smoke isolated CX shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 8094 --bind 127.0.0.1 --directory apps/customer-experience >/tmp/phil-sprint7-cx.log 2>&1 &
+          echo $! >/tmp/phil-sprint7-cx.pid
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8094/ >/dev/null; then break; fi
+            sleep 0.25
+          done
+          curl --fail --silent http://127.0.0.1:8094/ | grep -F 'Customer Experience'
+          curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F 'KOMOJU not connected'
+          echo PHIL_AI_OS_SPRINT_7_ISOLATED_RUNTIME_SMOKE_GREEN
+
+      - name: Destroy isolated runtimes
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/phil-sprint7-cx.pid ]; then kill "$(cat /tmp/phil-sprint7-cx.pid)" 2>/dev/null || true; fi
+          docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml down -v --remove-orphans

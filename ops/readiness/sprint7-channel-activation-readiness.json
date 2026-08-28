@@ -1,0 +1,71 @@
+{
+  "version": "sprint7-channel-activation-readiness-v1",
+  "date": "2026-08-28",
+  "authority_baseline": {
+    "autonomy": "A0",
+    "task_class_allowlist": ["general"],
+    "assigned_agent": "hermes",
+    "specialists_enabled": false,
+    "live_channel_connectivity_authorized": false,
+    "outbound_reply_authorized": false,
+    "customer_account_mutation_authorized": false
+  },
+  "channels": [
+    {
+      "channel": "facebook",
+      "identity_state": "not_configured_for_operations",
+      "credential_introduced": false,
+      "live_connectivity_authorized": false,
+      "inbound_activation_authorized": false,
+      "outbound_reply_authorized": false,
+      "activation_requirements": ["approved_integration_identity", "verified_current_platform_permissions", "signed_or_verified_ingress", "idempotency_and_replay_green", "rollback_disable_path"],
+      "write_scope_separate_gate": true
+    },
+    {
+      "channel": "instagram",
+      "identity_state": "not_configured_for_operations",
+      "credential_introduced": false,
+      "live_connectivity_authorized": false,
+      "inbound_activation_authorized": false,
+      "outbound_reply_authorized": false,
+      "activation_requirements": ["approved_integration_identity", "verified_current_platform_permissions", "signed_or_verified_ingress", "idempotency_and_replay_green", "rollback_disable_path"],
+      "write_scope_separate_gate": true
+    },
+    {
+      "channel": "telegram",
+      "identity_state": "existing_control_plane_approval_channel_is_not_operations_authority",
+      "credential_introduced": false,
+      "live_connectivity_authorized": false,
+      "inbound_activation_authorized": false,
+      "outbound_reply_authorized": false,
+      "activation_requirements": ["operations_scope_identity_review", "verified_current_bot_or_webhook_scope", "idempotency_and_replay_green", "rollback_disable_path"],
+      "write_scope_separate_gate": true
+    },
+    {
+      "channel": "whatsapp",
+      "identity_state": "not_configured_for_operations",
+      "credential_introduced": false,
+      "live_connectivity_authorized": false,
+      "inbound_activation_authorized": false,
+      "outbound_reply_authorized": false,
+      "activation_requirements": ["approved_business_integration_identity", "verified_current_platform_permissions", "signed_or_verified_ingress", "idempotency_and_replay_green", "rollback_disable_path"],
+      "write_scope_separate_gate": true
+    },
+    {
+      "channel": "google_business",
+      "identity_state": "not_configured_for_operations",
+      "credential_introduced": false,
+      "live_connectivity_authorized": false,
+      "inbound_activation_authorized": false,
+      "outbound_reply_authorized": false,
+      "activation_requirements": ["approved_business_integration_identity", "verify_current_google_business_capability_and_permissions_at_activation_time", "idempotency_and_replay_green", "rollback_disable_path"],
+      "write_scope_separate_gate": true
+    }
+  ],
+  "evidence": [
+    "docs/SPRINT_5_FORMAL_CLOSURE_2026-08-28.md",
+    "docs/SPRINT_7_CHANNEL_ACTIVATION_RUNBOOKS_2026-08-28.md",
+    "docs/SPRINT_7_PRODUCTION_SECRET_HANDLING_PLAN_2026-08-28.md",
+    "docs/SPRINT_7_ROLLBACK_ABORT_MATRIX_2026-08-28.md"
+  ]
+}

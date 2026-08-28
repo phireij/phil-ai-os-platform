@@ -1,0 +1,90 @@
+{
+  "version": "sprint7-security-recovery-v1",
+  "date": "2026-08-28",
+  "authority_baseline": {
+    "autonomy": "A0",
+    "task_class_allowlist": ["general"],
+    "assigned_agent": "hermes",
+    "specialists_enabled": false,
+    "mission_control_mutation_authorized": false,
+    "production_activation_authorized": false,
+    "automatic_production_retry_authorized": false,
+    "automatic_production_rollback_authorized": false
+  },
+  "controls": [
+    {
+      "id": "control-plane-backup-restore",
+      "status": "historically_validated_launch_recheck_required",
+      "evidence": ["docs/PHASE_1_17_IMPLEMENTATION_STATUS.md"],
+      "launch_requirement": "Re-check backup freshness, timer health, SQLite integrity and isolated restore immediately before production cutover."
+    },
+    {
+      "id": "approval-replay-protection",
+      "status": "current_green",
+      "evidence": ["docs/SPRINT_6_FORMAL_CLOSURE_2026-08-28.md"],
+      "launch_requirement": "Keep one-time approval consumption and replay rejection enabled."
+    },
+    {
+      "id": "execution-boundary-default-deny",
+      "status": "current_green",
+      "evidence": ["docs/PHASE_1_18_PLAN.md", "docs/SPRINT_6_FORMAL_CLOSURE_2026-08-28.md"],
+      "launch_requirement": "No provider/system bypass and no live side effect outside an explicitly authorized boundary."
+    },
+    {
+      "id": "woocommerce-credential-boundary",
+      "status": "plan_ready_activation_not_authorized",
+      "evidence": ["docs/SPRINT_3_WOOCOMMERCE_SECURITY_ACTIVATION_CHECKLIST_2026-08-28.md"],
+      "launch_requirement": "Use an approved least-privilege integration identity, approved secret store, HTTPS-only transport, rotation/revocation procedure and explicit CEO activation gate."
+    },
+    {
+      "id": "production-secret-handling",
+      "status": "plan_ready_activation_not_authorized",
+      "evidence": ["docs/SPRINT_7_PRODUCTION_SECRET_HANDLING_PLAN_2026-08-28.md"],
+      "launch_requirement": "No production credential may be committed, logged, copied into fixtures or exposed to unnecessary surfaces."
+    },
+    {
+      "id": "rollback-abort-governance",
+      "status": "plan_ready_activation_not_authorized",
+      "evidence": ["docs/SPRINT_7_ROLLBACK_ABORT_MATRIX_2026-08-28.md"],
+      "launch_requirement": "Every production activation step requires an owner, abort trigger, verification check and reversible fallback before execution."
+    },
+    {
+      "id": "fail-closed-launch-blockers",
+      "status": "active",
+      "evidence": ["docs/SPRINT_7_SECURITY_RECOVERY_READINESS_MATRIX_2026-08-28.md"],
+      "launch_requirement": "Any unresolved critical blocker prevents launch or the affected activation step."
+    }
+  ],
+  "launch_blockers": [
+    {
+      "id": "backup-or-restore-unhealthy",
+      "blocking": true,
+      "resolution": "Fresh backup, healthy monitor/timer, SQLite quick_check and isolated restore verification must pass."
+    },
+    {
+      "id": "production-secret-location-unapproved",
+      "blocking": true,
+      "resolution": "Approve least-privilege identity, secret storage, rotation and revocation before credentials are introduced."
+    },
+    {
+      "id": "authority-expansion-unapproved",
+      "blocking": true,
+      "resolution": "Obtain explicit CEO approval before live writes, specialist enablement, new execution classes, higher autonomy or Mission Control mutation authority."
+    },
+    {
+      "id": "rollback-or-abort-path-unproven",
+      "blocking": true,
+      "resolution": "Define and verify a reversible cutover/rollback path for the affected production change."
+    },
+    {
+      "id": "replay-idempotency-regression",
+      "blocking": true,
+      "resolution": "Replay, duplicate and idempotency tests must remain GREEN."
+    },
+    {
+      "id": "credential-or-authority-scan-failure",
+      "blocking": true,
+      "resolution": "Remove credential material or unauthorized authority before proceeding."
+    }
+  ]
+}
