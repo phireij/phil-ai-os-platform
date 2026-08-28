@@ -1,0 +1,7 @@
+{
+  "fixture_only": true,
+  "policy_id": "synthetic-pickup-policy-v1",
+  "min_lead_minutes": 60,
+  "max_advance_days": 14,
+  "note": "Synthetic policy for isolated Sprint 4 customer-flow testing only; not a Ruby's Cake Delights operating-hours commitment."
+}
