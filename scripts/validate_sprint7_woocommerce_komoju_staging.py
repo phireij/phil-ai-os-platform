@@ -6,9 +6,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 READINESS = ROOT / "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json"
+EVIDENCE = ROOT / "ops/readiness/ruby-hostinger-preproduction-evidence.template.json"
 PROFILE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
 TOKUSHOHO = ROOT / "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md"
 PLAN = ROOT / "docs/RUBY_WOOCOMMERCE_KOMOJU_STAGING_CONFIGURATION_PLAN_2026-08-29.md"
+OPERATOR = ROOT / "docs/RUBY_HOSTINGER_WORDPRESS_PREPRODUCTION_OPERATOR_STEP_2026-08-29.md"
 KOMOJU_RUNBOOK = ROOT / "docs/SPRINT_7_KOMOJU_ACTIVATION_RUNBOOK_2026-08-28.md"
 WOO_RUNBOOK = ROOT / "docs/SPRINT_7_WOOCOMMERCE_STAGING_CUTOVER_RUNBOOK_2026-08-28.md"
 
@@ -25,6 +27,7 @@ def require(text: str, phrases: tuple[str, ...], label: str) -> None:
 
 def main() -> None:
     data = json.loads(READINESS.read_text(encoding="utf-8"))
+    evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     profile = json.loads(PROFILE.read_text(encoding="utf-8"))
 
     if profile.get("profile_complete") is not True or profile.get("production_publish_authorized") is not False:
@@ -110,6 +113,24 @@ def main() -> None:
     if data.get("production_publish_authorized") is not False:
         fail("preproduction readiness gained production publication authority")
 
+    expected_evidence = {
+        "public_domain_unchanged": True,
+        "current_public_platform": "hostinger-website-builder",
+        "preproduction_url": None,
+        "wordpress_admin_reachable": False,
+        "woocommerce_active": False,
+        "https_ssl_green": False,
+        "hostinger_native_wordpress_staging_menu_available": None,
+        "hosting_plan_name": None,
+        "komoju_test_mode_connected": False,
+        "komoju_live_mode_connected": False,
+        "production_cutover_authorized": False,
+        "evidence_complete": False,
+    }
+    for key, value in expected_evidence.items():
+        if evidence.get(key) != value:
+            fail(f"operator evidence template must remain blank/safe: {key}={evidence.get(key)!r}")
+
     require(TOKUSHOHO.read_text(encoding="utf-8"), (
         "BOMBEO PHILIP GO",
         "050-1785-0575",
@@ -133,10 +154,20 @@ def main() -> None:
         "PHIL_AI_OS_RUBY_WOOCOMMERCE_KOMOJU_PREPRODUCTION_PLAN_READY_NEXT_GATE_CREATE_PARALLEL_WORDPRESS",
     ), "preproduction configuration plan")
 
+    require(OPERATOR.read_text(encoding="utf-8"), (
+        "NEXT HUMAN/ACCOUNT-SIDE STEP / PUBLIC SITE MUST REMAIN UNCHANGED",
+        "Create/add a **new website** using WordPress",
+        "Do **not** publish/switch the Ruby public domain",
+        "Do **not** connect KOMOJU Test Mode or Live Mode yet",
+        "pre-production URL",
+        "PHIL_AI_OS_RUBY_HOSTINGER_OPERATOR_NEXT_STEP_CREATE_PARALLEL_WORDPRESS_NO_CUTOVER",
+    ), "Hostinger operator step")
+
     require(KOMOJU_RUNBOOK.read_text(encoding="utf-8"), (
         "Sign into KOMOJU",
         "automatically configures the KOMOJU secret key and webhooks",
         "deprecated legacy `Komoju` payment method",
+        "parallel non-public WooCommerce pre-production environment",
         "Test Mode",
         "PHIL_AI_OS_SPRINT_7_KOMOJU_RUNBOOK_READY_NOT_AUTHORIZED",
     ), "KOMOJU runbook")
@@ -152,6 +183,7 @@ def main() -> None:
 
     print("PHIL_AI_OS_RUBY_WOO_KOMOJU_PREPRODUCTION_READINESS_GREEN profile=15of15 tokushoho_reconciled=true")
     print("PHIL_AI_OS_RUBY_HOSTINGER_ENVIRONMENT_MODEL_GREEN current=website_builder next=parallel_wordpress native_staging_requires_wordpress=true")
+    print("PHIL_AI_OS_RUBY_HOSTINGER_EVIDENCE_TEMPLATE_GREEN complete=false public_domain_unchanged=true komoju=false")
     print("PHIL_AI_OS_RUBY_FULFILLMENT_RECONCILIATION_GREEN pickup=true yamato_legacy=true shipping_production_verified=false")
     print("PHIL_AI_OS_RUBY_KOMOJU_CURRENT_INTEGRATION_GREEN connection=sign_in_oauth_style test_mode_authorized=false live_mode=false")
     print("PHIL_AI_OS_RUBY_PREPRODUCTION_NEXT_GATE_GREEN action=create_parallel_hostinger_wordpress publish=false")
