@@ -1,0 +1,75 @@
+name: Sprint 4 Customer Experience CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/customer-experience/**"
+      - "contracts/cx/**"
+      - "docs/SPRINT_4_**"
+      - ".github/workflows/sprint-4-customer-experience-ci.yml"
+  push:
+    branches:
+      - "sprint4/**"
+    paths:
+      - "apps/customer-experience/**"
+      - "contracts/cx/**"
+      - "docs/SPRINT_4_**"
+      - ".github/workflows/sprint-4-customer-experience-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cx-foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check apps/customer-experience/src/core.mjs
+          node --check apps/customer-experience/src/app.mjs
+          node --check apps/customer-experience/sw.js
+
+      - name: Run isolated CX unit tests
+        run: node --test apps/customer-experience/tests/*.test.mjs
+
+      - name: Validate CX fixture, PWA, accessibility and safety boundaries
+        run: python apps/customer-experience/tools_validate_cx.py
+
+      - name: Serve isolated customer experience
+        run: |
+          python -m http.server 8094 --bind 127.0.0.1 --directory apps/customer-experience >/tmp/phil-cx-http.log 2>&1 &
+          echo $! >/tmp/phil-cx-http.pid
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8094/ >/dev/null; then
+              exit 0
+            fi
+            sleep 0.25
+          done
+          cat /tmp/phil-cx-http.log
+          exit 1
+
+      - name: HTTP smoke app shell and fixture
+        run: |
+          set -euo pipefail
+          curl --fail --silent http://127.0.0.1:8094/ | grep -F "Customer Experience"
+          curl --fail --silent http://127.0.0.1:8094/manifest.webmanifest | grep -F '"display": "standalone"'
+          curl --fail --silent http://127.0.0.1:8094/fixtures/catalog.json | grep -F '"fixture_only": true'
+          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v1'
+
+      - name: Stop isolated server
+        if: always()
+        run: |
+          if [ -f /tmp/phil-cx-http.pid ]; then
+            kill "$(cat /tmp/phil-cx-http.pid)" 2>/dev/null || true
+          fi
