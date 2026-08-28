@@ -1,0 +1,70 @@
+name: Phase 2.2 A3 Capability Matrix Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/PHASE_2_2_A3_CAPABILITY_AUTHORITY_MATRIX.md'
+      - 'policy/phase2_2_a3_capability_matrix.json'
+      - '.github/workflows/phase-2-2-a3-capability-matrix-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate capability matrix safety invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | tee phase22-a3-evidence.txt
+          import json
+          p=json.load(open('policy/phase2_2_a3_capability_matrix.json'))
+          assert p['schema_version']=='2.2-a3.v1'
+          assert p['production_execution_allowlist']==['general']
+          assert p['initial_cross_agent_handoff_requires_human_authorization'] is True
+          for k in ('automatic_assignment','automatic_retry','automatic_reroute','automatic_execution'):
+              assert p[k] is False
+          r=p['roles']
+          assert r['mission_control']['read_only'] is True and r['mission_control']['mutate'] is False and r['mission_control']['execute'] is False
+          assert r['cto_office_advisory']['authorize_handoff'] is False and r['cto_office_advisory']['provider_execute'] is False and r['cto_office_advisory']['accept_work'] is False
+          assert r['control_api_coordinator']['self_authorize_handoff'] is False and r['control_api_coordinator']['provider_execute_via_coordination_route'] is False
+          assert r['hermes_operational_worker']['authority_ceiling']=='L3'
+          assert r['hermes_operational_worker']['authorize_handoff'] is False
+          assert r['hermes_operational_worker']['direct_provider_bypass'] is False
+          f=r['future_specialist_initial']
+          assert f['authority_ceiling_max']=='L1'
+          assert f['registered_in_production'] is False
+          assert f['provider_execution_capability'] is False
+          assert f['direct_provider_credentials'] is False
+          assert f['automatic_assignment'] is False and f['automatic_retry'] is False and f['automatic_reroute'] is False and f['automatic_execution'] is False
+          assert p['execution_approval_separate_from_handoff_authorization'] is True
+          assert p['readiness_has_authority_effect'] is False
+          assert p['normal_handoff_authority_rule']=='required_authority<=source_ceiling AND required_authority<=target_ceiling'
+          print('mission_control_mutation=none')
+          print('cto_production_authority=none')
+          print('future_specialist_registered=false')
+          print('future_specialist_provider_execution=false')
+          print('execution_allowlist=general')
+          print('automatic_assignment=false')
+          print('automatic_retry=false')
+          print('automatic_reroute=false')
+          print('automatic_execution=false')
+          print('production_change=none')
+          print('authority_expansion=none')
+          print('PHIL_AI_OS_PHASE_2_2_A3_CAPABILITY_MATRIX_OK')
+          PY
+          grep -qx 'PHIL_AI_OS_PHASE_2_2_A3_CAPABILITY_MATRIX_OK' phase22-a3-evidence.txt
+      - name: Upload A3 validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a3-capability-matrix-evidence
+          path: phase22-a3-evidence.txt
+          if-no-files-found: error
+          retention-days: 14
