@@ -1,14 +1,14 @@
-# Ruby's Cake Delights — Customer-Facing Content Drafts
+# Ruby's Cake Delights — Customer-Facing Content Records
 
 Date: 2026-08-28
-Status: **PARTIALLY APPROVED — BUSINESS DESCRIPTION REVISION PENDING / 3 POLICIES APPROVED**
+Status: **BUSINESS DESCRIPTION + 3 POLICIES APPROVED / PRIVACY + TERMS PENDING**
 Purpose: controlled customer-facing business description and core policy text for the future WordPress/WooCommerce storefront.
 
-These records do **not** authorize production publication. The machine-readable Verified Ruby Business Profile remains the governed source of truth. Approved policy text is verified as business policy wording, while the revised business description remains pending explicit business-owner approval.
+These records do **not** authorize production publication. The machine-readable Verified Ruby Business Profile remains the governed source of truth. The business description and three policy texts below have been approved by the CEO/business owner. Privacy Policy and Terms & Conditions remain separate unresolved requirements.
 
 ---
 
-## 1. Business Description — Revised Draft
+## 1. Business Description — APPROVED
 
 ### English
 
@@ -18,7 +18,7 @@ Ruby's Cake Delights is a neighborhood food and dessert shop in Ichikawa, Chiba,
 
 Ruby's Cake Delights（ルビーズ・ケーキ・デライツ）は、千葉県市川市にあるフード＆スイーツショップです。日常のお楽しみから特別な日まで、手作りのケーキ、ペストリー、デザート、そして食事メニューを心を込めてご用意しています。スイーツに加え、スパゲッティ、パラボック、ベイクドマカロニ、さまざまなフレーバーのフライドチキンなど、充実した食事メニューもご用意しています。商品は市川の店舗で便利にお受け取りいただけます。
 
-Approval state: **PENDING — revised after business-owner expansion update**
+Approval state: **APPROVED by CEO / business owner on 2026-08-28**
 
 ### Verified rollout note — not production catalog data
 
@@ -144,4 +144,4 @@ Before public release, final policy implementation should be reviewed against Ru
 
 ---
 
-`PHIL_AI_OS_RUBY_CUSTOMER_CONTENT_PARTIAL_APPROVAL`
+`PHIL_AI_OS_RUBY_CUSTOMER_CONTENT_DESCRIPTION_AND_3_POLICIES_APPROVED`
