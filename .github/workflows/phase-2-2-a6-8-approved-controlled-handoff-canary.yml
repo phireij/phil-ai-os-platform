@@ -1,0 +1,79 @@
+name: Phase 2.2 A6.8 Approved Controlled Handoff Canary
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-2-a6-8-approved-controlled-handoff-canary.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify recorded A6.8 authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          RECEIPT=docs/PHASE_2_2_A6_8_CEO_APPROVAL_2026-08-28.md
+          grep -Fx 'Approved by: CEO' "$RECEIPT"
+          grep -Fx 'Authorization: APPROVE_PHASE_2_2_A6_8' "$RECEIPT"
+          grep -F 'one bounded, non-executing Hermes -> `specialist-worker-01` production handoff canary only' "$RECEIPT"
+      - name: Finalize and statically validate audited scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/phase2_2_a6_8_finalize_activation_script.py scripts/phase2_2_a6_8_approved_canary_activation.sh
+          python3 -m py_compile scripts/phase2_2_a6_8_patch_control_api.py
+          bash -n scripts/phase2_2_a6_8_approved_canary_activation.sh
+          sha256sum scripts/phase2_2_a6_8_patch_control_api.py scripts/phase2_2_a6_8_approved_canary_activation.sh | tee phase22-a6-8-script-sha.txt
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          for attempt in 1 2 3 4; do
+            if ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=10 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true; then exit 0; fi
+            sleep $((attempt*4))
+          done
+          exit 1
+      - name: Stage audited A6.8 scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -4 -P "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes \
+            scripts/phase2_2_a6_8_patch_control_api.py \
+            scripts/phase2_2_a6_8_approved_canary_activation.sh \
+            "$VPS_USER@$VPS_HOST:/tmp/"
+      - name: Execute approved A6.8 controlled canary with rollback containment
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            'chmod 700 /tmp/phase2_2_a6_8_approved_canary_activation.sh /tmp/phase2_2_a6_8_patch_control_api.py && bash /tmp/phase2_2_a6_8_approved_canary_activation.sh /tmp/phase2_2_a6_8_patch_control_api.py' \
+            | tee phase22-a6-8-evidence.txt
+      - name: Upload A6.8 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a6-8-controlled-handoff-canary-evidence
+          path: |
+            phase22-a6-8-evidence.txt
+            phase22-a6-8-script-sha.txt
+          if-no-files-found: warn
+          retention-days: 30
