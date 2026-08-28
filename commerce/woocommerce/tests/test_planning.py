@@ -9,6 +9,7 @@ from phil_ai_os_woocommerce import (
     ProductRecord,
     build_product_media_plan,
     plan_category_hierarchy,
+    project_category_payload,
 )
 
 
@@ -63,6 +64,25 @@ class PlanningTests(unittest.TestCase):
     def test_category_duplicate_key_fails_closed(self):
         with self.assertRaises(CategoryHierarchyError):
             plan_category_hierarchy([self.category("a"), self.category("a")])
+
+    def test_category_child_projection_requires_parent_remote_id(self):
+        plan = plan_category_hierarchy([
+            self.category("baked-goods"),
+            self.category("cupcakes", "baked-goods"),
+        ])
+        child = next(item for item in plan if item.key == "cupcakes")
+        with self.assertRaises(CategoryHierarchyError):
+            project_category_payload(child)
+
+    def test_category_child_projection_uses_parent_remote_id(self):
+        plan = plan_category_hierarchy([
+            self.category("baked-goods"),
+            self.category("cupcakes", "baked-goods"),
+        ])
+        child = next(item for item in plan if item.key == "cupcakes")
+        payload = project_category_payload(child, locale="ja", remote_ids={"baked-goods": 41})
+        self.assertEqual(payload["parent"], 41)
+        self.assertEqual(payload["name"], "cupcakes-ja")
 
     def test_media_primary_is_first_and_locale_is_projected(self):
         product = self.product(("gallery-1", "primary-1"))
