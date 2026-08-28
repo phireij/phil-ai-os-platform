@@ -99,6 +99,9 @@ jobs:
       - name: Validate external channel activation readiness
         run: python scripts/validate_sprint7_channel_activation.py
 
+      - name: Validate operator documentation and launch acceptance
+        run: python scripts/validate_sprint7_launch_acceptance.py
+
       - name: Verify executive Sprint 7 entry and closure records
         run: |
           set -euo pipefail
