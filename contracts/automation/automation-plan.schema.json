@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/automation/automation-plan.schema.json",
+  "title": "Phil AI OS Automation Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["plan_id", "lifecycle_correlation_id", "source", "normalized_intent", "risk_level", "approval_required", "approval_state", "plan_state", "task_class", "assigned_agent", "specialist_enabled", "automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized", "authority_effect", "steps"],
+  "properties": {
+    "plan_id": {"type": "string", "minLength": 1},
+    "lifecycle_correlation_id": {"type": "string", "minLength": 1},
+    "source": {"enum": ["facebook", "instagram", "telegram", "whatsapp", "google_business"]},
+    "normalized_intent": {"enum": ["general_inquiry", "product_inquiry", "pickup_inquiry", "order_inquiry", "review_feedback", "complaint"]},
+    "risk_level": {"enum": ["low", "medium", "high"]},
+    "approval_required": {"type": "boolean"},
+    "approval_state": {"enum": ["not_required", "required"]},
+    "plan_state": {"enum": ["ready_for_simulation", "blocked_pending_approval"]},
+    "task_class": {"const": "general"},
+    "assigned_agent": {"const": "hermes"},
+    "specialist_enabled": {"const": false},
+    "automatic_execution": {"const": false},
+    "execution_authorized": {"const": false},
+    "channel_reply_authorized": {"const": false},
+    "mutation_authorized": {"const": false},
+    "authority_effect": {"const": "none"},
+    "steps": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "system", "mode"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "system": {"type": "string", "minLength": 1},
+          "mode": {"enum": ["read_only", "simulation"]}
+        }
+      }
+    }
+  }
+}
