@@ -1,28 +1,39 @@
 # Ruby's Cake Delights — Customer-Facing Content Drafts
 
 Date: 2026-08-28
-Status: **DRAFT — AWAITING CEO / BUSINESS OWNER APPROVAL**
-Purpose: draft customer-facing business description and core bakery policies for the future WordPress/WooCommerce storefront.
+Status: **PARTIALLY APPROVED — BUSINESS DESCRIPTION REVISION PENDING / 3 POLICIES APPROVED**
+Purpose: controlled customer-facing business description and core policy text for the future WordPress/WooCommerce storefront.
 
-These drafts do **not** authorize production publication. The machine-readable Verified Ruby Business Profile remains the governed source of truth, and these drafts remain unverified until explicitly approved.
+These records do **not** authorize production publication. The machine-readable Verified Ruby Business Profile remains the governed source of truth. Approved policy text is verified as business policy wording, while the revised business description remains pending explicit business-owner approval.
 
 ---
 
-## 1. Business Description — Draft
+## 1. Business Description — Revised Draft
 
 ### English
 
-Ruby's Cake Delights is a cake and sweets shop in Ichikawa, Chiba, creating handcrafted cakes, baked treats, and desserts for everyday enjoyment and special occasions. We prepare each order with care and welcome customers for pickup at our Ichikawa shop.
+Ruby's Cake Delights is a neighborhood food and dessert shop in Ichikawa, Chiba, offering handcrafted cakes, pastries, desserts, and satisfying savory meals for everyday enjoyment and special occasions. Alongside our sweets, our growing food menu includes favorites such as Spaghetti, Palabok, Baked Macaroni, and Fried Chicken in a variety of flavors. We prepare our products with care and welcome customers for convenient pickup at our Ichikawa shop.
 
 ### 日本語
 
-Ruby's Cake Delights（ルビーズ・ケーキ・デライツ）は、千葉県市川市にあるケーキとスイーツのお店です。日常のおやつから大切なお祝いまで、ひとつひとつ心を込めてケーキ、焼き菓子、デザートをご用意しています。ご注文の商品は市川の店舗でお受け取りいただけます。
+Ruby's Cake Delights（ルビーズ・ケーキ・デライツ）は、千葉県市川市にあるフード＆スイーツショップです。日常のお楽しみから特別な日まで、手作りのケーキ、ペストリー、デザート、そして食事メニューを心を込めてご用意しています。スイーツに加え、スパゲッティ、パラボック、ベイクドマカロニ、さまざまなフレーバーのフライドチキンなど、充実した食事メニューもご用意しています。商品は市川の店舗で便利にお受け取りいただけます。
 
-Approval state: **PENDING**
+Approval state: **PENDING — revised after business-owner expansion update**
+
+### Verified rollout note — not production catalog data
+
+The business owner confirmed that Ruby's Cake Delights plans to launch its expanded meal offering on **September 13, 2026**, beginning with:
+
+- Spaghetti
+- Palabok
+- Baked Macaroni
+- Fried Chicken in different flavors
+
+This rollout note records the business direction and launch date only. It does **not** create WooCommerce product records or assert prices, SKUs, categories, inventory, ingredients, media, or availability. Those require separately verified catalog data.
 
 ---
 
-## 2. Cancellation & Refund Policy — Draft
+## 2. Cancellation & Refund Policy — APPROVED
 
 ### English
 
@@ -54,11 +65,11 @@ For cancellation or change requests, please contact Ruby's Cake Delights using t
 
 キャンセル・変更をご希望の場合は、注文番号と受取日時をご用意のうえ、ウェブサイトに記載の連絡先までご連絡ください。
 
-Approval state: **PENDING**
+Approval state: **APPROVED by CEO / business owner on 2026-08-28**
 
 ---
 
-## 3. Pickup & Order Policy — Draft
+## 3. Pickup & Order Policy — APPROVED
 
 ### English
 
@@ -84,11 +95,11 @@ Approval state: **PENDING**
 - 受取時に商品をご確認ください。明らかな問題がある場合は、可能な限り店舗を離れる前にお知らせください。受取後に問題に気づいた場合は、注文情報と必要に応じて写真をご用意のうえ、当日中にできるだけ早くご連絡ください。
 - 商品受取後の運搬、温度管理、保存、および商品ごとの消費・保存案内の遵守はお客様の責任となります。
 
-Approval state: **PENDING**
+Approval state: **APPROVED by CEO / business owner on 2026-08-28**
 
 ---
 
-## 4. Allergen Information & Disclaimer — Draft
+## 4. Allergen Information & Disclaimer — APPROVED WORDING
 
 ### English
 
@@ -110,13 +121,15 @@ Ruby's Cake Delightsでは、食物アレルギーに関する情報を重要な
 
 重篤または生命に関わる可能性のあるアレルギーをお持ちのお客様は、ウェブサイト上の一般的な説明だけで判断せず、ご注文前に最新の原材料・アレルゲン情報をご確認ください。注文内容を変更した場合も再確認をお願いいたします。
 
-Approval state: **PENDING**
+Approval state: **APPROVED by CEO / business owner on 2026-08-28**
+
+Production note: approval covers the customer-facing wording. Product-specific ingredient/allergen data and operational process review remain required before production publication where applicable.
 
 ---
 
 ## 5. Research Basis
 
-These drafts were informed by current public guidance and bakery/e-commerce practices, but the text above is original Ruby's Cake Delights draft language and was not copied from another business.
+These drafts were informed by current public guidance and bakery/e-commerce practices, but the text above is original Ruby's Cake Delights language and was not copied from another business.
 
 Reference points reviewed:
 
@@ -127,8 +140,8 @@ Reference points reviewed:
 - Chateraise, Web reservation/store pickup cancellation practice: https://www.chateraise.co.jp/customercenter/guide/detail/guide_05
 - Cake.jp, change/cancellation guidance: https://cake.jp/guide/cancel/
 
-Before public release, the final policy text should be reviewed against Ruby's actual production practices and, where appropriate, Japanese legal/compliance requirements.
+Before public release, final policy implementation should be reviewed against Ruby's actual production practices and, where appropriate, Japanese legal/compliance requirements.
 
 ---
 
-`PHIL_AI_OS_RUBY_CUSTOMER_CONTENT_DRAFTS_AWAITING_APPROVAL`
+`PHIL_AI_OS_RUBY_CUSTOMER_CONTENT_PARTIAL_APPROVAL`
