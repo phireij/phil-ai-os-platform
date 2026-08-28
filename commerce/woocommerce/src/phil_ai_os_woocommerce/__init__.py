@@ -11,7 +11,12 @@ from .adapter import (
     WooCommerceAdapter,
 )
 from .audit import CommerceSyncAuditEvent, MemoryAuditSink
-from .category_plan import CategoryHierarchyError, CategoryPlanItem, plan_category_hierarchy
+from .category_plan import (
+    CategoryHierarchyError,
+    CategoryPlanItem,
+    plan_category_hierarchy,
+    project_category_payload,
+)
 from .inventory_guard import (
     InventoryConflictError,
     InventoryRevisionState,
@@ -56,5 +61,6 @@ __all__ = [
     "build_product_media_plan",
     "execute_with_retry",
     "plan_category_hierarchy",
+    "project_category_payload",
     "retry_decision",
 ]
