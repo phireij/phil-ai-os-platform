@@ -49,7 +49,7 @@ def main() -> None:
     required_live_false = (
         "tokushoho_publication_approved",
         "fresh_launch_time_backup_restore_check_green",
-        "woocommerce_staging_qa_green",
+        "woocommerce_preproduction_qa_green",
         "woocommerce_production_activation_approved",
         "woocommerce_production_credentials_configured",
         "komoju_test_mode_validated",
@@ -66,15 +66,20 @@ def main() -> None:
             fail(f"live launch gate must not be assumed complete: {key}")
 
     if staging["business_profile"].get("verified_profile_complete") is not True:
-        fail("staging readiness profile state drift")
+        fail("preproduction readiness profile state drift")
     if staging["business_profile"].get("tokushoho_source_reconciled") is not True:
-        fail("staging readiness Tokushoho reconciliation drift")
-    if staging["storefront"].get("staging_environment_created") is not False:
-        fail("launch acceptance must not assume staging created")
+        fail("preproduction readiness Tokushoho reconciliation drift")
+    sfront = staging["storefront"]
+    if sfront.get("parallel_preproduction_first_required") is not True:
+        fail("parallel preproduction requirement drift")
+    if sfront.get("parallel_preproduction_environment_created") is not False:
+        fail("launch acceptance must not assume preproduction environment created")
+    if sfront.get("native_hostinger_wordpress_staging_requires_existing_wordpress") is not True:
+        fail("Hostinger native staging prerequisite drift")
     if staging["komoju"].get("test_mode_connected") is not False:
         fail("launch acceptance must not assume KOMOJU Test Mode connected")
     if staging.get("production_publish_authorized") is not False:
-        fail("staging readiness gained publication authority")
+        fail("preproduction readiness gained publication authority")
 
     expected_baseline = {
         "autonomy": "A0",
@@ -105,7 +110,7 @@ def main() -> None:
         "Ruby business profile | **COMPLETE — 15/15 RESOLVED**",
         "Contact phone | **VERIFIED — 050-1785-0575**",
         "Tokushoho source | **RECONCILED / PUBLICATION APPROVAL PENDING**",
-        "WooCommerce staging QA | **NOT YET GREEN**",
+        "WooCommerce pre-production QA | **NOT YET GREEN**",
         "KOMOJU Test Mode | **NOT VALIDATED**",
         "CEO sign-off | **NOT RECORDED**",
         "CTO sign-off | **NOT RECORDED**",
@@ -114,7 +119,7 @@ def main() -> None:
             fail(f"launch state statement missing: {phrase}")
 
     print("PHIL_AI_OS_SPRINT_7_OPERATOR_AND_ACCEPTANCE_GREEN engineering_package=true live_launch=false profile_complete=true phone_verified=true")
-    print("PHIL_AI_OS_SPRINT_7_STAGING_PAYMENT_GATES_OPEN staging=false komoju_test=false shipping=false payment_methods=false")
+    print("PHIL_AI_OS_SPRINT_7_PREPRODUCTION_PAYMENT_GATES_OPEN preproduction=false komoju_test=false shipping=false payment_methods=false")
     print("PHIL_AI_OS_SPRINT_7_SIGNOFF_BOUNDARY_GREEN ceo=false cto=false cutover=false")
 
 
