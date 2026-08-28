@@ -1,0 +1,18 @@
+{
+  "fixture_only": true,
+  "intent_id": "fixture-checkout-001",
+  "evaluated_at": "2026-08-28T00:00:00Z",
+  "catalog_snapshot_ref": "fixture:catalog:001",
+  "items": [
+    {
+      "sku": "SAMPLE-CHOCO-001",
+      "requested_quantity": 2,
+      "availability": "available",
+      "available_quantity": 12
+    }
+  ],
+  "ready": false,
+  "blockers": ["contact", "pickup_time"],
+  "customer_action_required": ["Provide verified contact information", "Select a pickup time"],
+  "mutation_authorized": false
+}
