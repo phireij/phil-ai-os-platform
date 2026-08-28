@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           PORT="${VPS_PORT:-22}"
-          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE' | tee phase22-a1-evidence.txt
           set -euo pipefail
           CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
 
@@ -107,11 +107,9 @@ jobs:
           plan_rows=[dict(r) for r in c.execute('select * from task_plans order by created_at')]
           print('plan_rows='+json.dumps(plan_rows,separators=(',',':'),default=str))
 
-          # Discover any existing handoff/delegation/coordinator surfaces by schema naming only.
           handoff_tables=[t for t in tables if any(k in t.lower() for k in ('handoff','delegat','agent','assign','worker','coord'))]
           print('candidate_handoff_tables='+json.dumps(handoff_tables,separators=(',',':')))
 
-          # No schema/data writes are performed in A1.
           print('database_mode=read_only')
           print('agent_registry=hermes_L3_only')
           PY
@@ -138,3 +136,11 @@ jobs:
           echo authority_expansion=none
           echo PHIL_AI_OS_PHASE_2_2_A1_READONLY_MULTI_AGENT_DISCOVERY_OK
           REMOTE
+      - name: Upload A1 discovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a1-readonly-discovery-evidence
+          path: phase22-a1-evidence.txt
+          if-no-files-found: error
+          retention-days: 14
