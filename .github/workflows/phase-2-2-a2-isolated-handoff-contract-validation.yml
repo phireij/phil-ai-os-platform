@@ -1,0 +1,38 @@
+name: Phase 2.2 A2 Isolated Handoff Contract Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/PHASE_2_2_A2_ISOLATED_HANDOFF_CONTRACT.md'
+      - 'scripts/phase2_2_a2_isolated_handoff_validator.py'
+      - '.github/workflows/phase-2-2-a2-isolated-handoff-contract-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate A2 handoff contract in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/phase2_2_a2_isolated_handoff_validator.py | tee phase22-a2-evidence.txt
+          grep -qx 'PHIL_AI_OS_PHASE_2_2_A2_ISOLATED_HANDOFF_CONTRACT_OK' phase22-a2-evidence.txt
+          grep -qx 'provider_call=none' phase22-a2-evidence.txt
+          grep -qx 'execution_call=none' phase22-a2-evidence.txt
+          grep -qx 'production_change=none' phase22-a2-evidence.txt
+          grep -qx 'authority_expansion=none' phase22-a2-evidence.txt
+      - name: Upload A2 isolated validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-2-a2-isolated-handoff-evidence
+          path: phase22-a2-evidence.txt
+          if-no-files-found: error
+          retention-days: 14
