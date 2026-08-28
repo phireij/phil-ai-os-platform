@@ -84,7 +84,7 @@
       "type": "array",
       "const": ["products", "categories"]
     },
-    "profile_complete": {"const": false},
+    "profile_complete": {"type": "boolean"},
     "production_publish_authorized": {"const": false}
   }
 }
