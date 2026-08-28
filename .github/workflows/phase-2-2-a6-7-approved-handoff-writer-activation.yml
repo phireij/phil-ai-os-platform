@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/phase-2-2-a6-7-approved-handoff-writer-activation.yml'
+      - 'scripts/phase2_2_a6_7_approved_activation.sh'
+      - 'scripts/phase2_2_a6_7_patch_control_api.py'
 
 permissions:
   contents: read
