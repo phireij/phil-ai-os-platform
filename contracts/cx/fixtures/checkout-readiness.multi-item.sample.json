@@ -1,0 +1,13 @@
+{
+  "intent_id": "fixture-cart-intent-001",
+  "evaluated_at": "2026-08-28T12:00:00Z",
+  "catalog_snapshot_ref": "fixture:cx/synthetic-catalog-v2",
+  "items": [
+    {"sku": "SAMPLE-CHOCO-001", "requested_quantity": 1, "availability": "available", "available_quantity": null},
+    {"sku": "SAMPLE-UBE-001", "requested_quantity": 2, "availability": "available", "available_quantity": null}
+  ],
+  "ready": true,
+  "blockers": [],
+  "customer_action_required": [],
+  "mutation_authorized": false
+}
