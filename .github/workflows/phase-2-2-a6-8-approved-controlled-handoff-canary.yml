@@ -1,7 +1,7 @@
 name: Phase 2.2 A6.8 Approved Controlled Handoff Canary
 
-# Retry 3 retains root-owned 0644 non-secret canary evidence and adds bounded
-# post-accept replay diagnostics; authority scope is unchanged.
+# Retry 4 fixes only the read-only post-accept count probes by keeping docker
+# stdin open. Canary authority scope and rollback boundary are unchanged.
 on:
   push:
     branches: [main]
