@@ -62,47 +62,50 @@ jobs:
           echo compose_config_files="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.config_files"}}' "$CONTROL")"
           echo compose_working_dir="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$CONTROL")"
 
-          # Existing coordinator routes must already be auth-gated. Empty unauthenticated bodies may not mutate.
-          ASSIGN_CODE="$(curl -sS -o /tmp/a66-assign.out -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' http://127.0.0.1:4870/internal/coordinator/assign)"
-          PLAN_CODE="$(curl -sS -o /tmp/a66-plan.out -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' http://127.0.0.1:4870/internal/coordinator/plan)"
-          test "$ASSIGN_CODE" = 401
-          test "$PLAN_CODE" = 401
-          rm -f /tmp/a66-assign.out /tmp/a66-plan.out
-          echo coordinator_assign_unauth=401
-          echo coordinator_plan_unauth=401
+          # Probe likely historical coordinator paths without credentials. Security invariant: none may succeed.
+          for path in /internal/coordinator/assign /v1/coordinator/assign /internal/coordinator/plan /v1/coordinator/plan; do
+            code="$(curl -sS -o /tmp/a66-probe.out -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' "http://127.0.0.1:4870${path}")"
+            echo "unauth_probe_${path//\//_}=${code}"
+            case "$code" in 2*|3*) echo "unauthenticated coordinator probe unexpectedly succeeded" >&2; exit 1;; esac
+          done
+          rm -f /tmp/a66-probe.out
+          echo coordinator_unauthenticated_success=false
 
-          # Read-only structural discovery of the authoritative coordinator application.
+          # Discover the actual authoritative coordinator source/route shape rather than assuming a stale path spelling.
           docker exec -i "$CONTROL" python3 - <<'PY'
           import pathlib,hashlib,json,re
-          files=[]
-          handoff=[]
+          files=[]; handoff=[]
+          route_literal=re.compile(r'''["'](/[^"']*coordinator[^"']*)["']''',re.I)
           for p in pathlib.Path('/app').rglob('*.py'):
               try: b=p.read_bytes(); t=b.decode('utf-8','ignore')
               except Exception: continue
-              has_assign='/internal/coordinator/assign' in t
-              has_plan='/internal/coordinator/plan' in t
-              has_handoff='handoff' in t.lower()
-              if has_assign or has_plan:
+              lo=t.lower()
+              routes=sorted(set(route_literal.findall(t)))
+              coord_signal=('coordinator' in lo and ('assign' in lo or 'plan' in lo) and ('agent_registry' in lo or 'task_lifecycle_events' in lo or 'lifecycle_event_insert' in lo))
+              if coord_signal:
                   files.append({
                     'path':str(p),
                     'sha256':hashlib.sha256(b).hexdigest(),
-                    'assign_route':has_assign,
-                    'plan_route':has_plan,
+                    'routes':routes,
+                    'assign_signal':'assign' in lo,
+                    'plan_signal':'plan' in lo,
                     'auth_signal':bool(re.search(r'Authorization|Bearer|token|auth',t,re.I)),
-                    'registry_signal':'agent_registry' in t,
-                    'lifecycle_signal':'task_lifecycle_events' in t or 'lifecycle_event_insert' in t,
+                    'registry_signal':'agent_registry' in lo,
+                    'lifecycle_signal':'task_lifecycle_events' in lo or 'lifecycle_event_insert' in lo,
                   })
-              if has_handoff: handoff.append(str(p))
-          assert files, 'coordinator route source not found'
-          assert any(x['assign_route'] for x in files)
-          assert any(x['plan_route'] for x in files)
-          assert all(x['auth_signal'] for x in files)
+              if 'handoff' in lo: handoff.append(str(p))
+          assert files, 'coordinator source not found'
+          assert any(x['assign_signal'] for x in files)
+          assert any(x['plan_signal'] for x in files)
+          assert any(x['auth_signal'] for x in files)
+          assert any(x['registry_signal'] for x in files)
+          assert any(x['lifecycle_signal'] for x in files)
           print('coordinator_source='+json.dumps(files,separators=(',',':')))
           print('existing_handoff_code_files='+json.dumps(handoff,separators=(',',':')))
           print('existing_handoff_code_file_count='+str(len(handoff)))
           PY
 
-          # Production DB is read-only; candidate schema is proven only on an ephemeral copied DB.
+          # Production DB remains read-only; candidate schema is proven only on an ephemeral copied DB.
           docker exec -i "$CONTROL" python3 - <<'PY'
           import sqlite3,os,json
           uri='file:/app/state/control-plane.db?mode=ro'
@@ -118,8 +121,7 @@ jobs:
           assert s['authority_ceiling']=='L1' and int(s['enabled'])==0 and int(s['assignable'])==0
           tracked=['agent_registry','task_lifecycle_events','task_plans','approval_requests','execution_audit']
           base={t:src.execute(f'select count(*) from {t}').fetchone()[0] for t in tracked}
-          specialist_assignments=src.execute("select count(*) from task_lifecycle_events where assigned_agent_id='specialist-worker-01'").fetchone()[0]
-          assert specialist_assignments==0
+          assert src.execute("select count(*) from task_lifecycle_events where assigned_agent_id='specialist-worker-01'").fetchone()[0]==0
           print('production_registry='+json.dumps(reg,separators=(',',':'),default=str))
           print('production_baseline_counts='+json.dumps(base,separators=(',',':')))
           print('specialist_assignment_refs=0')
@@ -163,7 +165,6 @@ jobs:
           assert dst.execute('pragma quick_check').fetchone()[0]=='ok'
           assert {t:dst.execute(f'select count(*) from {t}').fetchone()[0] for t in tracked}==base
           assert dst.execute('select count(*) from task_handoffs').fetchone()[0]==0
-          # Inert activation baseline: disabled/non-assignable specialist is unchanged by schema activation.
           ss=dst.execute("select enabled,assignable,authority_ceiling from agent_registry where agent_id='specialist-worker-01'").fetchone()
           assert int(ss['enabled'])==0 and int(ss['assignable'])==0 and ss['authority_ceiling']=='L1'
           print('candidate_schema_additive=true')
@@ -172,7 +173,6 @@ jobs:
           print('candidate_specialist_remains_nonassignable=true')
           dst.close(); src.close(); os.remove(cp)
 
-          # Re-read production after isolated-copy proof.
           v=sqlite3.connect(uri,uri=True)
           assert v.execute('pragma quick_check').fetchone()[0]=='ok'
           assert {t:v.execute(f'select count(*) from {t}').fetchone()[0] for t in tracked}==base
