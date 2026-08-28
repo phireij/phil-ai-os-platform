@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/automation/automation-audit-event.schema.json",
+  "title": "Phil AI OS Automation Audit Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sequence", "lifecycle_correlation_id", "plan_id", "request_id", "stage", "outcome", "simulated", "execution_authorized", "channel_reply_authorized", "mutation_authorized", "authority_effect"],
+  "properties": {
+    "sequence": {"type": "integer", "minimum": 1},
+    "lifecycle_correlation_id": {"type": "string", "minLength": 1},
+    "plan_id": {"type": "string", "minLength": 1},
+    "request_id": {"type": ["string", "null"]},
+    "stage": {"enum": ["plan_created", "approval_evaluated", "boundary_preview", "result_preview"]},
+    "outcome": {"type": "string", "minLength": 1},
+    "simulated": {"const": true},
+    "execution_authorized": {"const": false},
+    "channel_reply_authorized": {"const": false},
+    "mutation_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}

@@ -1,0 +1,56 @@
+name: Sprint 6 Automation CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/automation-hub/**"
+      - "contracts/automation/**"
+      - "docs/SPRINT_6_**"
+      - ".github/workflows/sprint-6-automation-ci.yml"
+  push:
+    branches:
+      - "sprint6/**"
+    paths:
+      - "apps/automation-hub/**"
+      - "contracts/automation/**"
+      - "docs/SPRINT_6_**"
+      - ".github/workflows/sprint-6-automation-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  automation-foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile automation runtime
+        run: python -m compileall -q apps/automation-hub/src
+
+      - name: Run simulation-only automation tests
+        run: python -m unittest discover -s apps/automation-hub/tests -p 'test_*.py' -v
+
+      - name: Validate automation contracts and authority boundary
+        run: python apps/automation-hub/tools_validate_automation.py
+
+      - name: Validate lifecycle audit and recovery planning
+        run: python apps/automation-hub/tools_validate_lifecycle.py
+
+      - name: Assert no automation execution authority
+        run: |
+          set -euo pipefail
+          ! grep -R -E 'automatic_execution["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
+          ! grep -R -E 'execution_authorized["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
+          ! grep -R -E 'channel_reply_authorized["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
+          ! grep -R -E 'mutation_authorized["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
+          ! grep -R -E 'automatic_retry["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
+          ! grep -R -E 'retry_authorized["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
+          ! grep -R -E 'automatic_rollback["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
+          ! grep -R -E 'rollback_authorized["[:space:]]*:[[:space:]]*true' apps/automation-hub contracts/automation
+          echo PHIL_AI_OS_SPRINT_6_NO_EXECUTION_AUTHORITY_GREEN
