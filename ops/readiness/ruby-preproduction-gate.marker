@@ -1,0 +1,5 @@
+PHIL_AI_OS_RUBY_PREPRODUCTION_GATE_PACKAGE_READY
+production_publish_authorized=false
+komoju_test_mode_authorized=false
+komoju_live_mode_authorized=false
+public_domain_cutover_authorized=false
