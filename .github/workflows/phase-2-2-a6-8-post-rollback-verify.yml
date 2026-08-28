@@ -1,0 +1,58 @@
+name: Phase 2.2 A6.8 Post-Rollback Verify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-2-2-a6-8-post-rollback-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true
+      - name: Verify A6.7 production baseline restored
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTROL="$(docker ps --format '{{.Names}}' | grep -m1 'control-api')"
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.21.0-phase22a67'
+          test "$(docker exec "$CONTROL" sha256sum /app/app.py | awk '{print $1}')" = 'faa727987e087e2540fec7be0c9d709f7cc57dd51ddc767a3d8b39e0a6474b55'
+          test "$(sha256sum /opt/phil-ai-os-platform/phil-ai-os-platform-phase1/services/core/control-api/app.py | awk '{print $1}')" = 'faa727987e087e2540fec7be0c9d709f7cc57dd51ddc767a3d8b39e0a6474b55'
+          test ! -e /opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core/runtime/state/phase2_2_a6_8_canary_policy.json
+          test ! -e /opt/phil-ai-os-platform/phil-ai-os-platform-phase1/infrastructure/core/runtime/state/phase2_2_a6_8_canary_readiness.json
+          docker exec -i "$CONTROL" python3 - <<'PY'
+          import sqlite3
+          c=sqlite3.connect('file:/app/state/control-plane.db?mode=ro',uri=True)
+          assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+          assert c.execute('select count(*) from task_handoffs').fetchone()[0]==0
+          s=c.execute("select authority_ceiling,enabled,assignable from agent_registry where agent_id='specialist-worker-01'").fetchone(); assert s==('L1',0,0)
+          assert c.execute("select count(*) from task_lifecycle_events where assigned_agent_id='specialist-worker-01' and stage='ASSIGNED'").fetchone()[0]==0
+          assert c.execute("select count(*) from approval_requests where source='phase-2.2-a6.8-approved-canary'").fetchone()[0]==0
+          PY
+          curl -fsS http://127.0.0.1:4870/healthz >/dev/null
+          curl -fsS http://127.0.0.1:4870/readyz >/dev/null
+          echo a6_7_baseline_restored=true
+          echo production_change=none
+          echo PHIL_AI_OS_PHASE_2_2_A6_8_ROLLBACK_VERIFY_OK
+          REMOTE
