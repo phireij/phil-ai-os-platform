@@ -13,12 +13,15 @@
     "current_public_platform": "hostinger-website-builder",
     "public_domain": "https://www.rubyscakedelights.shop/",
     "parallel_preproduction_first_required": true,
-    "parallel_preproduction_environment_created": false,
+    "parallel_preproduction_environment_created": true,
+    "preproduction_url": "https://darkgreen-wallaby-680439.hostingersite.com/",
+    "hosting_plan": "Business Web Hosting",
     "native_hostinger_wordpress_staging_requires_existing_wordpress": true,
-    "native_staging_plan_eligibility_verified": false,
-    "wordpress_ready": false,
-    "woocommerce_ready": false,
-    "ssl_verified": false,
+    "native_staging_plan_eligibility_verified": true,
+    "native_staging_menu_located": false,
+    "wordpress_ready": true,
+    "woocommerce_ready": true,
+    "ssl_verified": true,
     "checkout_qa_green": false,
     "production_cutover_authorized": false
   },
@@ -55,6 +58,6 @@
     "final_confirmation_screen_reviewed": false,
     "privacy_terms_implementation_reviewed": false
   },
-  "next_gate": "create_parallel_hostinger_wordpress_woocommerce_preproduction_site_without_public_domain_cutover",
+  "next_gate": "configure_woocommerce_baseline_and_load_verified_ruby_business_legal_content_without_komoju_connection",
   "production_publish_authorized": false
 }
