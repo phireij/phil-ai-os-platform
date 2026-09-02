@@ -1,0 +1,131 @@
+name: Hostinger WordPress Preprod Readiness Audit
+
+on:
+  push:
+    branches:
+      - ops/woocommerce-preprod-readonly-qa-20260902
+    paths:
+      - '.github/workflows/hostinger-wordpress-preprod-readiness-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure VPS SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Run bounded read-only WooCommerce readiness audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          KEY_DIR="$HOME/.ssh/philaios-hostinger-wordpress"
+          KEY="$KEY_DIR/preprod_operator_ed25519"
+          HOSTINGER_HOST='147.93.80.5'
+          HOSTINGER_PORT='65002'
+          HOSTINGER_USER='u925842746'
+          test -f "$KEY"
+          ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
+          chmod 600 "$KEY_DIR/hostinger_known_hosts"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
+
+          echo '=== CORE AND SAFETY ASSERTIONS ==='
+          wp core is-installed --path="$WP_PATH"
+          wp eval '
+          $required=["woocommerce","woocommerce-order-approval","datery","komoju-payments","wp-mail-smtp"];
+          echo "wordpress_version=".get_bloginfo("version")."\n";
+          echo "blogname=".get_option("blogname","")."\n";
+          echo "home=".get_option("home","")."\n";
+          echo "siteurl=".get_option("siteurl","")."\n";
+          echo "timezone=".wp_timezone_string()."\n";
+          echo "blog_public=".get_option("blog_public","missing")."\n";
+          echo "wp_debug=".(defined("WP_DEBUG")&&WP_DEBUG?"true":"false")."\n";
+          foreach($required as $slug){echo "plugin_".$slug."=".(is_plugin_active($slug."/".$slug.".php")?"active":"check_slug")."\n";}
+          if(wp_timezone_string()!=="Asia/Tokyo"){fwrite(STDERR,"timezone assertion failed\n");exit(10);}
+          if(get_option("home","")!=="https://darkgreen-wallaby-680439.hostingersite.com"){fwrite(STDERR,"preprod home assertion failed\n");exit(11);}
+          ' --path="$WP_PATH"
+          wp plugin list --status=active --fields=name,version,status --format=table --path="$WP_PATH"
+
+          echo '=== POLICY AND COMMERCE PAGE ASSIGNMENTS ==='
+          wp eval '
+          $keys=["woocommerce_shop_page_id","woocommerce_cart_page_id","woocommerce_checkout_page_id","woocommerce_myaccount_page_id","woocommerce_terms_page_id","wp_page_for_privacy_policy"];
+          foreach($keys as $key){$id=(int)get_option($key,0);$p=$id?get_post($id):null;echo $key."=".$id."|".($p?$p->post_status:"missing")."|".($p?$p->post_title:"missing")."\n";if(!$p||$p->post_status!=="publish"){fwrite(STDERR,$key." not published\n");exit(20);}}
+          $approved=["Privacy Policy / プライバシーポリシー","Terms & Conditions / 利用規約","特定商取引法に基づく表記 / Commerce Disclosure","Cancellation & Refund Policy / キャンセル・返金ポリシー","Pickup & Order Policy / 店頭受取・注文ポリシー","Allergen Information / アレルゲン情報"];
+          foreach($approved as $title){$p=get_page_by_title($title,OBJECT,"page");echo "policy=".$title."|".($p?$p->post_status:"missing")."\n";if(!$p||$p->post_status!=="publish"){fwrite(STDERR,"approved policy missing/unpublished\n");exit(21);}}
+          ' --path="$WP_PATH"
+
+          echo '=== CATALOG AND PRODUCT FULFILLMENT READINESS ==='
+          wp eval '
+          $counts=wp_count_posts("product");
+          echo "products_publish=".(int)($counts->publish??0)."\n";
+          echo "products_draft=".(int)($counts->draft??0)."\n";
+          echo "product_categories=".(int)wp_count_terms(["taxonomy"=>"product_cat","hide_empty"=>false])."\n";
+          $ids=get_posts(["post_type"=>"product","post_status"=>["publish","draft","private","pending"],"numberposts"=>-1,"fields"=>"ids","orderby"=>"ID","order"=>"ASC"]);
+          foreach($ids as $id){$p=wc_get_product($id);if(!$p)continue;$class=$p->get_shipping_class();echo "product_id=".$id."|status=".get_post_status($id)."|sku=".$p->get_sku()."|type=".$p->get_type()."|virtual=".($p->is_virtual()?"yes":"no")."|stock=".$p->get_stock_status()."|shipping_class=".($class?:"UNASSIGNED")."\n";}
+          echo "shipping_classes=";foreach(WC()->shipping()->get_shipping_classes() as $c){echo $c->slug.",";}echo "\n";
+          ' --path="$WP_PATH"
+
+          echo '=== SHIPPING ZONES AND METHODS ==='
+          wp eval '
+          foreach(WC_Shipping_Zones::get_zones() as $zone){echo "zone=".$zone["zone_name"]."|id=".$zone["id"]."\n";foreach($zone["shipping_methods"] as $m){echo " method=".$m->id."|instance=".$m->instance_id."|title=".$m->title."|enabled=".$m->enabled."\n";}}
+          $z=new WC_Shipping_Zone(0);echo "zone=Rest of the world|id=0\n";foreach($z->get_shipping_methods(true) as $m){echo " method=".$m->id."|instance=".$m->instance_id."|title=".$m->title."|enabled=".$m->enabled."\n";}
+          ' --path="$WP_PATH"
+
+          echo '=== TAX, APPROVAL, DELIVERY DATE, AND SMTP POSTURE ==='
+          wp eval '
+          echo "currency=".get_woocommerce_currency()."\n";
+          echo "tax_enabled=".(wc_tax_enabled()?"true":"false")."\n";
+          echo "prices_include_tax=".(wc_prices_include_tax()?"true":"false")."\n";
+          echo "sg_inventory=".get_option("sg_oa_woo_manage_inventory","missing")."\n";
+          $smtp=get_option("wp_mail_smtp",[]);echo "smtp_mailer=".($smtp["mail"]["mailer"]??"")."\n";echo "smtp_from_email=".($smtp["mail"]["from_email"]??"")."\n";echo "smtp_password_set=".(!empty($smtp["smtp"]["pass"])?"true":"false")."\n";
+          global $wpdb;$rows=$wpdb->get_results($wpdb->prepare("SELECT option_name,option_value FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s ORDER BY option_name","%datery%","%delivery_date%"));foreach($rows as $r){$v=maybe_unserialize($r->option_value);if(is_scalar($v))echo $r->option_name."=".$v."\n";elseif(is_array($v)){foreach($v as $k=>$x){if(is_scalar($x)&&stripos((string)$k,"secret")===false&&stripos((string)$k,"token")===false&&stripos((string)$k,"password")===false)echo $r->option_name.".".$k."=".$x."\n";}}}
+          ' --path="$WP_PATH"
+
+          echo '=== PAYMENT MODE FAIL-CLOSED ASSERTION ==='
+          wp eval '
+          $secret=(string)get_option("komoju_woocommerce_secret_key","");$pub=(string)get_option("komoju_woocommerce_publishable_key","");$webhook=(string)get_option("komoju_woocommerce_webhook_secret","");
+          $kind=function($v){if($v==="")return "empty";if(str_starts_with($v,"sk_test_"))return "sk_test";if(str_starts_with($v,"pk_test_"))return "pk_test";if(str_starts_with($v,"sk_live_"))return "sk_live";if(str_starts_with($v,"pk_live_"))return "pk_live";return "set";};
+          echo "komoju_secret=".$kind($secret)."\n";echo "komoju_publishable=".$kind($pub)."\n";echo "komoju_webhook=".($webhook!==""?"set":"empty")."\n";
+          if(str_starts_with($secret,"sk_live_")||str_starts_with($pub,"pk_live_")){fwrite(STDERR,"live KOMOJU key detected: unauthorized\n");exit(30);}
+          if(!str_starts_with($secret,"sk_test_")||!str_starts_with($pub,"pk_test_")){fwrite(STDERR,"KOMOJU test-only assertion failed\n");exit(31);}
+          foreach(WC()->payment_gateways()->payment_gateways() as $id=>$g){echo "gateway=".$id."|enabled=".($g->enabled??"")."|class=".get_class($g)."\n";}
+          ' --path="$WP_PATH"
+
+          echo '=== ORDER-STATE COUNTS (NO CUSTOMER DATA) ==='
+          wp eval '
+          foreach(wc_get_order_statuses() as $status=>$label){$count=wp_count_posts("shop_order");$key=str_replace("wc-","",$status);echo $status."=".(int)($count->$key??0)."\n";}
+          ' --path="$WP_PATH"
+
+          echo 'PHIL_AI_OS_WORDPRESS_PREPROD_READINESS_AUDIT_OK'
+          HOSTREMOTE
+          REMOTE
+
+      - name: Verify public pre-production HTTPS surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 30 --output /dev/null --write-out 'home_http=%{http_code}\nhome_url=%{url_effective}\n' 'https://darkgreen-wallaby-680439.hostingersite.com/'
+          curl --fail --silent --show-error --location --max-time 30 --output /dev/null --write-out 'checkout_http=%{http_code}\ncheckout_url=%{url_effective}\n' 'https://darkgreen-wallaby-680439.hostingersite.com/checkout/'
+          echo 'PHIL_AI_OS_WORDPRESS_PREPROD_HTTPS_SURFACE_OK'
