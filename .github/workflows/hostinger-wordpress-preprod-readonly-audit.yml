@@ -1,0 +1,107 @@
+name: Hostinger WordPress Preprod Readonly Audit
+
+on:
+  push:
+    branches:
+      - ops/hostinger-wordpress-operator-bootstrap
+    paths:
+      - '.github/workflows/hostinger-wordpress-preprod-readonly-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure VPS SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+      - name: Audit WordPress and WooCommerce pre-production state
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          KEY_DIR="$HOME/.ssh/philaios-hostinger-wordpress"
+          KEY="$KEY_DIR/preprod_operator_ed25519"
+          HOSTINGER_HOST='147.93.80.5'
+          HOSTINGER_PORT='65002'
+          HOSTINGER_USER='u925842746'
+          ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
+          chmod 600 "$KEY_DIR/hostinger_known_hosts"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
+          echo '=== CORE ==='
+          wp core version --path="$WP_PATH"
+          wp option get blogname --path="$WP_PATH"
+          wp option get home --path="$WP_PATH"
+          wp option get siteurl --path="$WP_PATH"
+          echo '=== ACTIVE PLUGINS ==='
+          wp plugin list --status=active --fields=name,version,status --format=table --path="$WP_PATH"
+          echo '=== COMMERCE PAGES ==='
+          wp eval '
+          foreach(["woocommerce_shop_page_id","woocommerce_cart_page_id","woocommerce_checkout_page_id","woocommerce_myaccount_page_id","woocommerce_terms_page_id"] as $key){
+            $id=(int)get_option($key,0); $p=$id?get_post($id):null;
+            echo $key."=".$id."|".($p?$p->post_status:"missing")."|".($p?$p->post_title:"missing")."\n";
+          }
+          ' --path="$WP_PATH"
+          echo '=== GATEWAYS ==='
+          wp eval '
+          foreach(WC()->payment_gateways()->payment_gateways() as $id=>$g){
+            $enabled=isset($g->enabled)?$g->enabled:"";
+            $test="";
+            if(method_exists($g,"get_option")){ foreach(["testmode","test_mode","sandbox"] as $k){$v=$g->get_option($k,""); if($v!==""){$test=$k."=".$v;break;}} }
+            echo $id."|enabled=".$enabled."|class=".get_class($g)."|".$test."\n";
+          }
+          ' --path="$WP_PATH"
+          echo '=== SHIPPING ==='
+          wp eval '
+          foreach(WC_Shipping_Zones::get_zones() as $zone){
+            echo "zone=".$zone["zone_name"]."|id=".$zone["id"]."\n";
+            foreach($zone["shipping_methods"] as $m){echo " method=".$m->id."|title=".$m->title."|enabled=".$m->enabled."\n";}
+          }
+          $z=new WC_Shipping_Zone(0); echo "zone=Rest of the world|id=0\n"; foreach($z->get_shipping_methods(true) as $m){echo " method=".$m->id."|title=".$m->title."|enabled=".$m->enabled."\n";}
+          echo "classes="; foreach(WC()->shipping()->get_shipping_classes() as $c){echo $c->slug.",";} echo "\n";
+          ' --path="$WP_PATH"
+          echo '=== LOCAL PICKUP / ORDER APPROVAL / DELIVERY DATE ==='
+          wp eval '
+          echo "sg_inventory=".get_option("sg_oa_woo_manage_inventory","missing")."\n";
+          echo "timezone=".wp_timezone_string()."\n";
+          foreach(["woocommerce_local_pickup_settings","woocommerce_order_approval_settings"] as $k){echo $k."=".(get_option($k,false)!==false?"present":"missing")."\n";}
+          ' --path="$WP_PATH"
+          echo '=== SMTP SAFE STATE ==='
+          wp eval '
+          $o=get_option("wp_mail_smtp",[]);
+          echo "smtp_mailer=".($o["mail"]["mailer"]??"")."\n";
+          echo "smtp_from_email=".($o["mail"]["from_email"]??"")."\n";
+          echo "smtp_from_name=".($o["mail"]["from_name"]??"")."\n";
+          echo "smtp_password_set=".(!empty($o["smtp"]["pass"])?"true":"false")."\n";
+          ' --path="$WP_PATH"
+          echo '=== VISIBILITY / SAFETY ==='
+          wp eval '
+          echo "blog_public=".get_option("blog_public","missing")."\n";
+          echo "blogname=".get_option("blogname","")."\n";
+          echo "currency=".get_woocommerce_currency()."\n";
+          echo "prices_include_tax=".(wc_prices_include_tax()?"true":"false")."\n";
+          echo "tax_enabled=".(wc_tax_enabled()?"true":"false")."\n";
+          ' --path="$WP_PATH"
+          echo 'PHIL_AI_OS_WORDPRESS_PREPROD_READONLY_AUDIT_OK'
+          HOSTREMOTE
+          REMOTE
