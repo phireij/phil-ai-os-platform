@@ -5,6 +5,8 @@ from hashlib import sha256
 from typing import Protocol
 from urllib.parse import urlsplit, urlunsplit
 
+from .sms_delivery_store import MemorySmsIdempotencyStore, SmsIdempotencyStore
+
 
 ELIGIBLE_ORDER_STATUSES = frozenset({"pending"})
 BLOCKED_ORDER_STATUSES = frozenset({"cancelled", "failed", "processing", "completed", "refunded"})
@@ -127,9 +129,14 @@ class PaymentLinkSmsService:
     gates. The only eligible state is WooCommerce `pending` (payment required).
     """
 
-    def __init__(self, provider: SmsProvider | None = None) -> None:
+    def __init__(
+        self,
+        provider: SmsProvider | None = None,
+        *,
+        idempotency_store: SmsIdempotencyStore | None = None,
+    ) -> None:
         self.provider = provider or DisabledSmsProvider()
-        self._sent_keys: set[str] = set()
+        self.idempotency_store = idempotency_store or MemorySmsIdempotencyStore()
 
     def notify(self, request: PaymentLinkSmsRequest) -> SmsSendResult:
         if request.order_status in BLOCKED_ORDER_STATUSES:
@@ -148,7 +155,7 @@ class PaymentLinkSmsService:
             )
 
         key = request.idempotency_key
-        if key in self._sent_keys:
+        if self.idempotency_store.contains(key):
             return SmsSendResult(
                 status="duplicate_suppressed",
                 provider=self.provider.name,
@@ -162,7 +169,11 @@ class PaymentLinkSmsService:
             raise SmsNotificationError("SMS provider failed safely; no automatic retry performed") from exc
 
         if result.status == "sent":
-            self._sent_keys.add(key)
+            self.idempotency_store.mark_sent(
+                key,
+                provider=result.provider,
+                provider_message_id=result.provider_message_id,
+            )
         return result
 
 
