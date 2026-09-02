@@ -1,0 +1,66 @@
+name: Hostinger WordPress Preprod Safe Remediation
+
+on:
+  push:
+    branches:
+      - ops/hostinger-wordpress-operator-bootstrap
+    paths:
+      - '.github/workflows/hostinger-wordpress-preprod-safe-remediation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure VPS SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+      - name: Apply bounded pre-production fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          KEY_DIR="$HOME/.ssh/philaios-hostinger-wordpress"
+          KEY="$KEY_DIR/preprod_operator_ed25519"
+          HOSTINGER_HOST='147.93.80.5'
+          HOSTINGER_PORT='65002'
+          HOSTINGER_USER='u925842746'
+          ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
+          chmod 600 "$KEY_DIR/hostinger_known_hosts"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
+          wp option update timezone_string 'Asia/Tokyo' --path="$WP_PATH"
+          wp eval '
+          $id=(int)get_option("woocommerce_terms_page_id",0);
+          $p=$id?get_post($id):null;
+          if(!$p || $p->post_title!=="Terms & Conditions / 利用規約"){fwrite(STDERR,"Terms page identity mismatch\n"); exit(2);}
+          if($p->post_status!=="publish"){
+            $r=wp_update_post(["ID"=>$id,"post_status"=>"publish"],true);
+            if(is_wp_error($r)){fwrite(STDERR,$r->get_error_message()."\n"); exit(3);}
+          }
+          echo "terms_id=".$id."\n";
+          echo "terms_status=".get_post_status($id)."\n";
+          echo "timezone=".wp_timezone_string()."\n";
+          ' --path="$WP_PATH"
+          echo 'PHIL_AI_OS_WORDPRESS_PREPROD_SAFE_REMEDIATION_OK'
+          HOSTREMOTE
+          REMOTE
