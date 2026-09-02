@@ -17,6 +17,7 @@
     "air_mobile_order_quick_pickup_url_ready": false,
     "sms_production_readiness_if_in_launch_scope_green": false,
     "near_cutover_recovery_freshness_green": false,
+    "main_branch_protection_or_ruleset_green": false,
     "public_cutover_plan_confirmed": false,
     "final_ceo_go_no_go_accepted": false
   },
