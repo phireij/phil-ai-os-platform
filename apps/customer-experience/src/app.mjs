@@ -9,6 +9,7 @@ import { createCustomerFlow, transitionCustomerFlow } from "./flow.mjs";
 import { evaluatePickupSelection } from "./pickup.mjs";
 import { readinessFeedback } from "./readiness-feedback.mjs";
 import { catalogMetadata, productMetadata } from "./seo.mjs";
+import { uiState } from "./ui-state.mjs";
 
 const copy = {
   en: {
@@ -16,7 +17,6 @@ const copy = {
     heroCopy: "Synthetic data only. This preview proves customer flow without production WooCommerce connectivity.",
     catalogTitle: "Products",
     catalogCount: (count) => `${count} synthetic items`,
-    empty: "No fixture products are available in this preview.",
     view: "View",
     in_stock: "In stock",
     out_of_stock: "Out of stock",
@@ -35,14 +35,12 @@ const copy = {
     noOrder: "No order was created. mutation_authorized remains false.",
     safetyTitle: "Checkout remains an intent",
     safetyCopy: "This Sprint 4 preview can compose and evaluate checkout intent locally. It cannot create an order, charge a payment, or mutate WooCommerce.",
-    unavailable: "Customer experience preview unavailable",
   },
   ja: {
     heroTitle: "モバイルファーストのバイリンガルストア基盤",
     heroCopy: "合成データのみを使用しています。本プレビューは本番WooCommerceへ接続せずに顧客フローを検証します。",
     catalogTitle: "商品",
     catalogCount: (count) => `合成商品 ${count} 件`,
-    empty: "このプレビューで利用できるフィクスチャ商品はありません。",
     view: "見る",
     in_stock: "在庫あり",
     out_of_stock: "在庫切れ",
@@ -61,7 +59,6 @@ const copy = {
     noOrder: "注文は作成されていません。mutation_authorized は false のままです。",
     safetyTitle: "チェックアウトはインテントのままです",
     safetyCopy: "Sprint 4プレビューはチェックアウトインテントの作成と準備評価のみをローカルで行います。注文作成、決済、WooCommerce変更はできません。",
-    unavailable: "カスタマーエクスペリエンスのプレビューを利用できません",
   },
 };
 
@@ -122,7 +119,28 @@ function updateLocaleUrl() {
   history.replaceState(null, "", url);
 }
 
-function renderCatalog() {
+function stateMessage(kind, { includeRetry = false } = {}) {
+  const message = uiState(kind, state.locale);
+  const role = kind === "error" ? "alert" : "status";
+  const wrapper = document.createElement("div");
+  wrapper.className = `intent-output cx-state cx-state-${kind}`;
+  wrapper.setAttribute("role", role);
+  wrapper.setAttribute("aria-live", kind === "error" ? "assertive" : "polite");
+  wrapper.innerHTML = `<strong>${escapeHtml(message.title)}</strong><p>${escapeHtml(message.message)}</p>`;
+  if (includeRetry && message.retry_label) {
+    const retry = document.createElement("a");
+    const url = new URL(location.href);
+    url.searchParams.delete("product");
+    url.searchParams.set("lang", state.locale);
+    retry.className = "detail-link";
+    retry.href = url.toString();
+    retry.textContent = message.retry_label;
+    wrapper.append(retry);
+  }
+  return wrapper;
+}
+
+function renderCatalog({ noticeKind = null } = {}) {
   state.flow = createCustomerFlow();
   productSection.hidden = true;
   catalogSection.hidden = false;
@@ -130,11 +148,12 @@ function renderCatalog() {
   catalogSummary.textContent = copy[state.locale].catalogCount(state.catalog.length);
   applyMetadata(catalogMetadata(state.locale));
 
+  if (noticeKind) {
+    catalogGrid.append(stateMessage(noticeKind));
+  }
+
   if (state.catalog.length === 0) {
-    const empty = document.createElement("p");
-    empty.setAttribute("role", "status");
-    empty.textContent = copy[state.locale].empty;
-    catalogGrid.append(empty);
+    catalogGrid.append(stateMessage("empty"));
     return;
   }
 
@@ -279,7 +298,7 @@ function renderRoute() {
   const product = state.catalog.find((item) => item.product_key === productKey);
   if (!product) {
     history.replaceState(null, "", `?lang=${state.locale}`);
-    renderCatalog();
+    renderCatalog({ noticeKind: "route_missing" });
     return;
   }
   renderDetail(product);
@@ -294,6 +313,13 @@ async function fetchFixture(path) {
 }
 
 async function boot() {
+  setDocumentLocale();
+  productSection.hidden = true;
+  catalogSection.hidden = false;
+  catalogGrid.replaceChildren(stateMessage("loading"));
+  catalogSummary.textContent = "";
+  applyMetadata(catalogMetadata(state.locale));
+
   const [catalogPayload, pickupPolicy] = await Promise.all([
     fetchFixture("./fixtures/catalog.json"),
     fetchFixture("./fixtures/pickup-policy.json"),
@@ -314,8 +340,12 @@ async function boot() {
   }
 }
 
-boot().catch((error) => {
+boot().catch(() => {
   state.flow = transitionCustomerFlow(createCustomerFlow(), "fail");
+  setDocumentLocale();
   applyMetadata(catalogMetadata(state.locale));
-  catalogGrid.innerHTML = `<p role="alert"><strong>${escapeHtml(copy[state.locale].unavailable)}</strong><br>${escapeHtml(error.message)}</p>`;
+  productSection.hidden = true;
+  catalogSection.hidden = false;
+  catalogGrid.replaceChildren(stateMessage("error", { includeRetry: true }));
+  catalogSummary.textContent = "";
 });
