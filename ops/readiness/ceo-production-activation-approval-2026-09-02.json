@@ -1,0 +1,79 @@
+{
+  "version": "ceo-production-activation-approval-v1",
+  "date": "2026-09-02",
+  "decision": "approved",
+  "decision_authority": "CEO",
+  "approval_text": "I approve No. 2 production activation scope.",
+  "approved_scopes": {
+    "woocommerce_production_activation": true,
+    "komoju_live_mode": true,
+    "production_sms_sending": true,
+    "public_domain_dns_cutover": true,
+    "final_launch_signoff_process": true
+  },
+  "approval_effect": {
+    "ceo_scope_authorization_recorded": true,
+    "overrides_readiness_gates": false,
+    "overrides_missing_business_inputs": false,
+    "overrides_missing_credentials": false,
+    "authorizes_automatic_production_execution": false,
+    "live_launch_authorized": false
+  },
+  "current_lane_state": {
+    "woocommerce_production_activation": {
+      "approval": "approved",
+      "execution": "blocked",
+      "blockers": [
+        "approved_production_catalog_pending",
+        "japan_tax_and_qualified_invoice_evidence_pending",
+        "production_credentials_not_configured",
+        "final_checkout_legal_sync_pending",
+        "near_cutover_recovery_recheck_pending"
+      ]
+    },
+    "komoju_live_mode": {
+      "approval": "approved",
+      "execution": "blocked",
+      "blockers": [
+        "merchant_live_mode_approval_not_yet_verified",
+        "production_payment_method_subset_not_yet_verified",
+        "japan_tax_and_checkout_legal_sync_pending",
+        "near_cutover_recovery_recheck_pending"
+      ]
+    },
+    "production_sms_sending": {
+      "approval": "approved",
+      "execution": "blocked",
+      "blockers": [
+        "production_provider_identity_and_credentials_not_configured",
+        "first_live_send_validation_not_yet_performed"
+      ]
+    },
+    "public_domain_dns_cutover": {
+      "approval": "approved",
+      "execution": "blocked",
+      "blockers": [
+        "approved_production_catalog_pending",
+        "japan_tax_and_checkout_legal_sync_pending",
+        "production_payment_methods_not_finalized",
+        "near_cutover_recovery_recheck_pending",
+        "final_go_no_go_signoff_pending"
+      ]
+    },
+    "final_launch_signoff_process": {
+      "approval": "approved",
+      "execution": "pending_acceptance_gates",
+      "blockers": [
+        "launch_acceptance_not_complete"
+      ]
+    }
+  },
+  "governance_preserved": {
+    "autonomy": "A0",
+    "task_class_allowlist": ["general"],
+    "assigned_agent": "hermes",
+    "specialists_enabled": false,
+    "mission_control_mutation_authorized": false,
+    "automatic_production_execution_retry_rollback": false
+  }
+}
