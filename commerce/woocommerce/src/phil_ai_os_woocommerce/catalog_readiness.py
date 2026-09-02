@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Mapping
 
 from .models import CategoryRecord, ContractValidationError, MediaRecord, ProductRecord
@@ -13,6 +14,7 @@ YES_NO_PENDING = {PENDING, "yes", "no"}
 COD_TREATMENTS = {PENDING, "not_offered", "standard_rate", "reduced_rate", "other_confirmed"}
 IMPLEMENTATION_ROUTES = {PENDING, "tax_tables_candidate", "tax_disabled_candidate"}
 PRODUCT_TAX_CLASSES = {PENDING, "reduced_rate_food", "standard_rate", "exempt"}
+UNAPPROVED_SOURCE_MARKERS = ("fixture", "legacy", "historical", "test", "builder")
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,44 @@ def _duplicates(values: list[str]) -> set[str]:
             duplicates.add(value)
         seen.add(value)
     return duplicates
+
+
+def _source_is_unapproved(value: str) -> bool:
+    normalized = value.strip().lower()
+    return not normalized or any(marker in normalized for marker in UNAPPROVED_SOURCE_MARKERS)
+
+
+def _has_timezone_iso_timestamp(value: Any) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None
+
+
+def _category_integrity_blockers(categories: list[CategoryRecord]) -> list[str]:
+    blockers: list[str] = []
+    by_key = {category.key: category for category in categories}
+
+    for category in categories:
+        if category.parent_key and category.parent_key not in by_key:
+            blockers.append(
+                f"category {category.key} has unknown parent key: {category.parent_key}"
+            )
+
+    for category in categories:
+        seen: set[str] = set()
+        current = category
+        while current.parent_key and current.parent_key in by_key:
+            if current.key in seen or current.parent_key in seen:
+                blockers.append(f"category hierarchy cycle detected at: {category.key}")
+                break
+            seen.add(current.key)
+            current = by_key[current.parent_key]
+
+    return blockers
 
 
 def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxReadiness:
@@ -100,6 +140,8 @@ def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxRead
         for duplicate in sorted(_duplicates(values)):
             blockers.append(f"duplicate {label}: {duplicate}")
 
+    blockers.extend(_category_integrity_blockers(categories))
+
     category_key_set = set(category_keys)
     media_key_set = set(media_keys)
     media_by_key = {value.key: value for value in media}
@@ -126,6 +168,11 @@ def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxRead
         if raw.get("price_includes_tax") is not True:
             blockers.append(f"{prefix} tax-inclusive price confirmation is pending")
 
+        if _source_is_unapproved(product.source):
+            blockers.append(f"{prefix} source provenance is not approved")
+        if not _has_timezone_iso_timestamp(product.source_updated_at):
+            blockers.append(f"{prefix} source_updated_at must be a timezone-aware ISO timestamp")
+
         tax_class = _require_enum(
             raw.get("tax_class_candidate"), PRODUCT_TAX_CLASSES, "product tax_class_candidate"
         )
@@ -142,15 +189,23 @@ def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxRead
             blockers.append(f"{prefix} requires at least one approved category")
         if not product.media_keys:
             blockers.append(f"{prefix} requires at least one approved media item")
-        elif not any(
-            media_by_key.get(key) is not None and media_by_key[key].role == "primary"
-            for key in product.media_keys
-        ):
-            blockers.append(f"{prefix} requires one primary media item")
+        else:
+            primary_count = sum(
+                1
+                for key in product.media_keys
+                if media_by_key.get(key) is not None and media_by_key[key].role == "primary"
+            )
+            if primary_count != 1:
+                blockers.append(
+                    f"{prefix} requires exactly one primary media item; found {primary_count}"
+                )
 
     for value in media:
-        if value.source_ref.startswith("fixture://"):
-            blockers.append(f"media {value.key} still uses a fixture source")
+        source = value.source_ref.strip().lower()
+        if source.startswith("fixture://") or any(
+            marker in source for marker in ("legacy://", "historical://", "test://", "builder://")
+        ):
+            blockers.append(f"media {value.key} uses an unapproved source")
 
     tax = payload.get("tax_decision")
     if not isinstance(tax, Mapping):
@@ -204,6 +259,7 @@ def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxRead
         "catalog ",
         "approved catalog",
         "duplicate ",
+        "category ",
         "product[",
         "media ",
     )

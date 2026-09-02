@@ -129,7 +129,7 @@ class CatalogTaxReadinessTests(unittest.TestCase):
         payload["media"][0]["source_ref"] = "fixture://cake.jpg"
         result = evaluate_catalog_tax_readiness(payload)
         self.assertFalse(result.catalog_ready)
-        self.assertIn("media cake-primary still uses a fixture source", result.blockers)
+        self.assertIn("media cake-primary uses an unapproved source", result.blockers)
 
     def test_input_is_not_mutated(self):
         payload = self.approved_package()
