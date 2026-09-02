@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "service": "air-mobile-order-quick-pickup",
+  "purpose": "same-day-quick-pickup-link",
+  "production_url": null,
+  "url_status": "pending_owner_source",
+  "customer_label": {
+    "en": "Quick Pickup",
+    "ja": "クイック受取"
+  },
+  "placement_candidates": [
+    "storefront-home",
+    "pickup-information",
+    "checkout-choice"
+  ],
+  "woocommerce_role": "advance-order-and-delivery-platform",
+  "air_mobile_order_role": "quick-pickup-platform",
+  "external_navigation": true,
+  "link_render_authorized": false,
+  "production_publish_authorized": false,
+  "automatic_redirect_authorized": false,
+  "tracking_parameters_authorized": false,
+  "notes": "Do not invent or infer the production URL. Render only after the owner-approved URL is supplied and separately approved for publication."
+}
