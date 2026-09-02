@@ -3,11 +3,11 @@
 # Master Executive Roadmap & Schedule Control
 
 **Original 8-Sprint Plan • Accelerated Multi-Agent Delivery • V1 Launch Control**  
-**Last reconciled:** 2 September 2026 — Current executive roadmap: Sprint 3; Sprint 4 partial parallel acceleration
+**Last reconciled:** 3 September 2026 — Current executive roadmap: Sprint 3; Sprint 4 partial parallel acceleration
 
 | FIRST ISSUED | OWNER | LAST RECONCILED | CANONICAL SOURCE |
 | --- | --- | --- | --- |
-| 28 Aug 2026 | CEO / CTO Office | 2 Sep 2026 | GitHub master roadmap |
+| 28 Aug 2026 | CEO / CTO Office | 3 Sep 2026 | GitHub master roadmap |
 
 # CURRENT EXECUTIVE STATUS
 
@@ -19,8 +19,8 @@
 | --- | --- |
 | Overall schedule health | **AHEAD OF ORIGINAL 2-MONTH PLAN** |
 | Executive roadmap position | **Sprint 3 — WooCommerce Foundation is the CURRENT PRIMARY SPRINT; Sprint 4 — Customer Experience is partially active in parallel ahead of schedule.** |
-| Current engineering gate | Complete remaining Sprint 3 production-preparation inputs: final approved catalog/category/media source and Japan tax / Qualified Invoice evidence. WooCommerce production read-only identity is GREEN; production mutation remains fail-closed. |
-| Last completed checkpoint | Sprint 3 technical foundation and WooCommerce pre-production configuration GREEN; production read-only WooCommerce identity/connectivity verified GREEN on 2 Sep 2026. Sprint 4 bounded CX foundation is also GREEN early. |
+| Current engineering gate | Complete the remaining Sprint 3 owner input: final approved production catalog/category/media source. Japan 2026 consumption-tax / Qualified Invoice decision is GREEN with WooCommerce tax disabled; production mutation remains fail-closed. |
+| Last completed checkpoint | Sprint 3 technical foundation and WooCommerce pre-production configuration GREEN; production read-only WooCommerce identity/connectivity GREEN; Japan 2026 tax decision GREEN on 3 Sep 2026. Sprint 4 bounded CX foundation is also GREEN early. |
 | Mission Control | Multi-agent read model operational; operator/write authority intentionally bounded; Hermes remains intentionally idle while Mission Control is read-only. |
 | Multi-agent capability | Foundation proven; governed handoff demonstrated; normal specialist execution intentionally disabled. |
 | Current autonomy ceiling | **A0 — no autonomous production side-effect/execution expansion** |
@@ -29,9 +29,9 @@
 | Safety target | **2 October 2026** |
 | Original 2-month target | Approximately **19 October 2026** from the 19 August start |
 | Schedule variance | Materially ahead. Engineering/readiness elements from Sprints 4–7 have been pre-completed early, but formal executive roadmap position remains Sprint 3 with partial Sprint 4 overlap. |
-| Immediate next decision | Finalize production catalog and Japan tax evidence while continuing bounded Sprint 4 work and preserving the later Sprint 5–7 work as early readiness, not as current sprint entry. |
+| Immediate next decision | Finalize the production catalog while continuing bounded Sprint 4 work and preserving the later Sprint 5–7 work as early readiness, not as current sprint entry. |
 
-**2 SEP 2026 ROADMAP RECONCILIATION —** The executive roadmap remains in Sprint 3, with Sprint 4 partially accelerated in parallel. Engineering/readiness packages belonging to later Sprints 5–7 were completed early as advance preparation and must not be interpreted as formal sprint entry. WooCommerce production read-only identity/connectivity is GREEN; production writes, KOMOJU Live, live SMS and public cutover remain separately gated.
+**3 SEP 2026 ROADMAP RECONCILIATION —** The Japan 2026 consumption-tax / Qualified Invoice decision is GREEN: Ruby’s Cake Delights is treated as consumption-tax exempt for 2026 under the reviewed evidence, is not registered for Qualified Invoices, and has made no voluntary taxable-business election. WooCommerce tax remains disabled. The final owner-approved production catalog is now the only remaining Sprint 3 owner-input gate. This does not authorize catalog writes or any other production mutation.
 
 ### Schedule health definitions
 
@@ -112,7 +112,7 @@ Deliver **Phil AI OS Platform Core V1** together with the **Ruby’s Cake Deligh
 - Japanese
 - English
 
-**Control note:** Core WooCommerce contracts, isolated runtime, product/category/media/inventory/localization boundaries and pre-production WordPress/WooCommerce configuration are GREEN. Production read-only WooCommerce identity is GREEN. Remaining Sprint 3 completion gates are final production catalog data and Japan tax / Qualified Invoice evidence; production mutation remains fail-closed.
+**Control note:** Core WooCommerce contracts, isolated runtime, product/category/media/inventory/localization boundaries and pre-production WordPress/WooCommerce configuration are GREEN. Production read-only WooCommerce identity/connectivity is GREEN. Japan 2026 consumption-tax / Qualified Invoice decision is GREEN with the WooCommerce tax route disabled. The remaining Sprint 3 completion gate is the final owner-approved production catalog; production mutation remains fail-closed.
 
 ## Sprint 4 — Customer Experience
 
@@ -260,17 +260,17 @@ Update/review when:
 
 # 8. Current Decision Queue
 
-## Immediate — Sprint 3 completion gates
+## Immediate — Sprint 3 completion gate
 
-**Status: CURRENT / bounded by owner and external inputs; engineering foundation remains GREEN.**
+**Status: CURRENT / bounded by one remaining owner input; engineering foundation and Japan tax decision are GREEN.**
 
 Complete or confirm the following before Sprint 3 formal closure:
 
 - Finalize the approved production catalog/category/media source, including SKU, size class, temperature profile, pickup/delivery eligibility and bilingual content.
-- Confirm Japan consumption-tax / Qualified Invoice evidence before enabling WooCommerce tax tables.
-- Provide the Air Mobile Order Quick Pickup production URL when available.
-- Keep WooCommerce production mutation fail-closed until catalog, tax/legal and recovery gates are GREEN.
-- Continue Sprint 4 Customer Experience work in parallel where it remains non-authorizing and independent of missing Sprint 3 business inputs.
+- Preserve the reconciled 2026 Japan tax posture: consumption-tax exempt, Qualified Invoice not registered, WooCommerce tax disabled. No tax-table write is required under the current decision.
+- Provide the Air Mobile Order Quick Pickup production URL when available; this remains a later launch/input dependency and does not prevent the current tax decision from being GREEN.
+- Keep WooCommerce production mutation fail-closed until the final catalog, legal/checkout synchronization and recovery gates are GREEN.
+- Continue Sprint 4 Customer Experience work in parallel where it remains non-authorizing and independent of the missing Sprint 3 catalog input.
 - Preserve Sprint 5–7 engineering/readiness work as early preparation only; do not treat it as formal sprint entry.
 
 ## Parallel acceleration while Sprint 3 remains current
@@ -294,6 +294,7 @@ These targets remain materially ahead of the original approximately two-month ob
 # 10. Change Log
 
 - **28 Aug 2026** — Reconciled Phase 2.x engineering work with the original 8-Sprint plan and established this file as the master schedule-control roadmap. Schedule effect: Stretch Sep 25; working Sep 27–30; safety Oct 2; current state AHEAD.
-- **2 Sep 2026** — Reconciled the executive roadmap to Sprint 3 as the current primary sprint, with Sprint 4 partially active in parallel. Recorded Sprint 2 CLOSED GREEN, Sprint 0/1 closure, WooCommerce pre-production and production read-only identity GREEN, and classified later Sprint 5–7 work as early readiness rather than formal sprint entry. Remaining Sprint 3 gates are final catalog inputs and Japan tax / Qualified Invoice evidence; live production capabilities remain separately gated.
+- **2 Sep 2026** — Reconciled the executive roadmap to Sprint 3 as the current primary sprint, with Sprint 4 partially active in parallel. Recorded Sprint 2 CLOSED GREEN, Sprint 0/1 closure, WooCommerce pre-production and production read-only identity GREEN, and classified later Sprint 5–7 work as early readiness rather than formal sprint entry. Remaining Sprint 3 gates were final catalog inputs and Japan tax / Qualified Invoice evidence; live production capabilities remained separately gated.
+- **3 Sep 2026** — Reconciled owner-provided 2024/2025 business tax evidence and owner confirmation of no Qualified Invoice registration and no voluntary taxable-business election. Japan 2026 consumption-tax decision is GREEN as exempt; WooCommerce tax route remains disabled and non-authorizing. Final owner-approved production catalog is now the only remaining Sprint 3 owner-input gate.
 
 > **DOCUMENT CONTROL RULE:** Do not create a replacement master timeline for ordinary schedule updates. Review and update this canonical roadmap, refresh the status dashboard at the top, and record material changes in the Change Log.
