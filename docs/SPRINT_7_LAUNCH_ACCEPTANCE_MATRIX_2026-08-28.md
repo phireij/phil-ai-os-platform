@@ -29,7 +29,7 @@ Sprint 7 separates **bounded engineering and pre-production readiness** from **l
 | Air Mobile Order Quick Pickup preparation | **INERT LINK CONTRACT READY / PRODUCTION URL PENDING**. | EN/JA surface prepared through PR #33; no URL may be invented or published. |
 | Approved production catalog | **PENDING CEO FINALIZATION**. | Blocks product loading; no inference or old-builder migration allowed. |
 | Japan tax implementation | **PENDING BUSINESS EVIDENCE**. | WooCommerce tax stays disabled until consumption-tax/invoice status is verified. |
-| Fresh launch-time backup/restore | **CURRENT BASELINE GREEN / CUTOVER-TIME RECHECK PENDING**. | A new near-cutover GREEN check remains mandatory. |
+| Fresh launch-time backup/restore | **PENDING** — current Sep 2 baseline is GREEN, but a new cutover-time run is still required. | Blocks live cutover until the near-cutover run is GREEN. |
 | WooCommerce production identity/credentials | **NOT AUTHORIZED / NOT CONFIGURED**. | Blocks live API integration. |
 | KOMOJU Live Mode | **NOT AUTHORIZED**. | Blocks real-payment launch. |
 | Production payment methods | **NOT FINALIZED**. | Must be reconciled with merchant account, checkout and Tokushoho. |
@@ -54,7 +54,7 @@ The next substantive commerce work therefore depends primarily on CEO-owned cata
 
 Live cutover still requires all of the following:
 
-- repeat fresh launch-time backup/restore verification immediately before cutover;
+- fresh launch-time backup/restore verification immediately before cutover;
 - approved production catalog and completed tax configuration acceptance;
 - final legal/payment/shipping synchronization;
 - production payment-method verification;
