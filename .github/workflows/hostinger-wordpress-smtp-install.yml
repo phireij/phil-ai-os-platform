@@ -1,0 +1,62 @@
+name: Hostinger WordPress SMTP Install
+on:
+  push:
+    branches:
+      - ops/hostinger-wordpress-operator-bootstrap
+    paths:
+      - '.github/workflows/hostinger-wordpress-smtp-install.yml'
+permissions:
+  contents: read
+jobs:
+  smtp-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure VPS SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+      - name: Install WP Mail SMTP on pre-production
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          KEY_DIR="$HOME/.ssh/philaios-hostinger-wordpress"
+          KEY="$KEY_DIR/preprod_operator_ed25519"
+          HOSTINGER_HOST='147.93.80.5'
+          HOSTINGER_PORT='65002'
+          HOSTINGER_USER='u925842746'
+          ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
+          chmod 600 "$KEY_DIR/hostinger_known_hosts"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
+          echo '=== BEFORE ==='
+          wp plugin list --path="$WP_PATH" --fields=name,status,version --format=csv | grep -E '^wp-mail-smtp,' || true
+          if wp plugin is-installed wp-mail-smtp --path="$WP_PATH"; then
+            wp plugin activate wp-mail-smtp --path="$WP_PATH"
+          else
+            wp plugin install wp-mail-smtp --activate --path="$WP_PATH"
+          fi
+          echo '=== AFTER ==='
+          wp plugin get wp-mail-smtp --path="$WP_PATH" --fields=name,status,version --format=json
+          echo '=== OPTIONS ==='
+          wp option list --path="$WP_PATH" --search='wp_mail_smtp%' --fields=option_name,autoload --format=csv || true
+          wp option get wp_mail_smtp --path="$WP_PATH" --format=json 2>/dev/null || true
+          echo 'PHIL_AI_OS_WORDPRESS_SMTP_INSTALL_OK'
+          HOSTREMOTE
+          REMOTE
