@@ -1,7 +1,14 @@
 import unittest
 
 from phil_ai_os_woocommerce.adapter import MockWooCommerceTransport, ProductionConnectivityBlocked, WooCommerceAdapter
-from phil_ai_os_woocommerce.models import CategoryRecord, InventoryRecord, LocalizedText, MediaRecord, ProductRecord
+from phil_ai_os_woocommerce.models import (
+    CategoryRecord,
+    FulfillmentProfile,
+    InventoryRecord,
+    LocalizedText,
+    MediaRecord,
+    ProductRecord,
+)
 
 
 class CategoryInventoryMediaTests(unittest.TestCase):
@@ -17,6 +24,7 @@ class CategoryInventoryMediaTests(unittest.TestCase):
             slug=LocalizedText(en="cake", ja="cake-ja"),
             regular_price="500",
             currency="JPY",
+            fulfillment=FulfillmentProfile("cool-60", ("chilled",), True, True),
         )
 
     def test_category_create_and_replay(self):
