@@ -5,7 +5,7 @@ from phil_ai_os_woocommerce.adapter import (
     ProductionConnectivityBlocked,
     WooCommerceAdapter,
 )
-from phil_ai_os_woocommerce.models import LocalizedText, ProductRecord
+from phil_ai_os_woocommerce.models import FulfillmentProfile, LocalizedText, ProductRecord
 
 
 def sample_product(price: str = "500") -> ProductRecord:
@@ -16,6 +16,7 @@ def sample_product(price: str = "500") -> ProductRecord:
         slug=LocalizedText(en="cake", ja="cake-ja"),
         regular_price=price,
         currency="JPY",
+        fulfillment=FulfillmentProfile("cool-60", ("chilled",), True, True),
     )
 
 
