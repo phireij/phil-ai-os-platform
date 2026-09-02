@@ -4,7 +4,7 @@
   "title": "Phil AI OS Commerce Product",
   "type": "object",
   "additionalProperties": false,
-  "required": ["sku", "name", "description", "slug", "regular_price", "currency", "status", "visibility", "category_keys", "media_keys", "source"],
+  "required": ["sku", "name", "description", "slug", "regular_price", "currency", "fulfillment", "status", "visibility", "category_keys", "media_keys", "source"],
   "properties": {
     "sku": {"type": "string", "minLength": 1},
     "name": {"$ref": "#/$defs/localizedText"},
@@ -12,6 +12,7 @@
     "slug": {"$ref": "#/$defs/localizedText"},
     "regular_price": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]{1,2})?$"},
     "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "fulfillment": {"$ref": "#/$defs/fulfillmentProfile"},
     "status": {"enum": ["draft", "publish", "private"]},
     "visibility": {"enum": ["visible", "catalog", "search", "hidden"]},
     "category_keys": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
@@ -28,6 +29,48 @@
         "en": {"type": "string", "minLength": 1},
         "ja": {"type": "string", "minLength": 1}
       }
+    },
+    "fulfillmentProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shipping_class", "temperature_modes", "pickup_allowed", "delivery_allowed", "requires_order_approval"],
+      "properties": {
+        "shipping_class": {
+          "type": ["string", "null"],
+          "enum": ["cool-60", "cool-80", "cool-100", "cool-120", null]
+        },
+        "temperature_modes": {
+          "type": "array",
+          "items": {"enum": ["frozen", "chilled"]},
+          "uniqueItems": true
+        },
+        "pickup_allowed": {"type": "boolean"},
+        "delivery_allowed": {"type": "boolean"},
+        "requires_order_approval": {"const": true}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"delivery_allowed": {"const": true}}},
+          "then": {
+            "properties": {
+              "shipping_class": {"type": "string"},
+              "temperature_modes": {"minItems": 1}
+            }
+          },
+          "else": {
+            "properties": {
+              "shipping_class": {"type": "null"},
+              "temperature_modes": {"maxItems": 0}
+            }
+          }
+        },
+        {
+          "anyOf": [
+            {"properties": {"pickup_allowed": {"const": true}}},
+            {"properties": {"delivery_allowed": {"const": true}}}
+          ]
+        }
+      ]
     }
   }
 }
