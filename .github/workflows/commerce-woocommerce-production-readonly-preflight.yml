@@ -8,13 +8,18 @@ on:
         required: true
         type: boolean
         default: false
+  push:
+    branches:
+      - ops/woo-readonly-preflight-run
+    paths:
+      - .github/woo-readonly-preflight-trigger
 
 permissions:
   contents: read
 
 jobs:
   preflight:
-    if: ${{ inputs.confirm_read_only == true }}
+    if: ${{ github.event_name == 'push' || inputs.confirm_read_only == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
