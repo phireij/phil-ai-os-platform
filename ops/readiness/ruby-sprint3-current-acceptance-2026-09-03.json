@@ -1,5 +1,5 @@
 {
-  "version": "ruby-sprint3-current-acceptance-v1",
+  "version": "ruby-sprint3-current-acceptance-v2",
   "date": "2026-09-03",
   "executive_roadmap": {
     "current_primary_sprint": 3,
@@ -17,16 +17,21 @@
     "catalog_tax_intake_fail_closed_green": true,
     "catalog_provenance_integrity_guard_green": true,
     "catalog_dry_run_reconciliation_ready": true,
+    "japan_tax_decision_green": true,
+    "japan_tax_decision_evidence_ref": "ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json",
+    "woocommerce_tax_route": "disabled",
     "production_mutation_enabled": false
   },
   "remaining_sprint3_exit_inputs": {
     "final_owner_approved_catalog": false,
-    "japan_tax_evidence_and_decision": false
+    "japan_tax_evidence_and_decision": true
   },
   "exit_state": {
     "sprint3_exit_inputs_complete": false,
     "formal_sprint3_closure": false,
     "production_catalog_write_ready": false,
+    "tax_decision_ready": true,
+    "tax_activation_required": false,
     "tax_activation_ready": false
   },
   "authority": {
@@ -34,5 +39,5 @@
     "production_publish_authorized": false,
     "automatic_production_execution": false
   },
-  "decision": "SPRINT_3_CURRENT_PRIMARY_PENDING_OWNER_INPUTS"
+  "decision": "SPRINT_3_CURRENT_PRIMARY_PENDING_FINAL_CATALOG_ONLY"
 }
