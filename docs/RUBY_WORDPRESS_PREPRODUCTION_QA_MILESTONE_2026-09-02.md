@@ -20,6 +20,7 @@ The separate Hostinger WordPress + WooCommerce environment now exists and has pa
 - Store identity corrected to **Ruby's Cake Delights**.
 - Store timezone corrected and verified as **Asia/Tokyo**.
 - Currency verified as **JPY**.
+- Temporary-site search indexing is now disabled (`blog_public=0`).
 - WooCommerce tax engine remains disabled pending separate Japan tax configuration review; this does not alter the CEO-confirmed business rule that catalog prices are intended to be tax-inclusive.
 
 ## Shipping and pickup
@@ -43,6 +44,18 @@ Verified Yamato Cool zones are present for:
 - unsupported-islands handling.
 
 Both customer-facing **Frozen / 冷凍** and **Chilled / 冷蔵** methods are present in the supported shipping zones. Prior checkout QA verified the class-based charge behavior and the corrected size-120 rates. Store pickup was also verified separately as a free customer option.
+
+The canonical product contract now requires each approved product to declare:
+
+- SKU;
+- one Yamato Cool size class when delivery is allowed;
+- explicit `frozen` and/or `chilled` eligibility;
+- pickup and delivery eligibility;
+- approval-before-payment.
+
+PR #27 merged this fail-closed fulfillment profile to `main` as
+`0484c43dda2d1626317ee10c7b06417aa3e6cf90`. WooCommerce contracts, Sprint 3
+CI and Sprint 7 integrated readiness were all GREEN.
 
 ## Approval-before-payment flow
 
@@ -124,6 +137,11 @@ PR #23 added and merged an A0-safe provider-neutral SMS payment-link scaffold to
 
 Production SMS activation remains a separate CEO gate.
 
+The later bounded Twilio adapter is also merged to `main` at
+`d66191b09e415f3473307d8e4c441cecd0ca0bb2`. It remains disabled by default;
+no production Twilio credentials, sender identity or sending authority was
+introduced.
+
 ## Legal/policy publication
 
 The following approved bilingual/legal pages are now published in pre-production:
@@ -137,13 +155,50 @@ The following approved bilingual/legal pages are now published in pre-production
 
 WordPress's privacy-page assignment is verified to point to the approved bilingual Privacy Policy page. The separate default WordPress draft titled only `Privacy Policy` was deliberately left untouched.
 
+## Fresh bounded readiness audit and cleanup
+
+The fresh read-only audit run `33582154851` completed GREEN on 2026-09-02 and
+reconfirmed the plugin, policy, shipping, approval, Datery, SMTP, test-only
+KOMOJU and HTTPS state.
+
+It identified one exact leftover record:
+
+- product #47, `QA APPROVAL TEST`;
+- ¥100;
+- hidden catalog visibility;
+- no SKU;
+- no image;
+- uncategorized.
+
+The guarded cleanup moved only that exact record to WordPress Trash and set
+`blog_public=0`. Cleanup run `33582096962` completed GREEN. The final
+read-only verification confirmed:
+
+- published products: **0**;
+- draft products: **0**;
+- temporary-site indexing: **disabled**;
+- homepage: HTTP 200;
+- checkout surface: HTTP 200;
+- KOMOJU keys: test-only.
+
+No record was permanently deleted, and no catalog, payment, SMS, public-domain
+or production authority was activated.
+
+## Japan tax readiness
+
+PR #28 merged `docs/RUBY_WOOCOMMERCE_JAPAN_TAX_READINESS_2026-09-02.md` to
+`main`. It records the primary-source candidate of 8% for qualifying food and
+10% for separately charged shipping, with consumer prices displayed
+tax-inclusive. Configuration remains blocked pending confirmation of Ruby's
+consumption-tax and qualified-invoice status.
+
 ## Remaining blockers / next bounded work
 
 1. Load only separately approved production catalog/category/media data; do not copy the old Website Builder test catalog.
-2. Complete catalog/product-level shipping-class and chilled-eligibility assignment QA.
-3. Review Japan tax display/calculation implementation while preserving the CEO-confirmed tax-inclusive price intent.
+2. Assign each approved product an explicit SKU, size class, frozen/chilled eligibility and pickup/delivery eligibility using the merged contract.
+3. Confirm Ruby's consumption-tax/qualified-invoice status, then configure and test the tax-inclusive WooCommerce candidate.
 4. Prepare the **Air Mobile Order = Quick Pickup** link surface once its production URL is available; WooCommerce remains the advance-order/delivery platform.
-5. Complete SMS provider comparison and keep live provider activation gated.
+5. Complete production SMS activation planning and controlled test-recipient QA while keeping credentials and live sending gated.
 6. Perform fresh backup/restore and final legal/checkout synchronization near cutover.
 7. Keep public-domain cutover, KOMOJU Live Mode/real payments, production SMS, production commerce writes, and higher autonomy under explicit CEO approval.
 
@@ -159,6 +214,9 @@ WordPress's privacy-page assignment is verified to point to the approved bilingu
 - Email inbox placement: **NOT RELIABLE — SMS fallback required before production acceptance**.
 - Legal/policy page publication: **GREEN**.
 - SMS architecture/scaffold: **GREEN / external sending disabled**.
+- Guarded QA-product cleanup and indexing control: **GREEN / recoverable**.
+- Product fulfillment contract: **GREEN / catalog assignments pending**.
+- Japan tax implementation design: **PREPARED / business-status decision pending**.
 - Production cutover: **NOT AUTHORIZED**.
 - KOMOJU Live Mode: **NOT AUTHORIZED**.
 
