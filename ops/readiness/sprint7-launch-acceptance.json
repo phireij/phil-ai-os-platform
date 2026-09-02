@@ -1,6 +1,6 @@
 {
   "version": "sprint7-launch-acceptance-v1",
-  "date": "2026-08-29",
+  "date": "2026-09-02",
   "bounded_engineering_readiness": {
     "integrated_regression_baseline_tests": 165,
     "security_recovery_package_ready": true,
@@ -15,12 +15,12 @@
     "tokushoho_source_reconciled": true,
     "tokushoho_publication_approved": false,
     "fresh_launch_time_backup_restore_check_green": false,
-    "woocommerce_preproduction_qa_green": false,
+    "woocommerce_preproduction_qa_green": true,
     "woocommerce_production_activation_approved": false,
     "woocommerce_production_credentials_configured": false,
-    "komoju_test_mode_validated": false,
+    "komoju_test_mode_validated": true,
     "komoju_live_mode_approved": false,
-    "production_shipping_configuration_verified": false,
+    "production_shipping_configuration_verified": true,
     "production_payment_methods_verified": false,
     "external_channel_live_activation_approved": false,
     "production_cutover_approved": false,
@@ -46,6 +46,8 @@
     "ops/readiness/verified-ruby-business-profile.template.json",
     "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json",
     "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md",
-    "docs/RUBY_WOOCOMMERCE_KOMOJU_STAGING_CONFIGURATION_PLAN_2026-08-29.md"
+    "docs/RUBY_WOOCOMMERCE_KOMOJU_STAGING_CONFIGURATION_PLAN_2026-08-29.md",
+    "docs/RUBY_WORDPRESS_PREPRODUCTION_QA_MILESTONE_2026-09-02.md",
+    "docs/MASTER_EXECUTIVE_ROADMAP_SCHEDULE_CONTROL.md"
   ]
 }

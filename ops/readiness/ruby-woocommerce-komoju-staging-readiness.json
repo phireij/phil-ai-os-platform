@@ -1,6 +1,6 @@
 {
   "version": "ruby-woocommerce-komoju-staging-readiness-v1",
-  "date": "2026-08-29",
+  "date": "2026-09-02",
   "business_profile": {
     "verified_profile_complete": true,
     "resolved_fields": 15,
@@ -22,7 +22,7 @@
     "wordpress_ready": true,
     "woocommerce_ready": true,
     "ssl_verified": true,
-    "checkout_qa_green": false,
+    "checkout_qa_green": true,
     "production_cutover_authorized": false
   },
   "fulfillment": {
@@ -30,8 +30,8 @@
     "legacy_shipping_provider": "yamato-cool-takkyubin",
     "legacy_kanto_rate_jpy": 1350,
     "legacy_other_regions_rate_range_jpy": [1500, 1800],
-    "production_shipping_configuration_verified": false,
-    "production_shipping_rates_verified": false,
+    "production_shipping_configuration_verified": true,
+    "production_shipping_rates_verified": true,
     "mid_september_hours_recheck_required": true
   },
   "komoju": {
@@ -40,10 +40,11 @@
     "connection_method": "komoju-sign-in-oauth-style",
     "automatic_secret_and_webhook_configuration": true,
     "manual_api_key_entry_expected": false,
-    "current_connection_state": "not_configured",
+    "current_connection_state": "test_mode",
     "test_mode_required_before_live": true,
-    "test_mode_connection_authorized": false,
-    "test_mode_connected": false,
+    "test_mode_connection_authorized": true,
+    "test_mode_connected": true,
+    "test_capture_refund_validated": true,
     "merchant_available_payment_methods_verified": false,
     "legacy_disclosed_card_brands": ["Visa", "Mastercard", "JCB", "American Express", "Diners Club"],
     "production_enabled_payment_methods_finalized": false,
@@ -56,8 +57,8 @@
     "tokushoho_payment_timing_match_checkout": false,
     "tokushoho_shipping_fees_match_checkout": false,
     "final_confirmation_screen_reviewed": false,
-    "privacy_terms_implementation_reviewed": false
+    "privacy_terms_implementation_reviewed": true
   },
-  "next_gate": "configure_woocommerce_baseline_and_load_verified_ruby_business_legal_content_without_komoju_connection",
+  "next_gate": "complete_catalog_tax_recovery_and_final_launch_acceptance_without_live_activation",
   "production_publish_authorized": false
 }

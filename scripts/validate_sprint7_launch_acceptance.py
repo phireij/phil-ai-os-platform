@@ -24,7 +24,13 @@ def main() -> None:
 
     if engineering.get("integrated_regression_baseline_tests") != 165:
         fail("integrated regression baseline must remain 165")
-    for key in ("security_recovery_package_ready", "deployment_migration_runbooks_ready", "channel_activation_runbooks_ready", "operator_documentation_ready", "final_current_head_ci_required"):
+    for key in (
+        "security_recovery_package_ready",
+        "deployment_migration_runbooks_ready",
+        "channel_activation_runbooks_ready",
+        "operator_documentation_ready",
+        "final_current_head_ci_required",
+    ):
         if engineering.get(key) is not True:
             fail(f"bounded engineering readiness drift: {key}")
 
@@ -39,14 +45,19 @@ def main() -> None:
         fail("Tokushoho source reconciliation drift")
 
     for key in (
+        "woocommerce_preproduction_qa_green",
+        "komoju_test_mode_validated",
+        "production_shipping_configuration_verified",
+    ):
+        if live.get(key) is not True:
+            fail(f"verified pre-production gate regressed: {key}")
+
+    for key in (
         "tokushoho_publication_approved",
         "fresh_launch_time_backup_restore_check_green",
-        "woocommerce_preproduction_qa_green",
         "woocommerce_production_activation_approved",
         "woocommerce_production_credentials_configured",
-        "komoju_test_mode_validated",
         "komoju_live_mode_approved",
-        "production_shipping_configuration_verified",
         "production_payment_methods_verified",
         "external_channel_live_activation_approved",
         "production_cutover_approved",
@@ -64,14 +75,26 @@ def main() -> None:
         "wordpress_ready": True,
         "woocommerce_ready": True,
         "ssl_verified": True,
-        "checkout_qa_green": False,
+        "checkout_qa_green": True,
         "production_cutover_authorized": False,
     }
     for key, value in expected_front.items():
         if sfront.get(key) != value:
             fail(f"preproduction environment state drift: {key}")
-    if staging["komoju"].get("test_mode_connected") is not False or staging["komoju"].get("live_mode_authorized") is not False:
-        fail("KOMOJU must remain disconnected/unapproved")
+
+    fulfillment = staging["fulfillment"]
+    if fulfillment.get("production_shipping_configuration_verified") is not True:
+        fail("pre-production shipping configuration verification drift")
+    if fulfillment.get("production_shipping_rates_verified") is not True:
+        fail("pre-production shipping-rate verification drift")
+
+    komoju = staging["komoju"]
+    if komoju.get("current_connection_state") != "test_mode":
+        fail("KOMOJU must remain in test mode")
+    if komoju.get("test_mode_connected") is not True or komoju.get("test_capture_refund_validated") is not True:
+        fail("KOMOJU Test Mode validation drift")
+    if komoju.get("live_mode_authorized") is not False or komoju.get("payment_execution_authorized") is not False:
+        fail("KOMOJU live/payment authority must remain false")
     if staging.get("production_publish_authorized") is not False:
         fail("preproduction readiness gained publication authority")
 
@@ -96,9 +119,10 @@ def main() -> None:
         "PHIL_AI_OS_SPRINT_7_LAUNCH_ACCEPTANCE_PACKAGE_READY_NOT_SIGNED",
         "Ruby business profile | **COMPLETE — 15/15 RESOLVED**",
         "Contact phone | **VERIFIED — 050-1785-0575**",
-        "Tokushoho source | **RECONCILED / PUBLICATION APPROVAL PENDING**",
-        "WooCommerce pre-production QA | **NOT YET GREEN**",
-        "KOMOJU Test Mode | **NOT VALIDATED**",
+        "WooCommerce pre-production QA | **GREEN — 2026-09-02**",
+        "KOMOJU Test Mode | **GREEN — TEST CAPTURE/REFUND VALIDATED**",
+        "Shipping configuration | **GREEN IN PRE-PRODUCTION**",
+        "Fresh launch-time backup/restore | **PENDING**",
         "CEO sign-off | **NOT RECORDED**",
         "CTO sign-off | **NOT RECORDED**",
     ):
@@ -106,8 +130,8 @@ def main() -> None:
             fail(f"launch state statement missing: {phrase}")
 
     print("PHIL_AI_OS_SPRINT_7_OPERATOR_AND_ACCEPTANCE_GREEN engineering_package=true live_launch=false profile_complete=true")
-    print("PHIL_AI_OS_SPRINT_7_PREPRODUCTION_ENVIRONMENT_GREEN created=true qa=false komoju_test=false")
-    print("PHIL_AI_OS_SPRINT_7_SIGNOFF_BOUNDARY_GREEN ceo=false cto=false cutover=false")
+    print("PHIL_AI_OS_SPRINT_7_PREPRODUCTION_ENVIRONMENT_GREEN created=true qa=true komoju_test=true shipping=true")
+    print("PHIL_AI_OS_SPRINT_7_SIGNOFF_BOUNDARY_GREEN backup=false ceo=false cto=false cutover=false")
 
 
 if __name__ == "__main__":
