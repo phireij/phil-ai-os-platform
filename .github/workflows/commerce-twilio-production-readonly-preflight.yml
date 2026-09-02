@@ -1,0 +1,53 @@
+name: Twilio Production Read-Only Preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_no_send:
+        description: "Confirm this run must not send SMS"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    if: ${{ inputs.confirm_no_send == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Twilio secret presence without printing values
+        shell: bash
+        env:
+          RUBY_TWILIO_ACCOUNT_SID: ${{ secrets.RUBY_TWILIO_ACCOUNT_SID }}
+          RUBY_TWILIO_AUTH_TOKEN: ${{ secrets.RUBY_TWILIO_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$RUBY_TWILIO_ACCOUNT_SID"
+          test -n "$RUBY_TWILIO_AUTH_TOKEN"
+          echo "PHIL_AI_OS_TWILIO_PRODUCTION_SECRET_REFS_PRESENT"
+
+      - name: Verify active Twilio account without sending SMS
+        shell: bash
+        env:
+          RUBY_TWILIO_ACCOUNT_SID: ${{ secrets.RUBY_TWILIO_ACCOUNT_SID }}
+          RUBY_TWILIO_AUTH_TOKEN: ${{ secrets.RUBY_TWILIO_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          python commerce/woocommerce/tools_twilio_production_readonly_preflight.py
+
+      - name: Assert preflight contains no Messages POST
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E 'Messages\.json|method="POST"' \
+            commerce/woocommerce/tools_twilio_production_readonly_preflight.py
+          echo "PHIL_AI_OS_TWILIO_PREFLIGHT_NO_SEND_BOUNDARY_GREEN"
