@@ -1,0 +1,77 @@
+name: Hostinger WordPress SG Approval Diagnostics
+on:
+  push:
+    branches:
+      - ops/hostinger-wordpress-operator-bootstrap
+    paths:
+      - '.github/workflows/hostinger-wordpress-sg-approval-diagnostics.yml'
+permissions:
+  contents: read
+jobs:
+  sg-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure VPS SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+      - name: Inspect SG approval email surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          KEY_DIR="$HOME/.ssh/philaios-hostinger-wordpress"
+          KEY="$KEY_DIR/preprod_operator_ed25519"
+          HOSTINGER_HOST='147.93.80.5'
+          HOSTINGER_PORT='65002'
+          HOSTINGER_USER='u925842746'
+          ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
+          chmod 600 "$KEY_DIR/hostinger_known_hosts"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
+          echo '=== SG PLUGINS ==='
+          wp plugin list --path="$WP_PATH" --fields=name,status,version --format=csv | grep -Ei 'approval|sg-order|order-approval' || true
+          echo '=== ORDER 49 ==='
+          wp eval '
+          $o=wc_get_order(49);
+          if(!$o){echo "order49=false\n"; exit;}
+          echo "order49=true\n";
+          echo "status=".$o->get_status()."\n";
+          echo "email=".$o->get_billing_email()."\n";
+          echo "needs_payment=".($o->needs_payment()?"true":"false")."\n";
+          echo "payment_url=".$o->get_checkout_payment_url()."\n";
+          echo "total=".$o->get_total()."\n";
+          ' --path="$WP_PATH"
+          echo '=== WOOCOMMERCE EMAILS ==='
+          wp eval '
+          $emails=WC()->mailer()->get_emails();
+          foreach($emails as $k=>$e){
+            $id=method_exists($e,"get_id")?$e->get_id():"";
+            $title=isset($e->title)?$e->title:"";
+            $class=get_class($e);
+            if(stripos($id,"approv")!==false || stripos($title,"approv")!==false || stripos($class,"approv")!==false || stripos($id,"pre")!==false || stripos($title,"pre")!==false){
+              echo "key=$k|id=$id|title=$title|class=$class\n";
+            }
+          }
+          ' --path="$WP_PATH"
+          echo '=== SG FILE HINTS ==='
+          find "$WP_PATH/wp-content/plugins" -maxdepth 2 -type f -name '*.php' | grep -Ei 'approval|sg-order|order-approval' | head -40 || true
+          echo 'PHIL_AI_OS_SG_APPROVAL_DIAGNOSTICS_OK'
+          HOSTREMOTE
+          REMOTE
