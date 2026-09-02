@@ -1,0 +1,67 @@
+name: Hostinger WordPress Preprod Safe Cleanup
+
+on:
+  push:
+    branches:
+      - ops/woocommerce-preprod-readonly-qa-20260902
+    paths:
+      - '.github/workflows/hostinger-wordpress-preprod-safe-cleanup.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure VPS SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Trash exact QA product and discourage indexing
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          KEY_DIR="$HOME/.ssh/philaios-hostinger-wordpress"
+          KEY="$KEY_DIR/preprod_operator_ed25519"
+          HOSTINGER_HOST='147.93.80.5'
+          HOSTINGER_PORT='65002'
+          HOSTINGER_USER='u925842746'
+          test -f "$KEY"
+          ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
+          chmod 600 "$KEY_DIR/hostinger_known_hosts"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
+          wp eval '
+          $id=47;$p=wc_get_product($id);
+          if(!$p){fwrite(STDERR,"guard failed: product 47 missing\n");exit(40);}
+          $expected=$p->get_name()==="QA APPROVAL TEST" && $p->get_regular_price()==="100" && $p->get_catalog_visibility()==="hidden" && $p->get_sku()==="" && get_post_status($id)==="publish";
+          if(!$expected){fwrite(STDERR,"guard failed: product 47 no longer matches exact QA record\n");exit(41);}
+          $result=wp_trash_post($id);
+          if(!$result||get_post_status($id)!=="trash"){fwrite(STDERR,"failed to trash guarded QA product\n");exit(42);}
+          echo "qa_product_47_status=".get_post_status($id)."\n";
+          ' --path="$WP_PATH"
+          wp option update blog_public 0 --path="$WP_PATH"
+          test "$(wp option get blog_public --path="$WP_PATH")" = "0"
+          echo 'blog_public=0'
+          echo 'PHIL_AI_OS_WORDPRESS_PREPROD_SAFE_CLEANUP_OK'
+          HOSTREMOTE
+          REMOTE
