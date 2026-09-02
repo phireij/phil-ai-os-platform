@@ -1,4 +1,4 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v5";
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v6";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -35,12 +35,24 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
+
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {
-      if (!response || response.status !== 200 || response.type === "opaque") return response;
-      const copy = response.clone();
-      caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-      return response;
-    }).catch(() => caches.match("./index.html")))
+    caches.match(event.request).then(async (cached) => {
+      if (cached) return cached;
+      try {
+        const response = await fetch(event.request);
+        if (response && response.status === 200 && response.type !== "opaque") {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
+        return response;
+      } catch {
+        if (event.request.mode === "navigate") {
+          const shell = await caches.match("./index.html");
+          if (shell) return shell;
+        }
+        return new Response("", { status: 503, statusText: "Offline" });
+      }
+    })
   );
 });
