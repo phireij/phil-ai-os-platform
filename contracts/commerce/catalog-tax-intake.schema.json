@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/commerce/catalog-tax-intake.schema.json",
+  "title": "Ruby Catalog and Tax Decision Intake",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "environment",
+    "package_state",
+    "catalog_approved",
+    "catalog_approval_ref",
+    "categories",
+    "media",
+    "products",
+    "tax_decision",
+    "mutation_authorized",
+    "production_publish_authorized"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "environment": {"const": "pre-production"},
+    "package_state": {"enum": ["draft", "approved"]},
+    "catalog_approved": {"type": "boolean"},
+    "catalog_approval_ref": {"type": ["string", "null"]},
+    "categories": {
+      "type": "array",
+      "items": {"$ref": "../../commerce/woocommerce/schemas/category.schema.json"}
+    },
+    "media": {
+      "type": "array",
+      "items": {"$ref": "../../commerce/woocommerce/schemas/media.schema.json"}
+    },
+    "products": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          {"$ref": "../../commerce/woocommerce/schemas/product.schema.json"},
+          {
+            "type": "object",
+            "required": ["approval_state", "price_includes_tax", "tax_class_candidate"],
+            "properties": {
+              "approval_state": {"enum": ["pending", "approved"]},
+              "price_includes_tax": {"type": ["boolean", "null"]},
+              "tax_class_candidate": {
+                "enum": ["pending", "reduced_rate_food", "standard_rate", "exempt"]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "tax_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taxable_business_status",
+        "qualified_invoice_status",
+        "qualified_invoice_registration_number",
+        "yamato_shipping_separately_charged",
+        "cod_fee_treatment",
+        "implementation_route",
+        "decision_evidence_ref"
+      ],
+      "properties": {
+        "taxable_business_status": {"enum": ["pending", "taxable", "exempt"]},
+        "qualified_invoice_status": {"enum": ["pending", "registered", "not_registered"]},
+        "qualified_invoice_registration_number": {"type": ["string", "null"]},
+        "yamato_shipping_separately_charged": {"enum": ["pending", "yes", "no"]},
+        "cod_fee_treatment": {
+          "enum": ["pending", "not_offered", "standard_rate", "reduced_rate", "other_confirmed"]
+        },
+        "implementation_route": {
+          "enum": ["pending", "tax_tables_candidate", "tax_disabled_candidate"]
+        },
+        "decision_evidence_ref": {"type": ["string", "null"]}
+      }
+    },
+    "mutation_authorized": {"const": false},
+    "production_publish_authorized": {"const": false}
+  }
+}

@@ -16,8 +16,8 @@
 |---|---|
 | **Overall schedule health** | **AHEAD OF ORIGINAL 2-MONTH PLAN** |
 | **Executive roadmap position** | **Sprint 7 — WORDPRESS/WOO PRE-PRODUCTION CONFIGURATION GREEN / CATALOG + TAX + FINAL INTEGRATION QA ACTIVE / LIVE ACTIVATION PENDING** |
-| **Current engineering gate** | **Load only approved production catalog/category/media data using explicit size and frozen/chilled eligibility, confirm Ruby's Japan tax/invoice status, validate inclusive-tax checkout totals, complete SMS fallback readiness and fresh recovery proof, then prepare the separately approved cutover gates.** |
-| **Last completed milestone** | **WooCommerce pre-production readiness refresh GREEN — 2026-09-02. WordPress/WooCommerce, shipping zones/classes, SG approval-before-payment, Datery, KOMOJU Test Mode, authenticated SMTP and six bilingual policy pages verified; leftover guarded QA product moved to Trash; temporary site indexing disabled; explicit product fulfillment contract merged via PR #27; Japan tax readiness review merged via PR #28; latest `main` `d4f1e441c8e2af9b59f12ff8cf301f782ac97305`.** |
+| **Current engineering gate** | **Complete the fail-closed catalog/tax intake package using only CEO-approved product/category/media data and confirmed Japan tax/invoice evidence; then seek a separate pre-production configuration approval before any WooCommerce write. Complete SMS fallback readiness and fresh recovery proof in parallel.** |
+| **Last completed milestone** | **WooCommerce pre-production readiness refresh GREEN — 2026-09-02. WordPress/WooCommerce, shipping zones/classes, SG approval-before-payment, Datery, KOMOJU Test Mode, authenticated SMTP and six bilingual policy pages verified; leftover guarded QA product moved to Trash; temporary site indexing disabled; explicit product fulfillment contract merged via PR #27; Japan tax readiness review merged via PR #28; repository milestone reconciliation merged through `9896da204b5f3f181e2bf8d18779a92e4967c5dd`.** |
 | **Mission Control** | Multi-agent read model operational; V1 UX North Star formalized; mutation authority intentionally bounded |
 | **Multi-agent capability** | Governed handoff foundation proven; normal specialist execution intentionally disabled |
 | **Current production autonomy ceiling** | **A0** |
@@ -276,6 +276,7 @@ Completed after bounded Sprint 7 closure:
 7. Guarded product `QA APPROVAL TEST` moved to Trash and temporary-site indexing disabled; cleanup run `33582096962` GREEN.
 8. Product contracts now require explicit shipping size, frozen/chilled eligibility, pickup/delivery eligibility and approval-before-payment; PR #27 merged and all three required CI suites GREEN.
 9. Japan tax readiness review records the 8% qualifying-food / 10% separately charged shipping candidate and required business-status decisions; PR #28 merged without enabling tax.
+10. A fail-closed catalog/tax intake contract, pending-input template and readiness evaluator are prepared. They keep catalog and tax readiness separate and cannot authorize WooCommerce mutation or production publishing.
 
 ### Current remaining live-production blockers
 
@@ -517,6 +518,7 @@ Targets remain unchanged. Early bounded engineering closure creates a substantia
 | **2026-09-02** | Hostinger WordPress/Woo pre-production configuration GREEN; guarded QA product trashed; indexing disabled; read-only verification GREEN. | **P2 closed; P3 catalog/final integration QA active; targets unchanged.** |
 | **2026-09-02** | Explicit fulfillment profile merged through PR #27; Commerce 80 tests and 186-test integrated baseline GREEN. | **Product-level size/temperature contract gap closed; targets unchanged.** |
 | **2026-09-02** | Japan tax readiness review merged through PR #28; no tax setting activated pending business-status confirmation. | **Tax implementation path prepared; targets unchanged.** |
+| **2026-09-02** | Fail-closed catalog/tax intake schema, pending-input template, readiness evaluator and consolidated decision register prepared; no product or tax answer inferred and no WooCommerce write authorized. | **Decision collection is structured; catalog/tax blockers remain explicit; targets unchanged.** |
 
 ---
 

@@ -18,7 +18,12 @@
     "category_keys": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
     "media_keys": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
     "source": {"type": "string", "minLength": 1},
-    "source_updated_at": {"type": ["string", "null"], "format": "date-time"}
+    "source_updated_at": {"type": ["string", "null"], "format": "date-time"},
+    "approval_state": {"enum": ["pending", "approved"]},
+    "price_includes_tax": {"type": ["boolean", "null"]},
+    "tax_class_candidate": {
+      "enum": ["pending", "reduced_rate_food", "standard_rate", "exempt"]
+    }
   },
   "$defs": {
     "localizedText": {

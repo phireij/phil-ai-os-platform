@@ -2,6 +2,12 @@
 
 This directory is the **bounded, inert Sprint 3 commerce foundation**.
 
+The catalog/tax intake gate in `catalog_readiness.py` prepares the current
+pre-production decision work without authorizing a WooCommerce change. Its
+template keeps product and tax decisions explicitly pending, evaluates catalog
+and tax readiness separately, and always returns both mutation and production
+publish authority as false.
+
 ## Approved deployment boundary
 
 - Ruby's customer-facing WordPress + WooCommerce production site will live on Hostinger managed web hosting.
@@ -81,6 +87,7 @@ PYTHONPATH=commerce/woocommerce/src \
   python -m unittest discover -s commerce/woocommerce/tests -v
 
 python commerce/woocommerce/tools_validate_contracts.py
+python commerce/woocommerce/tools_validate_catalog_readiness.py
 ```
 
 ## API compatibility baseline
