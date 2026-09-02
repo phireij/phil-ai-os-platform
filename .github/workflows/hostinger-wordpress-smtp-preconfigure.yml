@@ -1,0 +1,68 @@
+name: Hostinger WordPress SMTP Preconfigure
+on:
+  push:
+    branches:
+      - ops/hostinger-wordpress-operator-bootstrap
+    paths:
+      - '.github/workflows/hostinger-wordpress-smtp-preconfigure.yml'
+permissions:
+  contents: read
+jobs:
+  smtp-preconfigure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure VPS SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+      - name: Preconfigure WP Mail SMTP and WooCommerce sender
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          KEY_DIR="$HOME/.ssh/philaios-hostinger-wordpress"
+          KEY="$KEY_DIR/preprod_operator_ed25519"
+          HOSTINGER_HOST='147.93.80.5'
+          HOSTINGER_PORT='65002'
+          HOSTINGER_USER='u925842746'
+          ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
+          chmod 600 "$KEY_DIR/hostinger_known_hosts"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
+          wp option update woocommerce_email_from_address 'info@rubyscakedelights.shop' --path="$WP_PATH" >/dev/null
+          wp option update woocommerce_email_from_name "Ruby's Cake Delights" --path="$WP_PATH" >/dev/null
+          wp option update wp_mail_smtp '{"mail":{"from_email":"info@rubyscakedelights.shop","from_name":"Ruby's Cake Delights","mailer":"smtp","return_path":true,"from_email_force":true,"from_name_force":true},"smtp":{"host":"smtp.hostinger.com","port":465,"encryption":"ssl","autotls":true,"auth":true,"user":"info@rubyscakedelights.shop","pass":""},"general":{"summary_report_email_disabled":false}}' --format=json --path="$WP_PATH" >/dev/null
+          echo '=== VERIFIED NON-SECRET SMTP CONFIG ==='
+          wp eval '
+          $o=get_option("wp_mail_smtp",[]);
+          echo "from_email=".($o["mail"]["from_email"]??"")."\n";
+          echo "from_name=".($o["mail"]["from_name"]??"")."\n";
+          echo "mailer=".($o["mail"]["mailer"]??"")."\n";
+          echo "smtp_host=".($o["smtp"]["host"]??"")."\n";
+          echo "smtp_port=".($o["smtp"]["port"]??"")."\n";
+          echo "smtp_encryption=".($o["smtp"]["encryption"]??"")."\n";
+          echo "smtp_auth=".(empty($o["smtp"]["auth"])?"false":"true")."\n";
+          echo "smtp_user=".($o["smtp"]["user"]??"")."\n";
+          echo "smtp_password_set=".(empty($o["smtp"]["pass"])?"false":"true")."\n";
+          ' --path="$WP_PATH"
+          printf 'woo_from_address='; wp option get woocommerce_email_from_address --path="$WP_PATH"
+          printf 'woo_from_name='; wp option get woocommerce_email_from_name --path="$WP_PATH"
+          echo 'PHIL_AI_OS_WORDPRESS_SMTP_PRECONFIGURED'
+          HOSTREMOTE
+          REMOTE
