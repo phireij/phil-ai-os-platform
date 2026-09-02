@@ -73,7 +73,9 @@ jobs:
           $keys=["woocommerce_shop_page_id","woocommerce_cart_page_id","woocommerce_checkout_page_id","woocommerce_myaccount_page_id","woocommerce_terms_page_id","wp_page_for_privacy_policy"];
           foreach($keys as $key){$id=(int)get_option($key,0);$p=$id?get_post($id):null;echo $key."=".$id."|".($p?$p->post_status:"missing")."|".($p?$p->post_title:"missing")."\n";if(!$p||$p->post_status!=="publish"){fwrite(STDERR,$key." not published\n");exit(20);}}
           $approved=["Privacy Policy / プライバシーポリシー","Terms & Conditions / 利用規約","特定商取引法に基づく表記 / Commerce Disclosure","Cancellation & Refund Policy / キャンセル・返金ポリシー","Pickup & Order Policy / 店頭受取・注文ポリシー","Allergen Information / アレルゲン情報"];
-          foreach($approved as $title){$p=get_page_by_title($title,OBJECT,"page");echo "policy=".$title."|".($p?$p->post_status:"missing")."\n";if(!$p||$p->post_status!=="publish"){fwrite(STDERR,"approved policy missing/unpublished\n");exit(21);}}
+          $pages=get_posts(["post_type"=>"page","post_status"=>["publish","draft","private","pending"],"numberposts"=>-1]);$found=[];
+          foreach($pages as $p){$decoded=html_entity_decode($p->post_title,ENT_QUOTES|ENT_HTML5,"UTF-8");$found[$decoded]=$p;}
+          foreach($approved as $title){$p=$found[$title]??null;echo "policy=".$title."|".($p?$p->post_status:"missing")."\n";if(!$p||$p->post_status!=="publish"){fwrite(STDERR,"approved policy missing/unpublished: ".$title."\n");exit(21);}}
           ' --path="$WP_PATH"
 
           echo '=== CATALOG AND PRODUCT FULFILLMENT READINESS ==='
@@ -123,6 +125,7 @@ jobs:
           REMOTE
 
       - name: Verify public pre-production HTTPS surface
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
