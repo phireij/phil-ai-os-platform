@@ -54,5 +54,18 @@ def comparable_remote_product(remote: Mapping[str, Any]) -> dict[str, Any]:
         "regular_price",
         "status",
         "catalog_visibility",
+        "shipping_class",
     )
-    return {field: remote.get(field) for field in fields}
+    comparable = {field: remote.get(field) for field in fields}
+    target_meta = {
+        "_philaios_temperature_modes",
+        "_philaios_pickup_allowed",
+        "_philaios_delivery_allowed",
+        "_philaios_requires_order_approval",
+    }
+    comparable["meta_data"] = [
+        {"key": item.get("key"), "value": item.get("value")}
+        for item in remote.get("meta_data", [])
+        if isinstance(item, Mapping) and item.get("key") in target_meta
+    ]
+    return comparable
