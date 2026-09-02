@@ -1,0 +1,64 @@
+name: Hostinger WordPress Brand Mail Identity
+on:
+  push:
+    branches:
+      - ops/hostinger-wordpress-operator-bootstrap
+    paths:
+      - '.github/workflows/hostinger-wordpress-brand-mail-identity.yml'
+permissions:
+  contents: read
+jobs:
+  brand-mail:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure VPS SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+      - name: Set Ruby store identity and resend QA approval email
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          KEY_DIR="$HOME/.ssh/philaios-hostinger-wordpress"
+          KEY="$KEY_DIR/preprod_operator_ed25519"
+          HOSTINGER_HOST='147.93.80.5'
+          HOSTINGER_PORT='65002'
+          HOSTINGER_USER='u925842746'
+          ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
+          chmod 600 "$KEY_DIR/hostinger_known_hosts"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
+          wp option update blogname "Ruby's Cake Delights" --path="$WP_PATH" >/dev/null
+          wp option update woocommerce_email_from_name "Ruby's Cake Delights" --path="$WP_PATH" >/dev/null
+          wp option update woocommerce_email_from_address 'info@rubyscakedelights.shop' --path="$WP_PATH" >/dev/null
+          wp eval '
+          echo "blogname=".get_option("blogname")."\n";
+          $o=wc_get_order(51);
+          if(!$o){echo "order51=false\n"; exit(2);}
+          echo "order51_status=".$o->get_status()."\n";
+          echo "payment_url=".$o->get_checkout_payment_url()."\n";
+          $emails=WC()->mailer()->get_emails();
+          if(!isset($emails["WC_Customer_Order_Approved"])){echo "approval_email_class=false\n"; exit(3);}
+          $emails["WC_Customer_Order_Approved"]->trigger(51);
+          echo "approval_email_triggered=true\n";
+          ' --path="$WP_PATH"
+          echo 'PHIL_AI_OS_RUBY_MAIL_IDENTITY_OK'
+          HOSTREMOTE
+          REMOTE
