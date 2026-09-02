@@ -16,17 +16,22 @@ def main() -> int:
     payload = json.loads(template_path.read_text(encoding="utf-8"))
     result = evaluate_catalog_tax_readiness(payload)
 
+    # The Ruby-specific template now carries the reconciled 2026 exempt / tax-disabled
+    # decision, while the production catalog itself intentionally remains pending.
     assert result.catalog_ready is False
-    assert result.tax_decision_ready is False
+    assert result.tax_decision_ready is True
     assert result.ready_for_preproduction_configuration is False
     assert result.mutation_authorized is False
     assert result.production_publish_authorized is False
     assert result.blockers
+    assert "catalog approval is pending" in result.blockers
+    assert "Yamato separate-charge treatment is pending" not in result.blockers
+    assert "COD fee treatment is pending" not in result.blockers
 
     print(
         "PHIL_AI_OS_CATALOG_TAX_INTAKE_GATE_GREEN "
-        f"blockers={len(result.blockers)} mutation_authorized=false "
-        "production_publish_authorized=false"
+        f"catalog_ready=false tax_decision_ready=true blockers={len(result.blockers)} "
+        "mutation_authorized=false production_publish_authorized=false"
     )
     return 0
 
