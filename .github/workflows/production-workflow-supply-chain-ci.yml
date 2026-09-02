@@ -1,0 +1,25 @@
+name: Production Workflow Supply-Chain CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/commerce-woocommerce-production-readonly-preflight.yml"
+      - ".github/workflows/commerce-woocommerce-production-readonly-catalog-snapshot.yml"
+      - ".github/workflows/commerce-twilio-production-readonly-preflight.yml"
+      - ".github/workflows/production-workflow-supply-chain-ci.yml"
+      - "scripts/validate_production_workflow_action_pins.py"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-production-workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Validate immutable action pins and read-only permissions
+        run: python scripts/validate_production_workflow_action_pins.py
