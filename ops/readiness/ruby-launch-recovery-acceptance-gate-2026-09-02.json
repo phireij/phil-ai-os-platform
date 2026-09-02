@@ -1,0 +1,32 @@
+{
+  "version": "ruby-launch-recovery-acceptance-gate-v1",
+  "date": "2026-09-02",
+  "current_baseline": {
+    "run_id": 33605885952,
+    "status": "green_current_not_launch_fresh",
+    "source_sqlite_quick_check": "ok",
+    "restored_sqlite_quick_check": "ok",
+    "table_count": 17,
+    "row_counts_match": true,
+    "restored_size_bytes": 241664,
+    "backup_timer_active": true,
+    "backup_monitor_active": true,
+    "control_api_health": "ok"
+  },
+  "launch_time_acceptance": {
+    "fresh_run_completed_near_cutover": false,
+    "source_sqlite_quick_check_ok": false,
+    "restored_sqlite_quick_check_ok": false,
+    "row_counts_match": false,
+    "backup_timer_active": false,
+    "backup_monitor_active": false,
+    "control_api_health_ok": false,
+    "rollback_abort_path_confirmed": false
+  },
+  "execution": {
+    "current_baseline_can_authorize_cutover": false,
+    "launch_recovery_gate_green": false,
+    "cutover_ready_from_recovery_perspective": false
+  },
+  "decision": "PENDING_NEAR_CUTOVER_RECHECK_FAIL_CLOSED"
+}
