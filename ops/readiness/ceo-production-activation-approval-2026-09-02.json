@@ -1,5 +1,5 @@
 {
-  "version": "ceo-production-activation-approval-v2",
+  "version": "ceo-production-activation-approval-v3",
   "date": "2026-09-02",
   "decision": "approved",
   "decision_authority": "CEO",
@@ -22,6 +22,7 @@
   "prepared_activation_capabilities": {
     "woocommerce_fail_closed_production_transport": true,
     "woocommerce_manual_readonly_connectivity_preflight": true,
+    "woocommerce_production_readonly_identity_verified": true,
     "twilio_candidate_manual_readonly_account_preflight": true,
     "twilio_formally_selected_as_sms_provider": false,
     "komoju_test_mode_green": true,
@@ -32,9 +33,18 @@
     "woocommerce_production_activation": {
       "approval": "approved",
       "execution": "blocked",
-      "preflight": "prepared_not_run",
+      "preflight": "green",
+      "readonly_identity": "verified",
+      "readonly_preflight_run_id": 33630247231,
+      "readonly_preflight_commit": "5779fefe8a19ce74f50bcb98c077c46ce004e2f6",
+      "readonly_preflight_result": {
+        "wc_v3": true,
+        "identity": true,
+        "mutation": false,
+        "catalog_write": false,
+        "tax_write": false
+      },
       "blockers": [
-        "production_readonly_identity_and_actions_secrets_not_configured",
         "approved_production_catalog_pending",
         "japan_tax_and_qualified_invoice_evidence_pending",
         "final_checkout_legal_sync_pending",
