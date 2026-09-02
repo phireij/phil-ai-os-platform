@@ -1,8 +1,9 @@
-"""Phil AI OS WooCommerce foundation package.
+"""Phil AI OS WooCommerce foundation and production-activation contracts.
 
-Sprint 3 boundary: this package contains contracts, reconciliation logic, and
-mock/injected adapter behavior only. It intentionally ships no live WooCommerce
-network transport or production credentials.
+The package remains fail-closed by default. The production wc/v3 transport is
+present only as an explicitly enabled runtime capability: it resolves credentials
+from opaque external references, blocks mutations independently, and does not
+grant production readiness or launch authority by itself.
 """
 
 from .adapter import (
@@ -53,6 +54,15 @@ from .models import (
     ProductRecord,
 )
 from .orchestration import AuditedReconciliation, reconcile_with_audit
+from .production_transport import (
+    NoWooCommerceSecretResolver,
+    ProductionWooCommerceConfig,
+    ProductionWooCommerceTransport,
+    ResolvedWooCommerceCredentials,
+    WooCommerceActivationPreflight,
+    WooCommerceHttpClient,
+    WooCommerceSecretResolver,
+)
 from .resilience import (
     FailureInjectingTransport,
     HTTPStatusFailure,
@@ -93,15 +103,22 @@ __all__ = [
     "MockRollbackError",
     "MockWooCommerceTransport",
     "NoCredentialsProvider",
+    "NoWooCommerceSecretResolver",
     "ProductRecord",
     "ProductionConnectivityBlocked",
+    "ProductionWooCommerceConfig",
+    "ProductionWooCommerceTransport",
     "ReconciliationResult",
+    "ResolvedWooCommerceCredentials",
     "RetryDecision",
     "RetryExecutionResult",
     "SPRINT3_AUTH_BOUNDARY",
     "SUPPORTED_LOCALES",
     "StaleInventoryRevision",
+    "WooCommerceActivationPreflight",
     "WooCommerceAdapter",
+    "WooCommerceHttpClient",
+    "WooCommerceSecretResolver",
     "build_product_media_plan",
     "capture_mock_snapshot",
     "execute_with_retry",
