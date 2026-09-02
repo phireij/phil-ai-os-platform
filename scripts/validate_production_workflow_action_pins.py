@@ -9,6 +9,7 @@ WORKFLOWS = [
     ROOT / ".github/workflows/commerce-woocommerce-production-readonly-preflight.yml",
     ROOT / ".github/workflows/commerce-woocommerce-production-readonly-catalog-snapshot.yml",
     ROOT / ".github/workflows/commerce-twilio-production-readonly-preflight.yml",
+    ROOT / ".github/workflows/commerce-woocommerce-tests.yml",
     ROOT / ".github/workflows/sprint-3-woocommerce-foundation-ci.yml",
     ROOT / ".github/workflows/sprint-4-customer-experience-ci.yml",
     ROOT / ".github/workflows/sprint-7-integrated-readiness-ci.yml",
