@@ -57,9 +57,11 @@ jobs:
           else
             echo 'wp_cli=missing'
           fi
-          mapfile -t CONFIGS < <(find "$HOME" -maxdepth 7 -type f -name wp-config.php 2>/dev/null | sort)
-          echo "wp_config_count=${#CONFIGS[@]}"
-          for cfg in "${CONFIGS[@]}"; do
+          CONFIG_FILE_LIST=$(mktemp)
+          find "$HOME" -maxdepth 7 -type f -name wp-config.php 2>/dev/null | sort > "$CONFIG_FILE_LIST"
+          echo "wp_config_count=$(wc -l < "$CONFIG_FILE_LIST" | tr -d ' ')"
+          while IFS= read -r cfg; do
+            [ -n "$cfg" ] || continue
             dir=$(dirname "$cfg")
             echo "wp_path=$dir"
             if command -v wp >/dev/null 2>&1; then
@@ -72,7 +74,8 @@ jobs:
                 echo 'wp_core_installed=no'
               fi
             fi
-          done
+          done < "$CONFIG_FILE_LIST"
+          rm -f "$CONFIG_FILE_LIST"
           echo 'PHIL_AI_OS_HOSTINGER_WORDPRESS_OPERATOR_DISCOVERY_OK'
           HOSTREMOTE
           REMOTE
