@@ -41,6 +41,7 @@ def main() -> None:
         "wordpress_ready",
         "woocommerce_ready",
         "ssl_verified",
+        "checkout_qa_green",
     )
     for key in required_true:
         if woo.get(key) is not True:
@@ -49,25 +50,28 @@ def main() -> None:
         fail("preproduction URL drift")
     if woo.get("hosting_plan") != "Business Web Hosting":
         fail("hosting plan drift")
-    if woo.get("checkout_qa_green") is not False:
-        fail("checkout QA must remain open")
     for key in ("production_credentials_authorized", "live_api_connectivity_authorized", "live_mutation_authorized", "dns_or_site_cutover_authorized"):
         if woo.get(key) is not False:
             fail(f"WooCommerce production authority drift: {key}")
 
     komoju = data["komoju"]
-    if komoju.get("current_connection_state") != "not_configured" or komoju.get("connection_method") != "komoju-sign-in-oauth-style":
+    if komoju.get("current_connection_state") != "test_mode" or komoju.get("connection_method") != "komoju-sign-in-oauth-style":
         fail("KOMOJU connection state/model drift")
-    for key in ("test_mode_activation_authorized", "test_mode_validated", "live_mode_authorized", "payment_execution_authorized"):
+    for key in ("test_mode_activation_authorized", "test_mode_validated"):
+        if komoju.get(key) is not True:
+            fail(f"KOMOJU verified Test Mode state regressed: {key}")
+    for key in ("live_mode_authorized", "payment_execution_authorized"):
         if komoju.get(key) is not False:
-            fail(f"KOMOJU authority drift: {key}")
+            fail(f"KOMOJU live authority drift: {key}")
 
     legal = data["legal_and_fulfillment"]
     if legal.get("tokushoho_source_reconciled") is not True or legal.get("store_pickup_supported") is not True:
         fail("legal/fulfillment source drift")
-    for key in ("tokushoho_publication_approved", "production_shipping_rates_verified", "production_payment_methods_verified"):
+    if legal.get("production_shipping_rates_verified") is not True:
+        fail("pre-production shipping verification regressed")
+    for key in ("tokushoho_publication_approved", "production_payment_methods_verified"):
         if legal.get(key) is not False:
-            fail(f"production legal/fulfillment gate must remain open: {key}")
+            fail(f"production legal/payment gate must remain open: {key}")
 
     sfront = staging["storefront"]
     expected = {
@@ -78,16 +82,19 @@ def main() -> None:
         "wordpress_ready": True,
         "woocommerce_ready": True,
         "ssl_verified": True,
-        "checkout_qa_green": False,
+        "checkout_qa_green": True,
         "production_cutover_authorized": False,
     }
     for key, value in expected.items():
         if sfront.get(key) != value:
             fail(f"preproduction record drift: {key}")
-    if staging.get("next_gate") != "configure_woocommerce_baseline_and_load_verified_ruby_business_legal_content_without_komoju_connection":
+    if staging.get("next_gate") != "complete_catalog_tax_recovery_and_final_launch_acceptance_without_live_activation":
         fail("next gate drift")
-    if staging["komoju"].get("test_mode_connection_authorized") is not False or staging["komoju"].get("live_mode_authorized") is not False:
-        fail("KOMOJU staging authority drift")
+    skomoju = staging["komoju"]
+    if skomoju.get("current_connection_state") != "test_mode" or skomoju.get("test_mode_connected") is not True:
+        fail("KOMOJU staging Test Mode drift")
+    if skomoju.get("live_mode_authorized") is not False or skomoju.get("payment_execution_authorized") is not False:
+        fail("KOMOJU staging live/payment authority drift")
     if staging.get("production_publish_authorized") is not False:
         fail("preproduction record gained publication authority")
 
@@ -95,9 +102,9 @@ def main() -> None:
         if not (ROOT / rel).is_file():
             fail(f"missing deployment evidence file: {rel}")
 
-    print("PHIL_AI_OS_SPRINT_7_DEPLOYMENT_READINESS_GREEN preproduction_created=true wordpress=true woocommerce=true ssl=true checkout_qa=false")
-    print("PHIL_AI_OS_SPRINT_7_NEXT_GATE_GREEN configure_baseline_content=true komoju=false")
-    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_ACTIVATION_BOUNDARY_GREEN woo=false komoju=false dns=false")
+    print("PHIL_AI_OS_SPRINT_7_DEPLOYMENT_READINESS_GREEN preproduction_created=true wordpress=true woocommerce=true ssl=true checkout_qa=true shipping=true komoju_test=true")
+    print("PHIL_AI_OS_SPRINT_7_NEXT_GATE_GREEN catalog_tax_recovery_launch_acceptance=true live_activation=false")
+    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_ACTIVATION_BOUNDARY_GREEN woo=false komoju_live=false dns=false")
 
 
 if __name__ == "__main__":

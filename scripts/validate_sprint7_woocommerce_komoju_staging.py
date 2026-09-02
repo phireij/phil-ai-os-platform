@@ -46,14 +46,14 @@ def main() -> None:
         "wordpress_ready": True,
         "woocommerce_ready": True,
         "ssl_verified": True,
-        "checkout_qa_green": False,
+        "checkout_qa_green": True,
         "production_cutover_authorized": False,
     }
     for key, value in expected.items():
         if storefront.get(key) != value:
             fail(f"preproduction storefront state drift: {key}={storefront.get(key)!r}")
 
-    if data.get("next_gate") != "configure_woocommerce_baseline_and_load_verified_ruby_business_legal_content_without_komoju_connection":
+    if data.get("next_gate") != "complete_catalog_tax_recovery_and_final_launch_acceptance_without_live_activation":
         fail("next executable gate drift")
     if data.get("production_publish_authorized") is not False:
         fail("preproduction readiness gained production publication authority")
@@ -64,23 +64,37 @@ def main() -> None:
     if fulfillment.get("legacy_kanto_rate_jpy") != 1350 or fulfillment.get("legacy_other_regions_rate_range_jpy") != [1500, 1800]:
         fail("legacy shipping-rate source drift")
     for key in ("production_shipping_configuration_verified", "production_shipping_rates_verified"):
-        if fulfillment.get(key) is not False:
-            fail(f"shipping gate must remain open: {key}")
+        if fulfillment.get(key) is not True:
+            fail(f"verified pre-production shipping gate regressed: {key}")
 
     komoju = data["komoju"]
-    if komoju.get("current_connection_state") != "not_configured":
-        fail("KOMOJU must remain disconnected")
+    if komoju.get("current_connection_state") != "test_mode":
+        fail("KOMOJU current state must remain Test Mode")
     if komoju.get("connection_method") != "komoju-sign-in-oauth-style" or komoju.get("manual_api_key_entry_expected") is not False:
         fail("KOMOJU integration model drift")
-    for key in ("test_mode_connection_authorized", "test_mode_connected", "merchant_available_payment_methods_verified", "production_enabled_payment_methods_finalized", "live_mode_merchant_approval_verified", "live_mode_authorized", "payment_execution_authorized"):
+    for key in ("test_mode_connection_authorized", "test_mode_connected", "test_capture_refund_validated"):
+        if komoju.get(key) is not True:
+            fail(f"verified KOMOJU Test Mode state regressed: {key}")
+    for key in ("merchant_available_payment_methods_verified", "production_enabled_payment_methods_finalized", "live_mode_merchant_approval_verified", "live_mode_authorized", "payment_execution_authorized"):
         if komoju.get(key) is not False:
-            fail(f"KOMOJU gate must remain open: {key}")
+            fail(f"KOMOJU production/live gate must remain open: {key}")
 
-    for key, value in data["legal_checkout_sync"].items():
-        if value is not False:
-            fail(f"legal/checkout sync must remain incomplete: {key}")
+    legal = data["legal_checkout_sync"]
+    for key in (
+        "tokushoho_payment_methods_match_checkout",
+        "tokushoho_payment_timing_match_checkout",
+        "tokushoho_shipping_fees_match_checkout",
+        "final_confirmation_screen_reviewed",
+    ):
+        if legal.get(key) is not False:
+            fail(f"legal/checkout synchronization must remain pending: {key}")
+    if legal.get("privacy_terms_implementation_reviewed") is not True:
+        fail("verified privacy/terms implementation review regressed")
 
-    expected_evidence = {
+    # This evidence file is an immutable Aug 29 operator snapshot. It proves the
+    # pre-production environment existed before KOMOJU Test Mode was later enabled.
+    # Its historical false value must not override the current Sep 2 readiness record.
+    expected_historical_evidence = {
         "public_domain_unchanged": True,
         "current_public_platform": "hostinger-website-builder",
         "preproduction_url": "https://darkgreen-wallaby-680439.hostingersite.com/",
@@ -95,19 +109,19 @@ def main() -> None:
         "production_cutover_authorized": False,
         "evidence_complete": True,
     }
-    for key, value in expected_evidence.items():
+    for key, value in expected_historical_evidence.items():
         if evidence.get(key) != value:
-            fail(f"operator evidence drift: {key}={evidence.get(key)!r}")
+            fail(f"historical operator evidence drift: {key}={evidence.get(key)!r}")
 
     tokushoho = TOKUSHOHO.read_text(encoding="utf-8")
     for phrase in ("BOMBEO PHILIP GO", "050-1785-0575", "info@rubyscakedelights.shop", "tokushoho_publication_approved: false", "production_publish_authorized: false"):
         if phrase not in tokushoho:
             fail(f"Tokushoho safeguard missing: {phrase}")
 
-    print("PHIL_AI_OS_RUBY_HOSTINGER_PREPRODUCTION_ENVIRONMENT_GREEN created=true wordpress=true woocommerce=true ssl=true")
+    print("PHIL_AI_OS_RUBY_HOSTINGER_PREPRODUCTION_ENVIRONMENT_GREEN created=true wordpress=true woocommerce=true ssl=true checkout_qa=true shipping=true")
     print("PHIL_AI_OS_RUBY_HOSTINGER_PLAN_GREEN plan=Business_Web_Hosting native_staging_eligible=true menu_located=false")
-    print("PHIL_AI_OS_RUBY_KOMOJU_BOUNDARY_GREEN test_mode=false live_mode=false payment_execution=false")
-    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=configure_woocommerce_baseline_and_verified_content publish=false")
+    print("PHIL_AI_OS_RUBY_KOMOJU_TEST_BOUNDARY_GREEN test_mode=true capture_refund=true live_mode=false payment_execution=false")
+    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=complete_catalog_tax_recovery_launch_acceptance publish=false")
 
 
 if __name__ == "__main__":

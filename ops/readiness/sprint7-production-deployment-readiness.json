@@ -1,6 +1,6 @@
 {
   "version": "sprint7-production-deployment-readiness-v1",
-  "date": "2026-08-29",
+  "date": "2026-09-02",
   "storefront": {
     "public_domain": "https://www.rubyscakedelights.shop/",
     "current_platform": "hostinger-website-builder",
@@ -30,7 +30,7 @@
     "wordpress_ready": true,
     "woocommerce_ready": true,
     "ssl_verified": true,
-    "checkout_qa_green": false,
+    "checkout_qa_green": true,
     "production_credentials_authorized": false,
     "live_api_connectivity_authorized": false,
     "live_mutation_authorized": false,
@@ -40,9 +40,9 @@
     "provider": "komoju",
     "integration_mode": "woocommerce_plugin",
     "connection_method": "komoju-sign-in-oauth-style",
-    "current_connection_state": "not_configured",
-    "test_mode_activation_authorized": false,
-    "test_mode_validated": false,
+    "current_connection_state": "test_mode",
+    "test_mode_activation_authorized": true,
+    "test_mode_validated": true,
     "live_mode_authorized": false,
     "payment_execution_authorized": false
   },
@@ -51,7 +51,7 @@
     "tokushoho_publication_approved": false,
     "store_pickup_supported": true,
     "legacy_yamato_cool_shipping_preserved_for_preproduction_verification": true,
-    "production_shipping_rates_verified": false,
+    "production_shipping_rates_verified": true,
     "production_payment_methods_verified": false
   },
   "evidence": [
@@ -64,6 +64,7 @@
     "ops/readiness/ruby-hostinger-preproduction-evidence.template.json",
     "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md",
     "docs/RUBY_WOOCOMMERCE_KOMOJU_STAGING_CONFIGURATION_PLAN_2026-08-29.md",
+    "docs/RUBY_WORDPRESS_PREPRODUCTION_QA_MILESTONE_2026-09-02.md",
     "docs/SPRINT_7_WOOCOMMERCE_STAGING_CUTOVER_RUNBOOK_2026-08-28.md",
     "docs/SPRINT_7_KOMOJU_ACTIVATION_RUNBOOK_2026-08-28.md"
   ]
