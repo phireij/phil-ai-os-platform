@@ -1,0 +1,35 @@
+{
+  "version": "ruby-woocommerce-production-readonly-connectivity-v1",
+  "date": "2026-09-03",
+  "environment": "production-read-only-preflight",
+  "target": "Ruby WooCommerce pre-production origin using production-read-only identity",
+  "github_actions": {
+    "workflow": "WooCommerce Production Read-Only Preflight",
+    "run_id": 33630247231,
+    "run_number": 2,
+    "head_branch": "main",
+    "head_sha": "5779fefe8a19ce74f50bcb98c077c46ce004e2f6",
+    "conclusion": "success"
+  },
+  "evidence": {
+    "secret_refs_present": true,
+    "wc_v3_reachable": true,
+    "identity_authenticated": true,
+    "readonly_preflight_green": true,
+    "mutation_boundary_green": true,
+    "secret_values_printed": false
+  },
+  "markers": [
+    "PHIL_AI_OS_WOO_PRODUCTION_SECRET_REFS_PRESENT",
+    "PHIL_AI_OS_WOO_PRODUCTION_READONLY_PREFLIGHT_GREEN wc_v3=true identity=true mutation=false catalog_write=false tax_write=false",
+    "PHIL_AI_OS_WOO_PRODUCTION_PREFLIGHT_MUTATION_BOUNDARY_GREEN"
+  ],
+  "authority": {
+    "mutation_authorized": false,
+    "catalog_write_authorized": false,
+    "tax_write_authorized": false,
+    "production_publish_authorized": false,
+    "automatic_production_execution": false
+  },
+  "decision": "WOO_PRODUCTION_READONLY_CONNECTIVITY_GREEN_WRITE_BOUNDARY_CLOSED"
+}
