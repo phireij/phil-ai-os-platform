@@ -1,5 +1,5 @@
 {
-  "version": "ceo-production-activation-approval-v1",
+  "version": "ceo-production-activation-approval-v2",
   "date": "2026-09-02",
   "decision": "approved",
   "decision_authority": "CEO",
@@ -19,14 +19,24 @@
     "authorizes_automatic_production_execution": false,
     "live_launch_authorized": false
   },
+  "prepared_activation_capabilities": {
+    "woocommerce_fail_closed_production_transport": true,
+    "woocommerce_manual_readonly_connectivity_preflight": true,
+    "twilio_candidate_manual_readonly_account_preflight": true,
+    "twilio_formally_selected_as_sms_provider": false,
+    "komoju_test_mode_green": true,
+    "air_mobile_order_quick_pickup_surface_prepared": true,
+    "air_mobile_order_production_url_present": false
+  },
   "current_lane_state": {
     "woocommerce_production_activation": {
       "approval": "approved",
       "execution": "blocked",
+      "preflight": "prepared_not_run",
       "blockers": [
+        "production_readonly_identity_and_actions_secrets_not_configured",
         "approved_production_catalog_pending",
         "japan_tax_and_qualified_invoice_evidence_pending",
-        "production_credentials_not_configured",
         "final_checkout_legal_sync_pending",
         "near_cutover_recovery_recheck_pending"
       ]
@@ -44,8 +54,13 @@
     "production_sms_sending": {
       "approval": "approved",
       "execution": "blocked",
+      "candidate_provider": "twilio",
+      "provider_selection": "not_formally_finalized",
+      "account_preflight": "prepared_not_run",
       "blockers": [
+        "production_sms_provider_not_formally_finalized",
         "production_provider_identity_and_credentials_not_configured",
+        "sender_identity_not_configured",
         "first_live_send_validation_not_yet_performed"
       ]
     },
