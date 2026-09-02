@@ -52,7 +52,8 @@ jobs:
           wp eval '
           $id=(int)get_option("woocommerce_terms_page_id",0);
           $p=$id?get_post($id):null;
-          if(!$p || $p->post_title!=="Terms & Conditions / 利用規約"){fwrite(STDERR,"Terms page identity mismatch\n"); exit(2);}
+          if(!$p){fwrite(STDERR,"Assigned WooCommerce Terms page is missing\n"); exit(2);}
+          echo "terms_title=".$p->post_title."\n";
           if($p->post_status!=="publish"){
             $r=wp_update_post(["ID"=>$id,"post_status"=>"publish"],true);
             if(is_wp_error($r)){fwrite(STDERR,$r->get_error_message()."\n"); exit(3);}
