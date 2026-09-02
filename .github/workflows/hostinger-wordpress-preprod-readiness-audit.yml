@@ -85,7 +85,12 @@ jobs:
           echo "products_draft=".(int)($counts->draft??0)."\n";
           echo "product_categories=".(int)wp_count_terms(["taxonomy"=>"product_cat","hide_empty"=>false])."\n";
           $ids=get_posts(["post_type"=>"product","post_status"=>["publish","draft","private","pending"],"numberposts"=>-1,"fields"=>"ids","orderby"=>"ID","order"=>"ASC"]);
-          foreach($ids as $id){$p=wc_get_product($id);if(!$p)continue;$class=$p->get_shipping_class();echo "product_id=".$id."|status=".get_post_status($id)."|sku=".$p->get_sku()."|type=".$p->get_type()."|virtual=".($p->is_virtual()?"yes":"no")."|stock=".$p->get_stock_status()."|shipping_class=".($class?:"UNASSIGNED")."\n";}
+          foreach($ids as $id){
+            $p=wc_get_product($id);if(!$p)continue;$class=$p->get_shipping_class();
+            $cats=wp_get_post_terms($id,"product_cat",["fields"=>"slugs"]);
+            $meta=[];foreach($p->get_meta_data() as $m){if(str_starts_with((string)$m->key,"_philaios_"))$meta[$m->key]=$m->value;}
+            echo "product_id=".$id."|status=".get_post_status($id)."|name=".html_entity_decode($p->get_name(),ENT_QUOTES|ENT_HTML5,"UTF-8")."|sku=".($p->get_sku()?:"MISSING")."|price=".$p->get_regular_price()."|visibility=".$p->get_catalog_visibility()."|type=".$p->get_type()."|virtual=".($p->is_virtual()?"yes":"no")."|stock=".$p->get_stock_status()."|shipping_class=".($class?:"UNASSIGNED")."|categories=".implode(",",$cats)."|images=".(count($p->get_gallery_image_ids())+($p->get_image_id()?1:0))."|philaios_meta=".wp_json_encode($meta,JSON_UNESCAPED_UNICODE)."\n";
+          }
           echo "shipping_classes=";foreach(WC()->shipping()->get_shipping_classes() as $c){echo $c->slug.",";}echo "\n";
           ' --path="$WP_PATH"
 
