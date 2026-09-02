@@ -1,9 +1,17 @@
 import unittest
 
-from phil_ai_os_woocommerce.models import ContractValidationError, LocalizedText, ProductRecord
+from phil_ai_os_woocommerce.models import (
+    ContractValidationError,
+    FulfillmentProfile,
+    LocalizedText,
+    ProductRecord,
+)
 
 
 class ProductContractTests(unittest.TestCase):
+    def fulfillment(self) -> FulfillmentProfile:
+        return FulfillmentProfile("cool-60", ("chilled",), True, True)
+
     def product(self) -> ProductRecord:
         return ProductRecord(
             sku="SKU-1",
@@ -12,6 +20,7 @@ class ProductContractTests(unittest.TestCase):
             slug=LocalizedText(en="cake", ja="cake-ja"),
             regular_price="500",
             currency="JPY",
+            fulfillment=self.fulfillment(),
         )
 
     def test_bilingual_projection_is_deterministic(self):
@@ -33,7 +42,23 @@ class ProductContractTests(unittest.TestCase):
                 slug=LocalizedText(en="cake", ja="cake-ja"),
                 regular_price="-1",
                 currency="JPY",
+                fulfillment=self.fulfillment(),
             )
+
+    def test_delivery_requires_shipping_class_and_temperature(self):
+        with self.assertRaises(ContractValidationError):
+            FulfillmentProfile(None, (), True, True)
+
+    def test_pickup_only_rejects_delivery_configuration(self):
+        with self.assertRaises(ContractValidationError):
+            FulfillmentProfile("cool-60", ("chilled",), True, False)
+
+    def test_fulfillment_projection_is_explicit(self):
+        payload = self.product().to_wc_payload("en")
+        self.assertEqual(payload["shipping_class"], "cool-60")
+        metadata = {item["key"]: item["value"] for item in payload["meta_data"]}
+        self.assertEqual(metadata["_philaios_temperature_modes"], ["chilled"])
+        self.assertTrue(metadata["_philaios_requires_order_approval"])
 
 
 if __name__ == "__main__":
