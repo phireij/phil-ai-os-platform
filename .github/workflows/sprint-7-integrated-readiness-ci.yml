@@ -105,6 +105,9 @@ jobs:
       - name: Validate operator documentation and launch acceptance
         run: python scripts/validate_sprint7_launch_acceptance.py
 
+      - name: Validate reconciled production current state and final Go-No-Go
+        run: python scripts/validate_sprint7_production_current_state.py
+
       - name: Verify executive Sprint 7 entry and closure records
         run: |
           set -euo pipefail
