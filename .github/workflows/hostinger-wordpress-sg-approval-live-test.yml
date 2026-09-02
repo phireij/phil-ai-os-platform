@@ -1,0 +1,96 @@
+name: Hostinger WordPress SG Approval Live Test
+on:
+  push:
+    branches:
+      - ops/hostinger-wordpress-operator-bootstrap
+    paths:
+      - '.github/workflows/hostinger-wordpress-sg-approval-live-test.yml'
+permissions:
+  contents: read
+jobs:
+  approval-live-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure VPS SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+      - name: Create and approve isolated QA order
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          KEY_DIR="$HOME/.ssh/philaios-hostinger-wordpress"
+          KEY="$KEY_DIR/preprod_operator_ed25519"
+          HOSTINGER_HOST='147.93.80.5'
+          HOSTINGER_PORT='65002'
+          HOSTINGER_USER='u925842746'
+          ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
+          chmod 600 "$KEY_DIR/hostinger_known_hosts"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
+          wp eval '
+          $gateways=WC()->payment_gateways()->payment_gateways();
+          foreach($gateways as $id=>$g){
+            if(stripos($id,"approv")!==false || stripos(get_class($g),"approv")!==false){
+              echo "approval_gateway_id=$id\n";
+            }
+          }
+          $p=new WC_Product_Simple();
+          $p->set_name("QA APPROVAL EMAIL TEST");
+          $p->set_status("private");
+          $p->set_catalog_visibility("hidden");
+          $p->set_regular_price("100");
+          $p->set_virtual(true);
+          $pid=$p->save();
+          $o=wc_create_order();
+          $o->add_product(wc_get_product($pid),1);
+          $o->set_billing_first_name("Philip");
+          $o->set_billing_last_name("QA");
+          $o->set_billing_email("pbombeo76@gmail.com");
+          $o->set_billing_phone("05017850575");
+          $o->set_billing_country("JP");
+          $o->set_billing_state("JP12");
+          $o->set_billing_city("Ichikawa");
+          $o->set_billing_postcode("272-0034");
+          $o->set_billing_address_1("Ichikawa 1-26-15");
+          $o->set_billing_address_2("Hanakame Bldg. 1F-B");
+          if(isset($gateways["order_approval"])){
+            $o->set_payment_method($gateways["order_approval"]);
+          } else {
+            foreach($gateways as $id=>$g){ if(stripos($id,"approv")!==false){$o->set_payment_method($g); break;} }
+          }
+          $o->calculate_totals();
+          $o->set_status("waiting");
+          $o->save();
+          $oid=$o->get_id();
+          echo "qa_product_id=$pid\n";
+          echo "qa_order_id=$oid\n";
+          echo "before_status=".$o->get_status()."\n";
+          echo "before_total=".$o->get_total()."\n";
+          $o->update_status("pending","Phil AI OS isolated SG approval email QA");
+          $o=wc_get_order($oid);
+          echo "after_status=".$o->get_status()."\n";
+          echo "needs_payment=".($o->needs_payment()?"true":"false")."\n";
+          echo "payment_url=".$o->get_checkout_payment_url()."\n";
+          echo "billing_email=".$o->get_billing_email()."\n";
+          ' --path="$WP_PATH"
+          echo 'PHIL_AI_OS_SG_APPROVAL_LIVE_TEST_TRIGGERED'
+          HOSTREMOTE
+          REMOTE
