@@ -61,4 +61,10 @@ The Sep 2 recovery run is **current evidence**, not permanent launch-day evidenc
 - Sprint 7 current-head run `33607592125`
 - Sprint 7 PR #34 run `33607701299`
 
+Compatibility control marker retained for the existing validator:
+
+`PHIL_AI_OS_SPRINT_7_SECURITY_RECOVERY_READINESS_BOUNDED`
+
+Current-state marker:
+
 `PHIL_AI_OS_SPRINT_7_SECURITY_RECOVERY_CURRENT_GREEN_LAUNCH_RECHECK_REQUIRED`
