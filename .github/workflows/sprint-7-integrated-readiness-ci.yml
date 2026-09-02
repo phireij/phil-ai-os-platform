@@ -44,7 +44,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Commerce contracts and 59-test foundation
+      - name: Commerce contract regression
         env:
           PYTHONPATH: commerce/woocommerce/src
         run: |
@@ -53,7 +53,7 @@ jobs:
           docker compose --profile local-tools -f commerce/woocommerce/docker-compose.dev.yml config --quiet
           bash -n commerce/woocommerce/bootstrap-local.sh
 
-      - name: Customer Experience 36-test foundation
+      - name: Customer Experience regression
         run: |
           node --check apps/customer-experience/src/core.mjs
           node --check apps/customer-experience/src/cart.mjs
@@ -68,13 +68,13 @@ jobs:
           python apps/customer-experience/tools_validate_cx.py
           python apps/customer-experience/tools_validate_contract_compatibility.py
 
-      - name: Operations Hub 34-test foundation
+      - name: Operations Hub regression
         run: |
           python -m compileall -q apps/operations-hub/src
           python -m unittest discover -s apps/operations-hub/tests -p 'test_*.py' -v
           python apps/operations-hub/tools_validate_operations.py
 
-      - name: Automation 36-test foundation
+      - name: Automation regression
         run: |
           python -m compileall -q apps/automation-hub/src
           python -m unittest discover -s apps/automation-hub/tests -p 'test_*.py' -v
@@ -108,7 +108,7 @@ jobs:
       - name: Validate reconciled production current state and final Go-No-Go
         run: python scripts/validate_sprint7_production_current_state.py
 
-      - name: Verify executive Sprint 7 entry and closure records
+      - name: Verify bounded future Sprint 7 readiness records
         run: |
           set -euo pipefail
           grep -F 'Sprint 7 — Testing, Production Readiness, Documentation & Launch' docs/MASTER_EXECUTIVE_ROADMAP_SCHEDULE_CONTROL.md
@@ -116,7 +116,7 @@ jobs:
           grep -F 'PHIL_AI_OS_SPRINT_6_FORMAL_CLOSURE_GREEN' docs/SPRINT_6_FORMAL_CLOSURE_2026-08-28.md
           echo PHIL_AI_OS_SPRINT_7_DOCUMENT_CONTROL_GREEN
 
-      - name: Integrated regression marker
+      - name: Integrated readiness regression marker
         run: echo PHIL_AI_OS_SPRINT_7_INTEGRATED_REGRESSION_GREEN
 
   isolated-runtime-smoke:
