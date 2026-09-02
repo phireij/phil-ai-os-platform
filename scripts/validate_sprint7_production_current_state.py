@@ -10,6 +10,7 @@ GO_NO_GO = ROOT / "ops/readiness/ruby-final-go-no-go-gate-2026-09-02.json"
 KOMOJU = ROOT / "ops/readiness/ruby-komoju-live-acceptance-gate-2026-09-02.json"
 SMS = ROOT / "ops/readiness/ruby-sms-provider-activation-gate-2026-09-02.json"
 RECOVERY = ROOT / "ops/readiness/ruby-launch-recovery-acceptance-gate-2026-09-02.json"
+TAX = ROOT / "ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json"
 
 
 def load(path: Path) -> dict:
@@ -27,6 +28,7 @@ def main() -> None:
     komoju = load(KOMOJU)
     sms = load(SMS)
     recovery = load(RECOVERY)
+    tax = load(TAX)
 
     governance = overlay["governance"]
     require(governance["autonomy"] == "A0", "autonomy drift")
@@ -51,15 +53,20 @@ def main() -> None:
     require(woo["production_readonly_preflight_run_id"] == 33630247231, "Woo read-only evidence run drift")
     require(woo["production_mutation_ready"] is False, "Woo mutation became ready unexpectedly")
     require(woo["catalog_write_ready"] is False, "catalog write became ready unexpectedly")
+    require(woo["tax_decision_green"] is True, "Japan tax decision regressed")
+    require(woo["tax_configuration_route"] == "disabled", "exempt-business tax route drift")
     require(woo["tax_write_ready"] is False, "tax write became ready unexpectedly")
 
     inputs = overlay["business_inputs"]
-    for key in (
-        "final_production_catalog_ready",
-        "japan_tax_and_qualified_invoice_evidence_ready",
-        "air_mobile_order_quick_pickup_production_url_ready",
-    ):
-        require(inputs[key] is False, f"pending business input changed without reconciliation: {key}")
+    require(inputs["final_production_catalog_ready"] is False, "final catalog changed without reconciliation")
+    require(inputs["japan_tax_and_qualified_invoice_evidence_ready"] is True, "Japan tax evidence should remain GREEN")
+    require(inputs["air_mobile_order_quick_pickup_production_url_ready"] is False, "Air Mobile URL changed without reconciliation")
+
+    require(tax["decision"]["consumption_tax_status"] == "exempt", "tax status drift")
+    require(tax["decision"]["qualified_invoice_status"] == "not_registered", "qualified invoice status drift")
+    require(tax["decision"]["tax_decision_ready"] is True, "tax decision evidence not GREEN")
+    require(tax["authority"]["tax_write_ready"] is False, "tax evidence incorrectly permits tax writes")
+    require(tax["authority"]["mutation_authorized"] is False, "tax evidence incorrectly permits mutation")
 
     require(komoju["current_mode"] == "test_mode", "KOMOJU not in Test Mode")
     require(komoju["live_acceptance"]["merchant_live_mode_approval_verified"] is False, "KOMOJU merchant Live approval unexpectedly GREEN")
@@ -74,16 +81,20 @@ def main() -> None:
     require(recovery["execution"]["cutover_ready_from_recovery_perspective"] is False, "recovery incorrectly permits cutover")
 
     require(go["technical_baseline"]["woocommerce_readonly_identity_green"] is True, "Go/No-Go lost Woo read-only GREEN")
+    require(go["technical_baseline"]["japan_tax_decision_green"] is True, "Go/No-Go lost Japan tax GREEN")
+    require(go["required_launch_gates"]["japan_tax_and_qualified_invoice_evidence_ready"] is True, "Go/No-Go tax gate should be GREEN")
     for key, value in go["required_launch_gates"].items():
+        if key == "japan_tax_and_qualified_invoice_evidence_ready":
+            continue
         require(value is False, f"launch gate requires explicit reconciliation before GREEN: {key}")
     for key, value in go["execution"].items():
         require(value is False, f"live execution readiness unexpectedly true: {key}")
-    require(go["decision"] == "NO_GO_PENDING_REQUIRED_INPUTS_AND_LIVE_ACCEPTANCE", "Go/No-Go decision drift")
+    require(go["decision"] == "NO_GO_PENDING_REMAINING_REQUIRED_INPUTS_AND_LIVE_ACCEPTANCE", "Go/No-Go decision drift")
 
     require(overlay["launch"]["live_launch_authorized_by_readiness"] is False, "overlay unexpectedly authorizes live launch")
     require(overlay["decision"] == "CONTROL_POSTURE_GREEN_LAUNCH_PENDING_FAIL_CLOSED", "overlay decision drift")
 
-    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN")
+    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN tax_decision=green")
     print("PHIL_AI_OS_SPRINT_7_FINAL_GO_NO_GO_PENDING_FAIL_CLOSED")
 
 
