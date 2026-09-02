@@ -2,6 +2,7 @@ import { buildCartCheckoutIntent, cartPricingSummary } from "./cart.mjs";
 import { evaluateCheckoutReadiness, formatMoney, localized, normalizeLocale } from "./core.mjs";
 import { buildPaymentHandoffIntent, validatePaymentProviderProfile } from "./payment.mjs";
 import { evaluatePickupSelection, validatePickupPolicy } from "./pickup.mjs";
+import { readinessFeedback } from "./readiness-feedback.mjs";
 
 const copy = {
   en: {
@@ -18,6 +19,8 @@ const copy = {
     resultBlocked: "Checkout is not ready",
     resultReadyCopy: "Readiness is GREEN. A non-executable KOMOJU handoff intent was composed; no order or payment was created.",
     resultBlockedCopy: "The handoff remains blocked until all local readiness checks pass.",
+    nextSteps: "What to do next",
+    technicalDetails: "Technical preview details",
     safetyTitle: "KOMOJU is configured as intent only",
     safetyCopy: "Provider: KOMOJU · integration: WooCommerce plugin · connection: not configured · order creation: false · payment execution: false · live mode: false.",
     selected: (count, total) => `${count} selected item types · ${total}`,
@@ -38,6 +41,8 @@ const copy = {
     resultBlocked: "チェックアウトの準備ができていません",
     resultReadyCopy: "準備状況はGREENです。実行不能なKOMOJU引継ぎインテントのみを構成し、注文や決済は作成していません。",
     resultBlockedCopy: "すべてのローカル準備確認が通るまで引継ぎはブロックされます。",
+    nextSteps: "次に必要なこと",
+    technicalDetails: "技術プレビューの詳細",
     safetyTitle: "KOMOJUはインテントのみとして設定されています",
     safetyCopy: "プロバイダー: KOMOJU · 連携: WooCommerceプラグイン · 接続: 未設定 · 注文作成: false · 決済実行: false · ライブモード: false。",
     selected: (count, total) => `選択商品 ${count} 種類 · ${total}`,
@@ -68,6 +73,11 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function feedbackList(items) {
+  if (!items.length) return "";
+  return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
 }
 
 function setCopy() {
@@ -152,13 +162,24 @@ function toIso(value) {
 
 function renderResult({ readiness, pickupReadiness, pricing, handoff = null }) {
   const ready = readiness.ready && Boolean(handoff);
+  const feedback = readinessFeedback(readiness, state.locale);
   resultTitle.textContent = ready ? copy[state.locale].resultReady : copy[state.locale].resultBlocked;
-  result.innerHTML = `<p>${escapeHtml(ready ? copy[state.locale].resultReadyCopy : copy[state.locale].resultBlockedCopy)}</p><pre></pre>`;
+  const nextSteps = ready
+    ? `<p>${escapeHtml(feedback.summary)}</p>`
+    : `<p>${escapeHtml(feedback.summary)}</p><h3>${escapeHtml(copy[state.locale].nextSteps)}</h3>${feedbackList(feedback.action_messages.length ? feedback.action_messages : feedback.blocker_messages)}`;
+  result.innerHTML = `
+    <p>${escapeHtml(ready ? copy[state.locale].resultReadyCopy : copy[state.locale].resultBlockedCopy)}</p>
+    ${nextSteps}
+    <details>
+      <summary>${escapeHtml(copy[state.locale].technicalDetails)}</summary>
+      <pre></pre>
+    </details>`;
   result.querySelector("pre").textContent = JSON.stringify({
     pricing,
     pickup_readiness: pickupReadiness,
     checkout_readiness: readiness,
     payment_handoff: handoff,
+    customer_feedback: feedback,
   }, null, 2);
 }
 
