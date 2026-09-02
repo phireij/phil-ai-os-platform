@@ -40,9 +40,11 @@ jobs:
           HOSTINGER_HOST='147.93.80.5'
           HOSTINGER_PORT='65002'
           HOSTINGER_USER='u925842746'
-          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
           ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
           chmod 600 "$KEY_DIR/hostinger_known_hosts"
-          CODE='echo wp_mail("phireij@gmail.com", "Phil AI OS WordPress Mail Test 2026-09-02", "Controlled pre-production mail delivery test from Ruby Cake Delights WooCommerce staging site.") ? "wp_mail=true\\n" : "wp_mail=false\\n";'
-          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" wp eval "$CODE" --path="$WP_PATH"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
+          wp eval 'echo wp_mail("phireij@gmail.com", "Phil AI OS WordPress Mail Test 2026-09-02", "Controlled pre-production mail delivery test from Ruby Cake Delights WooCommerce staging site.") ? "wp_mail=true\\n" : "wp_mail=false\\n";' --path="$WP_PATH"
+          HOSTREMOTE
           REMOTE
