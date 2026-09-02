@@ -1,0 +1,56 @@
+{
+  "version": "ruby-production-current-state-overlay-v1",
+  "date": "2026-09-02",
+  "purpose": "Current operational reconciliation layer for production-readiness decisions where older roadmap wording predates later CEO approvals and verified read-only connectivity.",
+  "governance": {
+    "autonomy": "A0",
+    "task_class": "general",
+    "specialists_enabled": false,
+    "mission_control_mutation_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "ceo_activation_scope": {
+    "woocommerce_production_activation": true,
+    "komoju_live_mode": true,
+    "production_sms_sending": true,
+    "public_domain_dns_cutover": true,
+    "final_launch_signoff_process": true,
+    "scope_approval_overrides_readiness": false
+  },
+  "woocommerce": {
+    "preproduction_origin": "https://darkgreen-wallaby-680439.hostingersite.com/",
+    "public_domain": "https://www.rubyscakedelights.shop/",
+    "public_domain_current_platform": "hostinger-website-builder",
+    "production_readonly_identity_green": true,
+    "production_readonly_preflight_run_id": 33630247231,
+    "production_mutation_ready": false,
+    "catalog_write_ready": false,
+    "tax_write_ready": false
+  },
+  "business_inputs": {
+    "final_production_catalog_ready": false,
+    "japan_tax_and_qualified_invoice_evidence_ready": false,
+    "air_mobile_order_quick_pickup_production_url_ready": false
+  },
+  "komoju": {
+    "test_mode_green": true,
+    "live_acceptance_green": false,
+    "real_payment_execution_ready": false
+  },
+  "sms": {
+    "preferred_pilot_candidate": "twilio",
+    "formal_provider_selected": false,
+    "production_sending_ready": false
+  },
+  "recovery": {
+    "current_baseline_green": true,
+    "near_cutover_freshness_green": false
+  },
+  "launch": {
+    "final_go_no_go_green": false,
+    "production_publish_ready": false,
+    "public_cutover_ready": false,
+    "live_launch_authorized_by_readiness": false
+  },
+  "decision": "CONTROL_POSTURE_GREEN_LAUNCH_PENDING_FAIL_CLOSED"
+}
