@@ -43,7 +43,14 @@ from .media_plan import (
     build_product_media_plan,
     plan_media_reconciliation,
 )
-from .models import CategoryRecord, InventoryRecord, LocalizedText, MediaRecord, ProductRecord
+from .models import (
+    CategoryRecord,
+    FulfillmentProfile,
+    InventoryRecord,
+    LocalizedText,
+    MediaRecord,
+    ProductRecord,
+)
 from .orchestration import AuditedReconciliation, reconcile_with_audit
 from .resilience import (
     FailureInjectingTransport,
@@ -67,6 +74,7 @@ __all__ = [
     "CredentialReferenceProvider",
     "DEFAULT_LOCALIZATION_POLICY",
     "FailureInjectingTransport",
+    "FulfillmentProfile",
     "HTTPStatusFailure",
     "InventoryConflictError",
     "InventoryRecord",
