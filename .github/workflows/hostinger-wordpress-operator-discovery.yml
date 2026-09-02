@@ -1,0 +1,78 @@
+name: Hostinger WordPress Operator Discovery
+on:
+  push:
+    branches:
+      - ops/hostinger-wordpress-operator-bootstrap
+    paths:
+      - '.github/workflows/hostinger-wordpress-operator-discovery.yml'
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure VPS SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+      - name: Read-only Hostinger WordPress discovery from Phil AI OS VPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          KEY_DIR="$HOME/.ssh/philaios-hostinger-wordpress"
+          KEY="$KEY_DIR/preprod_operator_ed25519"
+          HOSTINGER_HOST='147.93.80.5'
+          HOSTINGER_PORT='65002'
+          HOSTINGER_USER='u925842746'
+          test -f "$KEY"
+          install -d -m 700 "$KEY_DIR"
+          ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
+          chmod 600 "$KEY_DIR/hostinger_known_hosts"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          echo '=== HOSTINGER WORDPRESS OPERATOR DISCOVERY ==='
+          echo 'ssh_connection=ok'
+          echo "remote_user=$(whoami)"
+          echo "remote_home=$HOME"
+          echo "remote_pwd=$(pwd)"
+          if command -v wp >/dev/null 2>&1; then
+            echo "wp_cli=$(command -v wp)"
+            wp --info | sed -n '1,12p'
+          else
+            echo 'wp_cli=missing'
+          fi
+          mapfile -t CONFIGS < <(find "$HOME" -maxdepth 7 -type f -name wp-config.php 2>/dev/null | sort)
+          echo "wp_config_count=${#CONFIGS[@]}"
+          for cfg in "${CONFIGS[@]}"; do
+            dir=$(dirname "$cfg")
+            echo "wp_path=$dir"
+            if command -v wp >/dev/null 2>&1; then
+              if wp core is-installed --path="$dir" >/dev/null 2>&1; then
+                echo 'wp_core_installed=yes'
+                printf 'siteurl='; wp option get siteurl --path="$dir" 2>/dev/null || true
+                printf 'home='; wp option get home --path="$dir" 2>/dev/null || true
+                wp plugin list --path="$dir" --fields=name,status,version --format=csv 2>/dev/null | head -n 40 || true
+              else
+                echo 'wp_core_installed=no'
+              fi
+            fi
+          done
+          echo 'PHIL_AI_OS_HOSTINGER_WORDPRESS_OPERATOR_DISCOVERY_OK'
+          HOSTREMOTE
+          REMOTE
