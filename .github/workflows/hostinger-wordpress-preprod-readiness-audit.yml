@@ -1,4 +1,5 @@
 name: Hostinger WordPress Preprod Readiness Audit
+# Re-verified after guarded QA cleanup on 2026-09-02.
 
 on:
   push:
