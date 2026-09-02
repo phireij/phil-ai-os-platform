@@ -21,10 +21,11 @@ const product = {
 
 const pickupPolicy = { fixture_only: true, min_lead_minutes: 60, max_advance_days: 14 };
 
-test("preview catalog metadata is noindex with no canonical", () => {
+test("preview catalog metadata is noindex with no canonical or alternates", () => {
   const metadata = catalogMetadata("en");
   assert.equal(metadata.robots, "noindex,nofollow");
   assert.equal(metadata.canonical, null);
+  assert.equal(metadata.alternates, null);
 });
 
 test("preview product metadata is localized and noindex", () => {
@@ -32,16 +33,36 @@ test("preview product metadata is localized and noindex", () => {
   assert.equal(metadata.title, "サンプルSEO");
   assert.equal(metadata.robots, "noindex,nofollow");
   assert.equal(metadata.canonical, null);
+  assert.equal(metadata.alternates, null);
 });
 
 test("deployment metadata requires explicit HTTPS canonical base", () => {
   assert.throws(() => productMetadata(product, "en", "deployment", "http://shop.invalid"), /explicit HTTPS/);
 });
 
-test("deployment product metadata creates deterministic localized canonical", () => {
+test("deployment catalog metadata creates deterministic localized alternates", () => {
+  const metadata = catalogMetadata("ja", "deployment", "https://shop.invalid/");
+  assert.equal(metadata.canonical, "https://shop.invalid/?lang=ja");
+  assert.deepEqual(metadata.alternates, {
+    en: "https://shop.invalid/?lang=en",
+    ja: "https://shop.invalid/?lang=ja",
+    "x-default": "https://shop.invalid/?lang=en",
+  });
+});
+
+test("deployment product metadata creates deterministic localized canonical and alternates", () => {
   const metadata = productMetadata(product, "ja", "deployment", "https://shop.invalid");
   assert.equal(metadata.robots, "index,follow");
   assert.equal(metadata.canonical, "https://shop.invalid/?product=sample-product&lang=ja");
+  assert.deepEqual(metadata.alternates, {
+    en: "https://shop.invalid/?product=sample-product&lang=en",
+    ja: "https://shop.invalid/?product=sample-product&lang=ja",
+    "x-default": "https://shop.invalid/?product=sample-product&lang=en",
+  });
+});
+
+test("unsupported SEO mode fails closed", () => {
+  assert.throws(() => catalogMetadata("en", "live", "https://shop.invalid"), /unsupported SEO mode/);
 });
 
 test("pickup policy must be explicitly fixture-only", () => {
