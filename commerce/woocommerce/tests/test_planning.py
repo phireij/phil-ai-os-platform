@@ -3,6 +3,7 @@ import unittest
 from phil_ai_os_woocommerce import (
     CategoryHierarchyError,
     CategoryRecord,
+    FulfillmentProfile,
     LocalizedText,
     MediaPlanError,
     MediaRecord,
@@ -31,6 +32,7 @@ class PlanningTests(unittest.TestCase):
             slug=LocalizedText(en="cake-plan", ja="cake-plan-ja"),
             regular_price="500",
             currency="JPY",
+            fulfillment=FulfillmentProfile("cool-60", ("chilled",), True, True),
             media_keys=tuple(media_keys),
         )
 
