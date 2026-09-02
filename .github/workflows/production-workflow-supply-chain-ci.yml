@@ -1,4 +1,4 @@
-name: Production Workflow Supply-Chain CI
+name: Active Workflow Supply-Chain CI
 
 on:
   pull_request:
@@ -6,6 +6,9 @@ on:
       - ".github/workflows/commerce-woocommerce-production-readonly-preflight.yml"
       - ".github/workflows/commerce-woocommerce-production-readonly-catalog-snapshot.yml"
       - ".github/workflows/commerce-twilio-production-readonly-preflight.yml"
+      - ".github/workflows/sprint-3-woocommerce-foundation-ci.yml"
+      - ".github/workflows/sprint-4-customer-experience-ci.yml"
+      - ".github/workflows/sprint-7-integrated-readiness-ci.yml"
       - ".github/workflows/production-workflow-supply-chain-ci.yml"
       - "scripts/validate_production_workflow_action_pins.py"
 
@@ -13,7 +16,7 @@ permissions:
   contents: read
 
 jobs:
-  validate-production-workflows:
+  validate-active-workflows:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
