@@ -153,7 +153,7 @@ Deliver **Phil AI OS Platform Core V1** together with the **Ruby’s Cake Deligh
 
 **Control note:** Simulation-only automation, approvals, dry-run execution boundaries, replay protection and audit/recovery plans are already GREEN early. Live automation authority remains A0/general/Hermes-only and formal Sprint 6 entry remains scheduled.
 
-## Sprint 7 — Testing / Production / Launch
+## Sprint 7 — Testing, Production Readiness, Documentation & Launch
 
 **Status: FUTURE FORMAL SPRINT / BOUNDED READINESS ARTIFACTS PRE-COMPLETED EARLY**  
 **Window:** 25–30 Sep 2026; safety 2 Oct
