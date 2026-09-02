@@ -51,40 +51,45 @@ jobs:
 
           echo '=== KOMOJU SAFE VERIFICATION ==='
           wp eval '
-          $candidates=["woocommerce_komoju_settings","woocommerce_komoju_credit_card_settings"];
-          foreach($candidates as $name){
-            $o=get_option($name,[]);
-            echo $name."|present=".(is_array($o)&&$o?"true":"false")."\n";
-            if(!is_array($o)) continue;
-            foreach($o as $k=>$v){
-              if(!is_scalar($v)) continue;
-              $s=(string)$v;
-              if(stripos($k,"key")!==false || stripos($k,"secret")!==false || stripos($k,"token")!==false){
-                $kind="set";
+          global $wpdb;
+          $rows=$wpdb->get_results($wpdb->prepare("SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s ORDER BY option_name","%komoju%"));
+          foreach($rows as $r){
+            echo "option=".$r->option_name."\n";
+            $v=maybe_unserialize($r->option_value);
+            if(!is_array($v)) continue;
+            foreach($v as $k=>$x){
+              if(!is_scalar($x)) continue;
+              $s=(string)$x;
+              $sensitive=stripos((string)$k,"key")!==false || stripos((string)$k,"secret")!==false || stripos((string)$k,"token")!==false;
+              if($sensitive){
+                $kind=$s===""?"empty":"set";
                 if(str_starts_with($s,"sk_test_")) $kind="sk_test";
                 elseif(str_starts_with($s,"pk_test_")) $kind="pk_test";
                 elseif(str_starts_with($s,"sk_live_")) $kind="sk_live";
                 elseif(str_starts_with($s,"pk_live_")) $kind="pk_live";
-                echo "  ".$k."=".($s===""?"empty":$kind)."\n";
-              } elseif(in_array($k,["enabled","testmode","test_mode","sandbox","title"],true)) {
+                echo "  ".$k."=".$kind."\n";
+              } elseif(in_array($k,["enabled","testmode","test_mode","sandbox","title","environment","mode"],true)) {
                 echo "  ".$k."=".$s."\n";
               }
             }
           }
+          $g=WC()->payment_gateways()->payment_gateways()["komoju_credit_card"]??null;
+          echo "gateway_enabled=".($g?$g->enabled:"missing")."\n";
           ' --path="$WP_PATH"
 
-          echo '=== DATERY SOURCE OPTIONS ==='
-          DATERY="$WP_PATH/wp-content/plugins/datery-delivery-date-for-woocommerce"
-          grep -RhoE "get_option\(['\"][A-Za-z0-9_-]+" "$DATERY" --include='*.php' 2>/dev/null | sed -E "s/.*get_option\(['\"]//" | sort -u | head -80 || true
           echo '=== DATERY RELEVANT OPTIONS ==='
           wp eval '
           global $wpdb;
-          $rows=$wpdb->get_results("SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE '%datery%' OR option_name LIKE '%delivery_date%' ORDER BY option_name");
+          $rows=$wpdb->get_results($wpdb->prepare("SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s ORDER BY option_name","%datery%","%delivery_date%"));
           foreach($rows as $r){
             $v=maybe_unserialize($r->option_value);
             if(is_array($v)){
               $safe=[];
-              foreach($v as $k=>$x){ if(is_scalar($x) && !preg_match('/secret|token|key|password/i',(string)$k)) $safe[$k]=$x; }
+              foreach($v as $k=>$x){
+                if(!is_scalar($x)) continue;
+                if(stripos((string)$k,"secret")!==false || stripos((string)$k,"token")!==false || stripos((string)$k,"password")!==false) continue;
+                $safe[$k]=$x;
+              }
               echo $r->option_name."=".wp_json_encode($safe,JSON_UNESCAPED_UNICODE)."\n";
             } elseif(is_scalar($v)) echo $r->option_name."=".$v."\n";
           }
@@ -95,7 +100,12 @@ jobs:
           foreach(["sg_oa_woo_manage_inventory","woocommerce_woa_gateway_settings"] as $name){
             $v=get_option($name,"__missing__");
             if(is_array($v)){
-              $safe=[]; foreach($v as $k=>$x){if(is_scalar($x)&&!preg_match('/secret|token|key|password/i',(string)$k))$safe[$k]=$x;}
+              $safe=[];
+              foreach($v as $k=>$x){
+                if(!is_scalar($x)) continue;
+                if(stripos((string)$k,"secret")!==false || stripos((string)$k,"token")!==false || stripos((string)$k,"password")!==false) continue;
+                $safe[$k]=$x;
+              }
               echo $name."=".wp_json_encode($safe,JSON_UNESCAPED_UNICODE)."\n";
             } else echo $name."=".$v."\n";
           }
@@ -106,10 +116,9 @@ jobs:
           $terms=["Privacy","プライバシ","Terms","利用規約","Cancellation","キャンセル","Pickup","受取","Allergen","アレルゲン","Commerce","特定商取引"];
           $pages=get_posts(["post_type"=>"page","post_status"=>["publish","draft","private","pending"],"numberposts"=>-1,"orderby"=>"ID","order"=>"ASC"]);
           foreach($pages as $p){
+            $title=html_entity_decode($p->post_title,ENT_QUOTES|ENT_HTML5,"UTF-8");
             foreach($terms as $needle){
-              if(mb_stripos(html_entity_decode($p->post_title,ENT_QUOTES|ENT_HTML5,"UTF-8"),$needle)!==false){
-                echo "id=".$p->ID."|status=".$p->post_status."|title=".$p->post_title."\n"; break;
-              }
+              if(mb_stripos($title,$needle)!==false){echo "id=".$p->ID."|status=".$p->post_status."|title=".$p->post_title."\n";break;}
             }
           }
           ' --path="$WP_PATH"
