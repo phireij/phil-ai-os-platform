@@ -9,6 +9,9 @@ WORKFLOWS = [
     ROOT / ".github/workflows/commerce-woocommerce-production-readonly-preflight.yml",
     ROOT / ".github/workflows/commerce-woocommerce-production-readonly-catalog-snapshot.yml",
     ROOT / ".github/workflows/commerce-twilio-production-readonly-preflight.yml",
+    ROOT / ".github/workflows/sprint-3-woocommerce-foundation-ci.yml",
+    ROOT / ".github/workflows/sprint-4-customer-experience-ci.yml",
+    ROOT / ".github/workflows/sprint-7-integrated-readiness-ci.yml",
 ]
 PINNED = re.compile(r"^\s*-\s+uses:\s+[^@\s]+@[0-9a-f]{40}(?:\s+#.*)?$", re.MULTILINE)
 USES = re.compile(r"^\s*-\s+uses:\s+.+$", re.MULTILINE)
@@ -30,10 +33,10 @@ def main() -> int:
 
     if failures:
         for item in failures:
-            print(f"PHIL_AI_OS_PRODUCTION_WORKFLOW_PIN_VALIDATION_FAILED: {item}")
+            print(f"PHIL_AI_OS_ACTIVE_WORKFLOW_PIN_VALIDATION_FAILED: {item}")
         return 1
 
-    print("PHIL_AI_OS_PRODUCTION_WORKFLOW_ACTION_PINS_GREEN")
+    print("PHIL_AI_OS_ACTIVE_WORKFLOW_ACTION_PINS_GREEN")
     return 0
 
 
