@@ -1,0 +1,39 @@
+{
+  "version": "ruby-komoju-live-acceptance-gate-v1",
+  "date": "2026-09-02",
+  "provider": "komoju",
+  "ceo_scope_approval": true,
+  "current_mode": "test_mode",
+  "test_mode_evidence": {
+    "connected": true,
+    "capture_validated": true,
+    "refund_validated": true
+  },
+  "live_acceptance": {
+    "merchant_live_mode_approval_verified": false,
+    "merchant_available_payment_methods_verified": false,
+    "production_enabled_payment_methods_finalized": false,
+    "catalog_ready": false,
+    "japan_tax_and_qualified_invoice_evidence_ready": false,
+    "checkout_legal_sync_complete": false,
+    "near_cutover_recovery_recheck_green": false,
+    "final_go_no_go_complete": false
+  },
+  "execution": {
+    "live_mode_authorized_by_readiness": false,
+    "real_payment_execution_ready": false,
+    "real_payment_executed": false,
+    "automatic_live_activation": false
+  },
+  "next_evidence_needed": [
+    "KOMOJU merchant dashboard evidence that Live Mode is approved/available",
+    "verified merchant-side payment-method availability",
+    "final production payment-method subset",
+    "approved production catalog",
+    "Japan tax and Qualified Invoice evidence",
+    "final checkout/Tokushoho/payment/shipping synchronization",
+    "fresh near-cutover recovery validation",
+    "final Go/No-Go acceptance"
+  ],
+  "decision": "PENDING_FAIL_CLOSED"
+}
