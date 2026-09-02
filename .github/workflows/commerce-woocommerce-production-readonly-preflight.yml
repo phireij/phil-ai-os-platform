@@ -1,0 +1,56 @@
+name: WooCommerce Production Read-Only Preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_read_only:
+        description: "Confirm this run must remain read-only"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    if: ${{ inputs.confirm_read_only == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate credential presence without printing values
+        shell: bash
+        env:
+          RUBY_WOO_PRODUCTION_BASE_URL: ${{ secrets.RUBY_WOO_PRODUCTION_BASE_URL }}
+          RUBY_WOO_PRODUCTION_CONSUMER_KEY: ${{ secrets.RUBY_WOO_PRODUCTION_CONSUMER_KEY }}
+          RUBY_WOO_PRODUCTION_CONSUMER_SECRET: ${{ secrets.RUBY_WOO_PRODUCTION_CONSUMER_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$RUBY_WOO_PRODUCTION_BASE_URL"
+          test -n "$RUBY_WOO_PRODUCTION_CONSUMER_KEY"
+          test -n "$RUBY_WOO_PRODUCTION_CONSUMER_SECRET"
+          echo "PHIL_AI_OS_WOO_PRODUCTION_SECRET_REFS_PRESENT"
+
+      - name: Run read-only wc/v3 connectivity preflight
+        shell: bash
+        env:
+          RUBY_WOO_PRODUCTION_BASE_URL: ${{ secrets.RUBY_WOO_PRODUCTION_BASE_URL }}
+          RUBY_WOO_PRODUCTION_CONSUMER_KEY: ${{ secrets.RUBY_WOO_PRODUCTION_CONSUMER_KEY }}
+          RUBY_WOO_PRODUCTION_CONSUMER_SECRET: ${{ secrets.RUBY_WOO_PRODUCTION_CONSUMER_SECRET }}
+        run: |
+          set -euo pipefail
+          python commerce/woocommerce/tools_production_connectivity_preflight.py
+
+      - name: Assert workflow contains no mutation command
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E 'transport\.request\("(POST|PUT|DELETE|PATCH)"' \
+            commerce/woocommerce/tools_production_connectivity_preflight.py
+          echo "PHIL_AI_OS_WOO_PRODUCTION_PREFLIGHT_MUTATION_BOUNDARY_GREEN"
