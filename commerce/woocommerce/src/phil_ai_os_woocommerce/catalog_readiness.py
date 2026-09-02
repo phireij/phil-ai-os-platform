@@ -117,6 +117,31 @@ def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxRead
     if not isinstance(catalog_approved, bool):
         raise ContractValidationError("catalog_approved must be boolean")
 
+    tax = payload.get("tax_decision")
+    if not isinstance(tax, Mapping):
+        raise ContractValidationError("tax_decision must be an object")
+
+    taxable_status = _require_enum(
+        tax.get("taxable_business_status"), TAXABLE_STATUSES, "taxable_business_status"
+    )
+    invoice_status = _require_enum(
+        tax.get("qualified_invoice_status"), INVOICE_STATUSES, "qualified_invoice_status"
+    )
+    shipping_separate = _require_enum(
+        tax.get("yamato_shipping_separately_charged"),
+        YES_NO_PENDING,
+        "yamato_shipping_separately_charged",
+    )
+    cod_fee_treatment = _require_enum(
+        tax.get("cod_fee_treatment"),
+        COD_TREATMENTS,
+        "cod_fee_treatment",
+    )
+    route = _require_enum(
+        tax.get("implementation_route"), IMPLEMENTATION_ROUTES, "implementation_route"
+    )
+    exempt_disabled_route = taxable_status == "exempt" and route == "tax_disabled_candidate"
+
     categories_raw = payload.get("categories", [])
     media_raw = payload.get("media", [])
     products_raw = payload.get("products", [])
@@ -128,6 +153,7 @@ def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxRead
     products = [ProductRecord.from_mapping(value) for value in products_raw]
 
     blockers: list[str] = []
+    pending_product_tax_classes: list[str] = []
     category_keys = [value.key for value in categories]
     media_keys = [value.key for value in media]
     product_skus = [value.sku for value in products]
@@ -177,7 +203,7 @@ def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxRead
             raw.get("tax_class_candidate"), PRODUCT_TAX_CLASSES, "product tax_class_candidate"
         )
         if tax_class == PENDING:
-            blockers.append(f"{prefix} tax class is pending")
+            pending_product_tax_classes.append(prefix)
 
         missing_categories = sorted(set(product.category_keys) - category_key_set)
         missing_media = sorted(set(product.media_keys) - media_key_set)
@@ -207,41 +233,25 @@ def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxRead
         ):
             blockers.append(f"media {value.key} uses an unapproved source")
 
-    tax = payload.get("tax_decision")
-    if not isinstance(tax, Mapping):
-        raise ContractValidationError("tax_decision must be an object")
-
-    taxable_status = _require_enum(
-        tax.get("taxable_business_status"), TAXABLE_STATUSES, "taxable_business_status"
-    )
-    invoice_status = _require_enum(
-        tax.get("qualified_invoice_status"), INVOICE_STATUSES, "qualified_invoice_status"
-    )
-    shipping_separate = _require_enum(
-        tax.get("yamato_shipping_separately_charged"),
-        YES_NO_PENDING,
-        "yamato_shipping_separately_charged",
-    )
-    cod_fee_treatment = _require_enum(
-        tax.get("cod_fee_treatment"),
-        COD_TREATMENTS,
-        "cod_fee_treatment",
-    )
-    route = _require_enum(
-        tax.get("implementation_route"), IMPLEMENTATION_ROUTES, "implementation_route"
-    )
-
     pending_tax_fields = [
         name
         for name, value in (
             ("taxable business status", taxable_status),
             ("qualified invoice status", invoice_status),
-            ("Yamato separate-charge treatment", shipping_separate),
-            ("COD fee treatment", cod_fee_treatment),
             ("tax implementation route", route),
         )
         if value == PENDING
     ]
+    if not exempt_disabled_route:
+        pending_tax_fields.extend(
+            name
+            for name, value in (
+                ("Yamato separate-charge treatment", shipping_separate),
+                ("COD fee treatment", cod_fee_treatment),
+            )
+            if value == PENDING
+        )
+        blockers.extend(f"{prefix} tax class is pending" for prefix in pending_product_tax_classes)
     blockers.extend(f"{name} is pending" for name in pending_tax_fields)
 
     if not str(tax.get("decision_evidence_ref") or "").strip():
