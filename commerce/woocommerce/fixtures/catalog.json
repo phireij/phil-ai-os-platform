@@ -25,6 +25,13 @@
       "slug": {"en": "sample-chocolate-cupcake", "ja": "sample-chocolate-cupcake-ja"},
       "regular_price": "500",
       "currency": "JPY",
+      "fulfillment": {
+        "shipping_class": "cool-60",
+        "temperature_modes": ["chilled"],
+        "pickup_allowed": true,
+        "delivery_allowed": true,
+        "requires_order_approval": true
+      },
       "status": "draft",
       "visibility": "visible",
       "category_keys": ["sample-cupcakes"],
