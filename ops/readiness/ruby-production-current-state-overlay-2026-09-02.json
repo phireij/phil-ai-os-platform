@@ -1,6 +1,6 @@
 {
-  "version": "ruby-production-current-state-overlay-v1",
-  "date": "2026-09-02",
+  "version": "ruby-production-current-state-overlay-v2",
+  "date": "2026-09-03",
   "purpose": "Current operational reconciliation layer for production-readiness decisions where older roadmap wording predates later CEO approvals and verified read-only connectivity.",
   "governance": {
     "autonomy": "A0",
@@ -25,11 +25,14 @@
     "production_readonly_preflight_run_id": 33630247231,
     "production_mutation_ready": false,
     "catalog_write_ready": false,
+    "tax_decision_green": true,
+    "tax_configuration_route": "disabled",
     "tax_write_ready": false
   },
   "business_inputs": {
     "final_production_catalog_ready": false,
-    "japan_tax_and_qualified_invoice_evidence_ready": false,
+    "japan_tax_and_qualified_invoice_evidence_ready": true,
+    "japan_tax_evidence_ref": "ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json",
     "air_mobile_order_quick_pickup_production_url_ready": false
   },
   "komoju": {

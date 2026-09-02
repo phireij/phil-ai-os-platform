@@ -1,0 +1,32 @@
+{
+  "version": "ruby-japan-consumption-tax-status-v1",
+  "date": "2026-09-03",
+  "business": "Ruby's Cake Delights",
+  "tax_year": 2026,
+  "evidence_summary": {
+    "2024_business_sales_jpy": 1770300,
+    "2025_jan_jun_business_sales_jpy": 1354062,
+    "qualified_invoice_registration": false,
+    "voluntary_consumption_taxable_business_election": false,
+    "personal_tax_return_files_retained_in_repository": false
+  },
+  "rule_basis": {
+    "base_period_for_individual_business": "two_years_prior",
+    "special_period_for_individual_business": "prior_year_january_1_to_june_30",
+    "threshold_jpy": 10000000,
+    "official_reference": "Japan National Tax Agency / e-Tax consumption-tax liability guidance reviewed 2026-09-03"
+  },
+  "decision": {
+    "consumption_tax_status": "exempt",
+    "qualified_invoice_status": "not_registered",
+    "qualified_invoice_registration_number": null,
+    "woocommerce_tax_implementation_route": "tax_disabled_candidate",
+    "tax_decision_ready": true
+  },
+  "authority": {
+    "tax_write_ready": false,
+    "tax_activation_authorized": false,
+    "mutation_authorized": false,
+    "production_publish_authorized": false
+  }
+}
