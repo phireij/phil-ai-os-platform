@@ -3,7 +3,8 @@
 **Document role:** Executive source of truth for product schedule, sprint position, delivery health, and launch target  
 **Owner:** CEO / CTO Office  
 **First issued:** 2026-08-28  
-**Last reconciled:** 2026-08-29  
+**Last reconciled:** 2026-09-02
+
 **Review cadence:** At every major engineering gate closure, sprint transition, material scope change, production-activation decision, or schedule-risk event  
 **Canonical repository:** `phireij/phil-ai-os-platform`
 
@@ -14,9 +15,9 @@
 | Control item | Current status |
 |---|---|
 | **Overall schedule health** | **AHEAD OF ORIGINAL 2-MONTH PLAN** |
-| **Executive roadmap position** | **Sprint 7 — BOUNDED PRODUCTION READINESS GREEN / PARALLEL WORDPRESS PRE-PRODUCTION NEXT / LIVE ACTIVATION PENDING** |
-| **Current engineering gate** | **Create and validate a separate non-public Hostinger WordPress + WooCommerce pre-production site while the existing Website Builder site continues serving `rubyscakedelights.shop`. Then complete pickup/shipping QA, separately authorized KOMOJU Test Mode validation, fresh recovery proof, legal/checkout synchronization, and later production cutover gates.** |
-| **Last completed milestone** | **Ruby production-preparation package GREEN — 2026-08-29. Verified Ruby Business Profile 15/15; current phone verified; Privacy/Terms/customer policies approved; Tokushoho legacy source reconciled; WooCommerce/KOMOJU pre-production gate validated through the 165-test integrated readiness suite plus isolated WooCommerce/CX runtime smoke; PR #20 merged safely to `main` as `67b65c661147ab985d71930bf5322f0d25f88b6a`; zero post-merge Actions fired.** |
+| **Executive roadmap position** | **Sprint 7 — WORDPRESS/WOO PRE-PRODUCTION CONFIGURATION GREEN / CATALOG + TAX + FINAL INTEGRATION QA ACTIVE / LIVE ACTIVATION PENDING** |
+| **Current engineering gate** | **Load only approved production catalog/category/media data using explicit size and frozen/chilled eligibility, confirm Ruby's Japan tax/invoice status, validate inclusive-tax checkout totals, complete SMS fallback readiness and fresh recovery proof, then prepare the separately approved cutover gates.** |
+| **Last completed milestone** | **WooCommerce pre-production readiness refresh GREEN — 2026-09-02. WordPress/WooCommerce, shipping zones/classes, SG approval-before-payment, Datery, KOMOJU Test Mode, authenticated SMTP and six bilingual policy pages verified; leftover guarded QA product moved to Trash; temporary site indexing disabled; explicit product fulfillment contract merged via PR #27; Japan tax readiness review merged via PR #28; latest `main` `d4f1e441c8e2af9b59f12ff8cf301f782ac97305`.** |
 | **Mission Control** | Multi-agent read model operational; V1 UX North Star formalized; mutation authority intentionally bounded |
 | **Multi-agent capability** | Governed handoff foundation proven; normal specialist execution intentionally disabled |
 | **Current production autonomy ceiling** | **A0** |
@@ -25,11 +26,11 @@
 | **Supabase** | **Deferred from Core V1 critical path; durable Control API SQLite remains canonical operational datastore** |
 | **Ruby production business profile** | **COMPLETE — 15/15 resolved; `profile_complete=true`; publication remains separately gated** |
 | **Current business phone** | **VERIFIED — 050-1785-0575** |
-| **Tokushoho / commerce disclosure** | **Legacy source captured and reconciled; current email/phone reflected; final publication approval pending actual WooCommerce shipping/payment/checkout synchronization** |
+| **Tokushoho / commerce disclosure** | **Approved bilingual page published in pre-production; final cutover synchronization remains pending catalog/tax/checkout acceptance** |
 | **Public storefront today** | **Hostinger Website Builder at `https://www.rubyscakedelights.shop/` — remains live and unchanged during pre-production build** |
-| **Target storefront** | **Hostinger managed WordPress + WooCommerce on a separate non-public pre-production environment first; same public domain retained only at later approved cutover** |
-| **Fulfillment baseline** | **Store pickup + legacy Yamato Cool TA-Q-BIN delivery retained for verification; production shipping configuration/rates not yet approved** |
-| **Payment merchant** | **KOMOJU selected; current WooCommerce integration uses KOMOJU Payments + Sign into KOMOJU; connection remains `not_configured`; Test Mode and Live Mode separately gated** |
+| **Target storefront** | **Hostinger managed WordPress + WooCommerce pre-production environment active at the temporary Hostinger URL; indexing disabled; same public domain retained only at later approved cutover** |
+| **Fulfillment baseline** | **Store pickup + Yamato Cool zones/classes configured in pre-production; canonical products now require explicit size plus frozen/chilled eligibility; approved production catalog assignments remain pending** |
+| **Payment merchant** | **KOMOJU Test Mode GREEN with test capture/refund evidence; no live keys; Live Mode remains separately gated** |
 | **Commerce production activation** | **GATED — no production WooCommerce identity/connectivity/mutation/cutover authority** |
 | **Operations live-channel activation** | **GATED — Facebook, Instagram, Telegram Operations, WhatsApp and Google Business live connectivity/replies remain separately gated** |
 | **Phil AI OS runtime** | **Hostinger VPS remains separate control/intelligence plane** |
@@ -37,11 +38,11 @@
 | **Working target** | **2026-09-27 to 2026-09-30** |
 | **Safety target / latest planned launch** | **2026-10-02** |
 | **Original 2-month target** | Approximately **2026-10-19** from the 2026-08-19 start |
-| **Schedule variance** | **Sprints 3–7 and the initial production-preparation packages closed materially ahead of their original September windows. Earned lead time is reserved for account-side WordPress build, catalog/fulfillment/payment QA, recovery validation and controlled launch.** |
-| **Immediate next action** | **Authorized Hostinger account owner creates a separate non-public WordPress + WooCommerce site without moving `rubyscakedelights.shop`; return its URL plus WordPress/WooCommerce/HTTPS/native-staging availability evidence. Do not connect KOMOJU yet.** |
-| **Next explicit approval boundary** | **Before KOMOJU Test Mode connection, WooCommerce production identity/connectivity/writes, public-site/DNS cutover, KOMOJU Live Mode, real charges/refunds, external-channel writes, specialist enablement, new execution class, autonomy increase, Mission Control mutation authority, or automatic production execution/retry/rollback.** |
+| **Schedule variance** | **Sprints 3–7, the Hostinger WordPress build and major pre-production configuration closed materially ahead of the original September windows. Earned lead time is reserved for approved catalog preparation, tax acceptance, SMS readiness, recovery validation and controlled launch.** |
+| **Immediate next action** | **Prepare the approved production catalog/category/media source with SKU, size class, frozen/chilled eligibility, pickup/delivery eligibility and bilingual content; confirm Ruby's consumption-tax/qualified-invoice status before enabling tax tables.** |
+| **Next explicit approval boundary** | **Before WooCommerce production identity/connectivity/writes, production catalog mutation authority, production SMS sending, public-site/DNS cutover, KOMOJU Live Mode/real payments, external-channel writes, specialist enablement, new execution class, autonomy increase, Mission Control mutation authority, or automatic production execution/retry/rollback.** |
 
-**Current classification: AHEAD / PRE-PRODUCTION PACKAGE GREEN / ACCOUNT-SIDE WORDPRESS CREATION NEXT.**
+**Current classification: AHEAD / PRE-PRODUCTION CONFIGURATION GREEN / CATALOG + TAX + FINAL INTEGRATION QA ACTIVE.**
 
 ---
 
@@ -146,10 +147,11 @@ Proven:
 - adapter, idempotency, reconciliation, audit and rollback boundaries;
 - inventory conflict/revision protection;
 - auth/localization fail-closed behavior;
-- **59 tests GREEN**;
+- **80 tests GREEN** after the explicit fulfillment-profile extension;
 - local WordPress + MariaDB bootstrap and `wc/v3` runtime GREEN;
 - credential scans GREEN;
-- PR #5 safely merged.
+- original PR #5 safely merged;
+- explicit size/temperature/pickup/delivery fulfillment contract merged through PR #27.
 
 Production WooCommerce remains separately gated.
 
@@ -229,11 +231,11 @@ Sprint 6 does not authorize production automation.
 
 ### Bounded engineering readiness delivered
 
-- Commerce 59-test foundation;
+- Commerce 80-test foundation;
 - CX 36-test foundation;
 - Operations 34-test foundation;
 - Automation 36-test foundation;
-- **165-test combined baseline GREEN**;
+- **186-test combined baseline GREEN**;
 - integrated authority/credential regression GREEN;
 - isolated WordPress/WooCommerce bootstrap + `wc/v3` GREEN;
 - isolated CX shell smoke GREEN;
@@ -263,17 +265,29 @@ Completed after bounded Sprint 7 closure:
 10. Hostinger migration path corrected: because the public site is Website Builder, create a **parallel non-public WordPress + WooCommerce pre-production site first**; Hostinger native WordPress staging is a later option only after WordPress exists and plan eligibility is verified.
 11. PR #20 pre-production package passed the full **165-test integrated readiness suite + isolated WooCommerce/CX runtime smoke** and merged as `67b65c661147ab985d71930bf5322f0d25f88b6a` with zero post-merge Actions.
 
+### WordPress/WooCommerce pre-production progress — 2026-09-02
+
+1. Separate Hostinger WordPress + WooCommerce site active at the temporary Hostinger URL; public `rubyscakedelights.shop` remains unchanged.
+2. WordPress 7.1, WooCommerce 11.0.1, SG Order Approval, Datery, KOMOJU and WP Mail SMTP verified active.
+3. Store timezone Asia/Tokyo, JPY, pickup, Yamato Cool zones/classes and size-120 rates verified.
+4. Approval-before-payment, KOMOJU Test Mode capture/refund and authenticated SMTP evidence GREEN.
+5. Six bilingual policy/legal pages published and assigned in pre-production.
+6. Read-only audit run `33582154851` GREEN; no live KOMOJU key detected.
+7. Guarded product `QA APPROVAL TEST` moved to Trash and temporary-site indexing disabled; cleanup run `33582096962` GREEN.
+8. Product contracts now require explicit shipping size, frozen/chilled eligibility, pickup/delivery eligibility and approval-before-payment; PR #27 merged and all three required CI suites GREEN.
+9. Japan tax readiness review records the 8% qualifying-food / 10% separately charged shipping candidate and required business-status decisions; PR #28 merged without enabling tax.
+
 ### Current remaining live-production blockers
 
-1. **Parallel Hostinger WordPress + WooCommerce pre-production site not yet created / QA not GREEN.**
-2. Approved production product/category source data must be loaded independently of the old builder test catalog.
-3. Production pickup + Yamato Cool shipping zones, eligibility, rates and tax behavior not yet verified.
-4. KOMOJU Test Mode has not been authorized/connected/validated; actual Ruby merchant-approved payment methods remain unverified.
-5. Tokushoho final publication approval is pending actual shipping/payment/checkout synchronization.
-6. Fresh launch-time backup/restore verification remains pending near cutover.
-7. WooCommerce production identity/connectivity/mutations and public domain/site cutover remain unauthorized.
-8. KOMOJU Live Mode / real payments remain unauthorized.
-9. External channel live identities/connectivity/replies remain separately gated.
+1. Approved production product/category/media source data must be loaded independently of the old builder test catalog.
+2. Every approved product still needs explicit SKU, size class, frozen/chilled eligibility and pickup/delivery assignment.
+3. Ruby's consumption-tax/qualified-invoice status and final WooCommerce tax-table implementation remain unresolved.
+4. Air Mobile Order Quick Pickup production URL/link surface remains pending.
+5. SMS fallback architecture is ready but production provider identity/credentials/sending remain gated.
+6. Email authentication is GREEN, but Gmail inbox placement remains unreliable.
+7. Fresh launch-time backup/restore verification remains pending near cutover.
+8. Final Tokushoho/checkout synchronization must follow catalog, tax, shipping and payment acceptance.
+9. WooCommerce production identity/connectivity/mutations, public cutover and KOMOJU Live Mode remain unauthorized.
 10. CEO/CTO live-launch sign-off has not been recorded.
 
 ### Hard stop boundary
@@ -294,7 +308,9 @@ Sprint 7 bounded readiness and production-preparation documentation do **not** a
 | **Aug 28** | Sprint 6 — Automation | **CLOSED GREEN / early** |
 | **Aug 28** | Sprint 7 bounded integrated readiness | **GREEN / live activation pending** |
 | **Aug 28–29** | Verified business profile, policies, Tokushoho reconciliation, Woo/KOMOJU pre-production gate | **COMPLETED / GREEN** |
-| **Aug 29 onward** | Parallel Hostinger WordPress/WooCommerce build + catalog/fulfillment/checkout QA | **NEXT** |
+| **Aug 29 onward** | Parallel Hostinger WordPress/WooCommerce build + catalog/fulfillment/checkout QA | **IN PROGRESS** |
+| **Sep 1–2** | Hostinger WordPress/Woo configuration, approval/payment/date/email/legal QA, safe cleanup and explicit fulfillment contract | **COMPLETED / GREEN within pre-production scope** |
+| **Sep 2 onward** | Approved catalog + tax + SMS + recovery + final integration QA | **ACTIVE / production activation gated** |
 | **Sep 1–20** | Original Sprint 3–5 windows | **Lead-time reserve for pre-production, migration, payment validation and launch-risk reduction** |
 | **Sep 21–25** | Original Sprint 6 window / stretch launch target | **Lead-time reserve; production activation remains serialized/gated** |
 | **Sep 25–30** | Production validation/training/launch | **Stretch/working window retained** |
@@ -318,15 +334,11 @@ Production activation is serialized even though preparation can run in parallel.
 
 ## Gate P2 — Parallel WordPress/WooCommerce pre-production environment
 
-**NEXT / ACCOUNT-SIDE STEP REQUIRED**
+**GREEN — 2026-09-02**
 
-Authorized Hostinger account owner:
-
-1. create a separate WordPress site in hPanel using a temporary/non-production address;
-2. keep `rubyscakedelights.shop` on the current Website Builder site;
-3. confirm WordPress Admin, WooCommerce and HTTPS;
-4. record whether Hostinger native `WordPress → Staging` is available after WordPress exists;
-5. do not connect KOMOJU yet.
+The temporary Hostinger WordPress/WooCommerce site is active and verified.
+`rubyscakedelights.shop` remains on the Website Builder site. Indexing on the
+temporary site is disabled.
 
 Operator source:
 
@@ -335,31 +347,28 @@ Operator source:
 
 ## Gate P3 — Storefront/catalog/fulfillment QA
 
-Pending P2.
+**IN PROGRESS**
 
 Requires:
 
-- verified business/legal content loaded;
-- old builder test products/categories absent;
-- separately approved catalog data loaded;
-- pickup flow GREEN;
-- Yamato Cool shipping configuration/rates GREEN;
-- tax/totals/fees GREEN;
-- mobile/bilingual/accessibility/checkout QA GREEN.
+- [x] verified business/legal content loaded;
+- [x] old builder test products/categories absent;
+- [ ] separately approved catalog data loaded;
+- [x] pickup flow GREEN;
+- [x] Yamato Cool zone/rate foundation GREEN;
+- [ ] product-level size and frozen/chilled eligibility assigned and tested;
+- [ ] tax/totals/fees GREEN;
+- [ ] final mobile/bilingual/accessibility/checkout QA GREEN.
 
 ## Gate P4 — KOMOJU Test Mode
 
-**SEPARATE APPROVAL REQUIRED**
+**GREEN IN PRE-PRODUCTION / LIVE MODE NOT AUTHORIZED**
 
-Only after pre-production checkout/fulfillment is ready:
-
-- install/enable current KOMOJU Payments plugin;
-- use **Sign into KOMOJU**;
-- select correct Ruby merchant account and **Test Mode**;
-- verify merchant-approved payment methods;
-- run controlled test transactions;
-- validate order/payment/webhook state and failures;
-- synchronize payment methods/timing into checkout and Tokushoho.
+- test keys and webhook secret verified without exposing values;
+- legacy aggregate gateway disabled;
+- KOMOJU Credit Card gateway enabled;
+- controlled Test Mode capture and full refund verified;
+- no live key or Live Mode authority introduced.
 
 No Live Mode.
 
@@ -414,8 +423,7 @@ Update this roadmap when:
 
 Mandatory remaining reviews:
 
-- after Hostinger WordPress pre-production creation;
-- before KOMOJU Test Mode connection;
+- after approved catalog and tax QA;
 - after pre-production storefront/payment QA;
 - before public storefront cutover;
 - before KOMOJU Live Mode;
@@ -454,13 +462,11 @@ Bounded engineering readiness alone is not the same as V1 production launch comp
 
 The following can proceed without a new production authority grant:
 
-- create the **parallel non-public Hostinger WordPress + WooCommerce pre-production site** while leaving the public Website Builder site unchanged;
-- verify WordPress/WooCommerce/HTTPS and Hostinger native staging eligibility;
-- populate verified store/contact/policy information in the non-public environment;
 - build the production catalog/categories only from separately verified Ruby business data;
-- configure and test pickup and Yamato shipping in pre-production;
+- assign explicit SKU, size class, frozen/chilled eligibility and pickup/delivery eligibility;
+- prepare and test tax-inclusive WooCommerce configuration only after Ruby's tax/invoice status is confirmed;
 - execute isolated/non-production QA that creates no unapproved production side effect;
-- prepare the KOMOJU Test Mode activation package without signing into the merchant account;
+- prepare SMS provider activation evidence without production sending;
 - perform fresh backup/restore verification near cutover;
 - continue operator training and launch rehearsal.
 
@@ -468,17 +474,16 @@ The following can proceed without a new production authority grant:
 
 Explicit governed gates are required before:
 
-1. KOMOJU Test Mode connection/sign-in;
-2. WooCommerce production identity/credentials/connectivity or writes;
-3. Tokushoho final production publication if configuration-dependent values are unresolved;
-4. live external-channel connectivity/webhooks/replies/writes;
-5. production catalog/inventory/order mutation authority;
-6. public WordPress/WooCommerce cutover/DNS/site change;
-7. KOMOJU Live Mode / real charges/refunds;
-8. specialist enablement/new task class/higher autonomy;
-9. Mission Control write/mutation authority;
-10. automatic production execution/retry/rollback; and
-11. final live-launch Go decision.
+1. WooCommerce production identity/credentials/connectivity or writes;
+2. Tokushoho final production publication if configuration-dependent values are unresolved;
+3. live external-channel connectivity/webhooks/replies/writes;
+4. production catalog/inventory/order mutation authority;
+5. public WordPress/WooCommerce cutover/DNS/site change;
+6. KOMOJU Live Mode / real charges/refunds;
+7. specialist enablement/new task class/higher autonomy;
+8. Mission Control write/mutation authority;
+9. automatic production execution/retry/rollback; and
+10. final live-launch Go decision.
 
 ---
 
@@ -509,6 +514,9 @@ Targets remain unchanged. Early bounded engineering closure creates a substantia
 | **2026-08-29** | Verified Ruby Business Profile reached **15/15**; phone `050-1785-0575`, business description, customer policies, Privacy Policy and Terms verified. | **Business-data blocker closed; targets unchanged.** |
 | **2026-08-29** | Existing 特定商取引法 disclosure captured/reconciled; legal seller identity preserved; current email/phone applied; shipping + pickup fulfillment paths reconciled. | **Legal-source blocker closed; final publication sync remains.** |
 | **2026-08-29** | WooCommerce/KOMOJU pre-production package GREEN: Hostinger parallel WordPress migration path and current KOMOJU sign-in/Test Mode model encoded; full 165-test/readiness regression + isolated Woo/CX runtime GREEN; PR #20 merged as `67b65c66...`. | **Program advances to account-side parallel WordPress creation; targets unchanged.** |
+| **2026-09-02** | Hostinger WordPress/Woo pre-production configuration GREEN; guarded QA product trashed; indexing disabled; read-only verification GREEN. | **P2 closed; P3 catalog/final integration QA active; targets unchanged.** |
+| **2026-09-02** | Explicit fulfillment profile merged through PR #27; Commerce 80 tests and 186-test integrated baseline GREEN. | **Product-level size/temperature contract gap closed; targets unchanged.** |
+| **2026-09-02** | Japan tax readiness review merged through PR #28; no tax setting activated pending business-status confirmation. | **Tax implementation path prepared; targets unchanged.** |
 
 ---
 
