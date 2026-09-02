@@ -81,15 +81,16 @@ class CatalogTaxReadinessTests(unittest.TestCase):
         )
         return payload
 
-    def test_pending_template_fails_closed_with_explicit_blockers(self):
+    def test_pending_catalog_fails_closed_while_reconciled_exempt_tax_is_ready(self):
         result = evaluate_catalog_tax_readiness(self.pending_template())
         self.assertFalse(result.catalog_ready)
-        self.assertFalse(result.tax_decision_ready)
+        self.assertTrue(result.tax_decision_ready)
         self.assertFalse(result.ready_for_preproduction_configuration)
         self.assertFalse(result.mutation_authorized)
         self.assertFalse(result.production_publish_authorized)
         self.assertIn("catalog approval is pending", result.blockers)
-        self.assertIn("taxable business status is pending", result.blockers)
+        self.assertNotIn("Yamato separate-charge treatment is pending", result.blockers)
+        self.assertNotIn("COD fee treatment is pending", result.blockers)
 
     def test_complete_example_can_be_ready_but_never_authorizes_mutation(self):
         result = evaluate_catalog_tax_readiness(self.approved_package())
@@ -99,6 +100,28 @@ class CatalogTaxReadinessTests(unittest.TestCase):
         self.assertFalse(result.mutation_authorized)
         self.assertFalse(result.production_publish_authorized)
         self.assertEqual(result.blockers, ())
+
+    def test_exempt_tax_disabled_route_does_not_require_tax_class_shipping_or_cod_tax_treatment(self):
+        payload = self.approved_package()
+        payload["products"][0]["tax_class_candidate"] = "pending"
+        payload["tax_decision"] = {
+            "taxable_business_status": "exempt",
+            "qualified_invoice_status": "not_registered",
+            "qualified_invoice_registration_number": None,
+            "yamato_shipping_separately_charged": "pending",
+            "cod_fee_treatment": "pending",
+            "implementation_route": "tax_disabled_candidate",
+            "decision_evidence_ref": "ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json",
+        }
+        result = evaluate_catalog_tax_readiness(payload)
+        self.assertTrue(result.catalog_ready)
+        self.assertTrue(result.tax_decision_ready)
+        self.assertTrue(result.ready_for_preproduction_configuration)
+        self.assertNotIn("product[1] APPROVED-001 tax class is pending", result.blockers)
+        self.assertNotIn("Yamato separate-charge treatment is pending", result.blockers)
+        self.assertNotIn("COD fee treatment is pending", result.blockers)
+        self.assertFalse(result.mutation_authorized)
+        self.assertFalse(result.production_publish_authorized)
 
     def test_boundary_flags_must_remain_false(self):
         payload = self.pending_template()
