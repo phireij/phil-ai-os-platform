@@ -47,7 +47,7 @@ jobs:
           WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
           wp option update woocommerce_email_from_address 'info@rubyscakedelights.shop' --path="$WP_PATH" >/dev/null
           wp option update woocommerce_email_from_name "Ruby's Cake Delights" --path="$WP_PATH" >/dev/null
-          wp option update wp_mail_smtp '{"mail":{"from_email":"info@rubyscakedelights.shop","from_name":"Ruby's Cake Delights","mailer":"smtp","return_path":true,"from_email_force":true,"from_name_force":true},"smtp":{"host":"smtp.hostinger.com","port":465,"encryption":"ssl","autotls":true,"auth":true,"user":"info@rubyscakedelights.shop","pass":""},"general":{"summary_report_email_disabled":false}}' --format=json --path="$WP_PATH" >/dev/null
+          wp option update wp_mail_smtp '{"mail":{"from_email":"info@rubyscakedelights.shop","from_name":"Ruby\u0027s Cake Delights","mailer":"smtp","return_path":true,"from_email_force":true,"from_name_force":true},"smtp":{"host":"smtp.hostinger.com","port":465,"encryption":"ssl","autotls":true,"auth":true,"user":"info@rubyscakedelights.shop","pass":""},"general":{"summary_report_email_disabled":false}}' --format=json --path="$WP_PATH" >/dev/null
           echo '=== VERIFIED NON-SECRET SMTP CONFIG ==='
           wp eval '
           $o=get_option("wp_mail_smtp",[]);
