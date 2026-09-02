@@ -1,0 +1,103 @@
+name: Hostinger WordPress Policy Publish and KOMOJU Verify
+
+on:
+  push:
+    branches:
+      - ops/hostinger-wordpress-operator-bootstrap
+    paths:
+      - '.github/workflows/hostinger-wordpress-policy-publish-komoju-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure VPS SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+      - name: Publish approved pages and verify test-only KOMOJU credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          KEY_DIR="$HOME/.ssh/philaios-hostinger-wordpress"
+          KEY="$KEY_DIR/preprod_operator_ed25519"
+          HOSTINGER_HOST='147.93.80.5'
+          HOSTINGER_PORT='65002'
+          HOSTINGER_USER='u925842746'
+          ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
+          chmod 600 "$KEY_DIR/hostinger_known_hosts"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
+
+          wp eval '
+          $approved=[
+            "Privacy Policy / プライバシーポリシー",
+            "Terms & Conditions / 利用規約",
+            "特定商取引法に基づく表記 / Commerce Disclosure",
+            "Cancellation & Refund Policy / キャンセル・返金ポリシー",
+            "Pickup & Order Policy / 店頭受取・注文ポリシー",
+            "Allergen Information / アレルゲン情報"
+          ];
+          $pages=get_posts(["post_type"=>"page","post_status"=>["publish","draft","private","pending"],"numberposts"=>-1]);
+          $matched=[];
+          foreach($pages as $p){
+            $title=html_entity_decode($p->post_title,ENT_QUOTES|ENT_HTML5,"UTF-8");
+            if(in_array($title,$approved,true)){
+              if(isset($matched[$title])){fwrite(STDERR,"duplicate approved page: ".$title."\n");exit(2);}
+              $matched[$title]=$p->ID;
+            }
+          }
+          foreach($approved as $title){
+            if(!isset($matched[$title])){fwrite(STDERR,"missing approved page: ".$title."\n");exit(3);}
+            $id=$matched[$title];
+            if(get_post_status($id)!=="publish"){
+              $r=wp_update_post(["ID"=>$id,"post_status"=>"publish"],true);
+              if(is_wp_error($r)){fwrite(STDERR,"publish failed: ".$title."\n");exit(4);}
+            }
+            echo "policy=".$title."|id=".$id."|status=".get_post_status($id)."\n";
+          }
+          $privacyId=(int)get_option("wp_page_for_privacy_policy",0);
+          echo "wordpress_privacy_page_id=".$privacyId."\n";
+          if($privacyId){echo "wordpress_privacy_page_status=".get_post_status($privacyId)."\n";echo "wordpress_privacy_page_title=".get_the_title($privacyId)."\n";}
+          ' --path="$WP_PATH"
+
+          echo '=== KOMOJU KEY MODE (NO SECRET VALUES) ==='
+          wp eval '
+          foreach(["komoju_woocommerce_secret_key","komoju_woocommerce_publishable_key","komoju_woocommerce_webhook_secret"] as $name){
+            $s=(string)get_option($name,"");
+            $kind=$s===""?"empty":"set";
+            if(str_starts_with($s,"sk_test_")) $kind="sk_test";
+            elseif(str_starts_with($s,"pk_test_")) $kind="pk_test";
+            elseif(str_starts_with($s,"sk_live_")) $kind="sk_live";
+            elseif(str_starts_with($s,"pk_live_")) $kind="pk_live";
+            echo $name."=".$kind."\n";
+          }
+          $secret=(string)get_option("komoju_woocommerce_secret_key","");
+          $pub=(string)get_option("komoju_woocommerce_publishable_key","");
+          $testOnly=str_starts_with($secret,"sk_test_") && str_starts_with($pub,"pk_test_");
+          echo "komoju_test_only=".($testOnly?"true":"false")."\n";
+          if(!$testOnly){fwrite(STDERR,"KOMOJU test-only assertion failed\n");exit(5);}
+          ' --path="$WP_PATH"
+          echo 'PHIL_AI_OS_POLICY_PUBLISH_KOMOJU_TEST_ONLY_OK'
+          HOSTREMOTE
+          REMOTE
