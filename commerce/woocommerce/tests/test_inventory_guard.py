@@ -2,7 +2,12 @@ import unittest
 
 from phil_ai_os_woocommerce import InventoryConflictError, StaleInventoryRevision
 from phil_ai_os_woocommerce.adapter import MockWooCommerceTransport, WooCommerceAdapter
-from phil_ai_os_woocommerce.models import InventoryRecord, LocalizedText, ProductRecord
+from phil_ai_os_woocommerce.models import (
+    FulfillmentProfile,
+    InventoryRecord,
+    LocalizedText,
+    ProductRecord,
+)
 
 
 class InventoryRevisionGuardTests(unittest.TestCase):
@@ -16,6 +21,7 @@ class InventoryRevisionGuardTests(unittest.TestCase):
             slug=LocalizedText(en="cake-rev", ja="cake-rev-ja"),
             regular_price="500",
             currency="JPY",
+            fulfillment=FulfillmentProfile("cool-60", ("chilled",), True, True),
         )
         self.adapter.reconcile_product(product)
 
