@@ -6,6 +6,10 @@ on:
       - "commerce/woocommerce/**"
       - "contracts/cx/**"
       - "contracts/operations/**"
+      - "ops/readiness/ruby-sprint3-current-acceptance-*.json"
+      - "docs/SPRINT_3_CURRENT_ACCEPTANCE_CHECKPOINT_*.md"
+      - "docs/MASTER_EXECUTIVE_ROADMAP_SCHEDULE_CONTROL.md"
+      - "scripts/validate_sprint3_current_acceptance.py"
       - ".github/workflows/sprint-3-woocommerce-foundation-ci.yml"
   push:
     branches:
@@ -14,6 +18,10 @@ on:
       - "commerce/woocommerce/**"
       - "contracts/cx/**"
       - "contracts/operations/**"
+      - "ops/readiness/ruby-sprint3-current-acceptance-*.json"
+      - "docs/SPRINT_3_CURRENT_ACCEPTANCE_CHECKPOINT_*.md"
+      - "docs/MASTER_EXECUTIVE_ROADMAP_SCHEDULE_CONTROL.md"
+      - "scripts/validate_sprint3_current_acceptance.py"
       - ".github/workflows/sprint-3-woocommerce-foundation-ci.yml"
 
 permissions:
@@ -34,6 +42,8 @@ jobs:
         env:
           PYTHONPATH: commerce/woocommerce/src
         run: python -m unittest discover -s commerce/woocommerce/tests -v
+      - name: Validate current Sprint 3 acceptance checkpoint
+        run: python scripts/validate_sprint3_current_acceptance.py
       - name: Validate local Compose topology
         shell: bash
         run: |
