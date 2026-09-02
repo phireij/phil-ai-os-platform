@@ -1,4 +1,4 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v4";
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v5";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -13,6 +13,7 @@ const APP_SHELL = [
   "./src/flow.mjs",
   "./src/payment.mjs",
   "./src/pickup.mjs",
+  "./src/readiness-feedback.mjs",
   "./src/seo.mjs",
   "./fixtures/catalog.json",
   "./fixtures/payment-provider.json",
