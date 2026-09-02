@@ -47,7 +47,7 @@ jobs:
           WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
           wp eval '
           add_filter("wp_mail_from", function(){ return "info@rubyscakedelights.shop"; });
-          add_filter("wp_mail_from_name", function(){ return "Ruby's"'"'"' Cake Delights"; });
+          add_filter("wp_mail_from_name", function(){ return "Ruby Cake Delights"; });
           $ok = wp_mail("phireij@gmail.com", "Ruby Mail Delivery Test 2026-09-02", "Controlled pre-production delivery test using info@rubyscakedelights.shop as the sender.");
           echo $ok ? "wp_mail=true\n" : "wp_mail=false\n";
           ' --path="$WP_PATH"
