@@ -77,6 +77,7 @@ def main() -> None:
         "src/flow.mjs",
         "src/payment.mjs",
         "src/pickup.mjs",
+        "src/readiness-feedback.mjs",
         "src/seo.mjs",
         "fixtures/catalog.json",
         "fixtures/payment-provider.json",
@@ -182,12 +183,15 @@ def main() -> None:
 
     app = (ROOT / "src/app.mjs").read_text(encoding="utf-8")
     cart_preview = (ROOT / "src/cart-preview.mjs").read_text(encoding="utf-8")
+    readiness_feedback = (ROOT / "src/readiness-feedback.mjs").read_text(encoding="utf-8")
     if "fixture_only !== true" not in app or "fixture_only !== true" not in cart_preview:
         fail("all customer previews must refuse non-fixture data")
     if 'serviceWorker.register("./sw.js")' not in app:
         fail("PWA service worker registration missing")
     if "buildPaymentHandoffIntent" not in cart_preview:
         fail("cart preview must compose the inert payment handoff through the tested boundary")
+    if "readiness feedback must remain non-authorizing" not in readiness_feedback:
+        fail("customer readiness feedback must preserve the non-authorizing boundary")
 
     service_worker = (ROOT / "sw.js").read_text(encoding="utf-8")
     for cached_path in (
@@ -197,6 +201,7 @@ def main() -> None:
         "./src/flow.mjs",
         "./src/payment.mjs",
         "./src/pickup.mjs",
+        "./src/readiness-feedback.mjs",
         "./src/seo.mjs",
         "./fixtures/payment-provider.json",
         "./fixtures/pickup-policy.json",
