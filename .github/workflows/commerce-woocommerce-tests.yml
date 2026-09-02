@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - 'commerce/woocommerce/**'
+      - 'contracts/commerce/**'
       - '.github/workflows/commerce-woocommerce-tests.yml'
   push:
     branches:
       - main
     paths:
       - 'commerce/woocommerce/**'
+      - 'contracts/commerce/**'
       - '.github/workflows/commerce-woocommerce-tests.yml'
 
 permissions:
@@ -29,3 +31,8 @@ jobs:
         env:
           PYTHONPATH: src
         run: python -m unittest discover -s tests -v
+      - name: Validate catalog and tax intake gate
+        working-directory: commerce/woocommerce
+        env:
+          PYTHONPATH: src
+        run: python tools_validate_catalog_readiness.py

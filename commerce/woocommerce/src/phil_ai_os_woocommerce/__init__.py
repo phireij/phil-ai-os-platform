@@ -25,6 +25,7 @@ from .category_plan import (
     plan_category_hierarchy,
     project_category_payload,
 )
+from .catalog_readiness import CatalogTaxReadiness, evaluate_catalog_tax_readiness
 from .inventory_guard import (
     InventoryConflictError,
     InventoryRevisionState,
@@ -68,6 +69,7 @@ __all__ = [
     "CategoryHierarchyError",
     "CategoryPlanItem",
     "CategoryRecord",
+    "CatalogTaxReadiness",
     "CommerceSyncAuditEvent",
     "CredentialBoundaryError",
     "CredentialReference",
@@ -103,6 +105,7 @@ __all__ = [
     "build_product_media_plan",
     "capture_mock_snapshot",
     "execute_with_retry",
+    "evaluate_catalog_tax_readiness",
     "plan_category_hierarchy",
     "plan_media_reconciliation",
     "project_category_payload",

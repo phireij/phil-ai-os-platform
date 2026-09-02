@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "environment": "pre-production",
+  "package_state": "draft",
+  "catalog_approved": false,
+  "catalog_approval_ref": null,
+  "categories": [],
+  "media": [],
+  "products": [],
+  "tax_decision": {
+    "taxable_business_status": "pending",
+    "qualified_invoice_status": "pending",
+    "qualified_invoice_registration_number": null,
+    "yamato_shipping_separately_charged": "pending",
+    "cod_fee_treatment": "pending",
+    "implementation_route": "pending",
+    "decision_evidence_ref": null
+  },
+  "mutation_authorized": false,
+  "production_publish_authorized": false
+}

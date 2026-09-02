@@ -30,6 +30,8 @@ def main() -> int:
 
     shared_contract = REPO_ROOT / "contracts" / "commerce" / "site-migration-source.schema.json"
     validate_schema_file(shared_contract)
+    catalog_tax_contract = REPO_ROOT / "contracts" / "commerce" / "catalog-tax-intake.schema.json"
+    validate_schema_file(catalog_tax_contract)
 
     for contract_dir in (REPO_ROOT / "contracts" / "cx", REPO_ROOT / "contracts" / "operations"):
         for schema in sorted(contract_dir.glob("*.schema.json")):
