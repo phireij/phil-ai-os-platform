@@ -1,0 +1,36 @@
+{
+  "version": "ruby-sprint3-current-acceptance-v1",
+  "date": "2026-09-03",
+  "executive_roadmap": {
+    "current_primary_sprint": 3,
+    "current_primary_sprint_name": "WooCommerce Foundation",
+    "sprint4_parallel_acceleration": true,
+    "formal_sprint4_entry": false
+  },
+  "technical_acceptance": {
+    "woocommerce_foundation_green": true,
+    "isolated_wordpress_woocommerce_runtime_green": true,
+    "preproduction_configuration_green": true,
+    "production_read_only_identity_green": true,
+    "catalog_tax_intake_fail_closed_green": true,
+    "catalog_provenance_integrity_guard_green": true,
+    "catalog_dry_run_reconciliation_ready": true,
+    "production_mutation_enabled": false
+  },
+  "remaining_sprint3_exit_inputs": {
+    "final_owner_approved_catalog": false,
+    "japan_tax_evidence_and_decision": false
+  },
+  "exit_state": {
+    "sprint3_exit_inputs_complete": false,
+    "formal_sprint3_closure": false,
+    "production_catalog_write_ready": false,
+    "tax_activation_ready": false
+  },
+  "authority": {
+    "mutation_authorized": false,
+    "production_publish_authorized": false,
+    "automatic_production_execution": false
+  },
+  "decision": "SPRINT_3_CURRENT_PRIMARY_PENDING_OWNER_INPUTS"
+}
