@@ -134,6 +134,62 @@ class InventoryRecord:
 
 
 @dataclass(frozen=True)
+class FulfillmentProfile:
+    shipping_class: str | None
+    temperature_modes: tuple[str, ...]
+    pickup_allowed: bool
+    delivery_allowed: bool
+    requires_order_approval: bool = True
+
+    def __post_init__(self) -> None:
+        allowed_classes = {"cool-60", "cool-80", "cool-100", "cool-120"}
+        allowed_temperatures = {"frozen", "chilled"}
+        if self.shipping_class is not None and self.shipping_class not in allowed_classes:
+            raise ContractValidationError("unsupported WooCommerce shipping class")
+        if len(set(self.temperature_modes)) != len(self.temperature_modes):
+            raise ContractValidationError("temperature_modes must be unique")
+        if not set(self.temperature_modes).issubset(allowed_temperatures):
+            raise ContractValidationError("unsupported fulfillment temperature mode")
+        if not self.pickup_allowed and not self.delivery_allowed:
+            raise ContractValidationError("at least one fulfillment channel must be allowed")
+        if self.delivery_allowed and self.shipping_class is None:
+            raise ContractValidationError("delivery products require an explicit shipping class")
+        if self.delivery_allowed and not self.temperature_modes:
+            raise ContractValidationError("delivery products require at least one temperature mode")
+        if not self.delivery_allowed and (self.shipping_class is not None or self.temperature_modes):
+            raise ContractValidationError(
+                "pickup-only products cannot declare delivery shipping or temperature settings"
+            )
+        if not self.requires_order_approval:
+            raise ContractValidationError(
+                "WooCommerce pre-production products must retain approval-before-payment"
+            )
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "FulfillmentProfile":
+        return cls(
+            shipping_class=value.get("shipping_class"),
+            temperature_modes=tuple(str(v) for v in value.get("temperature_modes", [])),
+            pickup_allowed=bool(value.get("pickup_allowed", False)),
+            delivery_allowed=bool(value.get("delivery_allowed", False)),
+            requires_order_approval=bool(value.get("requires_order_approval", False)),
+        )
+
+    def to_wc_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "meta_data": [
+                {"key": "_philaios_temperature_modes", "value": list(self.temperature_modes)},
+                {"key": "_philaios_pickup_allowed", "value": self.pickup_allowed},
+                {"key": "_philaios_delivery_allowed", "value": self.delivery_allowed},
+                {"key": "_philaios_requires_order_approval", "value": self.requires_order_approval},
+            ]
+        }
+        if self.shipping_class is not None:
+            payload["shipping_class"] = self.shipping_class
+        return payload
+
+
+@dataclass(frozen=True)
 class ProductRecord:
     sku: str
     name: LocalizedText
@@ -141,6 +197,7 @@ class ProductRecord:
     slug: LocalizedText
     regular_price: str
     currency: str
+    fulfillment: FulfillmentProfile
     status: str = "draft"
     visibility: str = "visible"
     category_keys: tuple[str, ...] = field(default_factory=tuple)
@@ -173,6 +230,7 @@ class ProductRecord:
             slug=LocalizedText.from_mapping(value.get("slug", {})),
             regular_price=str(value.get("regular_price", "")),
             currency=str(value.get("currency", "")),
+            fulfillment=FulfillmentProfile.from_mapping(value.get("fulfillment", {})),
             status=str(value.get("status", "draft")),
             visibility=str(value.get("visibility", "visible")),
             category_keys=tuple(str(v) for v in value.get("category_keys", [])),
@@ -201,7 +259,7 @@ class ProductRecord:
         name = self.name.en if locale == "en" else self.name.ja
         description = self.description.en if locale == "en" else self.description.ja
         slug = self.slug.en if locale == "en" else self.slug.ja
-        return {
+        payload = {
             "sku": self.sku,
             "name": name,
             "description": description,
@@ -210,3 +268,5 @@ class ProductRecord:
             "status": self.status,
             "catalog_visibility": self.visibility,
         }
+        payload.update(self.fulfillment.to_wc_payload())
+        return payload
