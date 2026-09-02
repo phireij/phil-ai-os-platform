@@ -1,0 +1,71 @@
+name: Hostinger WordPress Mail Diagnostics
+on:
+  push:
+    branches:
+      - ops/hostinger-wordpress-operator-bootstrap
+    paths:
+      - '.github/workflows/hostinger-wordpress-mail-diagnostics.yml'
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure VPS SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+      - name: Diagnose WordPress and domain mail settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          KEY_DIR="$HOME/.ssh/philaios-hostinger-wordpress"
+          KEY="$KEY_DIR/preprod_operator_ed25519"
+          HOSTINGER_HOST='147.93.80.5'
+          HOSTINGER_PORT='65002'
+          HOSTINGER_USER='u925842746'
+          ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
+          chmod 600 "$KEY_DIR/hostinger_known_hosts"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
+          echo '=== WORDPRESS MAIL SETTINGS ==='
+          printf 'admin_email='; wp option get admin_email --path="$WP_PATH" || true
+          printf 'woocommerce_email_from_name='; wp option get woocommerce_email_from_name --path="$WP_PATH" || true
+          printf 'woocommerce_email_from_address='; wp option get woocommerce_email_from_address --path="$WP_PATH" || true
+          printf 'siteurl='; wp option get siteurl --path="$WP_PATH" || true
+          printf 'home='; wp option get home --path="$WP_PATH" || true
+          echo '=== PHP MAIL ==='
+          php -r 'echo "sendmail_path=".ini_get("sendmail_path")."\n"; echo "SMTP=".ini_get("SMTP")."\n"; echo "smtp_port=".ini_get("smtp_port")."\n";'
+          echo '=== MAILER PLUGINS ==='
+          wp plugin list --path="$WP_PATH" --fields=name,status,version --format=csv | grep -Ei 'smtp|mail|email' || true
+          echo '=== DNS ==='
+          for cmd in dig host nslookup; do command -v "$cmd" >/dev/null 2>&1 && echo "$cmd=$(command -v "$cmd")"; done
+          if command -v dig >/dev/null 2>&1; then
+            echo '-- MX rubyscakedelights.shop --'; dig +short MX rubyscakedelights.shop || true
+            echo '-- TXT rubyscakedelights.shop --'; dig +short TXT rubyscakedelights.shop || true
+            echo '-- TXT _dmarc.rubyscakedelights.shop --'; dig +short TXT _dmarc.rubyscakedelights.shop || true
+          elif command -v host >/dev/null 2>&1; then
+            host -t MX rubyscakedelights.shop || true
+            host -t TXT rubyscakedelights.shop || true
+            host -t TXT _dmarc.rubyscakedelights.shop || true
+          fi
+          echo 'PHIL_AI_OS_WORDPRESS_MAIL_DIAGNOSTICS_OK'
+          HOSTREMOTE
+          REMOTE
