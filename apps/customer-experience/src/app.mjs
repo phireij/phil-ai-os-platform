@@ -7,6 +7,7 @@ import {
 } from "./core.mjs";
 import { createCustomerFlow, transitionCustomerFlow } from "./flow.mjs";
 import { evaluatePickupSelection } from "./pickup.mjs";
+import { readinessFeedback } from "./readiness-feedback.mjs";
 import { catalogMetadata, productMetadata } from "./seo.mjs";
 
 const copy = {
@@ -29,6 +30,8 @@ const copy = {
     intentTitle: "Local checkout intent preview",
     ready: "Ready for a later governed execution step",
     blocked: "Not ready — customer action or inventory review required",
+    nextSteps: "What to do next",
+    technicalDetails: "Technical preview details",
     noOrder: "No order was created. mutation_authorized remains false.",
     safetyTitle: "Checkout remains an intent",
     safetyCopy: "This Sprint 4 preview can compose and evaluate checkout intent locally. It cannot create an order, charge a payment, or mutate WooCommerce.",
@@ -53,6 +56,8 @@ const copy = {
     intentTitle: "ローカル・チェックアウトインテント",
     ready: "後続のガバナンス済み実行ステップへ進める状態です",
     blocked: "未準備 — お客様の操作または在庫確認が必要です",
+    nextSteps: "次に必要なこと",
+    technicalDetails: "技術プレビューの詳細",
     noOrder: "注文は作成されていません。mutation_authorized は false のままです。",
     safetyTitle: "チェックアウトはインテントのままです",
     safetyCopy: "Sprint 4プレビューはチェックアウトインテントの作成と準備評価のみをローカルで行います。注文作成、決済、WooCommerce変更はできません。",
@@ -158,6 +163,11 @@ function localDateTimeToIso(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function feedbackList(items) {
+  if (items.length === 0) return "";
+  return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
+
 function renderDetail(product) {
   state.flow = transitionCustomerFlow(createCustomerFlow(), "select_product");
   const vm = productDetailViewModel(product, state.locale);
@@ -191,7 +201,7 @@ function renderDetail(product) {
           </div>
           <p><button class="primary-button" type="submit">${escapeHtml(copy[state.locale].evaluate)}</button></p>
         </form>
-        <div id="intent-output" class="intent-output" hidden aria-live="polite"></div>
+        <div id="intent-output" class="intent-output" hidden role="status" aria-live="polite" aria-atomic="true"></div>
       </section>
     </div>`;
   productDetail.append(wrapper);
@@ -227,10 +237,25 @@ function renderDetail(product) {
     };
     state.flow = transitionCustomerFlow(state.flow, readiness.ready ? "readiness_ready" : "readiness_blocked");
 
+    const feedback = readinessFeedback(readiness, state.locale);
     const output = document.querySelector("#intent-output");
     output.hidden = false;
-    output.innerHTML = `<strong>${escapeHtml(readiness.ready ? copy[state.locale].ready : copy[state.locale].blocked)}</strong><p>${escapeHtml(copy[state.locale].noOrder)}</p><pre></pre>`;
-    output.querySelector("pre").textContent = JSON.stringify({ flow: state.flow, intent, pickup_readiness: pickupReadiness, readiness }, null, 2);
+    const guidance = feedback.ready
+      ? `<p>${escapeHtml(feedback.summary)}</p>`
+      : `<p>${escapeHtml(feedback.summary)}</p><h3>${escapeHtml(copy[state.locale].nextSteps)}</h3>${feedbackList(feedback.action_messages.length ? feedback.action_messages : feedback.blocker_messages)}`;
+    output.innerHTML = `
+      <strong>${escapeHtml(readiness.ready ? copy[state.locale].ready : copy[state.locale].blocked)}</strong>
+      ${guidance}
+      <p>${escapeHtml(copy[state.locale].noOrder)}</p>
+      <details>
+        <summary>${escapeHtml(copy[state.locale].technicalDetails)}</summary>
+        <pre></pre>
+      </details>`;
+    output.querySelector("pre").textContent = JSON.stringify(
+      { flow: state.flow, intent, pickup_readiness: pickupReadiness, readiness, customer_feedback: feedback },
+      null,
+      2,
+    );
   });
 }
 
