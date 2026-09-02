@@ -39,6 +39,14 @@ Category hierarchy planning validates unique keys, existing parents, acyclic rel
 
 Product media planning resolves canonical media references, requires exactly one primary image when media is present, rejects ambiguous positions, and produces deterministic locale-specific manifests without uploading files.
 
+Every product must also carry an explicit fulfillment profile. Delivery-enabled
+products declare one of the approved Yamato Cool size classes and at least one
+temperature mode (`frozen` or `chilled`). Pickup-only products cannot carry
+delivery settings. The profile projects deterministic WooCommerce shipping
+class and Phil AI OS metadata fields while preserving approval-before-payment
+as a required invariant. This prevents a size-only shipping class from silently
+making both frozen and chilled methods eligible for every product.
+
 ## Resilience, audit, and rollback preparation
 
 A failure-injecting test transport and retry executor exercise transient HTTP retry policy without sleeping or using live network connectivity. The executor returns planned delays for assertions.
