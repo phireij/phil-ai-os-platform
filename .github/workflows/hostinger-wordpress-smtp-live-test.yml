@@ -50,9 +50,9 @@ jobs:
           $has=!empty($o["smtp"]["pass"]);
           echo "smtp_password_set=".($has?"true":"false")."\n";
           if(!$has){ exit(2); }
-          $subject="Ruby SMTP Delivery Test 2026-09-02";
-          $body="Authenticated SMTP delivery test from Ruby pre-production. Marker: PHIL_AI_OS_SMTP_DELIVERY_OK";
-          $ok=wp_mail("phireij@gmail.com",$subject,$body);
+          $subject="Ruby SMTP Delivery Verification 2026-09-02";
+          $body="Authenticated SMTP delivery verification from Ruby pre-production. Marker: PHIL_AI_OS_SMTP_CONNECTED_GMAIL_OK";
+          $ok=wp_mail("pbombeo76@gmail.com",$subject,$body);
           echo "wp_mail=".($ok?"true":"false")."\n";
           if(!$ok){ exit(3); }
           ' --path="$WP_PATH"
