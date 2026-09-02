@@ -1,0 +1,126 @@
+name: Hostinger WordPress Preprod Config Verification
+
+on:
+  push:
+    branches:
+      - ops/hostinger-wordpress-operator-bootstrap
+    paths:
+      - '.github/workflows/hostinger-wordpress-preprod-config-verification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configure VPS SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 15 -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+      - name: Verify bounded configuration without exposing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          KEY_DIR="$HOME/.ssh/philaios-hostinger-wordpress"
+          KEY="$KEY_DIR/preprod_operator_ed25519"
+          HOSTINGER_HOST='147.93.80.5'
+          HOSTINGER_PORT='65002'
+          HOSTINGER_USER='u925842746'
+          ssh-keyscan -T 15 -p "$HOSTINGER_PORT" -H "$HOSTINGER_HOST" > "$KEY_DIR/hostinger_known_hosts" 2>/dev/null
+          chmod 600 "$KEY_DIR/hostinger_known_hosts"
+          ssh -i "$KEY" -p "$HOSTINGER_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KEY_DIR/hostinger_known_hosts" "$HOSTINGER_USER@$HOSTINGER_HOST" 'bash -s' <<'HOSTREMOTE'
+          set -euo pipefail
+          WP_PATH='/home/u925842746/domains/darkgreen-wallaby-680439.hostingersite.com/public_html'
+
+          echo '=== KOMOJU SAFE VERIFICATION ==='
+          wp eval '
+          $candidates=["woocommerce_komoju_settings","woocommerce_komoju_credit_card_settings"];
+          foreach($candidates as $name){
+            $o=get_option($name,[]);
+            echo $name."|present=".(is_array($o)&&$o?"true":"false")."\n";
+            if(!is_array($o)) continue;
+            foreach($o as $k=>$v){
+              if(!is_scalar($v)) continue;
+              $s=(string)$v;
+              if(stripos($k,"key")!==false || stripos($k,"secret")!==false || stripos($k,"token")!==false){
+                $kind="set";
+                if(str_starts_with($s,"sk_test_")) $kind="sk_test";
+                elseif(str_starts_with($s,"pk_test_")) $kind="pk_test";
+                elseif(str_starts_with($s,"sk_live_")) $kind="sk_live";
+                elseif(str_starts_with($s,"pk_live_")) $kind="pk_live";
+                echo "  ".$k."=".($s===""?"empty":$kind)."\n";
+              } elseif(in_array($k,["enabled","testmode","test_mode","sandbox","title"],true)) {
+                echo "  ".$k."=".$s."\n";
+              }
+            }
+          }
+          ' --path="$WP_PATH"
+
+          echo '=== DATERY SOURCE OPTIONS ==='
+          DATERY="$WP_PATH/wp-content/plugins/datery-delivery-date-for-woocommerce"
+          grep -RhoE "get_option\(['\"][A-Za-z0-9_-]+" "$DATERY" --include='*.php' 2>/dev/null | sed -E "s/.*get_option\(['\"]//" | sort -u | head -80 || true
+          echo '=== DATERY RELEVANT OPTIONS ==='
+          wp eval '
+          global $wpdb;
+          $rows=$wpdb->get_results("SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE '%datery%' OR option_name LIKE '%delivery_date%' ORDER BY option_name");
+          foreach($rows as $r){
+            $v=maybe_unserialize($r->option_value);
+            if(is_array($v)){
+              $safe=[];
+              foreach($v as $k=>$x){ if(is_scalar($x) && !preg_match('/secret|token|key|password/i',(string)$k)) $safe[$k]=$x; }
+              echo $r->option_name."=".wp_json_encode($safe,JSON_UNESCAPED_UNICODE)."\n";
+            } elseif(is_scalar($v)) echo $r->option_name."=".$v."\n";
+          }
+          ' --path="$WP_PATH"
+
+          echo '=== SG SETTINGS SAFE ==='
+          wp eval '
+          foreach(["sg_oa_woo_manage_inventory","woocommerce_woa_gateway_settings"] as $name){
+            $v=get_option($name,"__missing__");
+            if(is_array($v)){
+              $safe=[]; foreach($v as $k=>$x){if(is_scalar($x)&&!preg_match('/secret|token|key|password/i',(string)$k))$safe[$k]=$x;}
+              echo $name."=".wp_json_encode($safe,JSON_UNESCAPED_UNICODE)."\n";
+            } else echo $name."=".$v."\n";
+          }
+          ' --path="$WP_PATH"
+
+          echo '=== POLICY PAGES ==='
+          wp eval '
+          $terms=["Privacy","プライバシ","Terms","利用規約","Cancellation","キャンセル","Pickup","受取","Allergen","アレルゲン","Commerce","特定商取引"];
+          $pages=get_posts(["post_type"=>"page","post_status"=>["publish","draft","private","pending"],"numberposts"=>-1,"orderby"=>"ID","order"=>"ASC"]);
+          foreach($pages as $p){
+            foreach($terms as $needle){
+              if(mb_stripos(html_entity_decode($p->post_title,ENT_QUOTES|ENT_HTML5,"UTF-8"),$needle)!==false){
+                echo "id=".$p->ID."|status=".$p->post_status."|title=".$p->post_title."\n"; break;
+              }
+            }
+          }
+          ' --path="$WP_PATH"
+
+          echo '=== CORE SAFETY RECHECK ==='
+          wp eval '
+          echo "timezone=".wp_timezone_string()."\n";
+          echo "terms_status=".get_post_status((int)get_option("woocommerce_terms_page_id",0))."\n";
+          echo "currency=".get_woocommerce_currency()."\n";
+          echo "tax_enabled=".(wc_tax_enabled()?"true":"false")."\n";
+          ' --path="$WP_PATH"
+          echo 'PHIL_AI_OS_WORDPRESS_PREPROD_CONFIG_VERIFICATION_OK'
+          HOSTREMOTE
+          REMOTE
