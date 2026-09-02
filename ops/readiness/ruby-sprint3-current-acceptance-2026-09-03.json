@@ -12,6 +12,8 @@
     "isolated_wordpress_woocommerce_runtime_green": true,
     "preproduction_configuration_green": true,
     "production_read_only_identity_green": true,
+    "production_read_only_connectivity_green": true,
+    "production_read_only_connectivity_evidence_ref": "ops/readiness/ruby-woocommerce-production-readonly-connectivity-2026-09-03.json",
     "catalog_tax_intake_fail_closed_green": true,
     "catalog_provenance_integrity_guard_green": true,
     "catalog_dry_run_reconciliation_ready": true,
