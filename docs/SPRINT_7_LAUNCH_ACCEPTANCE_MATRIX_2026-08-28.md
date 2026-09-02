@@ -1,109 +1,79 @@
 # Sprint 7 — Launch Acceptance Matrix
 
-Date: 2026-08-29
-Status: ENGINEERING READINESS PACKAGE / LIVE LAUNCH NOT AUTHORIZED
+Date: 2026-09-02  
+Status: PRE-PRODUCTION CONFIGURATION GREEN / LIVE LAUNCH NOT AUTHORIZED
 
 ## Acceptance principle
 
-Sprint 7 separates **bounded engineering readiness** from **live production authorization**. Engineering can remain GREEN while live launch is blocked by WordPress/WooCommerce pre-production QA, fresh recovery checks, production payment/shipping configuration and explicit activation sign-off.
+Sprint 7 separates **bounded engineering and pre-production readiness** from **live production authorization**. Verified pre-production gates may move GREEN without granting WooCommerce production credentials, production catalog/tax mutation, KOMOJU Live Mode, SMS sending, public-domain cutover, higher autonomy, specialist execution, or Mission Control mutation authority.
 
 ## Current matrix
 
 | Gate | Current state | Launch effect |
 |---|---|---|
-| Integrated regression baseline | **165-test baseline proven GREEN in Sprint 7 Slice 1**; final branch head must also be GREEN before merge/closure. | Required engineering gate. |
-| Isolated WooCommerce + CX runtime smoke | GREEN at Slice 1; must remain GREEN at final head. | Required engineering gate. |
-| Security/recovery package | **READY**; historical Phase 1.17 backup/restore proof exists. | Fresh launch-time backup/restore recheck remains required. |
+| Integrated regression baseline | **165-test bounded baseline proven GREEN**; final current-head CI remains required before launch acceptance. | Required engineering gate. |
+| Security/recovery package | **READY**; historical Phase 1.17 backup/restore proof exists. | Fresh launch-time recovery proof still required. |
 | Replay/idempotency/authority controls | **GREEN** in bounded regression. | Must remain GREEN through launch. |
-| Production secret handling | **PLAN READY / NO PRODUCTION PAYMENT AUTHORITY AUTHORIZED**. | Block live integration until approved. |
-| WooCommerce deployment runbook | **READY / PARALLEL PRE-PRODUCTION FIRST**. | Public cutover remains blocked pending pre-production QA, fresh recovery proof and approval. |
-| Ruby business profile | **COMPLETE — 15/15 RESOLVED**. | Business-profile content verification blocker closed; publication remains separately gated. |
-| Contact phone | **VERIFIED — 050-1785-0575**. | Phone verification gate complete. |
-| Tokushoho source | **RECONCILED / PUBLICATION APPROVAL PENDING**. | Legal source-reconciliation blocker closed; final checkout/payment/shipping sync and CEO publication approval still required. |
-| Old builder products/categories | **EXCLUDED / NOT AUTHORITATIVE**. | Must not be migrated as production catalog. |
-| WooCommerce pre-production QA | **NOT YET GREEN**. | Current primary storefront-preparation blocker. |
-| Hostinger native WordPress staging | Requires an existing detected WordPress installation and eligible hosting plan; **eligibility/use not yet verified for Ruby**. | Native staging is a later convenience layer, not the first migration step from Website Builder. |
+| Production secret handling | **PLAN READY / NO NEW PRODUCTION CREDENTIAL AUTHORITY**. | Live integration remains gated. |
+| Ruby business profile | **COMPLETE — 15/15 RESOLVED**. | Closed. |
+| Contact phone | **VERIFIED — 050-1785-0575**. | Closed. |
+| Tokushoho source | **RECONCILED / FINAL CUTOVER SYNCHRONIZATION PENDING**. | Final checkout/payment/shipping synchronization and launch approval still required. |
+| Old builder products/categories | **EXCLUDED / NOT AUTHORITATIVE**. | Must not be migrated as the production catalog. |
+| WooCommerce pre-production QA | **GREEN — 2026-09-02**. | Pre-production storefront/configuration gate closed; catalog/tax remain separate. |
+| Shipping configuration | **GREEN IN PRE-PRODUCTION**. | Yamato Cool zones/classes and corrected size-120 behavior verified; approved product assignments remain pending. |
+| Approval-before-payment / Datery | **GREEN IN PRE-PRODUCTION**. | Current pre-production workflow verified. |
+| KOMOJU Test Mode | **GREEN — TEST CAPTURE/REFUND VALIDATED**. | Test-only evidence closed; Live Mode remains separately gated. |
+| Transactional SMTP | **AUTHENTICATION GREEN / GMAIL PLACEMENT UNRELIABLE**. | Email retained; SMS fallback required for production acceptance. |
+| SMS architecture | **GREEN / EXTERNAL SENDING DISABLED**. | Provider identity/credentials/live sending require later approval. |
+| Approved production catalog | **PENDING CEO FINALIZATION**. | Blocks product loading; no inference or old-builder migration allowed. |
+| Japan tax implementation | **PENDING BUSINESS EVIDENCE**. | WooCommerce tax stays disabled until consumption-tax/invoice status is verified. |
+| Fresh launch-time backup/restore | **PENDING**. | Blocks live cutover until fresh backup, timer/monitor health, SQLite integrity and isolated restore are GREEN. |
+| Air Mobile Order Quick Pickup link | **PRODUCTION URL PENDING**. | Link surface can be prepared; no production URL may be invented. |
 | WooCommerce production identity/credentials | **NOT AUTHORIZED / NOT CONFIGURED**. | Blocks live API integration. |
-| KOMOJU Test Mode | **NOT VALIDATED**. | Must be configured and tested only after the separate Test Mode gate is approved. |
-| KOMOJU Live Mode | **NOT AUTHORIZED**. | Blocks real payment launch. |
-| Shipping configuration | Legacy Yamato Cool terms captured; **production configuration/rates not yet verified**. | Must match WooCommerce checkout and Tokushoho before launch. |
-| Payment methods | Legacy card brands captured; **actual merchant-available/production-enabled methods not yet verified**. | Must match KOMOJU merchant account, WooCommerce checkout and Tokushoho. |
-| External channel activation | Runbooks READY; live identities/connectivity/replies remain disabled. | Does not block storefront-only launch unless channels are explicitly in launch scope. |
-| Operator quick-start / incident handling | **READY**. | Required documentation gate. |
+| KOMOJU Live Mode | **NOT AUTHORIZED**. | Blocks real-payment launch. |
+| Production payment methods | **NOT FINALIZED**. | Must be reconciled with merchant account, checkout and Tokushoho. |
+| External channel activation | Runbooks READY; live connectivity/replies disabled. | Separate approval if included in launch scope. |
+| Public-domain/DNS cutover | **NOT AUTHORIZED**. | Blocks public launch. |
 | CEO sign-off | **NOT RECORDED**. | Blocks live launch. |
 | CTO sign-off | **NOT RECORDED**. | Blocks live launch. |
 
-## Launch categories
+## Current independent work lanes
 
-### A. Bounded engineering acceptance
+The following can proceed without the pending catalog or tax information:
 
-Can remain GREEN when:
+1. prepare and perform fresh control-plane backup/restore verification close to cutover;
+2. keep final cross-system authority, replay, credential and integration regressions current;
+3. keep the disabled-by-default SMS fallback implementation ready without creating production provider identity or sending messages;
+4. prepare the Air Mobile Order Quick Pickup link/UX surface without inventing its production URL;
+5. reconcile operator, rollback, legal and launch-acceptance records to verified pre-production evidence.
 
-- final branch CI is GREEN;
-- all Sprint 7 readiness validators are GREEN;
-- isolated runtime smoke is GREEN;
-- no production credentials/secrets were introduced;
-- no authority baseline drift occurred;
-- readiness/runbook documentation is complete.
+## Recovery and cutover acceptance
 
-### B. Storefront pre-production acceptance
-
-The business-profile prerequisite is now complete.
-
-Because the current public Ruby site is **Hostinger Website Builder**, not WordPress, Hostinger's native WordPress staging tool cannot be the initial migration environment. Current Hostinger guidance requires an existing WordPress installation to be detected before native WordPress staging can be created.
-
-The next storefront gate therefore requires:
-
-- create a **separate non-public Hostinger WordPress + WooCommerce pre-production site** without moving `rubyscakedelights.shop`;
-- keep the current Website Builder storefront serving customers;
-- verify whether Ruby's Hostinger plan supports native WordPress staging after WordPress exists;
-- load verified profile/policies into pre-production;
-- create approved production product/category source data independently of the old test catalog;
-- configure and test both store pickup and intended Yamato Cool delivery behavior;
-- SSL, cart, checkout, mobile, bilingual and accessibility QA GREEN;
-- reconcile production shipping zones/rates with customer-facing legal disclosure;
-- no public domain/DNS cutover yet.
-
-### C. Payment acceptance
-
-Requires:
-
-- WooCommerce pre-production readiness;
-- official KOMOJU Payments WooCommerce plugin installed in the approved non-public context;
-- KOMOJU account connected using the current sign-in/OAuth-style flow in **Test Mode** only after separate authorization;
-- merchant-available payment methods verified and selected deliberately;
-- controlled Test Mode transactions GREEN, including order-state correlation and failure/cancel behavior;
-- customer-facing payment methods/timing synchronized with checkout and Tokushoho;
-- merchant Live Mode approval verified;
-- explicit CEO approval before Live Mode;
-- successful narrow real-payment verification only after that later gate;
-- disable/reconciliation path available.
-
-### D. Recovery and cutover acceptance
-
-Requires:
+Live cutover still requires all of the following:
 
 - fresh launch-time backup/restore verification;
-- pre-production acceptance GREEN;
-- legal/payment/shipping text synchronized with actual configuration;
-- rollback path verified;
-- explicit production cutover authorization;
+- approved production catalog and completed tax configuration acceptance;
+- final legal/payment/shipping synchronization;
+- production payment-method verification;
+- rollback/abort path verified;
+- explicit WooCommerce/KOMOJU/live-credential approvals;
+- explicit public-domain cutover authorization;
 - CEO and CTO sign-off.
 
-### E. Channel acceptance
+## Authority baseline
 
-For each channel in launch scope:
+Unchanged:
 
-- current platform capability/permissions verified;
-- approved identity and least-privilege credentials;
-- read-only canary GREEN;
-- authenticity/idempotency/governance checks GREEN;
-- disable/revoke path GREEN;
-- separate outbound reply/write approval if required.
+- autonomy: **A0**;
+- task-class allowlist: **`general` only**;
+- bounded routing agent: **Hermes**;
+- specialists disabled for normal execution;
+- Mission Control mutation authority: **false**;
+- live launch authority: **false**.
 
 ## Current launch conclusion
 
-**Bounded Sprint 7 engineering remains GREEN and the Verified Ruby Business Profile is complete. Live launch is still not authorized.** The primary remaining storefront/payment blockers are creation and QA of the parallel Hostinger WordPress/WooCommerce pre-production site, production shipping configuration/rate verification, KOMOJU Test Mode validation and payment-method verification, fresh launch-time backup/restore proof, final Tokushoho publication approval, and CEO/CTO sign-off.
+**WooCommerce pre-production configuration, shipping foundation, approval-before-payment, Datery, KOMOJU Test Mode, authenticated SMTP, policy-page publication, SMS architecture, and guarded cleanup are GREEN. Live launch remains blocked by the approved production catalog, Japan tax decision/configuration, fresh launch-time recovery proof, production payment-method finalization, final checkout/legal synchronization, production credentials/activation approvals, public cutover approval, and CEO/CTO sign-off.**
 
 ## Sign-off record template
 
@@ -114,11 +84,14 @@ Record only after all launch-scope gates are satisfied:
 - Final CI head:
 - Backup/restore verification:
 - Storefront pre-production acceptance:
+- Catalog acceptance:
+- Tax acceptance:
 - Shipping configuration/rates verification:
 - WooCommerce production activation decision:
 - KOMOJU Test/Live decision:
 - Payment methods verified:
-- Tokushoho publication approval:
+- Tokushoho publication/final synchronization:
+- SMS production decision:
 - External channel scope:
 - Rollback owner/path:
 - CEO sign-off:
