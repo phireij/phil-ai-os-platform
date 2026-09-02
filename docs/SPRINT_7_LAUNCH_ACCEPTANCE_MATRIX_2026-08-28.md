@@ -1,7 +1,7 @@
 # Sprint 7 — Launch Acceptance Matrix
 
 Date: 2026-09-02  
-Status: PRE-PRODUCTION CONFIGURATION GREEN / LIVE LAUNCH NOT AUTHORIZED
+Status: PRE-PRODUCTION CONFIGURATION + CURRENT-HEAD READINESS GREEN / LIVE LAUNCH NOT AUTHORIZED
 
 ## Acceptance principle
 
@@ -11,9 +11,10 @@ Sprint 7 separates **bounded engineering and pre-production readiness** from **l
 
 | Gate | Current state | Launch effect |
 |---|---|---|
-| Integrated regression baseline | **165-test bounded baseline proven GREEN**; final current-head CI remains required before launch acceptance. | Required engineering gate. |
-| Security/recovery package | **READY**; historical Phase 1.17 backup/restore proof exists. | Fresh launch-time recovery proof still required. |
-| Replay/idempotency/authority controls | **GREEN** in bounded regression. | Must remain GREEN through launch. |
+| Current-head integrated regression | **GREEN — 2026-09-02**. Commerce **87**, CX **36**, Operations **34**, Automation **36** tests passed (**193 combined**), plus current authority/credential/readiness validators. PR #34 revalidated the same current state. | Required engineering gate currently closed; must remain GREEN through launch. |
+| Isolated WooCommerce + CX runtime smoke | **GREEN — 2026-09-02**. Isolated WordPress/WooCommerce bootstrap, `wc/v3`, CX shell and teardown passed on current-head and PR-level checks. | Required engineering gate currently closed. |
+| Security/recovery package | **CURRENT GREEN BASELINE**. Governed restore run `33605885952` passed source/restored SQLite integrity, 17-table and row-count comparison, backup timer/monitor checks and Control API health. | **Repeat immediately before cutover**; today’s evidence does not permanently close launch-time freshness. |
+| Replay/idempotency/authority controls | **CURRENT GREEN** in current-head regression. | Must remain GREEN through launch. |
 | Production secret handling | **PLAN READY / NO NEW PRODUCTION CREDENTIAL AUTHORITY**. | Live integration remains gated. |
 | Ruby business profile | **COMPLETE — 15/15 RESOLVED**. | Closed. |
 | Contact phone | **VERIFIED — 050-1785-0575**. | Closed. |
@@ -25,10 +26,10 @@ Sprint 7 separates **bounded engineering and pre-production readiness** from **l
 | KOMOJU Test Mode | **GREEN — TEST CAPTURE/REFUND VALIDATED**. | Test-only evidence closed; Live Mode remains separately gated. |
 | Transactional SMTP | **AUTHENTICATION GREEN / GMAIL PLACEMENT UNRELIABLE**. | Email retained; SMS fallback required for production acceptance. |
 | SMS architecture | **GREEN / EXTERNAL SENDING DISABLED**. | Provider identity/credentials/live sending require later approval. |
+| Air Mobile Order Quick Pickup preparation | **INERT LINK CONTRACT READY / PRODUCTION URL PENDING**. | EN/JA surface prepared through PR #33; no URL may be invented or published. |
 | Approved production catalog | **PENDING CEO FINALIZATION**. | Blocks product loading; no inference or old-builder migration allowed. |
 | Japan tax implementation | **PENDING BUSINESS EVIDENCE**. | WooCommerce tax stays disabled until consumption-tax/invoice status is verified. |
-| Fresh launch-time backup/restore | **PENDING**. | Blocks live cutover until fresh backup, timer/monitor health, SQLite integrity and isolated restore are GREEN. |
-| Air Mobile Order Quick Pickup link | **PRODUCTION URL PENDING**. | Link surface can be prepared; no production URL may be invented. |
+| Fresh launch-time backup/restore | **PENDING** — current Sep 2 baseline is GREEN, but a new cutover-time run is still required. | Blocks live cutover until the near-cutover run is GREEN. |
 | WooCommerce production identity/credentials | **NOT AUTHORIZED / NOT CONFIGURED**. | Blocks live API integration. |
 | KOMOJU Live Mode | **NOT AUTHORIZED**. | Blocks real-payment launch. |
 | Production payment methods | **NOT FINALIZED**. | Must be reconciled with merchant account, checkout and Tokushoho. |
@@ -37,25 +38,27 @@ Sprint 7 separates **bounded engineering and pre-production readiness** from **l
 | CEO sign-off | **NOT RECORDED**. | Blocks live launch. |
 | CTO sign-off | **NOT RECORDED**. | Blocks live launch. |
 
-## Current independent work lanes
+## Independent work status
 
-The following can proceed without the pending catalog or tax information:
+The independent lanes that could be advanced without the pending catalog/tax decisions are now materially closed or prepared:
 
-1. prepare and perform fresh control-plane backup/restore verification close to cutover;
-2. keep final cross-system authority, replay, credential and integration regressions current;
-3. keep the disabled-by-default SMS fallback implementation ready without creating production provider identity or sending messages;
-4. prepare the Air Mobile Order Quick Pickup link/UX surface without inventing its production URL;
-5. reconcile operator, rollback, legal and launch-acceptance records to verified pre-production evidence.
+1. current control-plane recovery baseline — **GREEN Sep 2**, with launch-time repeat retained;
+2. current-head cross-system authority, replay, credential and integration regression — **GREEN**;
+3. disabled-by-default SMS fallback architecture — **GREEN / live sending gated**;
+4. Air Mobile Order Quick Pickup surface — **prepared inertly / real URL pending**;
+5. operator/readiness validator reconciliation to verified Sep 2 pre-production evidence — **GREEN**.
+
+The next substantive commerce work therefore depends primarily on CEO-owned catalog finalization and tax/invoice evidence, while launch-time operational checks remain intentionally deferred until they are temporally meaningful.
 
 ## Recovery and cutover acceptance
 
 Live cutover still requires all of the following:
 
-- fresh launch-time backup/restore verification;
+- fresh launch-time backup/restore verification immediately before cutover;
 - approved production catalog and completed tax configuration acceptance;
 - final legal/payment/shipping synchronization;
 - production payment-method verification;
-- rollback/abort path verified;
+- rollback/abort path verified for the approved change;
 - explicit WooCommerce/KOMOJU/live-credential approvals;
 - explicit public-domain cutover authorization;
 - CEO and CTO sign-off.
@@ -73,7 +76,7 @@ Unchanged:
 
 ## Current launch conclusion
 
-**WooCommerce pre-production configuration, shipping foundation, approval-before-payment, Datery, KOMOJU Test Mode, authenticated SMTP, policy-page publication, SMS architecture, and guarded cleanup are GREEN. Live launch remains blocked by the approved production catalog, Japan tax decision/configuration, fresh launch-time recovery proof, production payment-method finalization, final checkout/legal synchronization, production credentials/activation approvals, public cutover approval, and CEO/CTO sign-off.**
+**WooCommerce pre-production configuration, shipping foundation, approval-before-payment, Datery, KOMOJU Test Mode, authenticated SMTP, policy-page publication, SMS architecture, guarded cleanup, current recovery baseline and current-head integrated readiness are GREEN. Live launch remains blocked by the approved production catalog, Japan tax decision/configuration, a repeated near-cutover recovery check, production payment-method finalization, final checkout/legal synchronization, production credentials/activation approvals, public cutover approval, and CEO/CTO sign-off.**
 
 ## Sign-off record template
 
