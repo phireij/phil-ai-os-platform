@@ -1,0 +1,81 @@
+name: WooCommerce Production Read-Only Catalog Snapshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_read_only:
+        description: "Confirm this run must remain read-only"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    if: ${{ inputs.confirm_read_only == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate credential presence without printing values
+        shell: bash
+        env:
+          RUBY_WOO_PRODUCTION_BASE_URL: ${{ secrets.RUBY_WOO_PRODUCTION_BASE_URL }}
+          RUBY_WOO_PRODUCTION_CONSUMER_KEY: ${{ secrets.RUBY_WOO_PRODUCTION_CONSUMER_KEY }}
+          RUBY_WOO_PRODUCTION_CONSUMER_SECRET: ${{ secrets.RUBY_WOO_PRODUCTION_CONSUMER_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$RUBY_WOO_PRODUCTION_BASE_URL"
+          test -n "$RUBY_WOO_PRODUCTION_CONSUMER_KEY"
+          test -n "$RUBY_WOO_PRODUCTION_CONSUMER_SECRET"
+          echo "PHIL_AI_OS_WOO_PRODUCTION_SECRET_REFS_PRESENT"
+
+      - name: Assert snapshot implementation contains no mutation method
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E 'request\([[:space:]]*"(POST|PUT|DELETE|PATCH)"' \
+            commerce/woocommerce/tools_production_readonly_catalog_snapshot.py \
+            commerce/woocommerce/src/phil_ai_os_woocommerce/readonly_catalog_snapshot.py
+          echo "PHIL_AI_OS_WOO_PRODUCTION_READONLY_SNAPSHOT_MUTATION_BOUNDARY_GREEN"
+
+      - name: Capture bounded catalog metadata snapshot
+        shell: bash
+        env:
+          RUBY_WOO_PRODUCTION_BASE_URL: ${{ secrets.RUBY_WOO_PRODUCTION_BASE_URL }}
+          RUBY_WOO_PRODUCTION_CONSUMER_KEY: ${{ secrets.RUBY_WOO_PRODUCTION_CONSUMER_KEY }}
+          RUBY_WOO_PRODUCTION_CONSUMER_SECRET: ${{ secrets.RUBY_WOO_PRODUCTION_CONSUMER_SECRET }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/philaios-woo-readonly
+          python commerce/woocommerce/tools_production_readonly_catalog_snapshot.py \
+            /tmp/philaios-woo-readonly/catalog-snapshot.json
+
+      - name: Validate snapshot remains non-authorizing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/philaios-woo-readonly/catalog-snapshot.json').read_text())
+          assert payload['network_read_only'] is True
+          assert payload['mutation_authorized'] is False
+          assert payload['production_publish_authorized'] is False
+          assert payload['scope'] == 'woocommerce_catalog_metadata_read_only'
+          print('PHIL_AI_OS_WOO_PRODUCTION_READONLY_SNAPSHOT_CONTRACT_GREEN')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: woo-production-readonly-catalog-snapshot
+          path: /tmp/philaios-woo-readonly/catalog-snapshot.json
+          if-no-files-found: error
+          retention-days: 1
