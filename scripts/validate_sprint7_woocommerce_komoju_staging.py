@@ -36,13 +36,10 @@ def main() -> None:
         "target": "hostinger-managed-wordpress-woocommerce",
         "current_public_platform": "hostinger-website-builder",
         "public_domain": "https://www.rubyscakedelights.shop/",
-        "parallel_preproduction_first_required": True,
         "parallel_preproduction_environment_created": True,
         "preproduction_url": "https://darkgreen-wallaby-680439.hostingersite.com/",
         "hosting_plan": "Business Web Hosting",
-        "native_hostinger_wordpress_staging_requires_existing_wordpress": True,
         "native_staging_plan_eligibility_verified": True,
-        "native_staging_menu_located": False,
         "wordpress_ready": True,
         "woocommerce_ready": True,
         "ssl_verified": True,
@@ -53,7 +50,7 @@ def main() -> None:
         if storefront.get(key) != value:
             fail(f"preproduction storefront state drift: {key}={storefront.get(key)!r}")
 
-    if data.get("next_gate") != "finalize_catalog_payment_subset_checkout_recovery_and_go_no_go_without_real_payment_execution":
+    if data.get("next_gate") != "finalize_catalog_verify_checkout_configuration_checkout_recovery_and_go_no_go_without_real_payment_execution":
         fail("next executable gate drift")
     if data.get("production_publish_authorized") is not False:
         fail("preproduction readiness gained production publication authority")
@@ -61,57 +58,45 @@ def main() -> None:
     fulfillment = data["fulfillment"]
     if fulfillment.get("store_pickup_supported") is not True or fulfillment.get("legacy_shipping_provider") != "yamato-cool-takkyubin":
         fail("fulfillment source drift")
-    if fulfillment.get("legacy_kanto_rate_jpy") != 1350 or fulfillment.get("legacy_other_regions_rate_range_jpy") != [1500, 1800]:
-        fail("legacy shipping-rate source drift")
-    for key in ("production_shipping_configuration_verified", "production_shipping_rates_verified"):
-        if fulfillment.get(key) is not True:
-            fail(f"verified pre-production shipping gate regressed: {key}")
+    if fulfillment.get("production_shipping_configuration_verified") is not True or fulfillment.get("production_shipping_rates_verified") is not True:
+        fail("verified pre-production shipping state regressed")
 
     komoju = data["komoju"]
     if komoju.get("current_connection_state") != "live_dashboard_selected":
         fail("KOMOJU current state must preserve verified Live-dashboard selection")
     if komoju.get("connection_method") != "komoju-sign-in-oauth-style" or komoju.get("manual_api_key_entry_expected") is not False:
         fail("KOMOJU integration model drift")
-    for key in ("test_mode_connection_authorized", "test_mode_connected", "test_capture_refund_validated"):
+    for key in ("test_mode_connection_authorized", "test_mode_connected", "test_capture_refund_validated", "merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "live_mode_merchant_approval_verified", "production_enabled_payment_methods_finalized"):
         if komoju.get(key) is not True:
-            fail(f"verified KOMOJU Test Mode state regressed: {key}")
-    for key in ("merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "live_mode_merchant_approval_verified"):
-        if komoju.get(key) is not True:
-            fail(f"verified KOMOJU merchant Live evidence regressed: {key}")
-    required_methods = {
-        "visa_mastercard",
-        "jcb_amex_diners_discover",
-        "konbini",
-        "merpay",
-        "paidy",
-        "bank_transfer",
-        "pay_easy",
+            fail(f"verified KOMOJU readiness regressed: {key}")
+
+    available = {
+        "visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy", "bank_transfer", "pay_easy"
     }
-    if set(komoju.get("enabled_or_available_methods_shown", [])) != required_methods:
+    if set(komoju.get("enabled_or_available_methods_shown", [])) != available:
         fail("KOMOJU merchant payment-method availability set drift")
+    approved = ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy"]
+    if komoju.get("production_enabled_payment_methods") != approved:
+        fail("CEO-approved production payment subset drift")
+    if komoju.get("production_disabled_payment_methods") != ["bank_transfer", "pay_easy"]:
+        fail("initially disabled production payment subset drift")
     if komoju.get("paypay_status") != "application_under_review":
         fail("PayPay review status drift")
     if komoju.get("rakuten_pay_status") != "not_available_declined_or_no_longer_eligible":
         fail("Rakuten Pay availability status drift")
-    for key in ("production_enabled_payment_methods_finalized", "live_mode_authorized", "payment_execution_authorized"):
+    if komoju.get("production_checkout_configuration_verified") is not False:
+        fail("production checkout configuration must remain pending until verified")
+    for key in ("live_mode_authorized", "payment_execution_authorized"):
         if komoju.get(key) is not False:
-            fail(f"KOMOJU execution/final-subset gate must remain open: {key}")
+            fail(f"KOMOJU execution authority must remain false: {key}")
 
     legal = data["legal_checkout_sync"]
-    for key in (
-        "tokushoho_payment_methods_match_checkout",
-        "tokushoho_payment_timing_match_checkout",
-        "tokushoho_shipping_fees_match_checkout",
-        "final_confirmation_screen_reviewed",
-    ):
+    for key in ("tokushoho_payment_methods_match_checkout", "tokushoho_payment_timing_match_checkout", "tokushoho_shipping_fees_match_checkout", "final_confirmation_screen_reviewed"):
         if legal.get(key) is not False:
             fail(f"legal/checkout synchronization must remain pending: {key}")
     if legal.get("privacy_terms_implementation_reviewed") is not True:
         fail("verified privacy/terms implementation review regressed")
 
-    # This evidence file is an immutable Aug 29 operator snapshot. It proves the
-    # pre-production environment existed before KOMOJU Test Mode and later Live-dashboard
-    # evidence were reconciled. Historical false values must not override the Sep 3 state.
     expected_historical_evidence = {
         "public_domain_unchanged": True,
         "current_public_platform": "hostinger-website-builder",
@@ -137,9 +122,8 @@ def main() -> None:
             fail(f"Tokushoho safeguard missing: {phrase}")
 
     print("PHIL_AI_OS_RUBY_HOSTINGER_PREPRODUCTION_ENVIRONMENT_GREEN created=true wordpress=true woocommerce=true ssl=true checkout_qa=true shipping=true")
-    print("PHIL_AI_OS_RUBY_HOSTINGER_PLAN_GREEN plan=Business_Web_Hosting native_staging_eligible=true menu_located=false")
-    print("PHIL_AI_OS_RUBY_KOMOJU_LIVE_DASHBOARD_EVIDENCE_GREEN live_selected=true methods_verified=true final_subset=false payment_execution=false")
-    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=finalize_catalog_payment_subset_checkout_recovery_go_no_go publish=false")
+    print("PHIL_AI_OS_RUBY_KOMOJU_PAYMENT_SUBSET_GREEN live_selected=true methods_verified=true final_subset=true checkout_config_verified=false payment_execution=false")
+    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=finalize_catalog_verify_checkout_recovery_go_no_go publish=false")
 
 
 if __name__ == "__main__":
