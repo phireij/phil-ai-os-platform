@@ -50,7 +50,7 @@ def main() -> None:
         if storefront.get(key) != value:
             fail(f"preproduction storefront state drift: {key}={storefront.get(key)!r}")
 
-    if data.get("next_gate") != "finalize_catalog_verify_checkout_configuration_checkout_recovery_and_go_no_go_without_real_payment_execution":
+    if data.get("next_gate") != "finalize_catalog_complete_payment_timing_legal_confirmation_screen_recovery_and_go_no_go_without_real_payment_execution":
         fail("next executable gate drift")
     if data.get("production_publish_authorized") is not False:
         fail("preproduction readiness gained production publication authority")
@@ -63,16 +63,14 @@ def main() -> None:
 
     komoju = data["komoju"]
     if komoju.get("current_connection_state") != "live_dashboard_selected":
-        fail("KOMOJU current state must preserve verified Live-dashboard selection")
+        fail("KOMOJU current state drift")
     if komoju.get("connection_method") != "komoju-sign-in-oauth-style" or komoju.get("manual_api_key_entry_expected") is not False:
         fail("KOMOJU integration model drift")
-    for key in ("test_mode_connection_authorized", "test_mode_connected", "test_capture_refund_validated", "merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "live_mode_merchant_approval_verified", "production_enabled_payment_methods_finalized"):
+    for key in ("test_mode_connection_authorized", "test_mode_connected", "test_capture_refund_validated", "merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "live_mode_merchant_approval_verified", "production_enabled_payment_methods_finalized", "production_checkout_configuration_verified"):
         if komoju.get(key) is not True:
             fail(f"verified KOMOJU readiness regressed: {key}")
 
-    available = {
-        "visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy", "bank_transfer", "pay_easy"
-    }
+    available = {"visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy", "bank_transfer", "pay_easy"}
     if set(komoju.get("enabled_or_available_methods_shown", [])) != available:
         fail("KOMOJU merchant payment-method availability set drift")
     approved = ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy"]
@@ -80,20 +78,22 @@ def main() -> None:
         fail("CEO-approved production payment subset drift")
     if komoju.get("production_disabled_payment_methods") != ["bank_transfer", "pay_easy"]:
         fail("initially disabled production payment subset drift")
+    if komoju.get("production_checkout_verification_run_id") != 33776964709 or komoju.get("production_checkout_verification_attempt") != 2:
+        fail("checkout verification evidence drift")
     if komoju.get("paypay_status") != "application_under_review":
         fail("PayPay review status drift")
     if komoju.get("rakuten_pay_status") != "not_available_declined_or_no_longer_eligible":
         fail("Rakuten Pay availability status drift")
-    if komoju.get("production_checkout_configuration_verified") is not False:
-        fail("production checkout configuration must remain pending until verified")
     for key in ("live_mode_authorized", "payment_execution_authorized"):
         if komoju.get(key) is not False:
             fail(f"KOMOJU execution authority must remain false: {key}")
 
     legal = data["legal_checkout_sync"]
-    for key in ("tokushoho_payment_methods_match_checkout", "tokushoho_payment_timing_match_checkout", "tokushoho_shipping_fees_match_checkout", "final_confirmation_screen_reviewed"):
+    if legal.get("tokushoho_payment_methods_match_checkout") is not True or legal.get("tokushoho_shipping_fees_match_checkout") is not True:
+        fail("verified payment-method/shipping legal sync regressed")
+    for key in ("tokushoho_payment_timing_match_checkout", "final_confirmation_screen_reviewed"):
         if legal.get(key) is not False:
-            fail(f"legal/checkout synchronization must remain pending: {key}")
+            fail(f"legal/checkout timing must remain pending: {key}")
     if legal.get("privacy_terms_implementation_reviewed") is not True:
         fail("verified privacy/terms implementation review regressed")
 
@@ -122,8 +122,8 @@ def main() -> None:
             fail(f"Tokushoho safeguard missing: {phrase}")
 
     print("PHIL_AI_OS_RUBY_HOSTINGER_PREPRODUCTION_ENVIRONMENT_GREEN created=true wordpress=true woocommerce=true ssl=true checkout_qa=true shipping=true")
-    print("PHIL_AI_OS_RUBY_KOMOJU_PAYMENT_SUBSET_GREEN live_selected=true methods_verified=true final_subset=true checkout_config_verified=false payment_execution=false")
-    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=finalize_catalog_verify_checkout_recovery_go_no_go publish=false")
+    print("PHIL_AI_OS_RUBY_KOMOJU_PAYMENT_SUBSET_GREEN live_selected=true methods_verified=true final_subset=true checkout_config_verified=true payment_execution=false")
+    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=finalize_catalog_legal_timing_recovery_go_no_go publish=false")
 
 
 if __name__ == "__main__":
