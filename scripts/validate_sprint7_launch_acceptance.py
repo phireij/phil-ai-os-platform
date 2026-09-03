@@ -92,8 +92,11 @@ def main() -> None:
     require(fulfillment.get("production_shipping_rates_verified") is True, "pre-production shipping-rate verification drift")
 
     komoju = staging["komoju"]
-    require(komoju.get("current_connection_state") == "test_mode", "KOMOJU must remain in test mode")
+    require(komoju.get("current_connection_state") == "live_dashboard_selected", "KOMOJU Live-dashboard state evidence drift")
     require(komoju.get("test_mode_connected") is True and komoju.get("test_capture_refund_validated") is True, "KOMOJU Test Mode validation drift")
+    require(komoju.get("merchant_live_dashboard_access_verified") is True, "KOMOJU merchant Live dashboard evidence missing")
+    require(komoju.get("merchant_available_payment_methods_verified") is True, "KOMOJU merchant payment-method evidence missing")
+    require(komoju.get("production_enabled_payment_methods_finalized") is False, "KOMOJU production payment subset changed without reconciliation")
     require(komoju.get("live_mode_authorized") is False and komoju.get("payment_execution_authorized") is False, "KOMOJU live/payment authority must remain false")
     require(staging.get("production_publish_authorized") is False, "preproduction readiness gained publication authority")
 
@@ -142,7 +145,7 @@ def main() -> None:
     require(data["decision"] == "ENGINEERING_PREPARED_LIVE_LAUNCH_PENDING_FAIL_CLOSED", "launch acceptance decision drift")
 
     print("PHIL_AI_OS_SPRINT_7_OPERATOR_AND_ACCEPTANCE_GREEN engineering_package=true live_launch=false profile_complete=true")
-    print("PHIL_AI_OS_SPRINT_7_PREPRODUCTION_ENVIRONMENT_GREEN created=true qa=true komoju_test=true shipping=true tax_exempt=true woo_readonly=true")
+    print("PHIL_AI_OS_SPRINT_7_PREPRODUCTION_ENVIRONMENT_GREEN created=true qa=true komoju_live_dashboard=true payment_execution=false shipping=true tax_exempt=true woo_readonly=true")
     print("PHIL_AI_OS_SPRINT_7_SIGNOFF_BOUNDARY_GREEN recovery_fresh=false ceo_go_no_go=false cto=false cutover=false")
     print("PHIL_AI_OS_SPRINT_7_CUTOVER_RUNBOOK_CONTROL_GREEN tax_disabled=true branch_protection_gate=true rollback_matrix=true")
 
