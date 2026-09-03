@@ -9,6 +9,7 @@ READINESS = ROOT / "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json
 EVIDENCE = ROOT / "ops/readiness/ruby-hostinger-preproduction-evidence.template.json"
 PROFILE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
 TOKUSHOHO = ROOT / "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md"
+TIMING_DOC = ROOT / "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md"
 
 
 def fail(message: str) -> None:
@@ -50,7 +51,7 @@ def main() -> None:
         if storefront.get(key) != value:
             fail(f"preproduction storefront state drift: {key}={storefront.get(key)!r}")
 
-    if data.get("next_gate") != "finalize_catalog_complete_payment_timing_legal_confirmation_screen_recovery_and_go_no_go_without_real_payment_execution":
+    if data.get("next_gate") != "finalize_catalog_apply_final_tokushoho_text_review_confirmation_screen_recovery_and_go_no_go_without_real_payment_execution":
         fail("next executable gate drift")
     if data.get("production_publish_authorized") is not False:
         fail("preproduction readiness gained production publication authority")
@@ -95,9 +96,12 @@ def main() -> None:
     legal = data["legal_checkout_sync"]
     if legal.get("tokushoho_payment_methods_match_checkout") is not True or legal.get("tokushoho_shipping_fees_match_checkout") is not True:
         fail("verified payment-method/shipping legal sync regressed")
-    for key in ("tokushoho_payment_timing_match_checkout", "final_confirmation_screen_reviewed"):
-        if legal.get(key) is not False:
-            fail(f"legal/checkout timing must remain pending: {key}")
+    if legal.get("tokushoho_payment_timing_match_checkout") is not True:
+        fail("verified payment-timing legal sync regressed")
+    if legal.get("payment_timing_reconciliation_doc") != "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md" or not TIMING_DOC.is_file():
+        fail("payment-timing reconciliation evidence missing")
+    if legal.get("final_confirmation_screen_reviewed") is not False:
+        fail("final confirmation screen must remain pending")
     if legal.get("privacy_terms_implementation_reviewed") is not True:
         fail("verified privacy/terms implementation review regressed")
 
@@ -126,8 +130,8 @@ def main() -> None:
             fail(f"Tokushoho safeguard missing: {phrase}")
 
     print("PHIL_AI_OS_RUBY_HOSTINGER_PREPRODUCTION_ENVIRONMENT_GREEN created=true wordpress=true woocommerce=true ssl=true checkout_qa=true shipping=true")
-    print("PHIL_AI_OS_RUBY_KOMOJU_PAYMENT_SUBSET_GREEN live_selected=true methods_verified=true final_subset=true checkout_config_verified=true konbini_expiry_days=3 payment_execution=false")
-    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=finalize_catalog_legal_timing_recovery_go_no_go publish=false")
+    print("PHIL_AI_OS_RUBY_KOMOJU_PAYMENT_TIMING_GREEN live_selected=true final_subset=true checkout_config_verified=true konbini_expiry_days=3 payment_timing=true payment_execution=false")
+    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=finalize_catalog_final_tokushoho_confirmation_screen_recovery_go_no_go publish=false")
 
 
 if __name__ == "__main__":

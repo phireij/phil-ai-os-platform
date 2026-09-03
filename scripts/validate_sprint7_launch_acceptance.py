@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 READINESS = ROOT / "ops/readiness/sprint7-launch-acceptance.json"
 PROFILE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
 STAGING = ROOT / "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json"
+TIMING_DOC = ROOT / "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md"
 CUTOVER_RUNBOOK = ROOT / "docs/SPRINT_7_FINAL_CUTOVER_CONTROL_RUNBOOK_2026-09-02.md"
 
 
@@ -46,6 +47,8 @@ def main() -> None:
         "komoju_production_payment_subset_finalized",
         "komoju_production_checkout_configuration_verified",
         "komoju_live_konbini_expiry_verified",
+        "payment_timing_wording_reconciled",
+        "tokushoho_payment_timing_match_checkout",
         "production_payment_methods_verified",
         "production_shipping_configuration_verified",
         "japan_2026_tax_decision_green",
@@ -55,6 +58,7 @@ def main() -> None:
     require(verified["japan_2026_tax_status"] == "exempt", "Japan tax status drift")
     require(verified["qualified_invoice_status"] == "not_registered", "Qualified Invoice status drift")
     require(verified["woocommerce_tax_enabled"] is False, "WooCommerce tax unexpectedly enabled")
+    require(TIMING_DOC.is_file(), "payment timing reconciliation document missing")
 
     scope = data["scope_approvals"]
     for key in ("woocommerce_production_activation_scope_approved", "komoju_live_mode_scope_approved", "production_sms_sending_scope_approved", "public_domain_dns_cutover_scope_approved", "final_launch_signoff_process_scope_approved"):
@@ -95,6 +99,8 @@ def main() -> None:
     require(komoju.get("production_checkout_verification_run_id") == 33776964709 and komoju.get("production_checkout_verification_attempt") == 2, "KOMOJU checkout verification evidence drift")
     require(komoju.get("konbini_live_expiry_setting_verified") is True and komoju.get("konbini_live_expiry_days") == 3, "KOMOJU Live Konbini expiry evidence drift")
     require(komoju.get("live_mode_authorized") is False and komoju.get("payment_execution_authorized") is False, "KOMOJU live/payment authority must remain false")
+    require(staging["legal_checkout_sync"].get("tokushoho_payment_timing_match_checkout") is True, "staging payment timing sync regressed")
+    require(staging["legal_checkout_sync"].get("final_confirmation_screen_reviewed") is False, "final confirmation screen changed without evidence")
     require(staging.get("production_publish_authorized") is False, "preproduction readiness gained publication authority")
 
     baseline = data["authority_baseline"]
@@ -128,8 +134,8 @@ def main() -> None:
     require(data["decision"] == "ENGINEERING_PREPARED_LIVE_LAUNCH_PENDING_FAIL_CLOSED", "launch acceptance decision drift")
 
     print("PHIL_AI_OS_SPRINT_7_OPERATOR_AND_ACCEPTANCE_GREEN engineering_package=true live_launch=false profile_complete=true")
-    print("PHIL_AI_OS_SPRINT_7_KOMOJU_SUBSET_GREEN finalized=true checkout_config_verified=true konbini_expiry_days=3 payment_execution=false")
-    print("PHIL_AI_OS_SPRINT_7_SIGNOFF_BOUNDARY_GREEN recovery_fresh=false ceo_go_no_go=false cto=false cutover=false")
+    print("PHIL_AI_OS_SPRINT_7_KOMOJU_PAYMENT_TIMING_GREEN checkout_config_verified=true konbini_expiry_days=3 payment_timing=true payment_execution=false")
+    print("PHIL_AI_OS_SPRINT_7_SIGNOFF_BOUNDARY_GREEN final_screen=false recovery_fresh=false ceo_go_no_go=false cto=false cutover=false")
     print("PHIL_AI_OS_SPRINT_7_CUTOVER_RUNBOOK_CONTROL_GREEN tax_disabled=true branch_protection_gate=true rollback_matrix=true")
 
 

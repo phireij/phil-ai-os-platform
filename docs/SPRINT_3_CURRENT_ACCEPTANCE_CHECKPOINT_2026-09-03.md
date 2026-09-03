@@ -18,6 +18,7 @@
 - **CEO-approved initial production payment subset is finalized:** Visa/Mastercard; JCB/American Express/Diners/Discover; Konbini; Merpay; Paidy.
 - **WooCommerce checkout configuration matches the approved production payment subset**, verified with the sanitized GET-only production snapshot.
 - **KOMOJU Live Konbini payment expiry is verified GREEN at 3 days.**
+- **Customer-facing payment timing/deadline wording is reconciled GREEN** for cards, Konbini, Merpay and Paidy; Paidy customer timing/fees are captured in the payment-timing/Tokushoho reconciliation companion.
 - Production catalog mutation remains disabled.
 - Real payment execution remains blocked.
 
@@ -25,17 +26,16 @@
 
 1. **Final owner-approved production catalog** — products/categories/media/SKU/fulfillment/bilingual content.
 
-The Japan tax / Qualified Invoice evidence gate and the current KOMOJU configuration/readiness evidence are resolved GREEN. The final catalog remains the only owner-input gate preventing formal Sprint 3 closure.
+The Japan tax / Qualified Invoice evidence gate and current KOMOJU/payment-readiness evidence are resolved GREEN. The final catalog remains the only owner-input gate preventing formal Sprint 3 closure.
 
 ## Parallel Sprint 4 readiness still pending
 
 The following can continue without changing formal sprint position or production authority:
 
-- finalize customer-facing payment timing/deadline wording for all selected methods, including the verified 3-day Konbini deadline;
-- reconcile Tokushoho payment-method/payment-timing wording;
-- review the final checkout/order-confirmation screen for price, shipping, payment deadline, fulfillment and cancellation wording.
+- apply the reconciled payment timing/fee wording to the final Tokushoho publication candidate and obtain required owner approval before publication;
+- review the actual final checkout/order-confirmation screen for price, shipping, payment deadline, fulfillment and cancellation wording.
 
-These are customer-experience/legal synchronization tasks. They do not authorize a real payment or production publishing.
+Payment-timing reconciliation itself is GREEN. Final Tokushoho publication approval and the final confirmation-screen review remain pending and non-authorizing.
 
 ## Tax evidence handling
 
@@ -51,11 +51,12 @@ Until the final production catalog is complete and revalidated:
 - production catalog writes remain disabled;
 - WooCommerce tax remains disabled under the current exempt-business decision;
 - dry-run/read-only planning cannot be treated as mutation authority;
-- KOMOJU dashboard/configuration/expiry GREEN cannot be treated as real-payment proof or payment authority;
+- KOMOJU dashboard/configuration/expiry/payment-timing GREEN cannot be treated as real-payment proof or payment authority;
+- final Tokushoho publication remains separately approval-gated;
 - real payment execution remains blocked;
 - automatic production execution remains blocked.
 
 Machine-readable Sprint 3 companion: `ops/readiness/ruby-sprint3-current-acceptance-2026-09-03.json`.  
-Payment/readiness companions: `ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-04.json` and `ops/readiness/ruby-komoju-live-acceptance-gate-2026-09-02.json`.
+Payment/readiness companions: `ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-04.json`, `ops/readiness/ruby-komoju-live-acceptance-gate-2026-09-02.json`, and `docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md`.
 
 `PHIL_AI_OS_SPRINT_3_CURRENT_PRIMARY_PENDING_FINAL_CATALOG_ONLY`

@@ -47,6 +47,9 @@
     "production_checkout_verification_attempt": 2,
     "konbini_live_expiry_setting_verified": true,
     "konbini_live_expiry_days": 3,
+    "payment_timing_wording_reconciled": true,
+    "tokushoho_payment_timing_match_checkout": true,
+    "final_confirmation_screen_reviewed": false,
     "checkout_legal_timing_sync_complete": false,
     "live_acceptance_green": false,
     "real_payment_execution_ready": false

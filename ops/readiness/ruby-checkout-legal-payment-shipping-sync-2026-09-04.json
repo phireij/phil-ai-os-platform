@@ -25,7 +25,8 @@
     "konbini_live_expiry_setting_verified": true,
     "konbini_live_expiry_days": 3,
     "konbini_live_expiry_evidence_class": "owner_confirmed_live_dashboard_configuration",
-    "all_selected_methods_customer_facing_timing_finalized": false
+    "all_selected_methods_customer_facing_timing_finalized": true,
+    "reconciliation_doc": "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md"
   },
   "woocommerce_checkout_verification": {
     "get_only_payment_gateway_snapshot_capability_ready": true,
@@ -67,7 +68,7 @@
     "tokushoho_payment_method_subset_reconciled_in_readiness_record": true,
     "tokushoho_publication_text_finalized": false,
     "tokushoho_payment_methods_match_checkout": true,
-    "tokushoho_payment_timing_match_checkout": false,
+    "tokushoho_payment_timing_match_checkout": true,
     "tokushoho_shipping_fees_match_checkout": true,
     "tax_display_route_reconciled": true,
     "final_confirmation_screen_reviewed": false,
@@ -80,8 +81,8 @@
     "automatic_production_execution_authorized": false
   },
   "next_evidence_needed": [
-    "reconcile customer-facing payment timing/deadline text for all selected methods, including the verified 3-day Konbini deadline",
-    "review final checkout confirmation screen against Tokushoho, payment, shipping and cancellation wording"
+    "apply reconciled payment-timing wording to the final Tokushoho publication candidate and obtain required owner approval before publication",
+    "review final checkout confirmation screen against Tokushoho, payment, shipping, fulfillment and cancellation wording"
   ],
-  "decision": "CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_AND_KONBINI_EXPIRY_GREEN_LEGAL_TIMING_AND_FINAL_SCREEN_PENDING_FAIL_CLOSED"
+  "decision": "CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_KONBINI_EXPIRY_AND_PAYMENT_TIMING_GREEN_FINAL_SCREEN_AND_PUBLICATION_PENDING_FAIL_CLOSED"
 }
