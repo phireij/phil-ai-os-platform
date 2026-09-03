@@ -1,25 +1,12 @@
 {
-  "version": "ruby-checkout-legal-payment-shipping-sync-v2",
+  "version": "ruby-checkout-legal-payment-shipping-sync-v3",
   "date": "2026-09-04",
   "production_payment_subset": {
     "ceo_approved": true,
-    "selected": [
-      "visa_mastercard",
-      "jcb_amex_diners_discover",
-      "konbini",
-      "merpay",
-      "paidy"
-    ],
-    "disabled_initial_launch": [
-      "bank_transfer",
-      "pay_easy"
-    ],
-    "pending_provider_review": [
-      "paypay"
-    ],
-    "excluded": [
-      "rakuten_pay"
-    ]
+    "selected": ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy"],
+    "disabled_initial_launch": ["bank_transfer", "pay_easy"],
+    "pending_provider_review": ["paypay"],
+    "excluded": ["rakuten_pay"]
   },
   "verified_prerequisites": {
     "komoju_live_dashboard_evidence_green": true,
@@ -43,29 +30,24 @@
     "payment_gateway_snapshot_endpoint": "/wp-json/wc/v3/payment_gateways",
     "sanitized_snapshot_run_green": true,
     "snapshot_run_id": 33776964709,
-    "snapshot_captured_at": "2026-09-03T16:10:05.269928Z",
+    "snapshot_attempt": 2,
+    "snapshot_artifact_id": 9902650701,
+    "snapshot_captured_at": "2026-09-03T16:27:24.175410Z",
     "snapshot_network_read_only": true,
     "snapshot_payment_execution_authorized": false,
-    "enabled_gateway_ids": [
-      "komoju_credit_card",
-      "woa_gateway"
-    ],
-    "disabled_gateway_ids": [
-      "komoju",
-      "bacs",
-      "cheque",
-      "cod"
-    ],
-    "approved_subset_matches_enabled_checkout_methods": false,
-    "approved_subset_missing_from_woocommerce": [
-      "konbini",
-      "merpay",
-      "paidy"
-    ],
+    "enabled_gateway_ids": ["komoju_credit_card", "woa_gateway", "komoju_konbini", "komoju_merpay", "komoju_paidy"],
+    "disabled_gateway_ids": ["komoju", "bacs", "cheque", "cod"],
+    "approved_subset_matches_enabled_checkout_methods": true,
+    "approved_subset_missing_from_woocommerce": [],
     "credit_card_gateway_enabled": true,
+    "konbini_gateway_enabled": true,
+    "merpay_gateway_enabled": true,
+    "paidy_gateway_enabled": true,
     "order_approval_gateway_enabled": true,
     "bank_transfer_not_enabled": true,
     "pay_easy_not_exposed": true,
+    "paypay_not_exposed": true,
+    "rakuten_pay_not_exposed": true,
     "customer_facing_gateway_titles_reviewed": true,
     "no_real_payment_required_for_verification": true
   },
@@ -73,19 +55,16 @@
     "official_woocommerce_plugin_configuration_required": true,
     "step_1_select_methods_in_komoju_settings": true,
     "step_2_enable_each_komoju_method_in_woocommerce_payments": true,
-    "required_methods_to_add": [
-      "konbini",
-      "merpay",
-      "paidy"
-    ],
+    "required_methods_to_add": ["konbini", "merpay", "paidy"],
     "production_configuration_mutation_required": true,
-    "performed": false,
-    "fresh_readonly_snapshot_required_after_change": true
+    "performed": true,
+    "fresh_readonly_snapshot_required_after_change": true,
+    "fresh_readonly_snapshot_green": true
   },
   "legal_checkout_sync": {
     "tokushoho_payment_method_subset_reconciled_in_readiness_record": true,
     "tokushoho_publication_text_finalized": false,
-    "tokushoho_payment_methods_match_checkout": false,
+    "tokushoho_payment_methods_match_checkout": true,
     "tokushoho_payment_timing_match_checkout": false,
     "tokushoho_shipping_fees_match_checkout": true,
     "tax_display_route_reconciled": true,
@@ -99,11 +78,9 @@
     "automatic_production_execution_authorized": false
   },
   "next_evidence_needed": [
-    "enable the CEO-approved Konbini, Merpay and Paidy KOMOJU gateways in WooCommerce using the official two-step KOMOJU/WooCommerce configuration flow",
-    "rerun the sanitized GET-only WooCommerce payment-gateway snapshot and verify the approved subset",
     "verify KOMOJU Live Konbini expiry setting",
     "reconcile customer-facing payment timing/deadline text for all selected methods",
     "review final checkout confirmation screen against Tokushoho, payment, shipping and cancellation wording"
   ],
-  "decision": "READONLY_CHECKOUT_SNAPSHOT_GREEN_APPROVED_SUBSET_MISMATCH_REMEDIATION_REQUIRED_FAIL_CLOSED"
+  "decision": "CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_GREEN_LEGAL_TIMING_AND_FINAL_SCREEN_PENDING_FAIL_CLOSED"
 }
