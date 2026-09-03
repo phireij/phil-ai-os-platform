@@ -66,7 +66,7 @@ def main() -> None:
         fail("KOMOJU current state drift")
     if komoju.get("connection_method") != "komoju-sign-in-oauth-style" or komoju.get("manual_api_key_entry_expected") is not False:
         fail("KOMOJU integration model drift")
-    for key in ("test_mode_connection_authorized", "test_mode_connected", "test_capture_refund_validated", "merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "live_mode_merchant_approval_verified", "production_enabled_payment_methods_finalized", "production_checkout_configuration_verified"):
+    for key in ("test_mode_connection_authorized", "test_mode_connected", "test_capture_refund_validated", "merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "live_mode_merchant_approval_verified", "production_enabled_payment_methods_finalized", "production_checkout_configuration_verified", "konbini_live_expiry_setting_verified"):
         if komoju.get(key) is not True:
             fail(f"verified KOMOJU readiness regressed: {key}")
 
@@ -80,6 +80,10 @@ def main() -> None:
         fail("initially disabled production payment subset drift")
     if komoju.get("production_checkout_verification_run_id") != 33776964709 or komoju.get("production_checkout_verification_attempt") != 2:
         fail("checkout verification evidence drift")
+    if komoju.get("konbini_live_expiry_days") != 3:
+        fail("Live Konbini expiry must remain exactly 3 days")
+    if komoju.get("konbini_live_expiry_evidence_class") != "owner_confirmed_live_dashboard_configuration":
+        fail("Live Konbini expiry evidence classification drift")
     if komoju.get("paypay_status") != "application_under_review":
         fail("PayPay review status drift")
     if komoju.get("rakuten_pay_status") != "not_available_declined_or_no_longer_eligible":
@@ -122,7 +126,7 @@ def main() -> None:
             fail(f"Tokushoho safeguard missing: {phrase}")
 
     print("PHIL_AI_OS_RUBY_HOSTINGER_PREPRODUCTION_ENVIRONMENT_GREEN created=true wordpress=true woocommerce=true ssl=true checkout_qa=true shipping=true")
-    print("PHIL_AI_OS_RUBY_KOMOJU_PAYMENT_SUBSET_GREEN live_selected=true methods_verified=true final_subset=true checkout_config_verified=true payment_execution=false")
+    print("PHIL_AI_OS_RUBY_KOMOJU_PAYMENT_SUBSET_GREEN live_selected=true methods_verified=true final_subset=true checkout_config_verified=true konbini_expiry_days=3 payment_execution=false")
     print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=finalize_catalog_legal_timing_recovery_go_no_go publish=false")
 
 
