@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 READINESS = ROOT / "ops/readiness/sprint7-launch-acceptance.json"
 PROFILE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
 STAGING = ROOT / "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json"
+CUTOVER_RUNBOOK = ROOT / "docs/SPRINT_7_FINAL_CUTOVER_CONTROL_RUNBOOK_2026-09-02.md"
 
 
 def fail(message: str) -> None:
@@ -129,9 +130,23 @@ def main() -> None:
         if phrase not in acceptance:
             fail(f"launch state statement missing: {phrase}")
 
+    runbook = CUTOVER_RUNBOOK.read_text(encoding="utf-8")
+    for phrase in (
+        "Ruby is treated as consumption-tax exempt",
+        "WooCommerce tax remains disabled",
+        "branch-protection rule or repository ruleset",
+        "## Stop / rollback decision matrix",
+        "DNS/public cutover last",
+        "Do not retain raw credentials, payment secrets, personal tax-return files",
+        "PHIL_AI_OS_SPRINT_7_FINAL_CUTOVER_RUNBOOK_PREPARED_FAIL_CLOSED",
+    ):
+        if phrase not in runbook:
+            fail(f"cutover runbook control missing: {phrase}")
+
     print("PHIL_AI_OS_SPRINT_7_OPERATOR_AND_ACCEPTANCE_GREEN engineering_package=true live_launch=false profile_complete=true")
     print("PHIL_AI_OS_SPRINT_7_PREPRODUCTION_ENVIRONMENT_GREEN created=true qa=true komoju_test=true shipping=true")
     print("PHIL_AI_OS_SPRINT_7_SIGNOFF_BOUNDARY_GREEN backup=false ceo=false cto=false cutover=false")
+    print("PHIL_AI_OS_SPRINT_7_CUTOVER_RUNBOOK_CONTROL_GREEN tax_disabled=true branch_protection_gate=true rollback_matrix=true")
 
 
 if __name__ == "__main__":
