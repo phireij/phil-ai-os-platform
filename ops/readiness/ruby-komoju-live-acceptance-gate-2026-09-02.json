@@ -1,6 +1,6 @@
 {
-  "version": "ruby-komoju-live-acceptance-gate-v3",
-  "date": "2026-09-03",
+  "version": "ruby-komoju-live-acceptance-gate-v4",
+  "date": "2026-09-04",
   "provider": "komoju",
   "ceo_scope_approval": true,
   "current_mode": "live_dashboard_selected",
@@ -14,43 +14,24 @@
     "live_mode_ui_selected": true,
     "merchant_live_mode_approval_verified": true,
     "merchant_available_payment_methods_verified": true,
-    "enabled_or_available_methods_shown": [
-      "visa_mastercard",
-      "jcb_amex_diners_discover",
-      "konbini",
-      "merpay",
-      "paidy",
-      "bank_transfer",
-      "pay_easy"
-    ],
+    "enabled_or_available_methods_shown": ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy", "bank_transfer", "pay_easy"],
     "paypay_status": "application_under_review",
     "rakuten_pay_status": "not_available_declined_or_no_longer_eligible"
   },
   "production_payment_subset": {
     "ceo_approved": true,
-    "enabled_for_initial_launch": [
-      "visa_mastercard",
-      "jcb_amex_diners_discover",
-      "konbini",
-      "merpay",
-      "paidy"
-    ],
-    "disabled_for_initial_launch": [
-      "bank_transfer",
-      "pay_easy"
-    ],
-    "pending_provider_review": [
-      "paypay"
-    ],
-    "excluded": [
-      "rakuten_pay"
-    ]
+    "enabled_for_initial_launch": ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy"],
+    "disabled_for_initial_launch": ["bank_transfer", "pay_easy"],
+    "pending_provider_review": ["paypay"],
+    "excluded": ["rakuten_pay"]
   },
   "live_acceptance": {
     "merchant_live_mode_approval_verified": true,
     "merchant_available_payment_methods_verified": true,
     "production_enabled_payment_methods_finalized": true,
-    "production_checkout_configuration_verified": false,
+    "production_checkout_configuration_verified": true,
+    "production_checkout_verification_run_id": 33776964709,
+    "production_checkout_verification_attempt": 2,
     "catalog_ready": false,
     "japan_tax_and_qualified_invoice_evidence_ready": true,
     "checkout_legal_sync_complete": false,
@@ -65,10 +46,10 @@
   },
   "next_evidence_needed": [
     "approved production catalog",
-    "verified WooCommerce checkout configuration exactly matching the CEO-approved production payment subset without executing a customer payment",
-    "final checkout/Tokushoho/payment/shipping synchronization",
+    "verify KOMOJU Live Konbini expiry setting",
+    "final checkout/Tokushoho/payment timing synchronization and confirmation-screen review",
     "fresh near-cutover recovery validation",
     "final Go/No-Go acceptance"
   ],
-  "decision": "LIVE_DASHBOARD_METHOD_AVAILABILITY_AND_PAYMENT_SUBSET_GREEN_EXECUTION_PENDING_FAIL_CLOSED"
+  "decision": "LIVE_DASHBOARD_PAYMENT_SUBSET_AND_CHECKOUT_CONFIGURATION_GREEN_EXECUTION_PENDING_FAIL_CLOSED"
 }
