@@ -37,6 +37,8 @@
     "production_checkout_verification_attempt": 2,
     "konbini_live_expiry_setting_verified": true,
     "konbini_live_expiry_days": 3,
+    "payment_timing_wording_reconciled": true,
+    "payment_timing_reconciliation_ref": "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md",
     "catalog_ready": false,
     "japan_tax_and_qualified_invoice_evidence_ready": true,
     "checkout_legal_sync_complete": false,
@@ -51,9 +53,9 @@
   },
   "next_evidence_needed": [
     "approved production catalog",
-    "final checkout/Tokushoho/payment timing synchronization and confirmation-screen review using the verified 3-day Konbini deadline",
+    "final Tokushoho publication candidate and owner approval plus final checkout/confirmation-screen review",
     "fresh near-cutover recovery validation",
     "final Go/No-Go acceptance"
   ],
-  "decision": "LIVE_DASHBOARD_PAYMENT_SUBSET_CHECKOUT_CONFIGURATION_AND_KONBINI_EXPIRY_GREEN_EXECUTION_PENDING_FAIL_CLOSED"
+  "decision": "LIVE_DASHBOARD_PAYMENT_SUBSET_CHECKOUT_CONFIGURATION_KONBINI_EXPIRY_AND_PAYMENT_TIMING_GREEN_EXECUTION_PENDING_FAIL_CLOSED"
 }
