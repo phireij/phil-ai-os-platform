@@ -1,0 +1,50 @@
+{
+  "version": "ruby-isolated-final-confirmation-preview-v1",
+  "date": "2026-09-04",
+  "executive_roadmap": {
+    "current_primary_sprint": 3,
+    "sprint4_parallel_acceleration": true,
+    "formal_sprint4_entry": false
+  },
+  "isolated_preview": {
+    "green": true,
+    "fixture_only": true,
+    "preview_only": true,
+    "html_ref": "apps/customer-experience/confirmation-preview.html",
+    "module_ref": "apps/customer-experience/src/confirmation-preview.mjs",
+    "fixture_ref": "apps/customer-experience/fixtures/final-confirmation.json",
+    "test_ref": "apps/customer-experience/tests/confirmation-preview.test.mjs",
+    "static_validator_ref": "apps/customer-experience/tools_validate_cx.py",
+    "pwa_offline_shell_integrated": true,
+    "bilingual_en_ja": true,
+    "disabled_final_order_control": true,
+    "approved_payment_subset_enforced": true,
+    "konbini_live_expiry_days_enforced": 3,
+    "japan_2026_tax_exempt_posture_enforced": true,
+    "yamato_cool_kanto_rate_jpy_enforced": 1350,
+    "cancellation_timing_policy_enforced": true
+  },
+  "ci_evidence": {
+    "sprint4_customer_experience_run_id": 33813388111,
+    "sprint4_customer_experience_green": true,
+    "integrated_readiness_run_id": 33813388104,
+    "integrated_readiness_green": true,
+    "workflow_supply_chain_run_id": 33813388099,
+    "workflow_supply_chain_green": true
+  },
+  "actual_woocommerce_screen": {
+    "reviewed": false,
+    "evidence_captured": false,
+    "satisfied_by_isolated_preview": false,
+    "real_order_required": false,
+    "real_payment_required": false
+  },
+  "authority": {
+    "order_creation_authorized": false,
+    "mutation_authorized": false,
+    "payment_execution_authorized": false,
+    "production_publish_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "decision": "ISOLATED_FINAL_CONFIRMATION_PREVIEW_GREEN_ACTUAL_WOOCOMMERCE_SCREEN_PENDING_FAIL_CLOSED"
+}
