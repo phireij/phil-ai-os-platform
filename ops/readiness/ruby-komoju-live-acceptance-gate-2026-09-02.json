@@ -1,5 +1,5 @@
 {
-  "version": "ruby-komoju-live-acceptance-gate-v2",
+  "version": "ruby-komoju-live-acceptance-gate-v3",
   "date": "2026-09-03",
   "provider": "komoju",
   "ceo_scope_approval": true,
@@ -26,10 +26,31 @@
     "paypay_status": "application_under_review",
     "rakuten_pay_status": "not_available_declined_or_no_longer_eligible"
   },
+  "production_payment_subset": {
+    "ceo_approved": true,
+    "enabled_for_initial_launch": [
+      "visa_mastercard",
+      "jcb_amex_diners_discover",
+      "konbini",
+      "merpay",
+      "paidy"
+    ],
+    "disabled_for_initial_launch": [
+      "bank_transfer",
+      "pay_easy"
+    ],
+    "pending_provider_review": [
+      "paypay"
+    ],
+    "excluded": [
+      "rakuten_pay"
+    ]
+  },
   "live_acceptance": {
     "merchant_live_mode_approval_verified": true,
     "merchant_available_payment_methods_verified": true,
-    "production_enabled_payment_methods_finalized": false,
+    "production_enabled_payment_methods_finalized": true,
+    "production_checkout_configuration_verified": false,
     "catalog_ready": false,
     "japan_tax_and_qualified_invoice_evidence_ready": true,
     "checkout_legal_sync_complete": false,
@@ -43,12 +64,11 @@
     "automatic_live_activation": false
   },
   "next_evidence_needed": [
-    "final production payment-method subset",
     "approved production catalog",
-    "verified live WooCommerce/KOMOJU checkout connection without executing a customer payment",
+    "verified WooCommerce checkout configuration exactly matching the CEO-approved production payment subset without executing a customer payment",
     "final checkout/Tokushoho/payment/shipping synchronization",
     "fresh near-cutover recovery validation",
     "final Go/No-Go acceptance"
   ],
-  "decision": "LIVE_DASHBOARD_AND_METHOD_AVAILABILITY_GREEN_EXECUTION_PENDING_FAIL_CLOSED"
+  "decision": "LIVE_DASHBOARD_METHOD_AVAILABILITY_AND_PAYMENT_SUBSET_GREEN_EXECUTION_PENDING_FAIL_CLOSED"
 }
