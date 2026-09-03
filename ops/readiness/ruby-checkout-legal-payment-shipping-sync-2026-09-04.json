@@ -1,0 +1,74 @@
+{
+  "version": "ruby-checkout-legal-payment-shipping-sync-v1",
+  "date": "2026-09-04",
+  "production_payment_subset": {
+    "ceo_approved": true,
+    "selected": [
+      "visa_mastercard",
+      "jcb_amex_diners_discover",
+      "konbini",
+      "merpay",
+      "paidy"
+    ],
+    "disabled_initial_launch": [
+      "bank_transfer",
+      "pay_easy"
+    ],
+    "pending_provider_review": [
+      "paypay"
+    ],
+    "excluded": [
+      "rakuten_pay"
+    ]
+  },
+  "verified_prerequisites": {
+    "komoju_live_dashboard_evidence_green": true,
+    "komoju_merchant_method_availability_green": true,
+    "japan_2026_tax_decision_green": true,
+    "japan_2026_tax_status": "exempt",
+    "woocommerce_tax_enabled": false,
+    "production_shipping_configuration_verified": true,
+    "production_shipping_rates_verified": true,
+    "woocommerce_production_readonly_identity_green": true
+  },
+  "payment_timing_reconciliation": {
+    "legacy_card_timing_source_captured": true,
+    "paidy_merchant_transaction_completion_documented": true,
+    "konbini_is_deferred_customer_payment": true,
+    "konbini_live_expiry_setting_verified": false,
+    "all_selected_methods_customer_facing_timing_finalized": false
+  },
+  "woocommerce_checkout_verification": {
+    "get_only_payment_gateway_snapshot_capability_ready": true,
+    "payment_gateway_snapshot_endpoint": "/wp-json/wc/v3/payment_gateways",
+    "sanitized_snapshot_run_green": false,
+    "approved_subset_matches_enabled_checkout_methods": false,
+    "disabled_methods_absent_from_checkout": false,
+    "customer_facing_gateway_titles_reviewed": false,
+    "no_real_payment_required_for_verification": true
+  },
+  "legal_checkout_sync": {
+    "tokushoho_payment_method_subset_reconciled_in_readiness_record": true,
+    "tokushoho_publication_text_finalized": false,
+    "tokushoho_payment_methods_match_checkout": false,
+    "tokushoho_payment_timing_match_checkout": false,
+    "tokushoho_shipping_fees_match_checkout": true,
+    "tax_display_route_reconciled": true,
+    "final_confirmation_screen_reviewed": false,
+    "checkout_legal_sync_complete": false
+  },
+  "authority": {
+    "mutation_authorized": false,
+    "payment_execution_authorized": false,
+    "production_publish_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "next_evidence_needed": [
+    "run sanitized GET-only WooCommerce payment-gateway snapshot",
+    "verify enabled WooCommerce checkout gateways match the CEO-approved KOMOJU subset",
+    "verify KOMOJU Live Konbini expiry setting",
+    "reconcile customer-facing payment timing/deadline text for all selected methods",
+    "review final checkout confirmation screen against Tokushoho, payment, shipping and cancellation wording"
+  ],
+  "decision": "PAYMENT_SUBSET_SHIPPING_AND_TAX_RECONCILED_CHECKOUT_CONFIGURATION_PENDING_FAIL_CLOSED"
+}
