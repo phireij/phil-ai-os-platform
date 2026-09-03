@@ -55,11 +55,13 @@ def main() -> None:
             fail(f"WooCommerce production authority drift: {key}")
 
     komoju = data["komoju"]
-    if komoju.get("current_connection_state") != "test_mode" or komoju.get("connection_method") != "komoju-sign-in-oauth-style":
+    if komoju.get("current_connection_state") != "live_dashboard_selected" or komoju.get("connection_method") != "komoju-sign-in-oauth-style":
         fail("KOMOJU connection state/model drift")
-    for key in ("test_mode_activation_authorized", "test_mode_validated"):
+    for key in ("test_mode_activation_authorized", "test_mode_validated", "merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified"):
         if komoju.get(key) is not True:
-            fail(f"KOMOJU verified Test Mode state regressed: {key}")
+            fail(f"KOMOJU verified state regressed: {key}")
+    if komoju.get("production_enabled_payment_methods_finalized") is not False:
+        fail("KOMOJU production payment subset changed without reconciliation")
     for key in ("live_mode_authorized", "payment_execution_authorized"):
         if komoju.get(key) is not False:
             fail(f"KOMOJU live authority drift: {key}")
@@ -88,11 +90,16 @@ def main() -> None:
     for key, value in expected.items():
         if sfront.get(key) != value:
             fail(f"preproduction record drift: {key}")
-    if staging.get("next_gate") != "complete_catalog_tax_recovery_and_final_launch_acceptance_without_live_activation":
+    if staging.get("next_gate") != "finalize_catalog_payment_subset_checkout_recovery_and_go_no_go_without_real_payment_execution":
         fail("next gate drift")
     skomoju = staging["komoju"]
-    if skomoju.get("current_connection_state") != "test_mode" or skomoju.get("test_mode_connected") is not True:
-        fail("KOMOJU staging Test Mode drift")
+    if skomoju.get("current_connection_state") != "live_dashboard_selected" or skomoju.get("test_mode_connected") is not True:
+        fail("KOMOJU staging Live-dashboard/Test baseline drift")
+    for key in ("merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "live_mode_merchant_approval_verified"):
+        if skomoju.get(key) is not True:
+            fail(f"KOMOJU staging merchant evidence regressed: {key}")
+    if skomoju.get("production_enabled_payment_methods_finalized") is not False:
+        fail("KOMOJU staging payment subset unexpectedly finalized")
     if skomoju.get("live_mode_authorized") is not False or skomoju.get("payment_execution_authorized") is not False:
         fail("KOMOJU staging live/payment authority drift")
     if staging.get("production_publish_authorized") is not False:
@@ -102,9 +109,9 @@ def main() -> None:
         if not (ROOT / rel).is_file():
             fail(f"missing deployment evidence file: {rel}")
 
-    print("PHIL_AI_OS_SPRINT_7_DEPLOYMENT_READINESS_GREEN preproduction_created=true wordpress=true woocommerce=true ssl=true checkout_qa=true shipping=true komoju_test=true")
-    print("PHIL_AI_OS_SPRINT_7_NEXT_GATE_GREEN catalog_tax_recovery_launch_acceptance=true live_activation=false")
-    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_ACTIVATION_BOUNDARY_GREEN woo=false komoju_live=false dns=false")
+    print("PHIL_AI_OS_SPRINT_7_DEPLOYMENT_READINESS_GREEN preproduction_created=true wordpress=true woocommerce=true ssl=true checkout_qa=true shipping=true komoju_live_dashboard=true")
+    print("PHIL_AI_OS_SPRINT_7_NEXT_GATE_GREEN catalog_payment_subset_checkout_recovery_go_no_go=true payment_execution=false")
+    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_ACTIVATION_BOUNDARY_GREEN woo=false komoju_payment_execution=false dns=false")
 
 
 if __name__ == "__main__":
