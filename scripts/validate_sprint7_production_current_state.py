@@ -72,9 +72,15 @@ def main() -> None:
     require(komoju["live_acceptance"]["merchant_live_mode_approval_verified"] is False, "KOMOJU merchant Live approval unexpectedly GREEN")
     require(komoju["execution"]["real_payment_execution_ready"] is False, "KOMOJU real payment unexpectedly ready")
 
-    require(sms["provider_selection"]["formally_selected"] is False, "SMS provider unexpectedly selected")
+    require(sms["provider_selection"]["formally_selected"] is True, "SMS provider selection should be reconciled GREEN")
+    require(sms["provider_selection"]["selected_provider"] == "twilio", "selected SMS provider must remain Twilio")
+    require(sms["activation_acceptance"]["provider_formally_selected"] is True, "SMS acceptance lost formal provider selection")
     require(sms["activation_acceptance"]["production_sending_ready"] is False, "SMS production sending unexpectedly ready")
+    require(sms["execution"]["live_sms_authorized_by_readiness"] is False, "SMS live-send readiness unexpectedly authorized")
     require(sms["execution"]["live_sms_sent"] is False, "live SMS evidence unexpectedly true")
+    require(overlay["sms"]["selected_provider"] == "twilio", "overlay SMS provider drift")
+    require(overlay["sms"]["formal_provider_selected"] is True, "overlay lost formal Twilio selection")
+    require(overlay["sms"]["production_sending_ready"] is False, "overlay SMS sending unexpectedly ready")
 
     require(recovery["current_baseline"]["status"] == "green_current_not_launch_fresh", "recovery baseline status drift")
     require(recovery["execution"]["launch_recovery_gate_green"] is False, "recovery incorrectly marked launch-fresh")
@@ -94,7 +100,7 @@ def main() -> None:
     require(overlay["launch"]["live_launch_authorized_by_readiness"] is False, "overlay unexpectedly authorizes live launch")
     require(overlay["decision"] == "CONTROL_POSTURE_GREEN_LAUNCH_PENDING_FAIL_CLOSED", "overlay decision drift")
 
-    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN tax_decision=green")
+    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN tax_decision=green sms_provider=twilio")
     print("PHIL_AI_OS_SPRINT_7_FINAL_GO_NO_GO_PENDING_FAIL_CLOSED")
 
 
