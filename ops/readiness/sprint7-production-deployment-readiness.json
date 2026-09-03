@@ -50,6 +50,8 @@
     "production_checkout_configuration_verified": true,
     "production_checkout_verification_run_id": 33776964709,
     "production_checkout_verification_attempt": 2,
+    "konbini_live_expiry_setting_verified": true,
+    "konbini_live_expiry_days": 3,
     "live_mode_authorized": false,
     "payment_execution_authorized": false
   },
@@ -60,7 +62,8 @@
     "legacy_yamato_cool_shipping_preserved_for_preproduction_verification": true,
     "production_shipping_rates_verified": true,
     "production_payment_methods_verified": true,
-    "production_payment_timing_verified": false,
+    "production_payment_timing_verified": true,
+    "payment_timing_reconciliation_ref": "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md",
     "final_confirmation_screen_reviewed": false
   },
   "evidence": [
@@ -72,6 +75,7 @@
     "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json",
     "ops/readiness/ruby-hostinger-preproduction-evidence.template.json",
     "ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-04.json",
+    "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md",
     "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md",
     "docs/RUBY_WOOCOMMERCE_KOMOJU_STAGING_CONFIGURATION_PLAN_2026-08-29.md",
     "docs/RUBY_WORDPRESS_PREPRODUCTION_QA_MILESTONE_2026-09-02.md",
