@@ -136,7 +136,7 @@ def main() -> None:
         "WooCommerce tax remains disabled",
         "branch-protection rule or repository ruleset",
         "## Stop / rollback decision matrix",
-        "DNS/public cutover last",
+        "Perform public-domain/DNS cutover last",
         "Do not retain raw credentials, payment secrets, personal tax-return files",
         "PHIL_AI_OS_SPRINT_7_FINAL_CUTOVER_RUNBOOK_PREPARED_FAIL_CLOSED",
     ):
