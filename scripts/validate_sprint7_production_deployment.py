@@ -9,6 +9,8 @@ READINESS = ROOT / "ops/readiness/sprint7-production-deployment-readiness.json"
 PROFILE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
 STAGING = ROOT / "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json"
 TIMING_DOC = ROOT / "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md"
+CANDIDATE_DOC = ROOT / "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md"
+SCREEN_CHECKLIST = ROOT / "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md"
 
 
 def fail(message: str) -> None:
@@ -65,6 +67,14 @@ def main() -> None:
         fail("production payment-timing wording reconciliation regressed")
     if legal.get("payment_timing_reconciliation_ref") != "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md" or not TIMING_DOC.is_file():
         fail("payment-timing reconciliation evidence missing")
+    if legal.get("tokushoho_publication_candidate_ready") is not True:
+        fail("Tokushoho publication candidate readiness regressed")
+    if legal.get("tokushoho_publication_candidate_ref") != "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md" or not CANDIDATE_DOC.is_file():
+        fail("Tokushoho publication candidate evidence missing")
+    if legal.get("static_confirmation_screen_checklist_ready") is not True:
+        fail("static confirmation-screen checklist readiness regressed")
+    if legal.get("static_confirmation_screen_checklist_ref") != "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md" or not SCREEN_CHECKLIST.is_file():
+        fail("static confirmation-screen checklist evidence missing")
     for key in ("tokushoho_publication_approved", "final_confirmation_screen_reviewed"):
         if legal.get(key) is not False:
             fail(f"remaining legal/publication gate unexpectedly closed: {key}")
@@ -84,7 +94,7 @@ def main() -> None:
     for key, value in expected.items():
         if sfront.get(key) != value:
             fail(f"preproduction record drift: {key}")
-    if staging.get("next_gate") != "finalize_catalog_apply_final_tokushoho_text_review_confirmation_screen_recovery_and_go_no_go_without_real_payment_execution":
+    if staging.get("next_gate") != "finalize_catalog_obtain_tokushoho_publication_approval_review_actual_confirmation_screen_recovery_and_go_no_go_without_real_payment_execution":
         fail("next gate drift")
     skomoju = staging["komoju"]
     for key in ("test_mode_connected", "merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "live_mode_merchant_approval_verified", "production_enabled_payment_methods_finalized", "production_checkout_configuration_verified", "konbini_live_expiry_setting_verified"):
@@ -94,10 +104,15 @@ def main() -> None:
         fail("KOMOJU staging production subset drift")
     if skomoju.get("konbini_live_expiry_days") != 3:
         fail("KOMOJU staging Konbini expiry drift")
-    if staging["legal_checkout_sync"].get("tokushoho_payment_timing_match_checkout") is not True:
+    slegal = staging["legal_checkout_sync"]
+    if slegal.get("tokushoho_payment_timing_match_checkout") is not True:
         fail("staging payment timing sync regressed")
-    if staging["legal_checkout_sync"].get("final_confirmation_screen_reviewed") is not False:
-        fail("final confirmation screen changed without evidence")
+    if slegal.get("tokushoho_publication_candidate_ready") is not True:
+        fail("staging Tokushoho candidate readiness regressed")
+    if slegal.get("static_confirmation_screen_checklist_ready") is not True:
+        fail("staging static confirmation-screen checklist readiness regressed")
+    if slegal.get("final_confirmation_screen_reviewed") is not False:
+        fail("actual final confirmation screen changed without evidence")
     if skomoju.get("live_mode_authorized") is not False or skomoju.get("payment_execution_authorized") is not False:
         fail("KOMOJU staging live/payment authority drift")
     if staging.get("production_publish_authorized") is not False:
@@ -108,7 +123,7 @@ def main() -> None:
             fail(f"missing deployment evidence file: {rel}")
 
     print("PHIL_AI_OS_SPRINT_7_DEPLOYMENT_READINESS_GREEN preproduction_created=true komoju_subset=true checkout_config_verified=true konbini_expiry_days=3 payment_timing=true")
-    print("PHIL_AI_OS_SPRINT_7_NEXT_GATE_GREEN catalog_final_tokushoho_confirmation_screen_recovery_go_no_go=true payment_execution=false")
+    print("PHIL_AI_OS_SPRINT_7_TOKUSHOHO_CANDIDATE_GREEN candidate=true approved=false actual_screen=false")
     print("PHIL_AI_OS_SPRINT_7_PRODUCTION_ACTIVATION_BOUNDARY_GREEN woo=false komoju_payment_execution=false publish=false dns=false")
 
 
