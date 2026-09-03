@@ -8,8 +8,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SYNC = ROOT / "ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-04.json"
 KOMOJU = ROOT / "ops/readiness/ruby-komoju-live-acceptance-gate-2026-09-02.json"
 STAGING = ROOT / "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json"
+CANDIDATE_RECORD = ROOT / "ops/readiness/ruby-tokushoho-publication-candidate-2026-09-04.json"
 DOC = ROOT / "docs/RUBY_CHECKOUT_LEGAL_PAYMENT_SHIPPING_SYNC_2026-09-04.md"
 TIMING_DOC = ROOT / "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md"
+CANDIDATE_DOC = ROOT / "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md"
+SCREEN_CHECKLIST = ROOT / "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md"
 WORKFLOW = ROOT / ".github/workflows/commerce-woocommerce-production-readonly-checkout-snapshot.yml"
 
 
@@ -22,6 +25,7 @@ def main() -> None:
     sync = json.loads(SYNC.read_text(encoding="utf-8"))
     komoju = json.loads(KOMOJU.read_text(encoding="utf-8"))
     staging = json.loads(STAGING.read_text(encoding="utf-8"))
+    candidate = json.loads(CANDIDATE_RECORD.read_text(encoding="utf-8"))
 
     require(sync.get("version") == "ruby-checkout-legal-payment-shipping-sync-v3", "checkout sync schema drift")
     expected_subset = ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy"]
@@ -78,11 +82,40 @@ def main() -> None:
     require(legal["tokushoho_payment_timing_match_checkout"] is True, "payment-timing legal sync not green")
     require(legal["tokushoho_shipping_fees_match_checkout"] is True, "shipping/legal sync regressed")
     require(legal["tax_display_route_reconciled"] is True, "tax display reconciliation regressed")
+    require(legal["tokushoho_publication_candidate_ready"] is True, "Tokushoho publication candidate not ready")
+    require(legal["tokushoho_publication_candidate_ref"] == "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md", "Tokushoho candidate reference drift")
+    require(legal["static_confirmation_screen_checklist_ready"] is True, "static confirmation-screen checklist not ready")
+    require(legal["static_confirmation_screen_checklist_ref"] == "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md", "confirmation-screen checklist reference drift")
     for key in ("tokushoho_publication_text_finalized", "final_confirmation_screen_reviewed", "checkout_legal_sync_complete"):
         require(legal[key] is False, f"publication/final-screen gate changed without evidence: {key}")
 
     for key, value in sync["authority"].items():
         require(value is False, f"authority expanded unexpectedly: {key}")
+
+    require(candidate["version"] == "ruby-tokushoho-publication-candidate-v1", "candidate record schema drift")
+    executive = candidate["executive_roadmap"]
+    require(executive["current_primary_sprint"] == 3, "candidate record changed current sprint")
+    require(executive["sprint4_parallel_acceleration"] is True, "candidate record lost Sprint 4 parallel acceleration")
+    require(executive["formal_sprint4_entry"] is False, "candidate record incorrectly entered Sprint 4 formally")
+    cand = candidate["candidate"]
+    require(cand["publication_candidate_ready"] is True, "publication candidate record not GREEN")
+    require(cand["japan_2026_consumption_tax_status"] == "exempt", "candidate tax status drift")
+    require(cand["qualified_invoice_status"] == "not_registered", "candidate Qualified Invoice status drift")
+    require(cand["woocommerce_tax_enabled"] is False, "candidate unexpectedly enabled WooCommerce tax")
+    require(cand["approved_payment_subset_reconciled"] is True, "candidate payment subset not reconciled")
+    require(cand["payment_timing_and_deadlines_reconciled"] is True, "candidate payment timing not reconciled")
+    require(cand["konbini_live_expiry_days"] == 3, "candidate Konbini expiry drift")
+    screen = candidate["confirmation_screen"]
+    require(screen["static_compliance_checklist_ready"] is True, "candidate static screen checklist missing")
+    require(screen["actual_final_screen_reviewed"] is False, "actual final screen cannot be GREEN without evidence")
+    require(screen["actual_final_screen_evidence_captured"] is False, "actual screen evidence unexpectedly claimed")
+    require(screen["real_order_required_for_review"] is False, "real order incorrectly required for review")
+    require(screen["real_payment_required_for_review"] is False, "real payment incorrectly required for review")
+    approval = candidate["approval_and_publication"]
+    for key in ("owner_publication_approval_recorded", "tokushoho_publication_approved", "published", "checkout_legal_sync_complete"):
+        require(approval[key] is False, f"candidate approval/publication gate expanded unexpectedly: {key}")
+    for key, value in candidate["authority"].items():
+        require(value is False, f"candidate authority expanded unexpectedly: {key}")
 
     live = komoju["live_acceptance"]
     require(live["production_checkout_configuration_verified"] is True, "KOMOJU checkout config not green")
@@ -125,13 +158,37 @@ def main() -> None:
     ):
         require(phrase in timing_doc, f"payment timing reconciliation doc missing: {phrase}")
 
+    candidate_doc = CANDIDATE_DOC.read_text(encoding="utf-8")
+    for phrase in (
+        "PUBLICATION CANDIDATE READY",
+        "消費税の免税事業者",
+        "Visa / Mastercard / JCB / American Express / Diners Club / Discover",
+        "コンビニ決済の有効期限は3日",
+        "tokushoho_publication_approved: false",
+        "actual_final_confirmation_screen_reviewed: false",
+        "payment_execution_authorized: false",
+        "PHIL_AI_OS_RUBY_TOKUSHOHO_PUBLICATION_CANDIDATE_READY_FAIL_CLOSED",
+    ):
+        require(phrase in candidate_doc, f"Tokushoho candidate missing: {phrase}")
+
+    checklist = SCREEN_CHECKLIST.read_text(encoding="utf-8")
+    for phrase in (
+        "STATIC COMPLIANCE CHECKLIST READY",
+        "actual_final_confirmation_screen_reviewed: false",
+        "payment_execution_authorized: false",
+        "production_publish_authorized: false",
+        "PHIL_AI_OS_RUBY_FINAL_CONFIRMATION_SCREEN_STATIC_CHECKLIST_READY_ACTUAL_REVIEW_PENDING_FAIL_CLOSED",
+    ):
+        require(phrase in checklist, f"confirmation-screen checklist missing: {phrase}")
+
     require(
-        sync["decision"] == "CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_KONBINI_EXPIRY_AND_PAYMENT_TIMING_GREEN_FINAL_SCREEN_AND_PUBLICATION_PENDING_FAIL_CLOSED",
+        sync["decision"] == "CHECKOUT_PAYMENT_TIMING_AND_TOKUSHOHO_CANDIDATE_GREEN_APPROVAL_AND_FINAL_SCREEN_PENDING_FAIL_CLOSED",
         "decision drift",
     )
 
-    print("PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_TIMING_GREEN konbini_expiry_days=3 payment_execution=false")
-    print("PHIL_AI_OS_RUBY_CHECKOUT_FINAL_SCREEN_AND_PUBLICATION_PENDING_FAIL_CLOSED production_publish=false")
+    print("PHIL_AI_OS_RUBY_TOKUSHOHO_CANDIDATE_GREEN candidate=true approved=false published=false")
+    print("PHIL_AI_OS_RUBY_CONFIRMATION_SCREEN_STATIC_CHECKLIST_GREEN actual_screen=false real_payment=false")
+    print("PHIL_AI_OS_RUBY_CHECKOUT_APPROVAL_AND_FINAL_SCREEN_PENDING_FAIL_CLOSED production_publish=false")
 
 
 if __name__ == "__main__":
