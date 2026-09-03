@@ -70,6 +70,8 @@ def main() -> None:
     require(komoju["live_acceptance"]["production_enabled_payment_methods_finalized"] is True, "KOMOJU payment subset should remain finalized")
     require(komoju["live_acceptance"]["production_checkout_configuration_verified"] is True, "KOMOJU checkout verification regressed")
     require(komoju["live_acceptance"]["production_checkout_verification_run_id"] == 33776964709 and komoju["live_acceptance"]["production_checkout_verification_attempt"] == 2, "KOMOJU checkout verification evidence drift")
+    require(komoju["live_acceptance"]["konbini_live_expiry_setting_verified"] is True, "KOMOJU Konbini expiry evidence missing")
+    require(komoju["live_acceptance"]["konbini_live_expiry_days"] == 3, "KOMOJU Konbini expiry must remain 3 days")
     require(komoju["live_acceptance"]["japan_tax_and_qualified_invoice_evidence_ready"] is True, "KOMOJU tax prerequisite regressed")
     require(komoju["execution"]["live_mode_authorized_by_readiness"] is False, "KOMOJU live execution authority expanded")
     require(komoju["execution"]["real_payment_execution_ready"] is False and komoju["execution"]["real_payment_executed"] is False, "KOMOJU real payment state expanded")
@@ -81,6 +83,7 @@ def main() -> None:
     require(ok["approved_initial_launch_subset"] == approved, "overlay approved payment subset drift")
     require(ok["production_checkout_configuration_verified"] is True, "overlay checkout config verification regressed")
     require(ok["production_checkout_verification_run_id"] == 33776964709 and ok["production_checkout_verification_attempt"] == 2, "overlay checkout evidence drift")
+    require(ok["konbini_live_expiry_setting_verified"] is True and ok["konbini_live_expiry_days"] == 3, "overlay Konbini expiry evidence drift")
     require(ok["checkout_legal_timing_sync_complete"] is False, "overlay legal/timing sync unexpectedly complete")
     require(ok["live_acceptance_green"] is False and ok["real_payment_execution_ready"] is False, "overlay KOMOJU acceptance expanded unexpectedly")
 
@@ -109,7 +112,7 @@ def main() -> None:
     require(overlay["launch"]["live_launch_authorized_by_readiness"] is False, "overlay unexpectedly authorizes live launch")
     require(overlay["decision"] == "CONTROL_POSTURE_GREEN_LAUNCH_PENDING_FAIL_CLOSED", "overlay decision drift")
 
-    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN tax=green twilio=selected komoju_subset=finalized checkout_config=true")
+    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN tax=green twilio=selected komoju_subset=finalized checkout_config=true konbini_expiry_days=3")
     print("PHIL_AI_OS_SPRINT_7_FINAL_GO_NO_GO_PENDING_FAIL_CLOSED")
 
 

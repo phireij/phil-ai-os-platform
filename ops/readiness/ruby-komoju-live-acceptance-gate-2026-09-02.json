@@ -16,7 +16,10 @@
     "merchant_available_payment_methods_verified": true,
     "enabled_or_available_methods_shown": ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy", "bank_transfer", "pay_easy"],
     "paypay_status": "application_under_review",
-    "rakuten_pay_status": "not_available_declined_or_no_longer_eligible"
+    "rakuten_pay_status": "not_available_declined_or_no_longer_eligible",
+    "konbini_live_expiry_setting_verified": true,
+    "konbini_live_expiry_days": 3,
+    "konbini_live_expiry_evidence_class": "owner_confirmed_live_dashboard_configuration"
   },
   "production_payment_subset": {
     "ceo_approved": true,
@@ -32,6 +35,8 @@
     "production_checkout_configuration_verified": true,
     "production_checkout_verification_run_id": 33776964709,
     "production_checkout_verification_attempt": 2,
+    "konbini_live_expiry_setting_verified": true,
+    "konbini_live_expiry_days": 3,
     "catalog_ready": false,
     "japan_tax_and_qualified_invoice_evidence_ready": true,
     "checkout_legal_sync_complete": false,
@@ -46,10 +51,9 @@
   },
   "next_evidence_needed": [
     "approved production catalog",
-    "verify KOMOJU Live Konbini expiry setting",
-    "final checkout/Tokushoho/payment timing synchronization and confirmation-screen review",
+    "final checkout/Tokushoho/payment timing synchronization and confirmation-screen review using the verified 3-day Konbini deadline",
     "fresh near-cutover recovery validation",
     "final Go/No-Go acceptance"
   ],
-  "decision": "LIVE_DASHBOARD_PAYMENT_SUBSET_AND_CHECKOUT_CONFIGURATION_GREEN_EXECUTION_PENDING_FAIL_CLOSED"
+  "decision": "LIVE_DASHBOARD_PAYMENT_SUBSET_CHECKOUT_CONFIGURATION_AND_KONBINI_EXPIRY_GREEN_EXECUTION_PENDING_FAIL_CLOSED"
 }

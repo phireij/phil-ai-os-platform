@@ -1,7 +1,7 @@
 # Ruby's Cake Delights — Checkout / Legal / Payment / Shipping Synchronization
 
 Date: 2026-09-04  
-Status: **IN PROGRESS — APPROVED KOMOJU CHECKOUT SUBSET VERIFIED GREEN; LEGAL TIMING / FINAL SCREEN PENDING**
+Status: **IN PROGRESS — APPROVED KOMOJU CHECKOUT SUBSET + LIVE KONBINI 3-DAY EXPIRY VERIFIED GREEN; CUSTOMER-FACING LEGAL TIMING / FINAL SCREEN PENDING**
 
 ## Verified production payment subset
 
@@ -50,6 +50,13 @@ Therefore the approved initial KOMOJU payment subset now **matches the WooCommer
 
 The snapshot is network-read-only, exports no gateway settings/secrets, cannot submit a payment, cannot create an order, and cannot change WooCommerce configuration.
 
+## Live Konbini expiry verification
+
+- KOMOJU Live Konbini payment-expiry setting: **3 days — VERIFIED GREEN**.
+- Evidence classification: owner-confirmed Live dashboard configuration evidence.
+- This closes the previously open Live Konbini expiry-setting evidence item.
+- The 3-day setting is configuration/timing evidence only; it does **not** prove or authorize a real Konbini payment, settlement, refund or capture.
+
 ## Tax and shipping state
 
 - 2026 consumption-tax status: exempt.
@@ -67,8 +74,8 @@ The snapshot is network-read-only, exports no gateway settings/secrets, cannot s
 - [x] Rakuten Pay not exposed.
 - [x] Tax route reconciled.
 - [x] Shipping configuration/rates reconciled.
-- [ ] Verify the actual **KOMOJU Live Konbini payment-expiry setting**.
-- [ ] Finalize customer-facing payment timing/deadline wording for every selected method.
+- [x] Actual **KOMOJU Live Konbini payment-expiry setting verified at 3 days**.
+- [ ] Finalize customer-facing payment timing/deadline wording for every selected method, including the verified 3-day Konbini deadline.
 - [ ] Reconcile final Tokushoho payment-method/payment-timing wording.
 - [ ] Review the final checkout/order-confirmation screen for price, shipping, payment timing/deadline, fulfillment and cancellation wording.
 
@@ -79,6 +86,6 @@ The snapshot is network-read-only, exports no gateway settings/secrets, cannot s
 `production_publish_authorized: false`  
 `automatic_production_execution_authorized: false`
 
-Checkout configuration verification is GREEN, but **real payment execution remains blocked** until the remaining legal/timing/recovery/final-Go-No-Go gates are satisfied.
+Checkout configuration and Live Konbini expiry verification are GREEN, but **real payment execution remains blocked** until the remaining legal/timing/recovery/final-Go-No-Go gates are satisfied.
 
-`PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_GREEN_LEGAL_TIMING_PENDING_FAIL_CLOSED`
+`PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_AND_KONBINI_EXPIRY_GREEN_LEGAL_TIMING_PENDING_FAIL_CLOSED`
