@@ -1,5 +1,5 @@
 {
-  "version": "ruby-production-current-state-overlay-v2",
+  "version": "ruby-production-current-state-overlay-v3",
   "date": "2026-09-03",
   "purpose": "Current operational reconciliation layer for production-readiness decisions where older roadmap wording predates later CEO approvals and verified read-only connectivity.",
   "governance": {
@@ -41,8 +41,10 @@
     "real_payment_execution_ready": false
   },
   "sms": {
-    "preferred_pilot_candidate": "twilio",
-    "formal_provider_selected": false,
+    "selected_provider": "twilio",
+    "formal_provider_selected": true,
+    "provider_account_owned_by_ruby": false,
+    "sender_identity_verified": false,
     "production_sending_ready": false
   },
   "recovery": {

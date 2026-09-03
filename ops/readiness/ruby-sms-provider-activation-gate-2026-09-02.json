@@ -1,14 +1,16 @@
 {
-  "version": "ruby-sms-provider-activation-gate-v1",
-  "date": "2026-09-02",
+  "version": "ruby-sms-provider-activation-gate-v2",
+  "date": "2026-09-03",
   "ceo_scope_approval_for_production_sms": true,
   "provider_candidates": {
     "preferred_pilot_candidate": "twilio",
     "secondary_candidate": "aws_end_user_messaging_sms"
   },
   "provider_selection": {
-    "formally_selected": false,
-    "selected_provider": null
+    "formally_selected": true,
+    "selected_provider": "twilio",
+    "selected_by": "CEO",
+    "selection_date": "2026-09-03"
   },
   "prepared_capabilities": {
     "provider_neutral_sms_contract": true,
@@ -17,7 +19,7 @@
     "live_send_enabled": false
   },
   "activation_acceptance": {
-    "provider_formally_selected": false,
+    "provider_formally_selected": true,
     "provider_account_owned_by_ruby": false,
     "credentials_configured_in_secret_boundary": false,
     "japan_sender_identity_verified": false,
@@ -32,5 +34,5 @@
     "live_sms_sent": false,
     "automatic_retry": false
   },
-  "decision": "PENDING_PROVIDER_SELECTION_FAIL_CLOSED"
+  "decision": "TWILIO_SELECTED_ACCOUNT_SENDER_CREDENTIALS_AND_TEST_PENDING_FAIL_CLOSED"
 }
