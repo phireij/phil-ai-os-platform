@@ -68,9 +68,22 @@ def main() -> None:
     require(tax["authority"]["tax_write_ready"] is False, "tax evidence incorrectly permits tax writes")
     require(tax["authority"]["mutation_authorized"] is False, "tax evidence incorrectly permits mutation")
 
-    require(komoju["current_mode"] == "test_mode", "KOMOJU not in Test Mode")
-    require(komoju["live_acceptance"]["merchant_live_mode_approval_verified"] is False, "KOMOJU merchant Live approval unexpectedly GREEN")
+    require(komoju["current_mode"] == "live_dashboard_selected", "KOMOJU Live dashboard selection evidence regressed")
+    require(komoju["live_dashboard_evidence"]["owner_supplied_dashboard_reviewed"] is True, "KOMOJU owner dashboard evidence missing")
+    require(komoju["live_dashboard_evidence"]["live_mode_ui_selected"] is True, "KOMOJU Live mode UI not verified")
+    require(komoju["live_acceptance"]["merchant_live_mode_approval_verified"] is True, "KOMOJU merchant Live approval evidence regressed")
+    require(komoju["live_acceptance"]["merchant_available_payment_methods_verified"] is True, "KOMOJU payment-method availability evidence regressed")
+    require(komoju["live_acceptance"]["production_enabled_payment_methods_finalized"] is False, "KOMOJU production payment subset changed without reconciliation")
+    require(komoju["live_acceptance"]["japan_tax_and_qualified_invoice_evidence_ready"] is True, "KOMOJU tax prerequisite should remain GREEN")
+    require(komoju["execution"]["live_mode_authorized_by_readiness"] is False, "KOMOJU live execution authority expanded unexpectedly")
     require(komoju["execution"]["real_payment_execution_ready"] is False, "KOMOJU real payment unexpectedly ready")
+    require(komoju["execution"]["real_payment_executed"] is False, "KOMOJU real payment evidence unexpectedly true")
+    require(overlay["komoju"]["live_dashboard_selected"] is True, "overlay lost KOMOJU Live dashboard evidence")
+    require(overlay["komoju"]["merchant_live_mode_approval_verified"] is True, "overlay lost KOMOJU merchant Live evidence")
+    require(overlay["komoju"]["merchant_available_payment_methods_verified"] is True, "overlay lost KOMOJU payment-method evidence")
+    require(overlay["komoju"]["production_enabled_payment_methods_finalized"] is False, "overlay payment subset unexpectedly finalized")
+    require(overlay["komoju"]["live_acceptance_green"] is False, "overlay KOMOJU acceptance unexpectedly GREEN")
+    require(overlay["komoju"]["real_payment_execution_ready"] is False, "overlay real payment unexpectedly ready")
 
     require(sms["provider_selection"]["formally_selected"] is True, "SMS provider selection should be reconciled GREEN")
     require(sms["provider_selection"]["selected_provider"] == "twilio", "selected SMS provider must remain Twilio")
@@ -100,7 +113,7 @@ def main() -> None:
     require(overlay["launch"]["live_launch_authorized_by_readiness"] is False, "overlay unexpectedly authorizes live launch")
     require(overlay["decision"] == "CONTROL_POSTURE_GREEN_LAUNCH_PENDING_FAIL_CLOSED", "overlay decision drift")
 
-    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN tax_decision=green sms_provider=twilio")
+    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN tax_decision=green sms_provider=twilio komoju_live_dashboard=verified")
     print("PHIL_AI_OS_SPRINT_7_FINAL_GO_NO_GO_PENDING_FAIL_CLOSED")
 
 
