@@ -1,7 +1,8 @@
 # Sprint 7 — CEO / Operator Quick Start
 
-Date: 2026-08-28
-Status: OPERATIONAL GUIDE / DOES NOT GRANT PRODUCTION AUTHORITY
+**Last reconciled:** 2026-09-03  
+**Status:** OPERATIONAL GUIDE / DOES NOT GRANT PRODUCTION AUTHORITY  
+**Current executive position:** Sprint 3 remains current; this guide is future launch preparation.
 
 ## 1. Ten-second Mission Control check
 
@@ -23,7 +24,10 @@ The default Core V1 operating boundary remains:
 - bounded routing agent: **Hermes**;
 - specialists: **disabled**;
 - Mission Control: **read-only** unless separately authorized;
-- production WooCommerce/KOMOJU/channel writes: **not authorized by Sprint 7 readiness work**;
+- CEO production scope approval: **recorded**, but does not override readiness gates;
+- WooCommerce production read-only identity/connectivity: **GREEN**;
+- WooCommerce production mutation: **not ready / fail-closed**;
+- KOMOJU Live, live SMS and public-domain/DNS execution: **not ready / separately gated**;
 - automatic production retry/rollback: **not authorized**.
 
 ## 3. Approval handling
@@ -68,18 +72,25 @@ Historical GREEN evidence is not a substitute for launch-time freshness.
 
 ## 6. Commerce / payment check
 
-Before production WooCommerce or KOMOJU activity:
+Current verified facts:
 
-- verified Ruby business/contact/policy data complete;
-- phone number verified;
-- no old test products/categories treated as authoritative;
-- staging QA GREEN;
-- SSL and checkout QA GREEN;
-- production secret storage approved;
-- rollback path ready;
-- WooCommerce production gate explicitly approved;
-- KOMOJU Test Mode validated before any Live Mode proposal;
-- KOMOJU Live Mode separately approved before real payments.
+- Ruby business/contact profile: **GREEN**;
+- 2026 Japan consumption-tax decision: **GREEN — exempt / not Qualified-Invoice registered**;
+- WooCommerce tax: **disabled** under the current decision;
+- WooCommerce production read-only identity/connectivity: **GREEN**;
+- final production catalog: **PENDING — only remaining Sprint 3 owner-input gate**;
+- KOMOJU Test Mode capture/refund: **GREEN**;
+- KOMOJU Live acceptance: **PENDING**.
+
+Before any production mutation or real-payment activity:
+
+- confirm the final owner-approved catalog is frozen and reconciled against a fresh read-only Woo snapshot;
+- confirm no old builder/test products or fixtures are treated as authoritative;
+- confirm the tax decision has not changed; if it has, stop and re-open the tax gate;
+- confirm staging QA, SSL, checkout, shipping/pickup and approval-before-payment remain GREEN;
+- confirm production secret handling and rollback path are ready;
+- confirm every required mutation/live-payment gate is explicitly GREEN;
+- do not treat read-only credentials, scope approval or Test Mode evidence as write/payment authority.
 
 ## 7. External channel check
 
@@ -100,9 +111,12 @@ Existing Telegram approval/notification infrastructure does not automatically gr
 
 Stop or postpone the affected launch step if:
 
-- backup/restore readiness is not GREEN;
-- verified business/contact/policy data is incomplete;
+- any required launch gate is not explicitly GREEN;
+- backup/restore readiness is not launch-fresh;
+- the final approved catalog/version cannot be identified;
+- tax/Invoice status no longer matches the recorded exempt/not-registered decision;
 - production secret handling is not ready;
+- `main` lacks the required approved branch-protection rule or repository ruleset;
 - credential/authority scans fail;
 - replay/idempotency tests regress;
 - rollback/disable path is unclear;
@@ -114,6 +128,8 @@ Stop or postpone the affected launch step if:
 
 A GREEN engineering branch or merged PR means the software/readiness package passed its bounded gates. It does **not** mean live launch is authorized.
 
-Live launch requires the remaining production gates and explicit CEO/CTO sign-off recorded in the Sprint 7 launch acceptance package.
+Live launch requires every applicable production gate to be GREEN plus final CEO Go/No-Go and CTO sign-off recorded in the Sprint 7 launch acceptance package.
+
+The public-domain/DNS cutover is performed **last**, after the production storefront and other launch components have passed their respective acceptance checks.
 
 `PHIL_AI_OS_SPRINT_7_OPERATOR_GUIDE_READY`

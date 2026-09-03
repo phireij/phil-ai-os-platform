@@ -1,132 +1,127 @@
 # Sprint 7 — KOMOJU Activation Runbook
 
-Date: 2026-08-29
-Status: PREPARATION ONLY / TEST MODE AND LIVE MODE NOT AUTHORIZED
+**Last reconciled:** 2026-09-03  
+**Status:** **TEST MODE GREEN / LIVE SCOPE APPROVED / LIVE ACCEPTANCE PENDING FAIL-CLOSED**  
+**Current executive position:** Sprint 3 remains current; this is future Sprint 7 payment-launch preparation.
 
-## Current contract baseline
+## Current verified baseline
 
 - payment provider: `komoju`;
-- integration mode: `woocommerce_plugin`;
-- current connection state: `not_configured`;
-- order creation authority: false;
-- payment execution authority: false;
-- live mode authority: false.
-
-## Intended architecture
+- integration mode: `woocommerce_plugin` using the supported KOMOJU Payments WooCommerce plugin;
+- WooCommerce pre-production environment: **GREEN**;
+- current KOMOJU connection state: **Test Mode**;
+- controlled Test Mode capture/refund: **GREEN**;
+- order creation authority from Phil AI OS: false;
+- real payment execution readiness: false;
+- Live Mode readiness: false;
+- CEO Live Mode **scope approval**: true;
+- scope approval overrides readiness: false.
 
 Customer CX → WooCommerce order/checkout boundary → official KOMOJU Payments WooCommerce integration.
 
-Phil AI OS may prepare and observe governed payment-handoff intent. This architecture does not give Phil AI OS direct payment authority.
+Phil AI OS may prepare and observe governed payment-handoff intent. It does not receive direct payment authority from this architecture or from Test Mode success.
 
-## Current official WooCommerce connection model
+## Connection and secret handling
 
-Current KOMOJU WooCommerce documentation describes the supported setup as:
+The supported WooCommerce connection uses the KOMOJU plugin sign-in/account-selection flow. The integration configures the required secret/webhook material through that supported flow.
 
-1. install the **KOMOJU Payments** WooCommerce plugin;
-2. open `WooCommerce → Settings → KOMOJU`;
-3. choose **Sign into KOMOJU**;
-4. select the merchant account and connection mode;
-5. use **Test Mode** for test payments or **Live Mode** only when the merchant account has been approved;
-6. enable each approved payment method individually in WooCommerce.
+Operational rules:
 
-The documented sign-in flow automatically configures the KOMOJU secret key and webhooks. Therefore the normal WooCommerce pre-production plan should **not request or paste manual API keys** unless a later verified integration requirement specifically requires them.
+- do not ask the CEO to paste KOMOJU API secrets into chat or repository files;
+- do not expose secrets in logs/readiness evidence;
+- use only the intended Ruby merchant account and connection mode;
+- do not use the deprecated legacy `Komoju` payment method;
+- merchant/account-side availability is the production source of truth for payment methods.
 
-KOMOJU also warns not to use the deprecated legacy `Komoju` payment method. The supported plugin/payment-method configuration should be used instead.
+## Test Mode — completed baseline
 
-Official reference checked 2026-08-29: `https://doc.komoju.com/docs/getting-started-with-woocommerce`
+The following evidence is already GREEN in pre-production:
+
+- [x] supported KOMOJU Payments plugin connected;
+- [x] connection confirmed as **Test Mode**, not Live Mode;
+- [x] checkout/payment handoff tested without real-charge authority;
+- [x] controlled test capture completed successfully;
+- [x] controlled test refund completed successfully;
+- [x] WooCommerce payment/order-state behavior was observed successfully;
+- [x] no Live Mode or real-payment authority was granted by the test;
+- [x] Test Mode remains the safe current state.
+
+Test Mode does **not** need to be repeated merely because this runbook was reconciled. Re-test only when a relevant plugin/configuration/payment-flow change makes fresh evidence necessary.
 
 ## Payment-method truth rule
 
-The legacy Ruby Tokushoho page disclosed these card brands:
+Legacy Tokushoho/card-brand wording and KOMOJU's general list of supported payment methods are not sufficient to determine Ruby's production payment options.
 
-- Visa;
-- Mastercard;
-- JCB;
-- American Express;
-- Diners Club.
+Before Live activation, the authorized operator must verify in Ruby's actual merchant account:
 
-This is useful legacy customer-facing evidence, but it does **not** prove which payment methods are currently approved on Ruby's KOMOJU merchant account.
+1. whether the merchant is approved/eligible for Live Mode;
+2. which payment methods are currently available/approved;
+3. which exact subset Ruby wants enabled at launch;
+4. that WooCommerce checkout exposes only that approved subset;
+5. that Tokushoho/payment/shipping wording matches the actual launch configuration.
 
-Current KOMOJU guidance states that merchants may only use payment methods that have completed the applicable review/approval. Before finalizing checkout or Tokushoho, the authorized operator must verify the actual merchant-available methods in the KOMOJU dashboard and enable only the intended subset in WooCommerce.
+Do not infer merchant availability from KOMOJU's global supported-method documentation.
 
-Official references checked 2026-08-29:
+## Live Mode acceptance gate
 
-- `https://help.komoju.com/hc/en-us/articles/4747504478494-How-to-Check-the-Available-Payment-Methods-for-Your-Account`
-- `https://doc.komoju.com/page/supported-payment-methods`
+CEO approval for the **scope** of KOMOJU Live Mode has already been recorded. It does not authorize activation until the readiness gate is GREEN.
 
-## Preconditions before any KOMOJU configuration
+Require all applicable items below before switching from Test Mode to Live Mode:
 
-- [ ] parallel non-public WooCommerce pre-production environment is ready;
-- [ ] checkout, pickup and shipping flow are GREEN without live payment execution;
-- [ ] rollback/disable procedure exists;
-- [ ] merchant/account access is available to the authorized operator;
-- [ ] Test Mode integration scope is explicitly approved;
-- [ ] actual merchant-available payment methods have been reviewed or are ready to be reviewed during the authorized Test Mode session;
-- [ ] no Live Mode capability is introduced during Test Mode preparation;
-- [ ] Tokushoho payment/shipping fields remain marked pending final configuration sync.
+- [x] Test Mode capture/refund evidence GREEN;
+- [x] WooCommerce pre-production baseline GREEN;
+- [ ] final owner-approved production catalog ready and accepted;
+- [ ] merchant Live Mode approval/eligibility verified in KOMOJU;
+- [ ] merchant-available payment methods verified;
+- [ ] exact production payment-method subset finalized;
+- [ ] final checkout/Tokushoho/payment/shipping synchronization GREEN;
+- [ ] charge/refund/reconciliation ownership confirmed;
+- [ ] rollback/disable path verified for Live activation;
+- [ ] fresh near-cutover recovery evidence GREEN when temporally required;
+- [ ] `main` branch protection/repository ruleset GREEN before final public launch;
+- [ ] final Go/No-Go and applicable sign-offs recorded.
 
-## Test Mode sequence
+Until those conditions are satisfied:
 
-Only after a separate approval to configure Test Mode:
+- current mode remains **Test Mode**;
+- `real_payment_execution_ready=false`;
+- no real customer charge/refund is authorized by readiness;
+- no automatic Live activation or retry is allowed.
 
-1. install/enable the supported **KOMOJU Payments** WooCommerce plugin in the parallel non-public WordPress/WooCommerce environment;
-2. open `WooCommerce → Settings → KOMOJU` and use **Sign into KOMOJU**;
-3. select Ruby's authorized KOMOJU merchant account and choose **Test Mode**;
-4. confirm the plugin connection is Test Mode and not Live Mode;
-5. verify the payment methods available to the merchant account and record the intended pre-production subset;
-6. enable each intended payment method individually; do not enable the deprecated legacy `Komoju` method;
-7. verify checkout renders only the intended payment options without real-charge authority;
-8. run controlled test transactions using KOMOJU test facilities;
-9. verify WooCommerce order-state transitions and KOMOJU test-state correlation;
-10. verify duplicate/retry/callback behavior does not create duplicate order/payment effects;
-11. verify failed/cancelled test payments produce the expected non-paid order state;
-12. verify logs/audit records contain identifiers/statuses but no exposed secret material;
-13. verify payment titles/descriptions and inline/redirect behavior are acceptable for customer UX;
-14. document disable/recovery steps;
-15. record Test Mode evidence before proposing Live Mode;
-16. synchronize actual payment methods/timing into Tokushoho and checkout/legal content before publication approval.
+## First Live acceptance principle
 
-## Current official payment-method context
+After a future explicitly gated Live activation, the first real-payment acceptance must be narrow and observable. Verify immediately:
 
-KOMOJU currently documents multiple Japan payment types, including credit cards, convenience-store payments, Pay-Easy, PayPay, Merpay, Rakuten Pay, Paidy, bank transfer and others. Availability for Ruby must **not** be inferred from the global support list; use the merchant account's approved methods as the production source of truth.
+- intended merchant account;
+- intended payment method;
+- amount and JPY currency;
+- WooCommerce order state;
+- KOMOJU payment state;
+- approval-before-payment behavior where applicable;
+- customer-facing payment/legal wording;
+- reconciliation/audit evidence.
 
-Official reference checked 2026-08-29: `https://doc.komoju.com/page/supported-payment-methods`
+Stop if any state differs from the accepted expected flow. Do not perform repeated real charges simply to diagnose an uncertain configuration.
 
-## Live Mode gate
+## Abort / disable criteria
 
-KOMOJU Live Mode is a separate production authorization boundary. Do not enable it unless all of the following are complete:
+Stop Live activation or disable the affected payment method if:
 
-- Test Mode evidence GREEN;
-- WooCommerce pre-production/cutover readiness GREEN;
-- merchant Live Mode approval verified in KOMOJU;
-- intended production payment-method subset verified;
-- charge/refund/reconciliation ownership defined;
-- customer-facing payment methods/timing and Tokushoho synchronized;
-- shipping/checkout totals and legal disclosure synchronized;
-- rollback/disable path tested or otherwise verified;
-- explicit CEO approval recorded for Live Mode.
-
-## First Live Mode principle
-
-If later authorized, the first real-payment verification must be narrow, observable and reversible where possible. Confirm WooCommerce order state, KOMOJU payment state, amount, currency and fulfillment record immediately and stop if any state differs from the approved expected flow.
-
-## Abort criteria
-
-Stop configuration or disable the payment method if:
-
-- the sign-in connection selects the wrong merchant account or mode;
+- wrong merchant account or mode is selected;
+- merchant Live eligibility cannot be verified;
+- an unapproved payment method appears;
 - authentication/webhook behavior fails;
-- a payment/order state cannot be reconciled;
+- payment/order states cannot be reconciled;
 - duplicate charge/order behavior appears;
-- secrets are exposed in logs or configuration surfaces;
-- the integration enters Live Mode unexpectedly;
-- an unapproved payment method appears to customers;
-- customer-facing checkout is materially degraded;
-- checkout payment/shipping/legal text becomes inconsistent;
-- the operator lacks a clear disable/recovery path.
+- secrets are exposed;
+- checkout/payment/shipping/Tokushoho wording becomes inconsistent;
+- the operator lacks a clear disable/recovery path;
+- any required launch/readiness gate regresses.
+
+Return to the accepted safe state, preserve evidence, remediate, and re-enter through the appropriate gate. Do not broaden permissions or bypass readiness controls to recover.
 
 ## Explicit non-authorization
 
-This runbook does not authorize KOMOJU Test Mode connection, Live Mode connection, real charges, refunds, payment execution, WooCommerce production order creation, production cutover, or broader Phil AI OS authority.
+This runbook records Test Mode as already GREEN and Live **scope** as approved. It does not itself authorize Live Mode activation, real charges/refunds, production order creation, WooCommerce production mutation, SMS sending, DNS/public cutover, specialist activation, higher autonomy, automatic production execution, or Mission Control write authority.
 
 `PHIL_AI_OS_SPRINT_7_KOMOJU_RUNBOOK_READY_NOT_AUTHORIZED`

@@ -1,155 +1,156 @@
 # Sprint 7 — Ruby WooCommerce Pre-Production & Cutover Runbook
 
-Date: 2026-08-29
-Status: PREPARATION ONLY / PARALLEL WORDPRESS PRE-PRODUCTION NEXT / CUTOVER NOT AUTHORIZED
+**Last reconciled:** 2026-09-03  
+**Status:** **PRE-PRODUCTION GREEN / CUTOVER PREPARATION ONLY / PUBLIC CUTOVER NOT READY**  
+**Current executive position:** Sprint 3 remains current; this is future Sprint 7 cutover preparation.
 
 ## Architecture baseline
 
-- Public customer domain remains `https://www.rubyscakedelights.shop/`.
-- Current public storefront is **Hostinger Website Builder**.
-- Future production storefront target: **WordPress + WooCommerce on Hostinger managed web hosting**.
-- Phil AI OS remains on the **separate Hostinger VPS** as the control/intelligence plane.
-- The current Website Builder site is a **reference source only**, not the future commerce source of truth.
+- Public customer domain remains `https://www.rubyscakedelights.shop/` on the current Hostinger Website Builder site.
+- WooCommerce pre-production origin is `https://darkgreen-wallaby-680439.hostingersite.com/`.
+- Future public storefront target is the prepared WordPress + WooCommerce environment after all launch gates are GREEN.
+- Phil AI OS remains on the separate Hostinger VPS as the control/intelligence plane.
+- The current Website Builder site is a reference source only, not the future commerce source of truth.
 
-## Hostinger environment rule
+## Current verified pre-production state
 
-Current Hostinger guidance requires an existing WordPress installation to be detected before its native WordPress staging feature can be created, and the built-in staging feature requires an eligible hosting plan (Business web hosting or higher under the current guidance).
-
-Because Ruby's current public site is Website Builder, the first WordPress environment must be a **parallel non-public WordPress/WooCommerce pre-production site**, not a direct native staging clone of the current public site.
-
-The public domain must remain on the existing Website Builder site until explicit cutover authorization.
+- [x] Parallel WordPress/WooCommerce pre-production environment exists.
+- [x] WordPress and WooCommerce are healthy.
+- [x] HTTPS/SSL is verified.
+- [x] WooCommerce `wc/v3` surface is available.
+- [x] Ruby Business Profile is complete — **15/15 resolved**.
+- [x] Business phone is verified — **050-1785-0575**.
+- [x] Required bilingual policy/legal pages are prepared/published in pre-production.
+- [x] Tokushoho source is reconciled; final checkout/payment/shipping synchronization remains pending.
+- [x] Store pickup and Yamato Cool shipping configuration are verified in pre-production.
+- [x] Approval-before-payment and Datery behavior are verified.
+- [x] KOMOJU Test Mode capture/refund is GREEN.
+- [x] WooCommerce production read-only identity/connectivity is GREEN.
+- [x] 2026 Japan tax decision is GREEN — **exempt / not Qualified-Invoice registered / WooCommerce tax disabled**.
+- [ ] Final owner-approved production catalog is pending.
+- [ ] KOMOJU Live acceptance and production payment-method subset are pending.
+- [ ] Fresh near-cutover recovery check is pending.
+- [ ] Main branch protection/repository ruleset is pending.
+- [ ] Final public cutover plan and final Go/No-Go are pending.
 
 ## Migration scope
 
-Eligible for controlled migration:
+Eligible for controlled migration/configuration only after the relevant mutation gate is GREEN:
 
 1. verified store information;
 2. verified contact information;
-3. approved customer/legal policies.
+3. approved customer/legal policies;
+4. final owner-approved production catalog and media;
+5. verified fulfillment assignments.
 
 Explicitly excluded:
 
-- existing test products;
-- existing test categories.
+- old Website Builder test products/categories as authoritative data;
+- repository fixtures/synthetic products as production data;
+- any unapproved media/source record.
 
-Current verified prerequisites:
+## Fulfillment and tax baseline
 
-- [x] Verified Ruby Business Profile complete — **15/15 resolved**;
-- [x] business phone verified — **050-1785-0575**;
-- [x] Privacy Policy and Terms approved;
-- [x] Cancellation/Refund, Pickup/Order and Allergen policies approved;
-- [x] existing 特定商取引法 disclosure source captured and reconciled into a working draft;
-- [ ] final Tokushoho publication approval pending checkout/payment/shipping synchronization.
+Pre-production supports:
 
-## Fulfillment baseline
+- store pickup;
+- Yamato Cool chilled/frozen shipping using the verified zones/classes/rates;
+- approval-before-payment flow;
+- Datery preferred delivery/pickup date behavior.
 
-The legacy disclosure confirms **Yamato Transport Cool TA-Q-BIN delivery** and legacy shipping rates:
+For 2026 under the reviewed current facts, Ruby is treated as a consumption-tax-exempt business and is not Qualified-Invoice registered. **WooCommerce tax remains disabled.** Do not create 8%/10% tax-table configuration while this decision applies.
 
-- Kanto: ¥1,350 flat;
-- other regions: ¥1,500–¥1,800, subject to order/destination variation.
+If Ruby's tax/Invoice status changes, stop and re-open the tax gate before changing WooCommerce tax configuration.
 
-The verified business profile also supports **store pickup**.
+## Catalog loading gate
 
-Therefore pre-production must support and test both intended fulfillment modes rather than assuming pickup-only operation. Legacy shipping rates are source evidence, not automatic production configuration: the actual WooCommerce shipping zones, fees, eligibility and tax treatment must be verified before launch.
+Before any production catalog write:
 
-## Preconditions before parallel WordPress build
+1. freeze the final owner-approved catalog package;
+2. confirm every product has approved bilingual names/content, unique SKU, price, category, primary media and fulfillment assignment;
+3. confirm old builder/test/fixture sources are excluded;
+4. capture a fresh GET-only production WooCommerce catalog snapshot;
+5. run the side-effect-free catalog reconciliation planner and review `create / update / noop` intentions;
+6. verify current legal/checkout/recovery prerequisites required by the production mutation gate;
+7. obtain/record the then-required bounded mutation authorization before executing any write.
 
-- [x] Sprint 7 integrated regression baseline GREEN;
-- [x] Sprint 7 security/recovery readiness package GREEN;
-- [x] verified Ruby Business Profile completed;
-- [x] phone number verified;
-- [x] Tokushoho legacy source captured/reconciled;
-- [ ] Hostinger managed WordPress hosting/site slot available for a separate non-public build;
-- [ ] temporary domain/subdomain/non-production address selected without moving the Ruby public domain;
-- [ ] approved production product/category source data available independently of the old test catalog;
-- [ ] production shipping-zone/rate design verified against intended Yamato service;
-- [ ] fresh backup/restore verification available near cutover;
-- [ ] payment handling and rollback/abort plans accepted;
-- [ ] no production WooCommerce/KOMOJU Live authority introduced.
+Read-only identity/connectivity does **not** authorize this step.
 
-## Parallel pre-production procedure
+## KOMOJU gate
 
-1. In Hostinger hPanel, create a **separate WordPress website** using the supported WordPress/CMS installation path.
-2. Use a temporary domain/subdomain/non-production address and keep `rubyscakedelights.shop` attached to the existing Website Builder site.
-3. Confirm WordPress is detected in Hostinger and record the hosting plan's native WordPress staging eligibility.
-4. Install/activate WooCommerce.
-5. Apply WordPress/WooCommerce baseline configuration and required security/update settings.
-6. Populate only verified store/contact/policy information from the controlled Ruby Business Profile.
-7. Add the reconciled Tokushoho working draft as **non-public pre-production content** for checkout/legal QA; do not treat it as publication-approved yet.
-8. Create the production category hierarchy from separately approved Ruby business data; do not import the existing test categories.
-9. Create approved product records/media from verified Ruby product data; do not import the old test catalog.
-10. Configure store pickup and intended Yamato Cool delivery behavior.
-11. Configure shipping zones/rates as a pre-production candidate, then reconcile them against the legacy disclosure and current business decision before publication.
-12. Configure pickup/customer-flow requirements and bilingual fields where required.
-13. Verify SSL/TLS and HTTPS behavior on the pre-production site.
-14. Run storefront, product, cart, checkout-intent, pickup, shipping, bilingual, accessibility and mobile QA.
-15. Validate WooCommerce API identity/reconciliation behavior in the non-production context before any live production connection.
-16. Install/configure KOMOJU only according to the separate KOMOJU runbook. Test Mode precedes any later Live Mode gate.
-17. After actual payment methods and payment timing are known, synchronize checkout wording and Tokushoho before seeking publication approval.
-18. Record defects, blockers and acceptance evidence before proposing cutover.
+KOMOJU Test Mode is already GREEN. Live Mode remains separate.
 
-## Native Hostinger WordPress staging after WordPress exists
+Before any real payment exposure:
 
-After the parallel WordPress installation exists:
+- merchant Live eligibility must be verified;
+- merchant-side available payment methods must be confirmed;
+- the exact production payment-method subset must be finalized;
+- checkout/payment timing and Tokushoho must be synchronized;
+- the final Go/No-Go and other applicable launch gates must be GREEN.
 
-1. verify the Hostinger plan supports native WordPress staging;
-2. if supported, use `Websites → Dashboard → WordPress → Staging` for WordPress-to-WordPress test copies as appropriate;
-3. treat Hostinger's **Publish** action as a production-impacting action requiring the later cutover gate;
-4. remember that publishing staging can replace live WordPress files/database, so it must never be used casually during the migration.
+Do not infer Live readiness from successful Test Mode capture/refund or CEO scope approval alone.
 
 ## Pre-production acceptance evidence
 
-Pre-production can be marked GREEN only when all of the following are evidenced:
+The existing pre-production baseline is GREEN for:
 
-- WordPress/WooCommerce health and admin access;
-- WooCommerce active;
-- HTTPS/SSL valid;
-- verified business/contact/legal data displayed correctly;
-- no old test catalog exposed;
-- approved product/category source loaded;
-- store pickup works as intended;
-- intended Yamato shipping zones/rates work as intended;
-- cart/checkout totals correctly include applicable shipping/fees/tax;
-- mobile/bilingual/accessibility smoke GREEN;
-- KOMOJU disposition recorded for the pre-production scope;
-- no production Live Mode/payment authority present.
+- WordPress/WooCommerce health;
+- HTTPS/SSL;
+- store/contact/policy baseline;
+- no authoritative migration from old test catalog;
+- store pickup and Yamato Cool shipping;
+- approval-before-payment and Datery;
+- mobile/bilingual/accessibility CX foundation;
+- KOMOJU Test Mode;
+- WooCommerce production read-only identity/connectivity;
+- Japan 2026 exempt/tax-disabled decision.
 
-## Cutover gate
+The final production catalog remains the only Sprint 3 owner-input gate.
 
-Public-site/DNS/domain cutover must not begin until:
+## Public cutover gate
 
-- all critical pre-production tests are GREEN;
-- fresh backup/rollback readiness is GREEN;
-- production shipping configuration/rates are verified;
-- KOMOJU Test Mode evidence is GREEN if online payment is in launch scope;
-- actual production payment methods/timing are synchronized with Tokushoho and checkout;
-- Tokushoho publication wording is approved;
-- customer-facing policies have passed implementation review;
-- rollback path is understood and available;
-- explicit CEO authorization is recorded for the production cutover scope.
+Public-site/DNS/domain cutover must not begin until every applicable launch gate is explicitly GREEN, including:
+
+- final approved production catalog loaded and accepted through the authorized mutation path;
+- fresh launch-time backup/restore verification;
+- final checkout/Tokushoho/payment/shipping synchronization;
+- production payment-method verification;
+- KOMOJU Live acceptance if online payments are in launch scope;
+- SMS production acceptance if SMS is in launch scope;
+- Air Mobile Order Quick Pickup production URL if that feature is in launch scope;
+- approved branch-protection rule or repository ruleset on `main`;
+- rollback/abort path confirmed;
+- public cutover plan confirmed;
+- final CEO Go/No-Go and CTO sign-off.
+
+The resolved Japan tax decision remains GREEN unless new facts supersede it.
 
 ## Controlled cutover sequence
 
-Only after approval:
+Only after final GO:
 
 1. create/verify the final pre-cutover backup/snapshot or Hostinger-supported equivalent;
-2. freeze avoidable storefront changes during the cutover window;
-3. confirm SSL certificate/domain readiness;
-4. perform the minimum Hostinger domain/site transition required to make the WooCommerce storefront public while retaining the same customer domain;
-5. verify homepage/product/cart/checkout/pickup/shipping/policy/contact flows;
-6. verify no old test products/categories are exposed;
-7. verify monitoring and customer-impact signals;
-8. keep production WooCommerce API writes and KOMOJU Live Mode disabled unless their separate activation gates are approved;
-9. record launch evidence and operator sign-off.
+2. freeze avoidable storefront/catalog changes during the cutover window;
+3. confirm final approved catalog/version and current WooCommerce production state;
+4. confirm SSL certificate/domain readiness;
+5. verify production storefront, inventory, shipping/pickup and approval-before-payment behavior before DNS exposure;
+6. verify only the approved payment/SMS integrations that are in launch scope;
+7. perform the minimum Hostinger domain/DNS/site transition required to make the accepted WooCommerce storefront public while retaining the customer domain;
+8. verify homepage/product/cart/checkout/pickup/shipping/policy/contact/payment flows;
+9. verify no old test products/categories are exposed;
+10. verify monitoring and customer-impact signals;
+11. record launch evidence and operator sign-off.
+
+**DNS/public cutover is last.** Do not use DNS as a way to test an unaccepted production storefront.
 
 ## Abort / rollback
 
-Abort if health, SSL, checkout, shipping totals, payment state, verified content, data integrity, customer-facing behavior or rollback readiness is uncertain.
+Abort if health, SSL, checkout, shipping totals, payment state, verified content, data integrity, customer-facing behavior, repository protection, authority boundaries or rollback readiness is uncertain.
 
-Fallback must return the public storefront to the last known-good customer-facing state using the approved Hostinger/site/domain recovery path. Do not improvise a production DNS or site mutation outside the approved cutover scope.
+Fallback must return the public storefront to the last known-good customer-facing state using the approved Hostinger/site/domain recovery path. Do not improvise a production DNS/site mutation, expand permissions, repeatedly charge/test customers, or enable automatic customer-message retries to recover from an incident.
 
 ## Explicit non-authorization
 
-This runbook does not authorize creating or purchasing a Hostinger hosting resource on the CEO's behalf, public DNS/site changes, production WooCommerce credentials, live API connectivity, live mutations, KOMOJU Test or Live Mode, real payments/refunds, specialist activation, higher autonomy or Mission Control write authority.
+This runbook does not authorize public DNS/site changes, production WooCommerce mutation, KOMOJU Live Mode, real payments/refunds, live SMS sending, specialist activation, higher autonomy, automatic production execution or Mission Control write authority. CEO scope approval is already recorded but remains subordinate to readiness gates.
 
 `PHIL_AI_OS_SPRINT_7_WOOCOMMERCE_CUTOVER_RUNBOOK_READY_NOT_AUTHORIZED`

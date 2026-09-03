@@ -8,64 +8,70 @@ ROOT = Path(__file__).resolve().parents[1]
 READINESS = ROOT / "ops/readiness/sprint7-launch-acceptance.json"
 PROFILE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
 STAGING = ROOT / "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json"
+CUTOVER_RUNBOOK = ROOT / "docs/SPRINT_7_FINAL_CUTOVER_CONTROL_RUNBOOK_2026-09-02.md"
 
 
 def fail(message: str) -> None:
     raise SystemExit(f"PHIL_AI_OS_SPRINT_7_LAUNCH_ACCEPTANCE_FAILED: {message}")
 
 
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        fail(message)
+
+
 def main() -> None:
     data = json.loads(READINESS.read_text(encoding="utf-8"))
     profile = json.loads(PROFILE.read_text(encoding="utf-8"))
     staging = json.loads(STAGING.read_text(encoding="utf-8"))
-    engineering = data["bounded_engineering_readiness"]
-    live = data["live_launch_gates"]
-    baseline = data["authority_baseline"]
 
-    if engineering.get("integrated_regression_baseline_tests") != 165:
-        fail("integrated regression baseline must remain 165")
+    require(data.get("version") == "sprint7-launch-acceptance-v2", "launch acceptance schema drift")
+
+    engineering = data["bounded_engineering_readiness"]
     for key in (
+        "current_head_integrated_regression_required",
+        "isolated_runtime_smoke_required",
         "security_recovery_package_ready",
         "deployment_migration_runbooks_ready",
         "channel_activation_runbooks_ready",
         "operator_documentation_ready",
         "final_current_head_ci_required",
     ):
-        if engineering.get(key) is not True:
-            fail(f"bounded engineering readiness drift: {key}")
+        require(engineering.get(key) is True, f"bounded engineering readiness drift: {key}")
 
-    if live.get("verified_ruby_business_profile_complete") is not True or profile.get("profile_complete") is not True:
-        fail("verified profile completion drift")
-    if live.get("contact_phone_verified") is not True:
-        fail("contact phone verification drift")
+    verified = data["verified_readiness"]
+    require(verified["verified_ruby_business_profile_complete"] is True and profile.get("profile_complete") is True, "verified profile completion drift")
+    require(verified["contact_phone_verified"] is True, "contact phone verification drift")
     phone = profile["contact_information"]["phone"]
-    if phone.get("value") != "050-1785-0575" or phone.get("verification_status") != "verified":
-        fail("launch phone verification mismatch")
-    if live.get("tokushoho_source_reconciled") is not True:
-        fail("Tokushoho source reconciliation drift")
-
+    require(phone.get("value") == "050-1785-0575" and phone.get("verification_status") == "verified", "launch phone verification mismatch")
     for key in (
+        "tokushoho_source_reconciled",
         "woocommerce_preproduction_qa_green",
+        "woocommerce_production_readonly_identity_green",
+        "woocommerce_production_readonly_connectivity_green",
         "komoju_test_mode_validated",
         "production_shipping_configuration_verified",
+        "japan_2026_tax_decision_green",
     ):
-        if live.get(key) is not True:
-            fail(f"verified pre-production gate regressed: {key}")
+        require(verified.get(key) is True, f"verified readiness regressed: {key}")
+    require(verified["japan_2026_tax_status"] == "exempt", "Japan tax status drift")
+    require(verified["qualified_invoice_status"] == "not_registered", "Qualified Invoice status drift")
+    require(verified["woocommerce_tax_enabled"] is False, "WooCommerce tax unexpectedly enabled")
 
+    scope = data["scope_approvals"]
     for key in (
-        "tokushoho_publication_approved",
-        "fresh_launch_time_backup_restore_check_green",
-        "woocommerce_production_activation_approved",
-        "woocommerce_production_credentials_configured",
-        "komoju_live_mode_approved",
-        "production_payment_methods_verified",
-        "external_channel_live_activation_approved",
-        "production_cutover_approved",
-        "ceo_signoff_recorded",
-        "cto_signoff_recorded",
+        "woocommerce_production_activation_scope_approved",
+        "komoju_live_mode_scope_approved",
+        "production_sms_sending_scope_approved",
+        "public_domain_dns_cutover_scope_approved",
+        "final_launch_signoff_process_scope_approved",
     ):
-        if live.get(key) is not False:
-            fail(f"live launch gate must remain open: {key}")
+        require(scope.get(key) is True, f"scope approval drift: {key}")
+    require(scope["scope_approval_overrides_readiness"] is False, "scope approval incorrectly overrides readiness")
+
+    remaining = data["remaining_launch_gates"]
+    for key, value in remaining.items():
+        require(value is False, f"launch gate changed without explicit reconciliation: {key}")
 
     sfront = staging["storefront"]
     expected_front = {
@@ -79,59 +85,66 @@ def main() -> None:
         "production_cutover_authorized": False,
     }
     for key, value in expected_front.items():
-        if sfront.get(key) != value:
-            fail(f"preproduction environment state drift: {key}")
+        require(sfront.get(key) == value, f"preproduction environment state drift: {key}")
 
     fulfillment = staging["fulfillment"]
-    if fulfillment.get("production_shipping_configuration_verified") is not True:
-        fail("pre-production shipping configuration verification drift")
-    if fulfillment.get("production_shipping_rates_verified") is not True:
-        fail("pre-production shipping-rate verification drift")
+    require(fulfillment.get("production_shipping_configuration_verified") is True, "pre-production shipping configuration verification drift")
+    require(fulfillment.get("production_shipping_rates_verified") is True, "pre-production shipping-rate verification drift")
 
     komoju = staging["komoju"]
-    if komoju.get("current_connection_state") != "test_mode":
-        fail("KOMOJU must remain in test mode")
-    if komoju.get("test_mode_connected") is not True or komoju.get("test_capture_refund_validated") is not True:
-        fail("KOMOJU Test Mode validation drift")
-    if komoju.get("live_mode_authorized") is not False or komoju.get("payment_execution_authorized") is not False:
-        fail("KOMOJU live/payment authority must remain false")
-    if staging.get("production_publish_authorized") is not False:
-        fail("preproduction readiness gained publication authority")
+    require(komoju.get("current_connection_state") == "test_mode", "KOMOJU must remain in test mode")
+    require(komoju.get("test_mode_connected") is True and komoju.get("test_capture_refund_validated") is True, "KOMOJU Test Mode validation drift")
+    require(komoju.get("live_mode_authorized") is False and komoju.get("payment_execution_authorized") is False, "KOMOJU live/payment authority must remain false")
+    require(staging.get("production_publish_authorized") is False, "preproduction readiness gained publication authority")
 
+    baseline = data["authority_baseline"]
     expected_baseline = {
         "autonomy": "A0",
         "task_class_allowlist": ["general"],
         "assigned_agent": "hermes",
         "specialists_enabled": False,
         "mission_control_mutation_authorized": False,
-        "live_launch_authorized": False,
+        "automatic_production_execution_authorized": False,
+        "live_launch_authorized_by_readiness": False,
     }
     for key, value in expected_baseline.items():
-        if baseline.get(key) != value:
-            fail(f"authority baseline drift: {key}")
+        require(baseline.get(key) == value, f"authority baseline drift: {key}")
 
     for rel in data.get("evidence", []):
-        if not (ROOT / rel).is_file():
-            fail(f"missing launch-acceptance evidence file: {rel}")
+        require((ROOT / rel).is_file(), f"missing launch-acceptance evidence file: {rel}")
 
     acceptance = (ROOT / "docs/SPRINT_7_LAUNCH_ACCEPTANCE_MATRIX_2026-08-28.md").read_text(encoding="utf-8")
     for phrase in (
         "PHIL_AI_OS_SPRINT_7_LAUNCH_ACCEPTANCE_PACKAGE_READY_NOT_SIGNED",
         "Ruby business profile | **COMPLETE — 15/15 RESOLVED**",
         "Contact phone | **VERIFIED — 050-1785-0575**",
-        "WooCommerce pre-production QA | **GREEN — 2026-09-02**",
-        "KOMOJU Test Mode | **GREEN — TEST CAPTURE/REFUND VALIDATED**",
-        "Shipping configuration | **GREEN IN PRE-PRODUCTION**",
-        "Fresh launch-time backup/restore | **PENDING**",
-        "CEO sign-off | **NOT RECORDED**",
+        "WooCommerce production read-only identity/connectivity | **GREEN",
+        "Japan 2026 consumption-tax / Qualified Invoice decision | **GREEN — EXEMPT / NOT REGISTERED / WOO TAX DISABLED**",
+        "Approved production catalog | **PENDING CEO FINALIZATION**",
+        "Main branch protection / repository ruleset | **PENDING**",
+        "Final CEO Go/No-Go | **NOT RECORDED**",
         "CTO sign-off | **NOT RECORDED**",
     ):
-        if phrase not in acceptance:
-            fail(f"launch state statement missing: {phrase}")
+        require(phrase in acceptance, f"launch state statement missing: {phrase}")
+
+    runbook = CUTOVER_RUNBOOK.read_text(encoding="utf-8")
+    for phrase in (
+        "Ruby is treated as consumption-tax exempt",
+        "WooCommerce tax remains disabled",
+        "branch-protection rule or repository ruleset",
+        "## Stop / rollback decision matrix",
+        "Perform public-domain/DNS cutover last",
+        "Do not retain raw credentials, payment secrets, personal tax-return files",
+        "PHIL_AI_OS_SPRINT_7_FINAL_CUTOVER_RUNBOOK_PREPARED_FAIL_CLOSED",
+    ):
+        require(phrase in runbook, f"cutover runbook control missing: {phrase}")
+
+    require(data["decision"] == "ENGINEERING_PREPARED_LIVE_LAUNCH_PENDING_FAIL_CLOSED", "launch acceptance decision drift")
 
     print("PHIL_AI_OS_SPRINT_7_OPERATOR_AND_ACCEPTANCE_GREEN engineering_package=true live_launch=false profile_complete=true")
-    print("PHIL_AI_OS_SPRINT_7_PREPRODUCTION_ENVIRONMENT_GREEN created=true qa=true komoju_test=true shipping=true")
-    print("PHIL_AI_OS_SPRINT_7_SIGNOFF_BOUNDARY_GREEN backup=false ceo=false cto=false cutover=false")
+    print("PHIL_AI_OS_SPRINT_7_PREPRODUCTION_ENVIRONMENT_GREEN created=true qa=true komoju_test=true shipping=true tax_exempt=true woo_readonly=true")
+    print("PHIL_AI_OS_SPRINT_7_SIGNOFF_BOUNDARY_GREEN recovery_fresh=false ceo_go_no_go=false cto=false cutover=false")
+    print("PHIL_AI_OS_SPRINT_7_CUTOVER_RUNBOOK_CONTROL_GREEN tax_disabled=true branch_protection_gate=true rollback_matrix=true")
 
 
 if __name__ == "__main__":
