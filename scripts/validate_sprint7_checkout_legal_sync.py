@@ -45,7 +45,12 @@ def main() -> None:
     require(prereq["woocommerce_tax_enabled"] is False, "WooCommerce tax unexpectedly enabled")
 
     timing = sync["payment_timing_reconciliation"]
-    require(timing["konbini_live_expiry_setting_verified"] is False, "Konbini expiry changed without evidence")
+    require(timing["konbini_live_expiry_setting_verified"] is True, "Konbini Live expiry evidence missing")
+    require(timing["konbini_live_expiry_days"] == 3, "Konbini Live expiry must remain exactly 3 days")
+    require(
+        timing["konbini_live_expiry_evidence_class"] == "owner_confirmed_live_dashboard_configuration",
+        "Konbini Live expiry evidence classification drift",
+    )
     require(timing["all_selected_methods_customer_facing_timing_finalized"] is False, "payment timing unexpectedly finalized")
 
     checkout = sync["woocommerce_checkout_verification"]
@@ -75,8 +80,14 @@ def main() -> None:
     for key, value in sync["authority"].items():
         require(value is False, f"authority expanded unexpectedly: {key}")
 
-    require(komoju["live_acceptance"]["production_checkout_configuration_verified"] is True, "KOMOJU checkout config not green")
+    live = komoju["live_acceptance"]
+    require(live["production_checkout_configuration_verified"] is True, "KOMOJU checkout config not green")
+    require(live["konbini_live_expiry_setting_verified"] is True, "KOMOJU gate missing Konbini expiry evidence")
+    require(live["konbini_live_expiry_days"] == 3, "KOMOJU gate Konbini expiry drift")
+    require(komoju["live_dashboard_evidence"]["konbini_live_expiry_setting_verified"] is True, "Live dashboard expiry evidence missing")
+    require(komoju["live_dashboard_evidence"]["konbini_live_expiry_days"] == 3, "Live dashboard expiry must be 3 days")
     require(komoju["execution"]["real_payment_execution_ready"] is False, "real payment execution unexpectedly ready")
+    require(komoju["execution"]["real_payment_executed"] is False, "real payment unexpectedly recorded")
     require(staging["komoju"]["production_checkout_configuration_verified"] is True, "staging checkout config not green")
     require(staging["komoju"]["payment_execution_authorized"] is False, "payment execution authority drift")
 
@@ -87,19 +98,24 @@ def main() -> None:
 
     doc = DOC.read_text(encoding="utf-8")
     for phrase in (
-        "APPROVED KOMOJU CHECKOUT SUBSET VERIFIED GREEN",
+        "APPROVED KOMOJU CHECKOUT SUBSET + LIVE KONBINI 3-DAY EXPIRY VERIFIED GREEN",
         "komoju_konbini",
         "komoju_merpay",
         "komoju_paidy",
         "cannot submit a payment",
-        "PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_GREEN_LEGAL_TIMING_PENDING_FAIL_CLOSED",
+        "3 days — VERIFIED GREEN",
+        "real payment execution remains blocked",
+        "PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_AND_KONBINI_EXPIRY_GREEN_LEGAL_TIMING_PENDING_FAIL_CLOSED",
     ):
         require(phrase in doc, f"checkout/legal doc missing: {phrase}")
 
-    require(sync["decision"] == "CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_GREEN_LEGAL_TIMING_AND_FINAL_SCREEN_PENDING_FAIL_CLOSED", "decision drift")
+    require(
+        sync["decision"] == "CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_AND_KONBINI_EXPIRY_GREEN_LEGAL_TIMING_AND_FINAL_SCREEN_PENDING_FAIL_CLOSED",
+        "decision drift",
+    )
 
-    print("PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_GREEN snapshot_attempt=2 payment_execution=false")
-    print("PHIL_AI_OS_RUBY_CHECKOUT_LEGAL_TIMING_PENDING_FAIL_CLOSED konbini_expiry=false final_screen=false production_publish=false")
+    print("PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_SUBSET_AND_KONBINI_EXPIRY_GREEN snapshot_attempt=2 konbini_expiry_days=3 payment_execution=false")
+    print("PHIL_AI_OS_RUBY_CHECKOUT_LEGAL_TIMING_PENDING_FAIL_CLOSED final_screen=false production_publish=false")
 
 
 if __name__ == "__main__":
