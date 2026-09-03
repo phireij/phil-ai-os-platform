@@ -9,6 +9,7 @@ SYNC = ROOT / "ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-0
 KOMOJU = ROOT / "ops/readiness/ruby-komoju-live-acceptance-gate-2026-09-02.json"
 STAGING = ROOT / "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json"
 DOC = ROOT / "docs/RUBY_CHECKOUT_LEGAL_PAYMENT_SHIPPING_SYNC_2026-09-04.md"
+TIMING_DOC = ROOT / "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md"
 WORKFLOW = ROOT / ".github/workflows/commerce-woocommerce-production-readonly-checkout-snapshot.yml"
 
 
@@ -51,7 +52,9 @@ def main() -> None:
         timing["konbini_live_expiry_evidence_class"] == "owner_confirmed_live_dashboard_configuration",
         "Konbini Live expiry evidence classification drift",
     )
-    require(timing["all_selected_methods_customer_facing_timing_finalized"] is False, "payment timing unexpectedly finalized")
+    require(timing["all_selected_methods_customer_facing_timing_finalized"] is True, "payment timing reconciliation regressed")
+    require(timing["reconciliation_doc"] == "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md", "payment timing evidence link drift")
+    require(TIMING_DOC.is_file(), "payment timing reconciliation document missing")
 
     checkout = sync["woocommerce_checkout_verification"]
     require(checkout["sanitized_snapshot_run_green"] is True, "snapshot evidence missing")
@@ -72,10 +75,11 @@ def main() -> None:
 
     legal = sync["legal_checkout_sync"]
     require(legal["tokushoho_payment_methods_match_checkout"] is True, "payment-method legal sync not green")
+    require(legal["tokushoho_payment_timing_match_checkout"] is True, "payment-timing legal sync not green")
     require(legal["tokushoho_shipping_fees_match_checkout"] is True, "shipping/legal sync regressed")
     require(legal["tax_display_route_reconciled"] is True, "tax display reconciliation regressed")
-    for key in ("tokushoho_publication_text_finalized", "tokushoho_payment_timing_match_checkout", "final_confirmation_screen_reviewed", "checkout_legal_sync_complete"):
-        require(legal[key] is False, f"legal/timing gate changed without evidence: {key}")
+    for key in ("tokushoho_publication_text_finalized", "final_confirmation_screen_reviewed", "checkout_legal_sync_complete"):
+        require(legal[key] is False, f"publication/final-screen gate changed without evidence: {key}")
 
     for key, value in sync["authority"].items():
         require(value is False, f"authority expanded unexpectedly: {key}")
@@ -98,24 +102,36 @@ def main() -> None:
 
     doc = DOC.read_text(encoding="utf-8")
     for phrase in (
-        "APPROVED KOMOJU CHECKOUT SUBSET + LIVE KONBINI 3-DAY EXPIRY VERIFIED GREEN",
+        "PAYMENT-TIMING WORDING GREEN",
         "komoju_konbini",
         "komoju_merpay",
         "komoju_paidy",
         "cannot submit a payment",
         "3 days — VERIFIED GREEN",
         "real payment execution remains blocked",
-        "PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_AND_KONBINI_EXPIRY_GREEN_LEGAL_TIMING_PENDING_FAIL_CLOSED",
+        "PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_TIMING_GREEN_FINAL_SCREEN_AND_PUBLICATION_PENDING_FAIL_CLOSED",
     ):
         require(phrase in doc, f"checkout/legal doc missing: {phrase}")
 
+    timing_doc = TIMING_DOC.read_text(encoding="utf-8")
+    for phrase in (
+        "PAYMENT-TIMING WORDING RECONCILED",
+        "現在のKOMOJU Live設定では支払期限は**3日**",
+        "あと払い（ペイディ）",
+        "翌月27日",
+        "production_publish_authorized: false",
+        "payment_execution_authorized: false",
+        "PHIL_AI_OS_RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILED_FINAL_SCREEN_PENDING_FAIL_CLOSED",
+    ):
+        require(phrase in timing_doc, f"payment timing reconciliation doc missing: {phrase}")
+
     require(
-        sync["decision"] == "CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_AND_KONBINI_EXPIRY_GREEN_LEGAL_TIMING_AND_FINAL_SCREEN_PENDING_FAIL_CLOSED",
+        sync["decision"] == "CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_KONBINI_EXPIRY_AND_PAYMENT_TIMING_GREEN_FINAL_SCREEN_AND_PUBLICATION_PENDING_FAIL_CLOSED",
         "decision drift",
     )
 
-    print("PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_SUBSET_AND_KONBINI_EXPIRY_GREEN snapshot_attempt=2 konbini_expiry_days=3 payment_execution=false")
-    print("PHIL_AI_OS_RUBY_CHECKOUT_LEGAL_TIMING_PENDING_FAIL_CLOSED final_screen=false production_publish=false")
+    print("PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_TIMING_GREEN konbini_expiry_days=3 payment_execution=false")
+    print("PHIL_AI_OS_RUBY_CHECKOUT_FINAL_SCREEN_AND_PUBLICATION_PENDING_FAIL_CLOSED production_publish=false")
 
 
 if __name__ == "__main__":
