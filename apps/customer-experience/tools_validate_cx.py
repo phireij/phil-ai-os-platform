@@ -66,6 +66,7 @@ def main() -> None:
     required = [
         "index.html",
         "cart-preview.html",
+        "confirmation-preview.html",
         "styles.css",
         "manifest.webmanifest",
         "app-icon.svg",
@@ -74,12 +75,14 @@ def main() -> None:
         "src/core.mjs",
         "src/cart.mjs",
         "src/cart-preview.mjs",
+        "src/confirmation-preview.mjs",
         "src/flow.mjs",
         "src/payment.mjs",
         "src/pickup.mjs",
         "src/readiness-feedback.mjs",
         "src/seo.mjs",
         "fixtures/catalog.json",
+        "fixtures/final-confirmation.json",
         "fixtures/payment-provider.json",
         "fixtures/pickup-policy.json",
     ]
@@ -145,6 +148,66 @@ def main() -> None:
         if payment_provider.get(key) != expected:
             fail(f"payment provider boundary mismatch: {key}")
 
+    confirmation = json.loads((ROOT / "fixtures/final-confirmation.json").read_text(encoding="utf-8"))
+    expected_confirmation_boundary = {
+        "fixture_only": True,
+        "preview_only": True,
+        "actual_final_confirmation_screen_reviewed": False,
+        "order_creation_authorized": False,
+        "mutation_authorized": False,
+        "payment_execution_authorized": False,
+        "production_publish_authorized": False,
+    }
+    for key, expected in expected_confirmation_boundary.items():
+        if confirmation.get(key) != expected:
+            fail(f"final confirmation boundary mismatch: {key}")
+    if not isinstance(confirmation.get("items"), list) or not confirmation["items"]:
+        fail("final confirmation fixture requires synthetic order items")
+    calculated_subtotal = 0
+    confirmation_skus: set[str] = set()
+    for item in confirmation["items"]:
+        sku = item.get("sku")
+        quantity = item.get("quantity")
+        unit_price = item.get("unit_price_jpy")
+        if not sku or sku in confirmation_skus:
+            fail("final confirmation fixture requires unique SKUs")
+        confirmation_skus.add(sku)
+        if not isinstance(quantity, int) or quantity < 1 or not isinstance(unit_price, int) or unit_price < 0:
+            fail(f"{sku}: final confirmation quantity/price invalid")
+        for field in ("name", "option"):
+            localized = item.get(field, {})
+            if not localized.get("en") or not localized.get("ja"):
+                fail(f"{sku}: final confirmation {field} requires en and ja")
+        calculated_subtotal += quantity * unit_price
+    pricing = confirmation.get("pricing", {})
+    if pricing.get("subtotal_jpy") != calculated_subtotal:
+        fail("final confirmation subtotal drift")
+    if pricing.get("total_jpy") != pricing.get("subtotal_jpy", 0) + pricing.get("shipping_jpy", 0):
+        fail("final confirmation total drift")
+    if pricing.get("consumption_tax_status") != "exempt" or pricing.get("qualified_invoice_status") != "not_registered":
+        fail("final confirmation tax posture drift")
+    if pricing.get("woocommerce_tax_enabled") is not False or pricing.get("separate_consumption_tax_jpy") != 0:
+        fail("final confirmation unexpectedly adds WooCommerce consumption tax")
+    shipping = confirmation.get("shipping", {})
+    if shipping.get("method") != "yamato_cool" or shipping.get("region") != "kanto" or shipping.get("rate_jpy") != 1350:
+        fail("final confirmation Yamato Cool Kanto rate drift")
+    if pricing.get("shipping_jpy") != shipping.get("rate_jpy"):
+        fail("final confirmation shipping total mismatch")
+    payment = confirmation.get("payment", {})
+    if payment.get("method") not in {"credit_card", "konbini", "merpay", "paidy"} or payment.get("provider") != "komoju":
+        fail("final confirmation payment method/provider drift")
+    if payment.get("method") == "konbini":
+        if payment.get("live_expiry_setting_verified") is not True or payment.get("expiry_days") != 3:
+            fail("final confirmation Konbini expiry must remain exactly 3 days")
+        if payment.get("exact_transaction_deadline_controls") is not True or payment.get("example_deadline_only") is not True:
+            fail("final confirmation must defer to the exact transaction deadline")
+    fulfillment = confirmation.get("fulfillment", {})
+    if fulfillment.get("dispatch_window_days") != [2, 5] or fulfillment.get("starts_after_required_payment_completion") is not True:
+        fail("final confirmation fulfillment timing drift")
+    cancellation = confirmation.get("cancellation", {})
+    if [cancellation.get("full_refund_before_hours"), cancellation.get("half_fee_from_hours"), cancellation.get("half_fee_to_hours"), cancellation.get("full_fee_under_hours")] != [48, 24, 48, 24]:
+        fail("final confirmation cancellation timing drift")
+
     manifest = json.loads((ROOT / "manifest.webmanifest").read_text(encoding="utf-8"))
     if manifest.get("display") != "standalone" or manifest.get("scope") != "./":
         fail("PWA manifest must remain local standalone scope")
@@ -153,10 +216,23 @@ def main() -> None:
 
     audit_html("index.html")
     audit_html("cart-preview.html")
+    audit_html("confirmation-preview.html")
 
     index_html = (ROOT / "index.html").read_text(encoding="utf-8")
+    cart_html = (ROOT / "cart-preview.html").read_text(encoding="utf-8")
+    confirmation_html = (ROOT / "confirmation-preview.html").read_text(encoding="utf-8")
     if "./cart-preview.html" not in index_html:
         fail("catalog preview must link the isolated cart/payment handoff preview")
+    if "./confirmation-preview.html" not in index_html or "./confirmation-preview.html" not in cart_html:
+        fail("isolated customer flow must link the final confirmation compliance preview")
+    for phrase in (
+        "No order submission",
+        "disabled>Place order (preview only — disabled)</button>",
+        "This is not the actual WooCommerce final screen",
+        "actual WooCommerce final screen reviewed = false",
+    ):
+        if phrase not in confirmation_html:
+            fail(f"final confirmation HTML safety marker missing: {phrase}")
 
     combined = "\n".join((ROOT / path).read_text(encoding="utf-8") for path in required if path != "app-icon.svg")
     forbidden = {
@@ -170,6 +246,9 @@ def main() -> None:
         "authorizing mutation flag": r"mutation_authorized\s*[:=]\s*true",
         "authorizing payment flag": r"payment_execution_authorized\s*[:=]\s*true",
         "authorizing live mode flag": r"live_mode_authorized\s*[:=]\s*true",
+        "authorizing order creation flag": r"order_creation_authorized\s*[:=]\s*true",
+        "authorizing production publish flag": r"production_publish_authorized\s*[:=]\s*true",
+        "false actual-screen acceptance": r"actual_final_confirmation_screen_reviewed\s*[:=]\s*true",
     }
     for label, pattern in forbidden.items():
         if re.search(pattern, combined, flags=re.IGNORECASE):
@@ -183,32 +262,47 @@ def main() -> None:
 
     app = (ROOT / "src/app.mjs").read_text(encoding="utf-8")
     cart_preview = (ROOT / "src/cart-preview.mjs").read_text(encoding="utf-8")
+    confirmation_preview = (ROOT / "src/confirmation-preview.mjs").read_text(encoding="utf-8")
     readiness_feedback = (ROOT / "src/readiness-feedback.mjs").read_text(encoding="utf-8")
-    if "fixture_only !== true" not in app or "fixture_only !== true" not in cart_preview:
+    if "fixture_only !== true" not in app or "fixture_only !== true" not in cart_preview or "fixture_only !== true" not in confirmation_preview:
         fail("all customer previews must refuse non-fixture data")
     if 'serviceWorker.register("./sw.js")' not in app:
         fail("PWA service worker registration missing")
     if "buildPaymentHandoffIntent" not in cart_preview:
         fail("cart preview must compose the inert payment handoff through the tested boundary")
+    for phrase in (
+        "isolated preview cannot claim actual final-screen acceptance",
+        "order_creation_authorized",
+        "payment_execution_authorized",
+        "production_publish_authorized",
+        "Konbini confirmation must preserve the verified 3-day Live expiry",
+        "payment method is outside the approved initial subset",
+    ):
+        if phrase not in confirmation_preview:
+            fail(f"final confirmation module safety control missing: {phrase}")
     if "readiness feedback must remain non-authorizing" not in readiness_feedback:
         fail("customer readiness feedback must preserve the non-authorizing boundary")
 
     service_worker = (ROOT / "sw.js").read_text(encoding="utf-8")
     for cached_path in (
         "./cart-preview.html",
+        "./confirmation-preview.html",
         "./src/cart.mjs",
         "./src/cart-preview.mjs",
+        "./src/confirmation-preview.mjs",
         "./src/flow.mjs",
         "./src/payment.mjs",
         "./src/pickup.mjs",
         "./src/readiness-feedback.mjs",
         "./src/seo.mjs",
+        "./fixtures/final-confirmation.json",
         "./fixtures/payment-provider.json",
         "./fixtures/pickup-policy.json",
     ):
         if cached_path not in service_worker:
             fail(f"offline app shell missing {cached_path}")
 
+    print("PHIL_AI_OS_SPRINT_4_FINAL_CONFIRMATION_PREVIEW_GREEN fixture_only=true actual_screen=false order_creation=false payment_execution=false")
     print("PHIL_AI_OS_SPRINT_4_CX_VALIDATION_GREEN")
 
 
