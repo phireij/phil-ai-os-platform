@@ -1,20 +1,37 @@
 {
-  "version": "ruby-komoju-live-acceptance-gate-v1",
-  "date": "2026-09-02",
+  "version": "ruby-komoju-live-acceptance-gate-v2",
+  "date": "2026-09-03",
   "provider": "komoju",
   "ceo_scope_approval": true,
-  "current_mode": "test_mode",
+  "current_mode": "live_dashboard_selected",
   "test_mode_evidence": {
     "connected": true,
     "capture_validated": true,
     "refund_validated": true
   },
+  "live_dashboard_evidence": {
+    "owner_supplied_dashboard_reviewed": true,
+    "live_mode_ui_selected": true,
+    "merchant_live_mode_approval_verified": true,
+    "merchant_available_payment_methods_verified": true,
+    "enabled_or_available_methods_shown": [
+      "visa_mastercard",
+      "jcb_amex_diners_discover",
+      "konbini",
+      "merpay",
+      "paidy",
+      "bank_transfer",
+      "pay_easy"
+    ],
+    "paypay_status": "application_under_review",
+    "rakuten_pay_status": "not_available_declined_or_no_longer_eligible"
+  },
   "live_acceptance": {
-    "merchant_live_mode_approval_verified": false,
-    "merchant_available_payment_methods_verified": false,
+    "merchant_live_mode_approval_verified": true,
+    "merchant_available_payment_methods_verified": true,
     "production_enabled_payment_methods_finalized": false,
     "catalog_ready": false,
-    "japan_tax_and_qualified_invoice_evidence_ready": false,
+    "japan_tax_and_qualified_invoice_evidence_ready": true,
     "checkout_legal_sync_complete": false,
     "near_cutover_recovery_recheck_green": false,
     "final_go_no_go_complete": false
@@ -26,14 +43,12 @@
     "automatic_live_activation": false
   },
   "next_evidence_needed": [
-    "KOMOJU merchant dashboard evidence that Live Mode is approved/available",
-    "verified merchant-side payment-method availability",
     "final production payment-method subset",
     "approved production catalog",
-    "Japan tax and Qualified Invoice evidence",
+    "verified live WooCommerce/KOMOJU checkout connection without executing a customer payment",
     "final checkout/Tokushoho/payment/shipping synchronization",
     "fresh near-cutover recovery validation",
     "final Go/No-Go acceptance"
   ],
-  "decision": "PENDING_FAIL_CLOSED"
+  "decision": "LIVE_DASHBOARD_AND_METHOD_AVAILABILITY_GREEN_EXECUTION_PENDING_FAIL_CLOSED"
 }

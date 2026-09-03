@@ -1,5 +1,5 @@
 {
-  "version": "ruby-production-current-state-overlay-v3",
+  "version": "ruby-production-current-state-overlay-v4",
   "date": "2026-09-03",
   "purpose": "Current operational reconciliation layer for production-readiness decisions where older roadmap wording predates later CEO approvals and verified read-only connectivity.",
   "governance": {
@@ -37,6 +37,10 @@
   },
   "komoju": {
     "test_mode_green": true,
+    "live_dashboard_selected": true,
+    "merchant_live_mode_approval_verified": true,
+    "merchant_available_payment_methods_verified": true,
+    "production_enabled_payment_methods_finalized": false,
     "live_acceptance_green": false,
     "real_payment_execution_ready": false
   },
