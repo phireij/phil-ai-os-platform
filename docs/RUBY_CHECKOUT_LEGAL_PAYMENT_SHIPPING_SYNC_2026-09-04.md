@@ -1,7 +1,7 @@
 # Ruby's Cake Delights — Checkout / Legal / Payment / Shipping Synchronization
 
 Date: 2026-09-04  
-Status: **IN PROGRESS — APPROVED KOMOJU CHECKOUT SUBSET + LIVE KONBINI 3-DAY EXPIRY VERIFIED GREEN; CUSTOMER-FACING LEGAL TIMING / FINAL SCREEN PENDING**
+Status: **APPROVED KOMOJU SUBSET + CHECKOUT + LIVE KONBINI 3-DAY EXPIRY + PAYMENT-TIMING WORDING GREEN; PUBLICATION / FINAL SCREEN PENDING**
 
 ## Verified production payment subset
 
@@ -54,8 +54,20 @@ The snapshot is network-read-only, exports no gateway settings/secrets, cannot s
 
 - KOMOJU Live Konbini payment-expiry setting: **3 days — VERIFIED GREEN**.
 - Evidence classification: owner-confirmed Live dashboard configuration evidence.
-- This closes the previously open Live Konbini expiry-setting evidence item.
 - The 3-day setting is configuration/timing evidence only; it does **not** prove or authorize a real Konbini payment, settlement, refund or capture.
+
+## Payment timing / Tokushoho reconciliation
+
+Customer-facing payment timing/deadline wording is now reconciled for every selected launch method in `docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md`.
+
+- Credit card — payment procedure at order time; actual issuer billing/debit date depends on the card issuer.
+- Konbini — pay by the exact KOMOJU deadline shown/notified after the order; current Live expiry setting is 3 days.
+- Merpay — complete the Merpay app/QR payment flow at order time; payment completes when the Merpay flow confirms completion.
+- Paidy — merchant-side transaction completes at order/transaction time while the customer pays Paidy later under Paidy's published billing schedule; current customer due date is the 27th under the documented methods.
+
+Paidy's currently published customer-borne fees are also captured in the reconciliation companion so they can be shown consistently before order submission.
+
+This closes the **payment-timing wording** evidence item only. It does not approve the final Tokushoho publication text and does not replace the final checkout/confirmation-screen review.
 
 ## Tax and shipping state
 
@@ -75,8 +87,9 @@ The snapshot is network-read-only, exports no gateway settings/secrets, cannot s
 - [x] Tax route reconciled.
 - [x] Shipping configuration/rates reconciled.
 - [x] Actual **KOMOJU Live Konbini payment-expiry setting verified at 3 days**.
-- [ ] Finalize customer-facing payment timing/deadline wording for every selected method, including the verified 3-day Konbini deadline.
-- [ ] Reconcile final Tokushoho payment-method/payment-timing wording.
+- [x] Customer-facing payment timing/deadline wording reconciled for all selected methods.
+- [x] Tokushoho payment-method/payment-timing reconciliation record prepared.
+- [ ] Apply reconciled payment wording to the final Tokushoho publication candidate and obtain required owner approval before publication.
 - [ ] Review the final checkout/order-confirmation screen for price, shipping, payment timing/deadline, fulfillment and cancellation wording.
 
 ## Authority boundary
@@ -86,6 +99,6 @@ The snapshot is network-read-only, exports no gateway settings/secrets, cannot s
 `production_publish_authorized: false`  
 `automatic_production_execution_authorized: false`
 
-Checkout configuration and Live Konbini expiry verification are GREEN, but **real payment execution remains blocked** until the remaining legal/timing/recovery/final-Go-No-Go gates are satisfied.
+Checkout configuration, Live Konbini expiry and payment-timing wording are GREEN, but **real payment execution remains blocked** and publication remains separately gated.
 
-`PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_AND_KONBINI_EXPIRY_GREEN_LEGAL_TIMING_PENDING_FAIL_CLOSED`
+`PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_TIMING_GREEN_FINAL_SCREEN_AND_PUBLICATION_PENDING_FAIL_CLOSED`
