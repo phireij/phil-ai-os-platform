@@ -1,30 +1,50 @@
 {
-  "version": "sprint7-launch-acceptance-v1",
-  "date": "2026-09-02",
+  "version": "sprint7-launch-acceptance-v2",
+  "date": "2026-09-03",
   "bounded_engineering_readiness": {
-    "integrated_regression_baseline_tests": 165,
+    "current_head_integrated_regression_required": true,
+    "isolated_runtime_smoke_required": true,
     "security_recovery_package_ready": true,
     "deployment_migration_runbooks_ready": true,
     "channel_activation_runbooks_ready": true,
     "operator_documentation_ready": true,
     "final_current_head_ci_required": true
   },
-  "live_launch_gates": {
+  "verified_readiness": {
     "verified_ruby_business_profile_complete": true,
     "contact_phone_verified": true,
     "tokushoho_source_reconciled": true,
-    "tokushoho_publication_approved": false,
-    "fresh_launch_time_backup_restore_check_green": false,
     "woocommerce_preproduction_qa_green": true,
-    "woocommerce_production_activation_approved": false,
-    "woocommerce_production_credentials_configured": false,
+    "woocommerce_production_readonly_identity_green": true,
+    "woocommerce_production_readonly_connectivity_green": true,
     "komoju_test_mode_validated": true,
-    "komoju_live_mode_approved": false,
     "production_shipping_configuration_verified": true,
+    "japan_2026_tax_decision_green": true,
+    "japan_2026_tax_status": "exempt",
+    "qualified_invoice_status": "not_registered",
+    "woocommerce_tax_enabled": false
+  },
+  "scope_approvals": {
+    "woocommerce_production_activation_scope_approved": true,
+    "komoju_live_mode_scope_approved": true,
+    "production_sms_sending_scope_approved": true,
+    "public_domain_dns_cutover_scope_approved": true,
+    "final_launch_signoff_process_scope_approved": true,
+    "scope_approval_overrides_readiness": false
+  },
+  "remaining_launch_gates": {
+    "final_production_catalog_ready": false,
+    "final_checkout_tokushoho_payment_shipping_sync_green": false,
+    "fresh_launch_time_backup_restore_check_green": false,
+    "woocommerce_production_mutation_ready": false,
+    "komoju_live_acceptance_green": false,
     "production_payment_methods_verified": false,
-    "external_channel_live_activation_approved": false,
-    "production_cutover_approved": false,
-    "ceo_signoff_recorded": false,
+    "air_mobile_order_quick_pickup_url_ready": false,
+    "sms_production_readiness_if_in_launch_scope_green": false,
+    "external_channel_live_activation_ready_if_in_scope": false,
+    "main_branch_protection_or_ruleset_green": false,
+    "public_cutover_plan_confirmed": false,
+    "final_ceo_go_no_go_accepted": false,
     "cto_signoff_recorded": false
   },
   "authority_baseline": {
@@ -33,7 +53,8 @@
     "assigned_agent": "hermes",
     "specialists_enabled": false,
     "mission_control_mutation_authorized": false,
-    "live_launch_authorized": false
+    "automatic_production_execution_authorized": false,
+    "live_launch_authorized_by_readiness": false
   },
   "evidence": [
     "docs/SPRINT_7_TESTING_PRODUCTION_READINESS_BACKLOG_2026-08-28.md",
@@ -42,12 +63,17 @@
     "docs/SPRINT_7_KOMOJU_ACTIVATION_RUNBOOK_2026-08-28.md",
     "docs/SPRINT_7_CHANNEL_ACTIVATION_RUNBOOKS_2026-08-28.md",
     "docs/SPRINT_7_OPERATOR_QUICK_START_2026-08-28.md",
+    "docs/SPRINT_7_FINAL_CUTOVER_CONTROL_RUNBOOK_2026-09-02.md",
     "docs/SPRINT_7_LAUNCH_ACCEPTANCE_MATRIX_2026-08-28.md",
     "ops/readiness/verified-ruby-business-profile.template.json",
     "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json",
+    "ops/readiness/ruby-woocommerce-production-readonly-connectivity-2026-09-03.json",
+    "ops/readiness/ruby-japan-tax-status-2026-09-03.json",
+    "ops/readiness/ruby-final-go-no-go-gate-2026-09-02.json",
     "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md",
     "docs/RUBY_WOOCOMMERCE_KOMOJU_STAGING_CONFIGURATION_PLAN_2026-08-29.md",
     "docs/RUBY_WORDPRESS_PREPRODUCTION_QA_MILESTONE_2026-09-02.md",
     "docs/MASTER_EXECUTIVE_ROADMAP_SCHEDULE_CONTROL.md"
-  ]
+  ],
+  "decision": "ENGINEERING_PREPARED_LIVE_LAUNCH_PENDING_FAIL_CLOSED"
 }
