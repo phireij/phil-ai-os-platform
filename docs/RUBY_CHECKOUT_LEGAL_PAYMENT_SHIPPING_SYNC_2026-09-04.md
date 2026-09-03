@@ -1,9 +1,9 @@
 # Ruby's Cake Delights — Checkout / Legal / Payment / Shipping Synchronization
 
 Date: 2026-09-04  
-Status: **IN PROGRESS — READ-ONLY SNAPSHOT GREEN / APPROVED SUBSET MISMATCH / REMEDIATION REQUIRED**
+Status: **IN PROGRESS — APPROVED KOMOJU CHECKOUT SUBSET VERIFIED GREEN; LEGAL TIMING / FINAL SCREEN PENDING**
 
-## Current production payment subset
+## Verified production payment subset
 
 CEO-approved initial KOMOJU launch subset:
 
@@ -13,105 +13,64 @@ CEO-approved initial KOMOJU launch subset:
 - Merpay
 - Paidy
 
-Initial-launch exclusions:
+Initial-launch exclusions remain:
 
 - Bank Transfer — disabled
-- Pay-easy — disabled
-- PayPay — pending KOMOJU review
-- Rakuten Pay — excluded
+- Pay-easy — not exposed
+- PayPay — not exposed while provider review is pending
+- Rakuten Pay — excluded / not exposed
 
 This selection does **not** authorize a real payment or WooCommerce mutation.
 
+## Fresh production GET-only verification
+
+Workflow run `33776964709`, rerun attempt 2, completed successfully after the owner enabled the approved methods in WooCommerce.
+
+Sanitized artifact: `9902650701`  
+Captured at: `2026-09-03T16:27:24.175410Z`
+
+Enabled gateway evidence:
+
+- `komoju_credit_card` — Credit Card
+- `komoju_konbini` — Konbini
+- `komoju_merpay` — Merpay
+- `komoju_paidy` — Paidy
+- `woa_gateway` — Submit Order for Confirmation / 注文確認を依頼
+
+Disabled gateway evidence:
+
+- `bacs` — Direct bank transfer
+- `cheque` — Check payments
+- `cod` — Cash on delivery
+- base `komoju` gateway — disabled
+
+Pay-easy, PayPay and Rakuten Pay are not exposed in the sanitized WooCommerce gateway snapshot.
+
+Therefore the approved initial KOMOJU payment subset now **matches the WooCommerce checkout configuration**.
+
+The snapshot is network-read-only, exports no gateway settings/secrets, cannot submit a payment, cannot create an order, and cannot change WooCommerce configuration.
+
 ## Tax and shipping state
 
-- Ruby's Cake Delights is treated as a 2026 consumption-tax-exempt business under the reviewed evidence.
+- 2026 consumption-tax status: exempt.
 - Qualified Invoice registration: not registered.
-- WooCommerce tax route: disabled; no separate consumption-tax table write is required under the current decision.
-- Production Yamato Cool shipping configuration and rates are already verified GREEN in the existing readiness record.
-
-## Payment timing — what is already known
-
-The legacy Tokushoho source says the legacy card methods were charged/confirmed when the order was placed. That wording must not be copied blindly to every KOMOJU method.
-
-Official KOMOJU documentation confirms:
-
-- Konbini is a deferred customer payment: a payment number/instruction is issued and the transaction waits for the customer to pay at the selected convenience store. The merchant-configurable default expiry is 3 days; Live Mode has its own expiry setting and must be checked directly before final legal wording.
-- Paidy is completed immediately from the merchant transaction perspective when the transaction is created/captured; the customer's later Paidy billing relationship does not delay merchant payment completion.
-- WooCommerce requires KOMOJU methods to be selected in the KOMOJU settings and then each resulting `KOMOJU - [payment method]` gateway must be enabled under WooCommerce payment settings before it appears on the site.
-
-Official references reviewed:
-
-- https://developer.woocommerce.com/docs/apis/rest-api/v3/payment-gateways/
-- https://help.komoju.com/hc/ja/articles/4747504207390--WooCommerce-KOMOJU%E6%B1%BA%E6%B8%88%E3%82%92Live%E3%83%A2%E3%83%BC%E3%83%89-%E6%9C%AC%E7%95%AA%E7%92%B0%E5%A2%83-%E3%81%A7%E5%88%A9%E7%94%A8%E9%96%8B%E5%A7%8B%E3%81%99%E3%82%8B%E6%96%B9%E6%B3%95
-- https://help.komoju.com/hc/en-us/articles/5201642509854--Paidy-Frequently-Asked-Questions-About-Payments
-
-## Production GET-only snapshot result
-
-Manual workflow run `33776964709` completed successfully on current `main` using the production read-only WooCommerce identity.
-
-Safety evidence:
-
-- network read-only: true
-- mutation authorized: false
-- payment execution authorized: false
-- production publish authorized: false
-- WooCommerce gateway `settings` values were not exported
-- no customer/order/payment-token data was captured
-
-The snapshot **cannot submit a payment** and cannot change gateway configuration.
-
-Enabled gateways observed:
-
-- `komoju_credit_card` — **KOMOJU Credit Card** — enabled
-- `woa_gateway` — **Submit Order for Confirmation / 注文確認を依頼** — enabled
-
-Disabled gateways observed:
-
-- base `komoju` — disabled
-- `bacs` / Direct bank transfer — disabled
-- `cheque` — disabled
-- `cod` — disabled
-
-Not exposed in the WooCommerce gateway snapshot:
-
-- Konbini
-- Merpay
-- Paidy
-- Pay-easy
-- PayPay
-- Rakuten Pay
-
-Therefore the approved initial subset does **not yet match** the WooCommerce checkout gateway configuration.
-
-## Required WooCommerce/KOMOJU remediation
-
-Per the official KOMOJU WooCommerce setup flow, the next configuration action is:
-
-1. Open **WooCommerce → Settings → KOMOJU** and select the approved methods that are still missing: **Konbini, Merpay and Paidy**.
-2. Save the KOMOJU settings.
-3. Open **WooCommerce → Settings → Payments**.
-4. Enable each resulting **KOMOJU - Konbini**, **KOMOJU - Merpay** and **KOMOJU - Paidy** gateway.
-5. Keep Bank Transfer and Pay-easy disabled for the initial launch.
-6. Do not enable PayPay while KOMOJU review remains pending.
-7. Keep Rakuten Pay excluded.
-8. Run the sanitized GET-only checkout snapshot again and require the approved subset to match before advancing the gate.
-
-This configuration step is a production WooCommerce setting change. The repository does not mark it as performed and does not authorize real payment execution.
+- WooCommerce tax route: disabled.
+- Production Yamato Cool shipping configuration and rates: verified GREEN.
 
 ## Remaining synchronization evidence
 
-- [x] Sanitized WooCommerce payment-gateway snapshot is GREEN.
-- [ ] Enabled WooCommerce checkout methods exactly match the CEO-approved initial subset.
-- [x] Bank Transfer is disabled for initial launch.
-- [x] Pay-easy is not exposed in the current snapshot.
-- [x] PayPay is not exposed while provider review is pending.
-- [x] Rakuten Pay is not exposed.
-- [ ] Add/enable Konbini, Merpay and Paidy in WooCommerce using the official KOMOJU two-step configuration.
-- [ ] Rerun the read-only snapshot and verify the approved subset.
-- [ ] KOMOJU Live Konbini expiry value is recorded.
-- [ ] Customer-facing payment timing/deadline wording is finalized for every selected method.
-- [ ] Tokushoho payment-method and payment-timing sections match the checkout behavior.
-- [ ] Final order-confirmation screen correctly shows price, shipping, payment timing/deadline, fulfillment and cancellation information.
+- [x] Approved KOMOJU payment subset finalized.
+- [x] WooCommerce checkout configuration matches the approved subset.
+- [x] Bank Transfer disabled.
+- [x] Pay-easy not exposed.
+- [x] PayPay not exposed while review is pending.
+- [x] Rakuten Pay not exposed.
+- [x] Tax route reconciled.
+- [x] Shipping configuration/rates reconciled.
+- [ ] Verify the actual **KOMOJU Live Konbini payment-expiry setting**.
+- [ ] Finalize customer-facing payment timing/deadline wording for every selected method.
+- [ ] Reconcile final Tokushoho payment-method/payment-timing wording.
+- [ ] Review the final checkout/order-confirmation screen for price, shipping, payment timing/deadline, fulfillment and cancellation wording.
 
 ## Authority boundary
 
@@ -120,4 +79,6 @@ This configuration step is a production WooCommerce setting change. The reposito
 `production_publish_authorized: false`  
 `automatic_production_execution_authorized: false`
 
-`PHIL_AI_OS_RUBY_CHECKOUT_SNAPSHOT_GREEN_SUBSET_MISMATCH_FAIL_CLOSED`
+Checkout configuration verification is GREEN, but **real payment execution remains blocked** until the remaining legal/timing/recovery/final-Go-No-Go gates are satisfied.
+
+`PHIL_AI_OS_RUBY_CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_GREEN_LEGAL_TIMING_PENDING_FAIL_CLOSED`
