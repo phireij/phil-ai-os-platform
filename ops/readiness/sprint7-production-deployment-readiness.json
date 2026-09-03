@@ -1,5 +1,5 @@
 {
-  "version": "sprint7-production-deployment-readiness-v2",
+  "version": "sprint7-production-deployment-readiness-v3",
   "date": "2026-09-03",
   "storefront": {
     "public_domain": "https://www.rubyscakedelights.shop/",
@@ -45,7 +45,15 @@
     "test_mode_validated": true,
     "merchant_live_dashboard_access_verified": true,
     "merchant_available_payment_methods_verified": true,
-    "production_enabled_payment_methods_finalized": false,
+    "production_enabled_payment_methods_finalized": true,
+    "production_enabled_payment_methods": [
+      "visa_mastercard",
+      "jcb_amex_diners_discover",
+      "konbini",
+      "merpay",
+      "paidy"
+    ],
+    "production_checkout_configuration_verified": false,
     "live_mode_authorized": false,
     "payment_execution_authorized": false
   },

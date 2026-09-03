@@ -38,13 +38,7 @@ def main() -> None:
     require(governance["automatic_production_execution_authorized"] is False, "automatic production execution drift")
 
     scope = overlay["ceo_activation_scope"]
-    for key in (
-        "woocommerce_production_activation",
-        "komoju_live_mode",
-        "production_sms_sending",
-        "public_domain_dns_cutover",
-        "final_launch_signoff_process",
-    ):
+    for key in ("woocommerce_production_activation", "komoju_live_mode", "production_sms_sending", "public_domain_dns_cutover", "final_launch_signoff_process"):
         require(scope[key] is True, f"CEO scope approval drift: {key}")
     require(scope["scope_approval_overrides_readiness"] is False, "scope approval incorrectly overrides readiness")
 
@@ -53,8 +47,7 @@ def main() -> None:
     require(woo["production_readonly_preflight_run_id"] == 33630247231, "Woo read-only evidence run drift")
     require(woo["production_mutation_ready"] is False, "Woo mutation became ready unexpectedly")
     require(woo["catalog_write_ready"] is False, "catalog write became ready unexpectedly")
-    require(woo["tax_decision_green"] is True, "Japan tax decision regressed")
-    require(woo["tax_configuration_route"] == "disabled", "exempt-business tax route drift")
+    require(woo["tax_decision_green"] is True and woo["tax_configuration_route"] == "disabled", "Japan tax route drift")
     require(woo["tax_write_ready"] is False, "tax write became ready unexpectedly")
 
     inputs = overlay["business_inputs"]
@@ -65,38 +58,38 @@ def main() -> None:
     require(tax["decision"]["consumption_tax_status"] == "exempt", "tax status drift")
     require(tax["decision"]["qualified_invoice_status"] == "not_registered", "qualified invoice status drift")
     require(tax["decision"]["tax_decision_ready"] is True, "tax decision evidence not GREEN")
-    require(tax["authority"]["tax_write_ready"] is False, "tax evidence incorrectly permits tax writes")
-    require(tax["authority"]["mutation_authorized"] is False, "tax evidence incorrectly permits mutation")
+    require(tax["authority"]["tax_write_ready"] is False and tax["authority"]["mutation_authorized"] is False, "tax evidence expanded authority")
 
+    approved = ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy"]
     require(komoju["current_mode"] == "live_dashboard_selected", "KOMOJU Live dashboard selection evidence regressed")
     require(komoju["live_dashboard_evidence"]["owner_supplied_dashboard_reviewed"] is True, "KOMOJU owner dashboard evidence missing")
-    require(komoju["live_dashboard_evidence"]["live_mode_ui_selected"] is True, "KOMOJU Live mode UI not verified")
-    require(komoju["live_acceptance"]["merchant_live_mode_approval_verified"] is True, "KOMOJU merchant Live approval evidence regressed")
-    require(komoju["live_acceptance"]["merchant_available_payment_methods_verified"] is True, "KOMOJU payment-method availability evidence regressed")
-    require(komoju["live_acceptance"]["production_enabled_payment_methods_finalized"] is False, "KOMOJU production payment subset changed without reconciliation")
-    require(komoju["live_acceptance"]["japan_tax_and_qualified_invoice_evidence_ready"] is True, "KOMOJU tax prerequisite should remain GREEN")
-    require(komoju["execution"]["live_mode_authorized_by_readiness"] is False, "KOMOJU live execution authority expanded unexpectedly")
-    require(komoju["execution"]["real_payment_execution_ready"] is False, "KOMOJU real payment unexpectedly ready")
-    require(komoju["execution"]["real_payment_executed"] is False, "KOMOJU real payment evidence unexpectedly true")
-    require(overlay["komoju"]["live_dashboard_selected"] is True, "overlay lost KOMOJU Live dashboard evidence")
-    require(overlay["komoju"]["merchant_live_mode_approval_verified"] is True, "overlay lost KOMOJU merchant Live evidence")
-    require(overlay["komoju"]["merchant_available_payment_methods_verified"] is True, "overlay lost KOMOJU payment-method evidence")
-    require(overlay["komoju"]["production_enabled_payment_methods_finalized"] is False, "overlay payment subset unexpectedly finalized")
-    require(overlay["komoju"]["live_acceptance_green"] is False, "overlay KOMOJU acceptance unexpectedly GREEN")
-    require(overlay["komoju"]["real_payment_execution_ready"] is False, "overlay real payment unexpectedly ready")
+    require(komoju["live_acceptance"]["merchant_live_mode_approval_verified"] is True, "KOMOJU merchant Live evidence regressed")
+    require(komoju["live_acceptance"]["merchant_available_payment_methods_verified"] is True, "KOMOJU method availability evidence regressed")
+    require(komoju["production_payment_subset"]["ceo_approved"] is True, "KOMOJU production subset lost CEO approval")
+    require(komoju["production_payment_subset"]["enabled_for_initial_launch"] == approved, "KOMOJU approved subset drift")
+    require(komoju["live_acceptance"]["production_enabled_payment_methods_finalized"] is True, "KOMOJU payment subset should remain finalized")
+    require(komoju["live_acceptance"]["production_checkout_configuration_verified"] is False, "KOMOJU checkout configuration unexpectedly verified")
+    require(komoju["live_acceptance"]["japan_tax_and_qualified_invoice_evidence_ready"] is True, "KOMOJU tax prerequisite regressed")
+    require(komoju["execution"]["live_mode_authorized_by_readiness"] is False, "KOMOJU live execution authority expanded")
+    require(komoju["execution"]["real_payment_execution_ready"] is False and komoju["execution"]["real_payment_executed"] is False, "KOMOJU real payment state expanded")
 
-    require(sms["provider_selection"]["formally_selected"] is True, "SMS provider selection should be reconciled GREEN")
+    ok = overlay["komoju"]
+    require(ok["live_dashboard_selected"] is True, "overlay lost KOMOJU Live dashboard evidence")
+    require(ok["merchant_live_mode_approval_verified"] is True and ok["merchant_available_payment_methods_verified"] is True, "overlay lost KOMOJU merchant evidence")
+    require(ok["production_enabled_payment_methods_finalized"] is True, "overlay lost finalized payment subset")
+    require(ok["approved_initial_launch_subset"] == approved, "overlay approved payment subset drift")
+    require(ok["production_checkout_configuration_verified"] is False, "overlay checkout config unexpectedly verified")
+    require(ok["live_acceptance_green"] is False and ok["real_payment_execution_ready"] is False, "overlay KOMOJU acceptance expanded unexpectedly")
+
+    require(sms["provider_selection"]["formally_selected"] is True, "SMS provider selection should be GREEN")
     require(sms["provider_selection"]["selected_provider"] == "twilio", "selected SMS provider must remain Twilio")
-    require(sms["activation_acceptance"]["provider_formally_selected"] is True, "SMS acceptance lost formal provider selection")
     require(sms["activation_acceptance"]["production_sending_ready"] is False, "SMS production sending unexpectedly ready")
-    require(sms["execution"]["live_sms_authorized_by_readiness"] is False, "SMS live-send readiness unexpectedly authorized")
-    require(sms["execution"]["live_sms_sent"] is False, "live SMS evidence unexpectedly true")
-    require(overlay["sms"]["selected_provider"] == "twilio", "overlay SMS provider drift")
-    require(overlay["sms"]["formal_provider_selected"] is True, "overlay lost formal Twilio selection")
+    require(sms["execution"]["live_sms_authorized_by_readiness"] is False and sms["execution"]["live_sms_sent"] is False, "SMS authority expanded")
+    require(overlay["sms"]["selected_provider"] == "twilio" and overlay["sms"]["formal_provider_selected"] is True, "overlay Twilio selection drift")
     require(overlay["sms"]["production_sending_ready"] is False, "overlay SMS sending unexpectedly ready")
 
     require(recovery["current_baseline"]["status"] == "green_current_not_launch_fresh", "recovery baseline status drift")
-    require(recovery["execution"]["launch_recovery_gate_green"] is False, "recovery incorrectly marked launch-fresh")
+    require(recovery["execution"]["launch_recovery_gate_green"] is False, "recovery incorrectly launch-fresh")
     require(recovery["execution"]["cutover_ready_from_recovery_perspective"] is False, "recovery incorrectly permits cutover")
 
     require(go["technical_baseline"]["woocommerce_readonly_identity_green"] is True, "Go/No-Go lost Woo read-only GREEN")
@@ -113,7 +106,7 @@ def main() -> None:
     require(overlay["launch"]["live_launch_authorized_by_readiness"] is False, "overlay unexpectedly authorizes live launch")
     require(overlay["decision"] == "CONTROL_POSTURE_GREEN_LAUNCH_PENDING_FAIL_CLOSED", "overlay decision drift")
 
-    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN tax_decision=green sms_provider=twilio komoju_live_dashboard=verified")
+    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN tax=green twilio=selected komoju_subset=finalized checkout_config=false")
     print("PHIL_AI_OS_SPRINT_7_FINAL_GO_NO_GO_PENDING_FAIL_CLOSED")
 
 

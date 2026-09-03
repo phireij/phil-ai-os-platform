@@ -28,15 +28,7 @@ def main() -> None:
     require(data.get("version") == "sprint7-launch-acceptance-v2", "launch acceptance schema drift")
 
     engineering = data["bounded_engineering_readiness"]
-    for key in (
-        "current_head_integrated_regression_required",
-        "isolated_runtime_smoke_required",
-        "security_recovery_package_ready",
-        "deployment_migration_runbooks_ready",
-        "channel_activation_runbooks_ready",
-        "operator_documentation_ready",
-        "final_current_head_ci_required",
-    ):
+    for key in ("current_head_integrated_regression_required", "isolated_runtime_smoke_required", "security_recovery_package_ready", "deployment_migration_runbooks_ready", "channel_activation_runbooks_ready", "operator_documentation_ready", "final_current_head_ci_required"):
         require(engineering.get(key) is True, f"bounded engineering readiness drift: {key}")
 
     verified = data["verified_readiness"]
@@ -44,28 +36,14 @@ def main() -> None:
     require(verified["contact_phone_verified"] is True, "contact phone verification drift")
     phone = profile["contact_information"]["phone"]
     require(phone.get("value") == "050-1785-0575" and phone.get("verification_status") == "verified", "launch phone verification mismatch")
-    for key in (
-        "tokushoho_source_reconciled",
-        "woocommerce_preproduction_qa_green",
-        "woocommerce_production_readonly_identity_green",
-        "woocommerce_production_readonly_connectivity_green",
-        "komoju_test_mode_validated",
-        "production_shipping_configuration_verified",
-        "japan_2026_tax_decision_green",
-    ):
+    for key in ("tokushoho_source_reconciled", "woocommerce_preproduction_qa_green", "woocommerce_production_readonly_identity_green", "woocommerce_production_readonly_connectivity_green", "komoju_test_mode_validated", "production_shipping_configuration_verified", "japan_2026_tax_decision_green"):
         require(verified.get(key) is True, f"verified readiness regressed: {key}")
     require(verified["japan_2026_tax_status"] == "exempt", "Japan tax status drift")
     require(verified["qualified_invoice_status"] == "not_registered", "Qualified Invoice status drift")
     require(verified["woocommerce_tax_enabled"] is False, "WooCommerce tax unexpectedly enabled")
 
     scope = data["scope_approvals"]
-    for key in (
-        "woocommerce_production_activation_scope_approved",
-        "komoju_live_mode_scope_approved",
-        "production_sms_sending_scope_approved",
-        "public_domain_dns_cutover_scope_approved",
-        "final_launch_signoff_process_scope_approved",
-    ):
+    for key in ("woocommerce_production_activation_scope_approved", "komoju_live_mode_scope_approved", "production_sms_sending_scope_approved", "public_domain_dns_cutover_scope_approved", "final_launch_signoff_process_scope_approved"):
         require(scope.get(key) is True, f"scope approval drift: {key}")
     require(scope["scope_approval_overrides_readiness"] is False, "scope approval incorrectly overrides readiness")
 
@@ -92,11 +70,14 @@ def main() -> None:
     require(fulfillment.get("production_shipping_rates_verified") is True, "pre-production shipping-rate verification drift")
 
     komoju = staging["komoju"]
+    approved = ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy"]
     require(komoju.get("current_connection_state") == "live_dashboard_selected", "KOMOJU Live-dashboard state evidence drift")
     require(komoju.get("test_mode_connected") is True and komoju.get("test_capture_refund_validated") is True, "KOMOJU Test Mode validation drift")
     require(komoju.get("merchant_live_dashboard_access_verified") is True, "KOMOJU merchant Live dashboard evidence missing")
     require(komoju.get("merchant_available_payment_methods_verified") is True, "KOMOJU merchant payment-method evidence missing")
-    require(komoju.get("production_enabled_payment_methods_finalized") is False, "KOMOJU production payment subset changed without reconciliation")
+    require(komoju.get("production_enabled_payment_methods_finalized") is True, "KOMOJU production payment subset should be finalized")
+    require(komoju.get("production_enabled_payment_methods") == approved, "KOMOJU approved production payment subset drift")
+    require(komoju.get("production_checkout_configuration_verified") is False, "KOMOJU checkout configuration must remain pending")
     require(komoju.get("live_mode_authorized") is False and komoju.get("payment_execution_authorized") is False, "KOMOJU live/payment authority must remain false")
     require(staging.get("production_publish_authorized") is False, "preproduction readiness gained publication authority")
 
@@ -145,7 +126,7 @@ def main() -> None:
     require(data["decision"] == "ENGINEERING_PREPARED_LIVE_LAUNCH_PENDING_FAIL_CLOSED", "launch acceptance decision drift")
 
     print("PHIL_AI_OS_SPRINT_7_OPERATOR_AND_ACCEPTANCE_GREEN engineering_package=true live_launch=false profile_complete=true")
-    print("PHIL_AI_OS_SPRINT_7_PREPRODUCTION_ENVIRONMENT_GREEN created=true qa=true komoju_live_dashboard=true payment_execution=false shipping=true tax_exempt=true woo_readonly=true")
+    print("PHIL_AI_OS_SPRINT_7_KOMOJU_SUBSET_GREEN finalized=true checkout_config_verified=false payment_execution=false")
     print("PHIL_AI_OS_SPRINT_7_SIGNOFF_BOUNDARY_GREEN recovery_fresh=false ceo_go_no_go=false cto=false cutover=false")
     print("PHIL_AI_OS_SPRINT_7_CUTOVER_RUNBOOK_CONTROL_GREEN tax_disabled=true branch_protection_gate=true rollback_matrix=true")
 

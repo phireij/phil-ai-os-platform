@@ -1,5 +1,5 @@
 {
-  "version": "ruby-production-current-state-overlay-v4",
+  "version": "ruby-production-current-state-overlay-v5",
   "date": "2026-09-03",
   "purpose": "Current operational reconciliation layer for production-readiness decisions where older roadmap wording predates later CEO approvals and verified read-only connectivity.",
   "governance": {
@@ -40,7 +40,15 @@
     "live_dashboard_selected": true,
     "merchant_live_mode_approval_verified": true,
     "merchant_available_payment_methods_verified": true,
-    "production_enabled_payment_methods_finalized": false,
+    "production_enabled_payment_methods_finalized": true,
+    "approved_initial_launch_subset": [
+      "visa_mastercard",
+      "jcb_amex_diners_discover",
+      "konbini",
+      "merpay",
+      "paidy"
+    ],
+    "production_checkout_configuration_verified": false,
     "live_acceptance_green": false,
     "real_payment_execution_ready": false
   },
