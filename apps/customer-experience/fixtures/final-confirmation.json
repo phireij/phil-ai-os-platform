@@ -1,0 +1,67 @@
+{
+  "fixture_only": true,
+  "preview_only": true,
+  "fixture_version": "cx-final-confirmation-v1",
+  "actual_final_confirmation_screen_reviewed": false,
+  "order_creation_authorized": false,
+  "mutation_authorized": false,
+  "payment_execution_authorized": false,
+  "production_publish_authorized": false,
+  "items": [
+    {
+      "sku": "SYN-UBE-01",
+      "name": {"en": "Synthetic Ube Celebration Cake", "ja": "合成ウベセレブレーションケーキ"},
+      "option": {"en": "15 cm · chilled", "ja": "15cm・冷蔵"},
+      "quantity": 1,
+      "unit_price_jpy": 4000
+    },
+    {
+      "sku": "SYN-CUP-01",
+      "name": {"en": "Synthetic Carrot Cupcake", "ja": "合成キャロットカップケーキ"},
+      "option": {"en": "standard", "ja": "標準"},
+      "quantity": 2,
+      "unit_price_jpy": 500
+    }
+  ],
+  "pricing": {
+    "subtotal_jpy": 5000,
+    "shipping_jpy": 1350,
+    "total_jpy": 6350,
+    "consumption_tax_status": "exempt",
+    "qualified_invoice_status": "not_registered",
+    "woocommerce_tax_enabled": false,
+    "separate_consumption_tax_jpy": 0
+  },
+  "shipping": {
+    "method": "yamato_cool",
+    "region": "kanto",
+    "rate_jpy": 1350,
+    "label": {"en": "Yamato Cool delivery · Kanto", "ja": "ヤマト運輸 クール宅急便・関東"}
+  },
+  "payment": {
+    "method": "konbini",
+    "provider": "komoju",
+    "label": {"en": "Konbini", "ja": "コンビニ決済"},
+    "live_expiry_setting_verified": true,
+    "expiry_days": 3,
+    "exact_transaction_deadline_controls": true,
+    "example_deadline_only": true,
+    "example_deadline": {"en": "Example only: pay within 3 days; the transaction-specific KOMOJU deadline controls.", "ja": "例示のみ：3日以内にお支払いください。実際はKOMOJUが注文ごとに表示する期限が優先されます。"}
+  },
+  "fulfillment": {
+    "mode": "delivery",
+    "dispatch_window_days": [2, 5],
+    "starts_after_required_payment_completion": true,
+    "summary": {"en": "Delivery · normally dispatched 2–5 days after order confirmation and required payment completion.", "ja": "配送・注文確定および必要な支払完了後、通常2〜5日以内に発送します。"}
+  },
+  "cancellation": {
+    "full_refund_before_hours": 48,
+    "half_fee_from_hours": 24,
+    "half_fee_to_hours": 48,
+    "full_fee_under_hours": 24,
+    "summary": {"en": "48+ hours: full-refund eligible · 24–<48 hours: 50% fee · <24 hours/same-day/no-show: 100% fee.", "ja": "48時間以上前：全額返金対象・24〜48時間未満：50%キャンセル料・24時間未満／当日／無断：100%キャンセル料。"}
+  },
+  "returns": {
+    "summary": {"en": "Perishable-food change-of-mind returns are generally not accepted. Shipped defects/damage/wrong items should be reported within 24 hours with photos.", "ja": "食品・生もののためお客様都合の返品は原則不可。配送品の不良・破損・誤商品は24時間以内に写真を添えてご連絡ください。"}
+  }
+}
