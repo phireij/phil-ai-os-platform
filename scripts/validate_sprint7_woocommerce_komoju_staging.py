@@ -53,7 +53,7 @@ def main() -> None:
         if storefront.get(key) != value:
             fail(f"preproduction storefront state drift: {key}={storefront.get(key)!r}")
 
-    if data.get("next_gate") != "complete_catalog_tax_recovery_and_final_launch_acceptance_without_live_activation":
+    if data.get("next_gate") != "finalize_catalog_payment_subset_checkout_recovery_and_go_no_go_without_real_payment_execution":
         fail("next executable gate drift")
     if data.get("production_publish_authorized") is not False:
         fail("preproduction readiness gained production publication authority")
@@ -68,16 +68,34 @@ def main() -> None:
             fail(f"verified pre-production shipping gate regressed: {key}")
 
     komoju = data["komoju"]
-    if komoju.get("current_connection_state") != "test_mode":
-        fail("KOMOJU current state must remain Test Mode")
+    if komoju.get("current_connection_state") != "live_dashboard_selected":
+        fail("KOMOJU current state must preserve verified Live-dashboard selection")
     if komoju.get("connection_method") != "komoju-sign-in-oauth-style" or komoju.get("manual_api_key_entry_expected") is not False:
         fail("KOMOJU integration model drift")
     for key in ("test_mode_connection_authorized", "test_mode_connected", "test_capture_refund_validated"):
         if komoju.get(key) is not True:
             fail(f"verified KOMOJU Test Mode state regressed: {key}")
-    for key in ("merchant_available_payment_methods_verified", "production_enabled_payment_methods_finalized", "live_mode_merchant_approval_verified", "live_mode_authorized", "payment_execution_authorized"):
+    for key in ("merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "live_mode_merchant_approval_verified"):
+        if komoju.get(key) is not True:
+            fail(f"verified KOMOJU merchant Live evidence regressed: {key}")
+    required_methods = {
+        "visa_mastercard",
+        "jcb_amex_diners_discover",
+        "konbini",
+        "merpay",
+        "paidy",
+        "bank_transfer",
+        "pay_easy",
+    }
+    if set(komoju.get("enabled_or_available_methods_shown", [])) != required_methods:
+        fail("KOMOJU merchant payment-method availability set drift")
+    if komoju.get("paypay_status") != "application_under_review":
+        fail("PayPay review status drift")
+    if komoju.get("rakuten_pay_status") != "not_available_declined_or_no_longer_eligible":
+        fail("Rakuten Pay availability status drift")
+    for key in ("production_enabled_payment_methods_finalized", "live_mode_authorized", "payment_execution_authorized"):
         if komoju.get(key) is not False:
-            fail(f"KOMOJU production/live gate must remain open: {key}")
+            fail(f"KOMOJU execution/final-subset gate must remain open: {key}")
 
     legal = data["legal_checkout_sync"]
     for key in (
@@ -92,8 +110,8 @@ def main() -> None:
         fail("verified privacy/terms implementation review regressed")
 
     # This evidence file is an immutable Aug 29 operator snapshot. It proves the
-    # pre-production environment existed before KOMOJU Test Mode was later enabled.
-    # Its historical false value must not override the current Sep 2 readiness record.
+    # pre-production environment existed before KOMOJU Test Mode and later Live-dashboard
+    # evidence were reconciled. Historical false values must not override the Sep 3 state.
     expected_historical_evidence = {
         "public_domain_unchanged": True,
         "current_public_platform": "hostinger-website-builder",
@@ -120,8 +138,8 @@ def main() -> None:
 
     print("PHIL_AI_OS_RUBY_HOSTINGER_PREPRODUCTION_ENVIRONMENT_GREEN created=true wordpress=true woocommerce=true ssl=true checkout_qa=true shipping=true")
     print("PHIL_AI_OS_RUBY_HOSTINGER_PLAN_GREEN plan=Business_Web_Hosting native_staging_eligible=true menu_located=false")
-    print("PHIL_AI_OS_RUBY_KOMOJU_TEST_BOUNDARY_GREEN test_mode=true capture_refund=true live_mode=false payment_execution=false")
-    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=complete_catalog_tax_recovery_launch_acceptance publish=false")
+    print("PHIL_AI_OS_RUBY_KOMOJU_LIVE_DASHBOARD_EVIDENCE_GREEN live_selected=true methods_verified=true final_subset=false payment_execution=false")
+    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=finalize_catalog_payment_subset_checkout_recovery_go_no_go publish=false")
 
 
 if __name__ == "__main__":
