@@ -1,6 +1,6 @@
 {
-  "version": "sprint7-production-deployment-readiness-v1",
-  "date": "2026-09-02",
+  "version": "sprint7-production-deployment-readiness-v2",
+  "date": "2026-09-03",
   "storefront": {
     "public_domain": "https://www.rubyscakedelights.shop/",
     "current_platform": "hostinger-website-builder",
@@ -40,9 +40,12 @@
     "provider": "komoju",
     "integration_mode": "woocommerce_plugin",
     "connection_method": "komoju-sign-in-oauth-style",
-    "current_connection_state": "test_mode",
+    "current_connection_state": "live_dashboard_selected",
     "test_mode_activation_authorized": true,
     "test_mode_validated": true,
+    "merchant_live_dashboard_access_verified": true,
+    "merchant_available_payment_methods_verified": true,
+    "production_enabled_payment_methods_finalized": false,
     "live_mode_authorized": false,
     "payment_execution_authorized": false
   },
