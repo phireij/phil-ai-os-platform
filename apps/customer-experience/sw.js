@@ -1,8 +1,9 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v7";
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v8";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./cart-preview.html",
+  "./confirmation-preview.html",
   "./styles.css",
   "./manifest.webmanifest",
   "./app-icon.svg",
@@ -10,6 +11,7 @@ const APP_SHELL = [
   "./src/core.mjs",
   "./src/cart.mjs",
   "./src/cart-preview.mjs",
+  "./src/confirmation-preview.mjs",
   "./src/flow.mjs",
   "./src/payment.mjs",
   "./src/pickup.mjs",
@@ -17,6 +19,7 @@ const APP_SHELL = [
   "./src/seo.mjs",
   "./src/ui-state.mjs",
   "./fixtures/catalog.json",
+  "./fixtures/final-confirmation.json",
   "./fixtures/payment-provider.json",
   "./fixtures/pickup-policy.json",
 ];

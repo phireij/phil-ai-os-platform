@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#fff7f5">
+  <meta name="description" content="Phil AI OS isolated final order confirmation compliance preview">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <title>Phil AI OS — Final Confirmation Preview</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">Phil AI OS · Sprint 4</p>
+      <a class="brand" href="./">Customer Experience</a>
+    </div>
+    <div class="header-actions">
+      <label class="locale-label" for="locale-select">Language</label>
+      <select id="locale-select" aria-label="Language">
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+      </select>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="hero" aria-labelledby="hero-title">
+      <p class="status-pill">Isolated synthetic preview · No order submission</p>
+      <h1 id="hero-title">Final order confirmation — isolated preview</h1>
+      <p id="hero-copy">Synthetic fixture only. This screen never submits an order or executes payment.</p>
+      <p><a class="text-link" href="./cart-preview.html">← Synthetic cart</a></p>
+    </section>
+
+    <section class="detail-panel" aria-labelledby="confirmation-title">
+      <p class="eyebrow">Final-step review</p>
+      <h2 id="confirmation-title">Order contents</h2>
+      <div id="confirmation-items" class="product-grid" aria-live="polite"></div>
+    </section>
+
+    <section class="detail-panel" aria-labelledby="pricing-title">
+      <p class="eyebrow">Transaction total</p>
+      <h2 id="pricing-title">Price and fees</h2>
+      <div id="pricing-summary" class="intent-output" aria-live="polite"></div>
+    </section>
+
+    <section class="detail-panel" aria-labelledby="payment-title">
+      <p class="eyebrow">Payment timing</p>
+      <h2 id="payment-title">Payment</h2>
+      <div id="payment-summary" class="intent-output"></div>
+    </section>
+
+    <section class="detail-panel" aria-labelledby="fulfillment-title">
+      <p class="eyebrow">Fulfillment</p>
+      <h2 id="fulfillment-title">Fulfillment</h2>
+      <p id="fulfillment-summary"></p>
+    </section>
+
+    <section class="detail-panel" aria-labelledby="policy-title">
+      <p class="eyebrow">Policies</p>
+      <h2 id="policy-title">Cancellation / changes · Returns / defects</h2>
+      <div id="policy-summary"></div>
+    </section>
+
+    <section class="checkout-card" aria-labelledby="action-title">
+      <p class="eyebrow">Final action</p>
+      <h2 id="action-title">Review before submitting</h2>
+      <p id="correction-copy">Need to change something? Return to the synthetic cart before final submission.</p>
+      <p><a class="text-link" href="./cart-preview.html">← Edit synthetic cart</a></p>
+      <p><button id="place-order-preview" class="primary-button" type="button" disabled>Place order (preview only — disabled)</button></p>
+    </section>
+
+    <section class="safety-panel" aria-labelledby="safety-title">
+      <p class="eyebrow">Authority boundary</p>
+      <h2 id="safety-title">This is not the actual WooCommerce final screen</h2>
+      <p id="safety-copy">Authority boundary: actual WooCommerce final screen reviewed = false · order creation = false · payment execution = false · production publishing = false.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Phil AI OS · Sprint 4 · synthetic final-confirmation compliance preview</p>
+  </footer>
+
+  <script type="module" src="./src/confirmation-preview.mjs"></script>
+</body>
+</html>
