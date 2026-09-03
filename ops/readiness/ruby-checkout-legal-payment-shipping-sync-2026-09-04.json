@@ -1,5 +1,5 @@
 {
-  "version": "ruby-checkout-legal-payment-shipping-sync-v1",
+  "version": "ruby-checkout-legal-payment-shipping-sync-v2",
   "date": "2026-09-04",
   "production_payment_subset": {
     "ceo_approved": true,
@@ -41,11 +41,46 @@
   "woocommerce_checkout_verification": {
     "get_only_payment_gateway_snapshot_capability_ready": true,
     "payment_gateway_snapshot_endpoint": "/wp-json/wc/v3/payment_gateways",
-    "sanitized_snapshot_run_green": false,
+    "sanitized_snapshot_run_green": true,
+    "snapshot_run_id": 33776964709,
+    "snapshot_captured_at": "2026-09-03T16:10:05.269928Z",
+    "snapshot_network_read_only": true,
+    "snapshot_payment_execution_authorized": false,
+    "enabled_gateway_ids": [
+      "komoju_credit_card",
+      "woa_gateway"
+    ],
+    "disabled_gateway_ids": [
+      "komoju",
+      "bacs",
+      "cheque",
+      "cod"
+    ],
     "approved_subset_matches_enabled_checkout_methods": false,
-    "disabled_methods_absent_from_checkout": false,
-    "customer_facing_gateway_titles_reviewed": false,
+    "approved_subset_missing_from_woocommerce": [
+      "konbini",
+      "merpay",
+      "paidy"
+    ],
+    "credit_card_gateway_enabled": true,
+    "order_approval_gateway_enabled": true,
+    "bank_transfer_not_enabled": true,
+    "pay_easy_not_exposed": true,
+    "customer_facing_gateway_titles_reviewed": true,
     "no_real_payment_required_for_verification": true
+  },
+  "woocommerce_komoju_remediation": {
+    "official_woocommerce_plugin_configuration_required": true,
+    "step_1_select_methods_in_komoju_settings": true,
+    "step_2_enable_each_komoju_method_in_woocommerce_payments": true,
+    "required_methods_to_add": [
+      "konbini",
+      "merpay",
+      "paidy"
+    ],
+    "production_configuration_mutation_required": true,
+    "performed": false,
+    "fresh_readonly_snapshot_required_after_change": true
   },
   "legal_checkout_sync": {
     "tokushoho_payment_method_subset_reconciled_in_readiness_record": true,
@@ -64,11 +99,11 @@
     "automatic_production_execution_authorized": false
   },
   "next_evidence_needed": [
-    "run sanitized GET-only WooCommerce payment-gateway snapshot",
-    "verify enabled WooCommerce checkout gateways match the CEO-approved KOMOJU subset",
+    "enable the CEO-approved Konbini, Merpay and Paidy KOMOJU gateways in WooCommerce using the official two-step KOMOJU/WooCommerce configuration flow",
+    "rerun the sanitized GET-only WooCommerce payment-gateway snapshot and verify the approved subset",
     "verify KOMOJU Live Konbini expiry setting",
     "reconcile customer-facing payment timing/deadline text for all selected methods",
     "review final checkout confirmation screen against Tokushoho, payment, shipping and cancellation wording"
   ],
-  "decision": "PAYMENT_SUBSET_SHIPPING_AND_TAX_RECONCILED_CHECKOUT_CONFIGURATION_PENDING_FAIL_CLOSED"
+  "decision": "READONLY_CHECKOUT_SNAPSHOT_GREEN_APPROVED_SUBSET_MISMATCH_REMEDIATION_REQUIRED_FAIL_CLOSED"
 }

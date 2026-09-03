@@ -22,6 +22,8 @@ def main() -> None:
     komoju = json.loads(KOMOJU.read_text(encoding="utf-8"))
     staging = json.loads(STAGING.read_text(encoding="utf-8"))
 
+    require(sync.get("version") == "ruby-checkout-legal-payment-shipping-sync-v2", "checkout sync schema drift")
+
     expected_subset = [
         "visa_mastercard",
         "jcb_amex_diners_discover",
@@ -60,14 +62,28 @@ def main() -> None:
     checkout = sync["woocommerce_checkout_verification"]
     require(checkout["get_only_payment_gateway_snapshot_capability_ready"] is True, "GET-only checkout snapshot capability missing")
     require(checkout["payment_gateway_snapshot_endpoint"] == "/wp-json/wc/v3/payment_gateways", "checkout snapshot endpoint drift")
-    for key in (
-        "sanitized_snapshot_run_green",
-        "approved_subset_matches_enabled_checkout_methods",
-        "disabled_methods_absent_from_checkout",
-        "customer_facing_gateway_titles_reviewed",
-    ):
-        require(checkout[key] is False, f"checkout verification changed without live read-only evidence: {key}")
+    require(checkout["sanitized_snapshot_run_green"] is True, "sanitized checkout snapshot evidence missing")
+    require(checkout["snapshot_run_id"] == 33776964709, "checkout snapshot run id drift")
+    require(checkout["snapshot_network_read_only"] is True, "checkout snapshot lost read-only boundary")
+    require(checkout["snapshot_payment_execution_authorized"] is False, "checkout snapshot gained payment authority")
+    require(checkout["enabled_gateway_ids"] == ["komoju_credit_card", "woa_gateway"], "enabled gateway evidence drift")
+    require(checkout["approved_subset_matches_enabled_checkout_methods"] is False, "approved subset unexpectedly marked matched")
+    require(checkout["approved_subset_missing_from_woocommerce"] == ["konbini", "merpay", "paidy"], "missing approved gateways evidence drift")
+    require(checkout["credit_card_gateway_enabled"] is True, "credit card gateway evidence regressed")
+    require(checkout["order_approval_gateway_enabled"] is True, "order approval gateway evidence regressed")
+    require(checkout["bank_transfer_not_enabled"] is True, "bank transfer exclusion evidence regressed")
+    require(checkout["pay_easy_not_exposed"] is True, "Pay-easy exclusion evidence regressed")
+    require(checkout["customer_facing_gateway_titles_reviewed"] is True, "gateway title review evidence missing")
     require(checkout["no_real_payment_required_for_verification"] is True, "checkout verification must remain non-charging")
+
+    remediation = sync["woocommerce_komoju_remediation"]
+    require(remediation["official_woocommerce_plugin_configuration_required"] is True, "KOMOJU WooCommerce remediation control missing")
+    require(remediation["step_1_select_methods_in_komoju_settings"] is True, "KOMOJU settings selection step missing")
+    require(remediation["step_2_enable_each_komoju_method_in_woocommerce_payments"] is True, "WooCommerce gateway enablement step missing")
+    require(remediation["required_methods_to_add"] == ["konbini", "merpay", "paidy"], "remediation method set drift")
+    require(remediation["production_configuration_mutation_required"] is True, "production configuration mutation boundary missing")
+    require(remediation["performed"] is False, "production checkout remediation marked performed without evidence")
+    require(remediation["fresh_readonly_snapshot_required_after_change"] is True, "post-change read-only verification requirement missing")
 
     legal = sync["legal_checkout_sync"]
     require(legal["tokushoho_payment_method_subset_reconciled_in_readiness_record"] is True, "payment subset legal reconciliation missing")
@@ -103,17 +119,18 @@ def main() -> None:
 
     doc = DOC.read_text(encoding="utf-8")
     for phrase in (
-        "PAYMENT SUBSET / TAX / SHIPPING RECONCILED",
-        "Konbini is a deferred customer payment",
+        "READ-ONLY SNAPSHOT GREEN / APPROVED SUBSET MISMATCH",
+        "KOMOJU Credit Card",
+        "Konbini, Merpay and Paidy",
         "cannot submit a payment",
-        "PHIL_AI_OS_RUBY_CHECKOUT_LEGAL_PAYMENT_SYNC_PREPARED_FAIL_CLOSED",
+        "PHIL_AI_OS_RUBY_CHECKOUT_SNAPSHOT_GREEN_SUBSET_MISMATCH_FAIL_CLOSED",
     ):
         require(phrase in doc, f"checkout/legal synchronization documentation missing: {phrase}")
 
-    require(sync["decision"] == "PAYMENT_SUBSET_SHIPPING_AND_TAX_RECONCILED_CHECKOUT_CONFIGURATION_PENDING_FAIL_CLOSED", "decision drift")
+    require(sync["decision"] == "READONLY_CHECKOUT_SNAPSHOT_GREEN_APPROVED_SUBSET_MISMATCH_REMEDIATION_REQUIRED_FAIL_CLOSED", "decision drift")
 
-    print("PHIL_AI_OS_RUBY_CHECKOUT_LEGAL_SYNC_PREPARED_GREEN payment_subset=true shipping=true tax_exempt=true checkout_snapshot_ready=true")
-    print("PHIL_AI_OS_RUBY_CHECKOUT_CONFIGURATION_PENDING_FAIL_CLOSED payment_execution=false production_publish=false")
+    print("PHIL_AI_OS_RUBY_CHECKOUT_SNAPSHOT_EVIDENCE_GREEN network_read_only=true credit_card=true order_approval=true")
+    print("PHIL_AI_OS_RUBY_CHECKOUT_SUBSET_MISMATCH_FAIL_CLOSED missing=konbini,merpay,paidy payment_execution=false production_publish=false")
 
 
 if __name__ == "__main__":
