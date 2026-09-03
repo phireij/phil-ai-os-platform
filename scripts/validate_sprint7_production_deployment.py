@@ -42,13 +42,13 @@ def main() -> None:
     komoju = data["komoju"]
     if komoju.get("current_connection_state") != "live_dashboard_selected" or komoju.get("connection_method") != "komoju-sign-in-oauth-style":
         fail("KOMOJU connection state/model drift")
-    for key in ("test_mode_activation_authorized", "test_mode_validated", "merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "production_enabled_payment_methods_finalized"):
+    for key in ("test_mode_activation_authorized", "test_mode_validated", "merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "production_enabled_payment_methods_finalized", "production_checkout_configuration_verified"):
         if komoju.get(key) is not True:
             fail(f"KOMOJU verified state regressed: {key}")
     if komoju.get("production_enabled_payment_methods") != approved:
         fail("KOMOJU approved production subset drift")
-    if komoju.get("production_checkout_configuration_verified") is not False:
-        fail("KOMOJU checkout configuration must remain pending")
+    if komoju.get("production_checkout_verification_run_id") != 33776964709 or komoju.get("production_checkout_verification_attempt") != 2:
+        fail("KOMOJU checkout verification evidence drift")
     for key in ("live_mode_authorized", "payment_execution_authorized"):
         if komoju.get(key) is not False:
             fail(f"KOMOJU live authority drift: {key}")
@@ -56,9 +56,11 @@ def main() -> None:
     legal = data["legal_and_fulfillment"]
     if legal.get("tokushoho_source_reconciled") is not True or legal.get("store_pickup_supported") is not True or legal.get("production_shipping_rates_verified") is not True:
         fail("legal/fulfillment source drift")
-    for key in ("tokushoho_publication_approved", "production_payment_methods_verified"):
+    if legal.get("production_payment_methods_verified") is not True:
+        fail("production payment-method verification regressed")
+    for key in ("tokushoho_publication_approved", "production_payment_timing_verified", "final_confirmation_screen_reviewed"):
         if legal.get(key) is not False:
-            fail(f"production legal/payment verification gate must remain open: {key}")
+            fail(f"remaining legal/payment gate unexpectedly closed: {key}")
 
     sfront = staging["storefront"]
     expected = {
@@ -75,16 +77,14 @@ def main() -> None:
     for key, value in expected.items():
         if sfront.get(key) != value:
             fail(f"preproduction record drift: {key}")
-    if staging.get("next_gate") != "finalize_catalog_verify_checkout_configuration_checkout_recovery_and_go_no_go_without_real_payment_execution":
+    if staging.get("next_gate") != "finalize_catalog_complete_payment_timing_legal_confirmation_screen_recovery_and_go_no_go_without_real_payment_execution":
         fail("next gate drift")
     skomoju = staging["komoju"]
-    for key in ("test_mode_connected", "merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "live_mode_merchant_approval_verified", "production_enabled_payment_methods_finalized"):
+    for key in ("test_mode_connected", "merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "live_mode_merchant_approval_verified", "production_enabled_payment_methods_finalized", "production_checkout_configuration_verified"):
         if skomoju.get(key) is not True:
             fail(f"KOMOJU staging evidence regressed: {key}")
     if skomoju.get("production_enabled_payment_methods") != approved:
         fail("KOMOJU staging production subset drift")
-    if skomoju.get("production_checkout_configuration_verified") is not False:
-        fail("KOMOJU staging checkout verification unexpectedly GREEN")
     if skomoju.get("live_mode_authorized") is not False or skomoju.get("payment_execution_authorized") is not False:
         fail("KOMOJU staging live/payment authority drift")
     if staging.get("production_publish_authorized") is not False:
@@ -94,8 +94,8 @@ def main() -> None:
         if not (ROOT / rel).is_file():
             fail(f"missing deployment evidence file: {rel}")
 
-    print("PHIL_AI_OS_SPRINT_7_DEPLOYMENT_READINESS_GREEN preproduction_created=true komoju_subset=true checkout_config_verified=false")
-    print("PHIL_AI_OS_SPRINT_7_NEXT_GATE_GREEN catalog_checkout_recovery_go_no_go=true payment_execution=false")
+    print("PHIL_AI_OS_SPRINT_7_DEPLOYMENT_READINESS_GREEN preproduction_created=true komoju_subset=true checkout_config_verified=true")
+    print("PHIL_AI_OS_SPRINT_7_NEXT_GATE_GREEN catalog_legal_timing_recovery_go_no_go=true payment_execution=false")
     print("PHIL_AI_OS_SPRINT_7_PRODUCTION_ACTIVATION_BOUNDARY_GREEN woo=false komoju_payment_execution=false dns=false")
 
 
