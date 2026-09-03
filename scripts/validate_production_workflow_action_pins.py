@@ -13,6 +13,7 @@ WORKFLOWS = [
     ROOT / ".github/workflows/sprint-3-woocommerce-foundation-ci.yml",
     ROOT / ".github/workflows/sprint-4-customer-experience-ci.yml",
     ROOT / ".github/workflows/sprint-7-integrated-readiness-ci.yml",
+    ROOT / ".github/workflows/production-workflow-supply-chain-ci.yml",
 ]
 PINNED = re.compile(r"^\s*-\s+uses:\s+[^@\s]+@[0-9a-f]{40}(?:\s+#.*)?$", re.MULTILINE)
 USES = re.compile(r"^\s*-\s+uses:\s+.+$", re.MULTILINE)
