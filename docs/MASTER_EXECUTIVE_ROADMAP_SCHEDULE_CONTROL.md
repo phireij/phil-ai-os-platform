@@ -19,8 +19,8 @@
 | --- | --- |
 | Overall schedule health | **AHEAD OF ORIGINAL 2-MONTH PLAN** |
 | Executive roadmap position | **Sprint 3 — WooCommerce Foundation is the CURRENT PRIMARY SPRINT; Sprint 4 — Customer Experience is partially active in parallel ahead of schedule.** |
-| Current engineering gate | Finalize the remaining Sprint 3 owner input: final approved production catalog/category/media source. KOMOJU Live dashboard, approved production payment subset, WooCommerce checkout configuration, Live Konbini expiry at 3 days and customer-facing payment-timing wording are GREEN. Final Tokushoho publication text/approval and final checkout-screen review remain bounded parallel readiness work. Real payment execution and production mutation remain fail-closed. |
-| Last completed checkpoint | Sprint 3 technical foundation, WooCommerce pre-production, production read-only identity/connectivity and Japan 2026 tax decision are GREEN. KOMOJU Live dashboard evidence, the approved production subset, WooCommerce checkout configuration, Live Konbini 3-day expiry and payment-timing/Tokushoho reconciliation are GREEN without expanding payment authority. |
+| Current engineering gate | Finalize the remaining Sprint 3 owner input: final approved production catalog/category/media source. KOMOJU Live dashboard, approved production payment subset, WooCommerce checkout configuration, Live Konbini expiry at 3 days, customer-facing payment-timing wording, the final non-published Tokushoho publication candidate and the static final-confirmation-screen checklist are GREEN. Owner publication approval and actual final-screen evidence remain pending bounded parallel readiness gates. Real payment execution and production mutation remain fail-closed. |
+| Last completed checkpoint | Sprint 3 technical foundation, WooCommerce pre-production, production read-only identity/connectivity and Japan 2026 tax decision are GREEN. KOMOJU Live dashboard evidence, the approved production subset, WooCommerce checkout configuration, Live Konbini 3-day expiry, payment-timing reconciliation, the non-published Tokushoho candidate and static final-screen compliance checklist are GREEN without expanding payment or publication authority. |
 | Mission Control | Multi-agent read model operational; operator/write authority intentionally bounded; Hermes remains intentionally idle while Mission Control is read-only. |
 | Multi-agent capability | Foundation proven; governed handoff demonstrated; normal specialist execution intentionally disabled. |
 | Current autonomy ceiling | **A0 — no autonomous production side-effect/execution expansion** |
@@ -29,7 +29,9 @@
 | Safety target | **2 October 2026** |
 | Original 2-month target | Approximately **19 October 2026** from the 19 August start |
 | Schedule variance | Materially ahead. Engineering/readiness elements from Sprints 4–7 have been pre-completed early, but formal executive roadmap position remains Sprint 3 with partial Sprint 4 overlap. |
-| Immediate next decision | Finalize the production catalog while preparing the final Tokushoho publication candidate and performing the bounded final checkout/confirmation-screen review. Preserve real payment execution, production publishing and automatic production execution as separately gated and fail-closed. |
+| Immediate next decision | Finalize the production catalog while obtaining explicit owner approval for the prepared Tokushoho publication candidate and capturing safe non-transactional evidence of the actual final checkout/confirmation screen. Preserve real payment execution, production publishing and automatic production execution as separately gated and fail-closed. |
+
+**4 SEP 2026 TOKUSHOHO / FINAL-SCREEN RECONCILIATION —** The final non-published Tokushoho publication candidate is prepared and reconciled to the verified 2026 exempt-business tax posture, approved production payment subset, payment timing/deadlines, shipping, pickup and cancellation/returns rules. A static final checkout/order-confirmation compliance checklist is also GREEN. This does **not** mean the disclosure is approved or published, and it does **not** mean the actual final WooCommerce confirmation screen has been reviewed. Owner publication approval and safe actual-screen evidence remain explicit pending gates. No real order or real payment is required or authorized for this readiness step.
 
 **4 SEP 2026 ROADMAP RECONCILIATION —** KOMOJU merchant Live dashboard evidence is GREEN; the CEO-approved initial production payment subset is finalized; WooCommerce checkout configuration matches that subset; and the actual KOMOJU Live Konbini payment-expiry setting is verified GREEN at **3 days**. Customer-facing payment timing/deadline wording for the selected methods has also been reconciled against the verified platform state and current official provider/regulatory guidance. These are configuration/readiness facts only. They do not prove a real payment and do not authorize charging, settlement, capture, refund, publication or automatic production execution. Sprint 3 remains the current primary sprint, Sprint 4 remains partially active in parallel, and the final owner-approved production catalog remains the only Sprint 3 owner-input gate.
 
@@ -114,7 +116,7 @@ Deliver **Phil AI OS Platform Core V1** together with the **Ruby’s Cake Deligh
 - Japanese
 - English
 
-**Control note:** Core WooCommerce contracts, isolated runtime, product/category/media/inventory/localization boundaries and pre-production WordPress/WooCommerce configuration are GREEN. Production read-only WooCommerce identity/connectivity is GREEN. Japan 2026 consumption-tax / Qualified Invoice decision is GREEN with the WooCommerce tax route disabled. KOMOJU Live dashboard evidence, the approved production payment subset, the matching WooCommerce checkout configuration, Live Konbini expiry at 3 days and payment-timing wording reconciliation are also GREEN as bounded readiness evidence. The remaining Sprint 3 completion gate is the final owner-approved production catalog; production catalog mutation and real payment execution remain fail-closed.
+**Control note:** Core WooCommerce contracts, isolated runtime, product/category/media/inventory/localization boundaries and pre-production WordPress/WooCommerce configuration are GREEN. Production read-only WooCommerce identity/connectivity is GREEN. Japan 2026 consumption-tax / Qualified Invoice decision is GREEN with the WooCommerce tax route disabled. KOMOJU Live dashboard evidence, the approved production payment subset, the matching WooCommerce checkout configuration, Live Konbini expiry at 3 days, payment-timing wording reconciliation, the non-published Tokushoho candidate and static final-screen checklist are also GREEN as bounded readiness evidence. The remaining Sprint 3 completion gate is the final owner-approved production catalog; production catalog mutation and real payment execution remain fail-closed.
 
 ## Sprint 4 — Customer Experience
 
@@ -129,7 +131,7 @@ Deliver **Phil AI OS Platform Core V1** together with the **Ruby’s Cake Deligh
 - Pickup
 - Bilingual customer experience
 
-**Control note:** Approved overlap is active because commerce/API contracts stabilized early. Mobile/PWA, bilingual customer-flow, cart/checkout/pickup and KOMOJU handoff foundations are already GREEN. The approved payment-method configuration, 3-day Konbini expiry and customer-facing payment timing/deadline wording are now reconciled GREEN. Final Tokushoho publication candidate/owner approval and the actual checkout/confirmation-screen review remain pending bounded CX readiness work. Formal Sprint 4 roadmap entry remains after Sprint 3 closure.
+**Control note:** Approved overlap is active because commerce/API contracts stabilized early. Mobile/PWA, bilingual customer-flow, cart/checkout/pickup and KOMOJU handoff foundations are already GREEN. The approved payment-method configuration, 3-day Konbini expiry, customer-facing payment timing/deadline wording, final non-published Tokushoho publication candidate and static final-confirmation-screen checklist are reconciled GREEN. Owner approval of the publication candidate and the actual checkout/confirmation-screen evidence review remain pending bounded CX readiness work. Formal Sprint 4 roadmap entry remains after Sprint 3 closure.
 
 ## Sprint 5 — Operations Hub
 
@@ -169,7 +171,7 @@ Deliver **Phil AI OS Platform Core V1** together with the **Ruby’s Cake Deligh
 - Training
 - Launch
 
-**Control note:** A significant share of testing, recovery, launch-gate and acceptance preparation has been pre-completed early. KOMOJU Live configuration evidence and payment-timing wording may be GREEN while real payment execution and publication remain blocked; this is early readiness, not formal Sprint 7 entry. Formal Sprint 7 entry occurs only after Sprints 3–6 are formally traversed/closed. Final live launch remains separately gated.
+**Control note:** A significant share of testing, recovery, launch-gate and acceptance preparation has been pre-completed early. KOMOJU Live configuration evidence, payment-timing wording, the non-published Tokushoho candidate and static confirmation-screen checklist may be GREEN while real payment execution, actual screen acceptance and publication remain blocked; this is early readiness, not formal Sprint 7 entry. Formal Sprint 7 entry occurs only after Sprints 3–6 are formally traversed/closed. Final live launch remains separately gated.
 
 # 3. Revised Integrated Schedule
 
@@ -279,8 +281,8 @@ Complete or confirm the following before Sprint 3 formal closure:
 
 ## Parallel acceleration while Sprint 3 remains current
 
-- Prepare the final Tokushoho publication candidate using the reconciled payment timing/fee wording, but keep publication approval and production publishing separately gated.
-- Review the actual final checkout/confirmation screen against price, shipping, payment timing/deadline, fulfillment and cancellation requirements without submitting a real order/payment.
+- Preserve the final Tokushoho publication candidate as prepared/ready but **not approved or published** until explicit owner approval is recorded.
+- Capture safe non-transactional evidence of the actual final checkout/confirmation screen and review it against the prepared static checklist for price, shipping, payment timing/deadline, fulfillment and cancellation requirements. Do not submit a real order/payment merely to satisfy this review.
 - Maintain A0 autonomy, general-only execution and Hermes-only bounded routing; specialists remain disabled for normal execution.
 - Keep Mission Control read-only until a separately governed mutation authority decision.
 - Keep **real KOMOJU payment execution**, live SMS sending, public-domain/DNS cutover and automatic production execution fail-closed until their separate acceptance gates are satisfied.
@@ -304,5 +306,6 @@ These targets remain materially ahead of the original approximately two-month ob
 - **3 Sep 2026** — Reconciled owner-provided 2024/2025 business tax evidence and owner confirmation of no Qualified Invoice registration and no voluntary taxable-business election. Japan 2026 consumption-tax decision is GREEN as exempt; WooCommerce tax route remains disabled and non-authorizing. Final owner-approved production catalog is now the only remaining Sprint 3 owner-input gate.
 - **4 Sep 2026** — Reconciled KOMOJU Live dashboard evidence, CEO-approved production payment subset, matching WooCommerce checkout configuration and actual Live Konbini expiry at **3 days** as GREEN. Sprint 3 remains primary and Sprint 4 remains partially active in parallel. No sprint advancement or authority expansion occurred; real payment execution, production publishing and automatic production execution remain fail-closed.
 - **4 Sep 2026** — Reconciled customer-facing payment timing/deadline wording for cards, Konbini, Merpay and Paidy against current platform evidence and official provider/regulatory guidance. Payment-timing wording is GREEN; final Tokushoho publication approval and final checkout/confirmation-screen review remain pending. No real payment or publication authority was introduced.
+- **4 Sep 2026** — Prepared the final non-published Tokushoho publication candidate and static final checkout/order-confirmation compliance checklist. Candidate/checklist readiness is GREEN; explicit owner publication approval and actual final-screen evidence remain pending. Sprint 3 remains current primary, Sprint 4 remains parallel, and all production/payment authority remains fail-closed.
 
 > **DOCUMENT CONTROL RULE:** Do not create a replacement master timeline for ordinary schedule updates. Review and update this canonical roadmap, refresh the status dashboard at the top, and record material changes in the Change Log.
