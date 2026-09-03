@@ -22,7 +22,9 @@
     "legacy_card_timing_source_captured": true,
     "paidy_merchant_transaction_completion_documented": true,
     "konbini_is_deferred_customer_payment": true,
-    "konbini_live_expiry_setting_verified": false,
+    "konbini_live_expiry_setting_verified": true,
+    "konbini_live_expiry_days": 3,
+    "konbini_live_expiry_evidence_class": "owner_confirmed_live_dashboard_configuration",
     "all_selected_methods_customer_facing_timing_finalized": false
   },
   "woocommerce_checkout_verification": {
@@ -78,9 +80,8 @@
     "automatic_production_execution_authorized": false
   },
   "next_evidence_needed": [
-    "verify KOMOJU Live Konbini expiry setting",
-    "reconcile customer-facing payment timing/deadline text for all selected methods",
+    "reconcile customer-facing payment timing/deadline text for all selected methods, including the verified 3-day Konbini deadline",
     "review final checkout confirmation screen against Tokushoho, payment, shipping and cancellation wording"
   ],
-  "decision": "CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_GREEN_LEGAL_TIMING_AND_FINAL_SCREEN_PENDING_FAIL_CLOSED"
+  "decision": "CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_AND_KONBINI_EXPIRY_GREEN_LEGAL_TIMING_AND_FINAL_SCREEN_PENDING_FAIL_CLOSED"
 }
