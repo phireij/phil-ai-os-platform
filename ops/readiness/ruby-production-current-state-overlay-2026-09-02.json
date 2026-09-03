@@ -1,7 +1,7 @@
 {
-  "version": "ruby-production-current-state-overlay-v5",
-  "date": "2026-09-03",
-  "purpose": "Current operational reconciliation layer for production-readiness decisions where older roadmap wording predates later CEO approvals and verified read-only connectivity.",
+  "version": "ruby-production-current-state-overlay-v6",
+  "date": "2026-09-04",
+  "purpose": "Current operational reconciliation layer for production-readiness decisions.",
   "governance": {
     "autonomy": "A0",
     "task_class": "general",
@@ -41,14 +41,11 @@
     "merchant_live_mode_approval_verified": true,
     "merchant_available_payment_methods_verified": true,
     "production_enabled_payment_methods_finalized": true,
-    "approved_initial_launch_subset": [
-      "visa_mastercard",
-      "jcb_amex_diners_discover",
-      "konbini",
-      "merpay",
-      "paidy"
-    ],
-    "production_checkout_configuration_verified": false,
+    "approved_initial_launch_subset": ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy"],
+    "production_checkout_configuration_verified": true,
+    "production_checkout_verification_run_id": 33776964709,
+    "production_checkout_verification_attempt": 2,
+    "checkout_legal_timing_sync_complete": false,
     "live_acceptance_green": false,
     "real_payment_execution_ready": false
   },
