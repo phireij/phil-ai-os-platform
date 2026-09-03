@@ -68,7 +68,7 @@
     "ops/readiness/verified-ruby-business-profile.template.json",
     "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json",
     "ops/readiness/ruby-woocommerce-production-readonly-connectivity-2026-09-03.json",
-    "ops/readiness/ruby-japan-tax-status-2026-09-03.json",
+    "ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json",
     "ops/readiness/ruby-final-go-no-go-gate-2026-09-02.json",
     "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md",
     "docs/RUBY_WOOCOMMERCE_KOMOJU_STAGING_CONFIGURATION_PLAN_2026-08-29.md",
