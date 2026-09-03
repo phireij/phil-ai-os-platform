@@ -66,11 +66,15 @@
   },
   "legal_checkout_sync": {
     "tokushoho_payment_method_subset_reconciled_in_readiness_record": true,
+    "tokushoho_publication_candidate_ready": true,
+    "tokushoho_publication_candidate_ref": "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md",
     "tokushoho_publication_text_finalized": false,
     "tokushoho_payment_methods_match_checkout": true,
     "tokushoho_payment_timing_match_checkout": true,
     "tokushoho_shipping_fees_match_checkout": true,
     "tax_display_route_reconciled": true,
+    "static_confirmation_screen_checklist_ready": true,
+    "static_confirmation_screen_checklist_ref": "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md",
     "final_confirmation_screen_reviewed": false,
     "checkout_legal_sync_complete": false
   },
@@ -81,8 +85,8 @@
     "automatic_production_execution_authorized": false
   },
   "next_evidence_needed": [
-    "apply reconciled payment-timing wording to the final Tokushoho publication candidate and obtain required owner approval before publication",
-    "review final checkout confirmation screen against Tokushoho, payment, shipping, fulfillment and cancellation wording"
+    "obtain explicit owner approval of the Tokushoho publication candidate before publication",
+    "capture safe non-transactional evidence of the actual final WooCommerce confirmation screen and review it against the static checklist"
   ],
-  "decision": "CHECKOUT_PAYMENT_SUBSET_CONFIGURATION_KONBINI_EXPIRY_AND_PAYMENT_TIMING_GREEN_FINAL_SCREEN_AND_PUBLICATION_PENDING_FAIL_CLOSED"
+  "decision": "CHECKOUT_PAYMENT_TIMING_AND_TOKUSHOHO_CANDIDATE_GREEN_APPROVAL_AND_FINAL_SCREEN_PENDING_FAIL_CLOSED"
 }
