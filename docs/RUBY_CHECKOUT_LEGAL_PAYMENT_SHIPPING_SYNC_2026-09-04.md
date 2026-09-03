@@ -1,7 +1,7 @@
 # Ruby's Cake Delights — Checkout / Legal / Payment / Shipping Synchronization
 
 Date: 2026-09-04  
-Status: **IN PROGRESS — PAYMENT SUBSET / TAX / SHIPPING RECONCILED; CHECKOUT CONFIGURATION STILL FAIL-CLOSED**
+Status: **IN PROGRESS — READ-ONLY SNAPSHOT GREEN / APPROVED SUBSET MISMATCH / REMEDIATION REQUIRED**
 
 ## Current production payment subset
 
@@ -37,51 +37,75 @@ Official KOMOJU documentation confirms:
 
 - Konbini is a deferred customer payment: a payment number/instruction is issued and the transaction waits for the customer to pay at the selected convenience store. The merchant-configurable default expiry is 3 days; Live Mode has its own expiry setting and must be checked directly before final legal wording.
 - Paidy is completed immediately from the merchant transaction perspective when the transaction is created/captured; the customer's later Paidy billing relationship does not delay merchant payment completion.
-- The selected payment methods are supported by KOMOJU in Japan, but actual Ruby checkout exposure must still be verified against WooCommerce.
+- WooCommerce requires KOMOJU methods to be selected in the KOMOJU settings and then each resulting `KOMOJU - [payment method]` gateway must be enabled under WooCommerce payment settings before it appears on the site.
 
 Official references reviewed:
 
 - https://developer.woocommerce.com/docs/apis/rest-api/v3/payment-gateways/
-- https://ja.doc.komoju.com/page/supported-payment-methods
-- https://help.komoju.com/hc/ja/articles/4747480397982
+- https://help.komoju.com/hc/ja/articles/4747504207390--WooCommerce-KOMOJU%E6%B1%BA%E6%B8%88%E3%82%92Live%E3%83%A2%E3%83%BC%E3%83%89-%E6%9C%AC%E7%95%AA%E7%92%B0%E5%A2%83-%E3%81%A7%E5%88%A9%E7%94%A8%E9%96%8B%E5%A7%8B%E3%81%99%E3%82%8B%E6%96%B9%E6%B3%95
 - https://help.komoju.com/hc/en-us/articles/5201642509854--Paidy-Frequently-Asked-Questions-About-Payments
 
-## Safe WooCommerce verification prepared
+## Production GET-only snapshot result
 
-A manual production **GET-only** workflow now captures `/wp-json/wc/v3/payment_gateways` using the existing read-only production identity.
+Manual workflow run `33776964709` completed successfully on current `main` using the production read-only WooCommerce identity.
 
-The artifact intentionally retains only:
+Safety evidence:
 
-- gateway ID;
-- customer-facing title;
-- enabled status;
-- display order;
-- method title; and
-- method-support capability names.
+- network read-only: true
+- mutation authorized: false
+- payment execution authorized: false
+- production publish authorized: false
+- WooCommerce gateway `settings` values were not exported
+- no customer/order/payment-token data was captured
 
-The WooCommerce `settings` object is discarded because it may contain credentials, webhook values, account identifiers or other sensitive configuration.
+Enabled gateways observed:
 
-The workflow:
+- `komoju_credit_card` — **KOMOJU Credit Card** — enabled
+- `woa_gateway` — **Submit Order for Confirmation / 注文確認を依頼** — enabled
 
-- cannot create an order;
-- cannot submit a payment;
-- cannot enable/disable a gateway;
-- cannot update WooCommerce;
-- cannot publish the storefront;
-- requires an explicit manual read-only confirmation; and
-- retains the sanitized artifact for one day only.
+Disabled gateways observed:
 
-Workflow: `.github/workflows/commerce-woocommerce-production-readonly-checkout-snapshot.yml`
+- base `komoju` — disabled
+- `bacs` / Direct bank transfer — disabled
+- `cheque` — disabled
+- `cod` — disabled
+
+Not exposed in the WooCommerce gateway snapshot:
+
+- Konbini
+- Merpay
+- Paidy
+- Pay-easy
+- PayPay
+- Rakuten Pay
+
+Therefore the approved initial subset does **not yet match** the WooCommerce checkout gateway configuration.
+
+## Required WooCommerce/KOMOJU remediation
+
+Per the official KOMOJU WooCommerce setup flow, the next configuration action is:
+
+1. Open **WooCommerce → Settings → KOMOJU** and select the approved methods that are still missing: **Konbini, Merpay and Paidy**.
+2. Save the KOMOJU settings.
+3. Open **WooCommerce → Settings → Payments**.
+4. Enable each resulting **KOMOJU - Konbini**, **KOMOJU - Merpay** and **KOMOJU - Paidy** gateway.
+5. Keep Bank Transfer and Pay-easy disabled for the initial launch.
+6. Do not enable PayPay while KOMOJU review remains pending.
+7. Keep Rakuten Pay excluded.
+8. Run the sanitized GET-only checkout snapshot again and require the approved subset to match before advancing the gate.
+
+This configuration step is a production WooCommerce setting change. The repository does not mark it as performed and does not authorize real payment execution.
 
 ## Remaining synchronization evidence
 
-The gate remains PENDING until all of the following are verified:
-
-- [ ] Sanitized WooCommerce payment-gateway snapshot is GREEN.
+- [x] Sanitized WooCommerce payment-gateway snapshot is GREEN.
 - [ ] Enabled WooCommerce checkout methods exactly match the CEO-approved initial subset.
-- [ ] Bank Transfer and Pay-easy are absent/disabled for initial launch.
-- [ ] PayPay is not exposed while provider review is pending.
-- [ ] Rakuten Pay is not exposed.
+- [x] Bank Transfer is disabled for initial launch.
+- [x] Pay-easy is not exposed in the current snapshot.
+- [x] PayPay is not exposed while provider review is pending.
+- [x] Rakuten Pay is not exposed.
+- [ ] Add/enable Konbini, Merpay and Paidy in WooCommerce using the official KOMOJU two-step configuration.
+- [ ] Rerun the read-only snapshot and verify the approved subset.
 - [ ] KOMOJU Live Konbini expiry value is recorded.
 - [ ] Customer-facing payment timing/deadline wording is finalized for every selected method.
 - [ ] Tokushoho payment-method and payment-timing sections match the checkout behavior.
@@ -94,4 +118,4 @@ The gate remains PENDING until all of the following are verified:
 `production_publish_authorized: false`  
 `automatic_production_execution_authorized: false`
 
-`PHIL_AI_OS_RUBY_CHECKOUT_LEGAL_PAYMENT_SYNC_PREPARED_FAIL_CLOSED`
+`PHIL_AI_OS_RUBY_CHECKOUT_SNAPSHOT_GREEN_SUBSET_MISMATCH_FAIL_CLOSED`
