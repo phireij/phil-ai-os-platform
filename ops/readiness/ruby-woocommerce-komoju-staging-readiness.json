@@ -1,6 +1,6 @@
 {
-  "version": "ruby-woocommerce-komoju-staging-readiness-v3",
-  "date": "2026-09-03",
+  "version": "ruby-woocommerce-komoju-staging-readiness-v4",
+  "date": "2026-09-04",
   "business_profile": {
     "verified_profile_complete": true,
     "resolved_fields": 15,
@@ -47,41 +47,26 @@
     "test_capture_refund_validated": true,
     "merchant_live_dashboard_access_verified": true,
     "merchant_available_payment_methods_verified": true,
-    "enabled_or_available_methods_shown": [
-      "visa_mastercard",
-      "jcb_amex_diners_discover",
-      "konbini",
-      "merpay",
-      "paidy",
-      "bank_transfer",
-      "pay_easy"
-    ],
+    "enabled_or_available_methods_shown": ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy", "bank_transfer", "pay_easy"],
     "paypay_status": "application_under_review",
     "rakuten_pay_status": "not_available_declined_or_no_longer_eligible",
     "production_enabled_payment_methods_finalized": true,
-    "production_enabled_payment_methods": [
-      "visa_mastercard",
-      "jcb_amex_diners_discover",
-      "konbini",
-      "merpay",
-      "paidy"
-    ],
-    "production_disabled_payment_methods": [
-      "bank_transfer",
-      "pay_easy"
-    ],
-    "production_checkout_configuration_verified": false,
+    "production_enabled_payment_methods": ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy"],
+    "production_disabled_payment_methods": ["bank_transfer", "pay_easy"],
+    "production_checkout_configuration_verified": true,
+    "production_checkout_verification_run_id": 33776964709,
+    "production_checkout_verification_attempt": 2,
     "live_mode_merchant_approval_verified": true,
     "live_mode_authorized": false,
     "payment_execution_authorized": false
   },
   "legal_checkout_sync": {
-    "tokushoho_payment_methods_match_checkout": false,
+    "tokushoho_payment_methods_match_checkout": true,
     "tokushoho_payment_timing_match_checkout": false,
-    "tokushoho_shipping_fees_match_checkout": false,
+    "tokushoho_shipping_fees_match_checkout": true,
     "final_confirmation_screen_reviewed": false,
     "privacy_terms_implementation_reviewed": true
   },
-  "next_gate": "finalize_catalog_verify_checkout_configuration_checkout_recovery_and_go_no_go_without_real_payment_execution",
+  "next_gate": "finalize_catalog_complete_payment_timing_legal_confirmation_screen_recovery_and_go_no_go_without_real_payment_execution",
   "production_publish_authorized": false
 }
