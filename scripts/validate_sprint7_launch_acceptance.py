@@ -45,11 +45,13 @@ def main() -> None:
         "komoju_live_dashboard_green",
         "komoju_production_payment_subset_finalized",
         "komoju_production_checkout_configuration_verified",
+        "komoju_live_konbini_expiry_verified",
         "production_payment_methods_verified",
         "production_shipping_configuration_verified",
         "japan_2026_tax_decision_green",
     ):
         require(verified.get(key) is True, f"verified readiness regressed: {key}")
+    require(verified["komoju_live_konbini_expiry_days"] == 3, "KOMOJU Live Konbini expiry drift")
     require(verified["japan_2026_tax_status"] == "exempt", "Japan tax status drift")
     require(verified["qualified_invoice_status"] == "not_registered", "Qualified Invoice status drift")
     require(verified["woocommerce_tax_enabled"] is False, "WooCommerce tax unexpectedly enabled")
@@ -91,6 +93,7 @@ def main() -> None:
     require(komoju.get("production_enabled_payment_methods") == approved, "KOMOJU approved production payment subset drift")
     require(komoju.get("production_checkout_configuration_verified") is True, "KOMOJU checkout configuration verification regressed")
     require(komoju.get("production_checkout_verification_run_id") == 33776964709 and komoju.get("production_checkout_verification_attempt") == 2, "KOMOJU checkout verification evidence drift")
+    require(komoju.get("konbini_live_expiry_setting_verified") is True and komoju.get("konbini_live_expiry_days") == 3, "KOMOJU Live Konbini expiry evidence drift")
     require(komoju.get("live_mode_authorized") is False and komoju.get("payment_execution_authorized") is False, "KOMOJU live/payment authority must remain false")
     require(staging.get("production_publish_authorized") is False, "preproduction readiness gained publication authority")
 
@@ -125,7 +128,7 @@ def main() -> None:
     require(data["decision"] == "ENGINEERING_PREPARED_LIVE_LAUNCH_PENDING_FAIL_CLOSED", "launch acceptance decision drift")
 
     print("PHIL_AI_OS_SPRINT_7_OPERATOR_AND_ACCEPTANCE_GREEN engineering_package=true live_launch=false profile_complete=true")
-    print("PHIL_AI_OS_SPRINT_7_KOMOJU_SUBSET_GREEN finalized=true checkout_config_verified=true payment_execution=false")
+    print("PHIL_AI_OS_SPRINT_7_KOMOJU_SUBSET_GREEN finalized=true checkout_config_verified=true konbini_expiry_days=3 payment_execution=false")
     print("PHIL_AI_OS_SPRINT_7_SIGNOFF_BOUNDARY_GREEN recovery_fresh=false ceo_go_no_go=false cto=false cutover=false")
     print("PHIL_AI_OS_SPRINT_7_CUTOVER_RUNBOOK_CONTROL_GREEN tax_disabled=true branch_protection_gate=true rollback_matrix=true")
 
