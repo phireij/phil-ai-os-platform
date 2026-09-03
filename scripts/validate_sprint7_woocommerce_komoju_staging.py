@@ -10,6 +10,8 @@ EVIDENCE = ROOT / "ops/readiness/ruby-hostinger-preproduction-evidence.template.
 PROFILE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
 TOKUSHOHO = ROOT / "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md"
 TIMING_DOC = ROOT / "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md"
+CANDIDATE_DOC = ROOT / "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md"
+SCREEN_CHECKLIST = ROOT / "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md"
 
 
 def fail(message: str) -> None:
@@ -29,6 +31,8 @@ def main() -> None:
         fail("business-profile prerequisite drift")
     if business.get("contact_phone_verified") is not True or business.get("tokushoho_source_reconciled") is not True:
         fail("verified phone/Tokushoho prerequisite drift")
+    if business.get("tokushoho_publication_candidate_ready") is not True:
+        fail("Tokushoho publication candidate must remain ready")
     if business.get("tokushoho_publication_approved") is not False:
         fail("Tokushoho publication must remain pending")
 
@@ -51,7 +55,7 @@ def main() -> None:
         if storefront.get(key) != value:
             fail(f"preproduction storefront state drift: {key}={storefront.get(key)!r}")
 
-    if data.get("next_gate") != "finalize_catalog_apply_final_tokushoho_text_review_confirmation_screen_recovery_and_go_no_go_without_real_payment_execution":
+    if data.get("next_gate") != "finalize_catalog_obtain_tokushoho_publication_approval_review_actual_confirmation_screen_recovery_and_go_no_go_without_real_payment_execution":
         fail("next executable gate drift")
     if data.get("production_publish_authorized") is not False:
         fail("preproduction readiness gained production publication authority")
@@ -100,8 +104,16 @@ def main() -> None:
         fail("verified payment-timing legal sync regressed")
     if legal.get("payment_timing_reconciliation_doc") != "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md" or not TIMING_DOC.is_file():
         fail("payment-timing reconciliation evidence missing")
+    if legal.get("tokushoho_publication_candidate_ready") is not True:
+        fail("Tokushoho publication candidate readiness regressed")
+    if legal.get("tokushoho_publication_candidate_ref") != "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md" or not CANDIDATE_DOC.is_file():
+        fail("Tokushoho publication candidate evidence missing")
+    if legal.get("static_confirmation_screen_checklist_ready") is not True:
+        fail("static final confirmation-screen checklist readiness regressed")
+    if legal.get("static_confirmation_screen_checklist_ref") != "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md" or not SCREEN_CHECKLIST.is_file():
+        fail("final confirmation-screen checklist evidence missing")
     if legal.get("final_confirmation_screen_reviewed") is not False:
-        fail("final confirmation screen must remain pending")
+        fail("actual final confirmation screen must remain pending")
     if legal.get("privacy_terms_implementation_reviewed") is not True:
         fail("verified privacy/terms implementation review regressed")
 
@@ -129,9 +141,20 @@ def main() -> None:
         if phrase not in tokushoho:
             fail(f"Tokushoho safeguard missing: {phrase}")
 
+    candidate = CANDIDATE_DOC.read_text(encoding="utf-8")
+    for phrase in ("PUBLICATION CANDIDATE READY", "tokushoho_publication_approved: false", "actual_final_confirmation_screen_reviewed: false", "production_publish_authorized: false", "payment_execution_authorized: false"):
+        if phrase not in candidate:
+            fail(f"final Tokushoho candidate safeguard missing: {phrase}")
+
+    checklist = SCREEN_CHECKLIST.read_text(encoding="utf-8")
+    for phrase in ("STATIC COMPLIANCE CHECKLIST READY", "actual_final_confirmation_screen_reviewed: false", "payment_execution_authorized: false", "production_publish_authorized: false"):
+        if phrase not in checklist:
+            fail(f"final-screen checklist safeguard missing: {phrase}")
+
     print("PHIL_AI_OS_RUBY_HOSTINGER_PREPRODUCTION_ENVIRONMENT_GREEN created=true wordpress=true woocommerce=true ssl=true checkout_qa=true shipping=true")
-    print("PHIL_AI_OS_RUBY_KOMOJU_PAYMENT_TIMING_GREEN live_selected=true final_subset=true checkout_config_verified=true konbini_expiry_days=3 payment_timing=true payment_execution=false")
-    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=finalize_catalog_final_tokushoho_confirmation_screen_recovery_go_no_go publish=false")
+    print("PHIL_AI_OS_RUBY_TOKUSHOHO_CANDIDATE_GREEN candidate=true approved=false publish=false")
+    print("PHIL_AI_OS_RUBY_CONFIRMATION_SCREEN_CHECKLIST_GREEN static=true actual=false payment_execution=false")
+    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=finalize_catalog_owner_approval_actual_confirmation_screen_recovery_go_no_go")
 
 
 if __name__ == "__main__":

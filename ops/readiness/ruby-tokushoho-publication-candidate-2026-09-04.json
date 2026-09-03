@@ -1,0 +1,59 @@
+{
+  "version": "ruby-tokushoho-publication-candidate-v1",
+  "date": "2026-09-04",
+  "executive_roadmap": {
+    "current_primary_sprint": 3,
+    "current_primary_sprint_name": "WooCommerce Foundation",
+    "sprint4_parallel_acceleration": true,
+    "formal_sprint4_entry": false
+  },
+  "candidate": {
+    "publication_candidate_ready": true,
+    "candidate_document": "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md",
+    "verified_business_identity_reconciled": true,
+    "japan_2026_consumption_tax_posture_reconciled": true,
+    "japan_2026_consumption_tax_status": "exempt",
+    "qualified_invoice_status": "not_registered",
+    "woocommerce_tax_enabled": false,
+    "approved_payment_subset_reconciled": true,
+    "payment_timing_and_deadlines_reconciled": true,
+    "konbini_live_expiry_setting_verified": true,
+    "konbini_live_expiry_days": 3,
+    "shipping_configuration_and_rates_reconciled": true,
+    "cancellation_returns_policy_reconciled": true,
+    "pickup_hours_recheck_required_mid_september": true
+  },
+  "confirmation_screen": {
+    "static_compliance_checklist_ready": true,
+    "checklist_document": "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md",
+    "actual_final_screen_reviewed": false,
+    "actual_final_screen_evidence_captured": false,
+    "real_order_required_for_review": false,
+    "real_payment_required_for_review": false
+  },
+  "approval_and_publication": {
+    "owner_publication_approval_recorded": false,
+    "tokushoho_publication_approved": false,
+    "published": false,
+    "checkout_legal_sync_complete": false
+  },
+  "sprint3": {
+    "final_owner_approved_production_catalog_ready": false,
+    "formal_sprint3_closure": false
+  },
+  "authority": {
+    "mutation_authorized": false,
+    "payment_execution_authorized": false,
+    "real_payment_execution_ready": false,
+    "production_publish_authorized": false,
+    "public_cutover_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "next_evidence_needed": [
+    "owner approval of the final Tokushoho publication candidate before publication",
+    "safe non-transactional evidence of the actual final WooCommerce confirmation screen against the static checklist",
+    "final owner-approved production catalog for Sprint 3 closure",
+    "fresh near-cutover recovery validation and final Go/No-Go at the appropriate later gate"
+  ],
+  "decision": "TOKUSHOHO_PUBLICATION_CANDIDATE_AND_STATIC_SCREEN_CHECKLIST_READY_APPROVAL_AND_ACTUAL_SCREEN_PENDING_FAIL_CLOSED"
+}
