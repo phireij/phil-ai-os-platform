@@ -58,6 +58,8 @@ Safety evidence:
 - WooCommerce gateway `settings` values were not exported
 - no customer/order/payment-token data was captured
 
+The snapshot **cannot submit a payment** and cannot change gateway configuration.
+
 Enabled gateways observed:
 
 - `komoju_credit_card` — **KOMOJU Credit Card** — enabled
