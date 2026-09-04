@@ -10,6 +10,8 @@ on:
       - "contracts/**"
       - "ops/readiness/**"
       - "scripts/validate_sprint7_*.py"
+      - "scripts/probe_ruby_preproduction_catalog.mjs"
+      - "scripts/capture_ruby_preproduction_final_screen.mjs"
       - "docs/SPRINT_7_**"
       - "docs/RUBY_CHECKOUT_LEGAL_PAYMENT_SHIPPING_SYNC_2026-09-04.md"
       - ".github/workflows/sprint-7-integrated-readiness-ci.yml"
@@ -24,6 +26,8 @@ on:
       - "contracts/**"
       - "ops/readiness/**"
       - "scripts/validate_sprint7_*.py"
+      - "scripts/probe_ruby_preproduction_catalog.mjs"
+      - "scripts/capture_ruby_preproduction_final_screen.mjs"
       - "docs/SPRINT_7_**"
       - "docs/RUBY_CHECKOUT_LEGAL_PAYMENT_SHIPPING_SYNC_2026-09-04.md"
       - ".github/workflows/sprint-7-integrated-readiness-ci.yml"
@@ -115,7 +119,10 @@ jobs:
         run: python scripts/validate_sprint7_actual_confirmation_screen_evidence.py --self-test
 
       - name: Validate guarded preproduction final-screen capture workflow
-        run: python scripts/validate_sprint7_preproduction_final_screen_capture_workflow.py
+        run: |
+          node --check scripts/probe_ruby_preproduction_catalog.mjs
+          node --check scripts/capture_ruby_preproduction_final_screen.mjs
+          python scripts/validate_sprint7_preproduction_final_screen_capture_workflow.py
 
       - name: Validate external channel activation readiness
         run: python scripts/validate_sprint7_channel_activation.py
