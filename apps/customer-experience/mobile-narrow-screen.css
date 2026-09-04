@@ -1,0 +1,81 @@
+main,
+.site-header > *,
+.header-actions,
+.product-card,
+.product-card-body,
+.product-card-footer,
+.detail-layout,
+.detail-copy,
+.checkout-card,
+.intent-output,
+.preview-link-card,
+.mobile-action-dock a,
+.mobile-action-dock span {
+  min-width: 0;
+}
+
+.product-card-body,
+.detail-copy,
+.checkout-card,
+.intent-output,
+.preview-link-card {
+  overflow-wrap: anywhere;
+}
+
+.header-actions select {
+  max-width: 100%;
+}
+
+@media (max-width: 360px) {
+  main {
+    padding-left: .75rem;
+    padding-right: .75rem;
+  }
+
+  .site-header {
+    padding-left: max(.75rem, env(safe-area-inset-left));
+    padding-right: max(.75rem, env(safe-area-inset-right));
+  }
+
+  .brand {
+    font-size: .9rem;
+  }
+
+  .header-actions select {
+    max-width: 7.5rem;
+    padding-left: .65rem;
+    padding-right: .65rem;
+  }
+
+  .product-status-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .fulfillment-chip {
+    white-space: normal;
+    text-align: center;
+  }
+
+  .mobile-action-dock a {
+    padding-inline: .2rem;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) and (max-width: 900px) {
+  :root {
+    --mobile-dock-height: 64px;
+  }
+
+  .mobile-action-dock a {
+    min-height: 48px;
+  }
+}
+
+@media (forced-colors: active) {
+  .header-actions select,
+  .mobile-action-dock a {
+    forced-color-adjust: auto;
+  }
+}
