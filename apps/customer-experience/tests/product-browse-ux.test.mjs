@@ -17,7 +17,7 @@ test("mobile catalog supports fast all versus available-now scanning", () => {
 
 test("catalog filter context survives product-detail navigation and return", () => {
   assert.match(source, /filterFromUrl/);
-  assert.match(source, /searchParams\.get\("filter"\)/);
+  assert.match(source, /URLSearchParams\(location\.search\)\.get\("filter"\)/);
   assert.match(source, /searchParams\.set\("filter", "available"\)/);
   assert.match(source, /decorateCatalogDetailLinks/);
   assert.match(source, /catalogReturnHref/);
