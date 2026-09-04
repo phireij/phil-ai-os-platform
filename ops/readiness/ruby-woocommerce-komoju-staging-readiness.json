@@ -1,5 +1,5 @@
 {
-  "version": "ruby-woocommerce-komoju-staging-readiness-v4",
+  "version": "ruby-woocommerce-komoju-staging-readiness-v5",
   "date": "2026-09-04",
   "business_profile": {
     "verified_profile_complete": true,
@@ -7,6 +7,9 @@
     "contact_phone_verified": true,
     "tokushoho_source_reconciled": true,
     "tokushoho_publication_candidate_ready": true,
+    "tokushoho_candidate_text_approved": true,
+    "tokushoho_candidate_text_approval_ref": "ops/readiness/ruby-tokushoho-owner-approval-2026-09-04.json",
+    "tokushoho_publication_execution_approved": false,
     "tokushoho_publication_approved": false
   },
   "storefront": {
@@ -71,11 +74,14 @@
     "tokushoho_shipping_fees_match_checkout": true,
     "tokushoho_publication_candidate_ready": true,
     "tokushoho_publication_candidate_ref": "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md",
+    "tokushoho_candidate_text_approved": true,
+    "tokushoho_candidate_text_approval_ref": "ops/readiness/ruby-tokushoho-owner-approval-2026-09-04.json",
+    "tokushoho_publication_execution_approved": false,
     "static_confirmation_screen_checklist_ready": true,
     "static_confirmation_screen_checklist_ref": "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md",
     "final_confirmation_screen_reviewed": false,
     "privacy_terms_implementation_reviewed": true
   },
-  "next_gate": "finalize_catalog_obtain_tokushoho_publication_approval_review_actual_confirmation_screen_recovery_and_go_no_go_without_real_payment_execution",
+  "next_gate": "finalize_catalog_review_actual_confirmation_screen_then_separate_publication_execution_recovery_and_go_no_go_without_real_payment_execution",
   "production_publish_authorized": false
 }

@@ -1,5 +1,5 @@
 {
-  "version": "sprint7-production-deployment-readiness-v4",
+  "version": "sprint7-production-deployment-readiness-v5",
   "date": "2026-09-04",
   "storefront": {
     "public_domain": "https://www.rubyscakedelights.shop/",
@@ -59,6 +59,9 @@
     "tokushoho_source_reconciled": true,
     "tokushoho_publication_candidate_ready": true,
     "tokushoho_publication_candidate_ref": "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md",
+    "tokushoho_candidate_text_approved": true,
+    "tokushoho_candidate_text_approval_ref": "ops/readiness/ruby-tokushoho-owner-approval-2026-09-04.json",
+    "tokushoho_publication_execution_approved": false,
     "tokushoho_publication_approved": false,
     "store_pickup_supported": true,
     "legacy_yamato_cool_shipping_preserved_for_preproduction_verification": true,
@@ -80,6 +83,7 @@
     "ops/readiness/ruby-hostinger-preproduction-evidence.template.json",
     "ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-04.json",
     "ops/readiness/ruby-tokushoho-publication-candidate-2026-09-04.json",
+    "ops/readiness/ruby-tokushoho-owner-approval-2026-09-04.json",
     "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md",
     "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md",
     "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md",

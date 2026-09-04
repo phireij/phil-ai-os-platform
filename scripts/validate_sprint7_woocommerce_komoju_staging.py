@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 READINESS = ROOT / "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json"
 EVIDENCE = ROOT / "ops/readiness/ruby-hostinger-preproduction-evidence.template.json"
 PROFILE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
+APPROVAL = ROOT / "ops/readiness/ruby-tokushoho-owner-approval-2026-09-04.json"
 TOKUSHOHO = ROOT / "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md"
 TIMING_DOC = ROOT / "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md"
 CANDIDATE_DOC = ROOT / "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md"
@@ -22,7 +23,10 @@ def main() -> None:
     data = json.loads(READINESS.read_text(encoding="utf-8"))
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     profile = json.loads(PROFILE.read_text(encoding="utf-8"))
+    approval = json.loads(APPROVAL.read_text(encoding="utf-8"))
 
+    if data.get("version") != "ruby-woocommerce-komoju-staging-readiness-v5":
+        fail("staging readiness schema drift")
     if profile.get("profile_complete") is not True or profile.get("production_publish_authorized") is not False:
         fail("canonical business profile state drift")
 
@@ -33,8 +37,17 @@ def main() -> None:
         fail("verified phone/Tokushoho prerequisite drift")
     if business.get("tokushoho_publication_candidate_ready") is not True:
         fail("Tokushoho publication candidate must remain ready")
-    if business.get("tokushoho_publication_approved") is not False:
-        fail("Tokushoho publication must remain pending")
+    if business.get("tokushoho_candidate_text_approved") is not True:
+        fail("CEO Tokushoho candidate-text approval missing")
+    if business.get("tokushoho_candidate_text_approval_ref") != "ops/readiness/ruby-tokushoho-owner-approval-2026-09-04.json":
+        fail("Tokushoho text-approval reference drift")
+    if business.get("tokushoho_publication_execution_approved") is not False or business.get("tokushoho_publication_approved") is not False:
+        fail("candidate-text approval leaked into publication execution")
+    if approval.get("decision_scope") != "candidate_text_approval_only" or approval.get("approval_recorded") is not True or approval.get("candidate_text_approved") is not True:
+        fail("canonical CEO text-approval evidence drift")
+    for key, value in approval["authority"].items():
+        if value is not False:
+            fail(f"CEO text approval expanded authority: {key}")
 
     storefront = data["storefront"]
     expected = {
@@ -55,7 +68,7 @@ def main() -> None:
         if storefront.get(key) != value:
             fail(f"preproduction storefront state drift: {key}={storefront.get(key)!r}")
 
-    if data.get("next_gate") != "finalize_catalog_obtain_tokushoho_publication_approval_review_actual_confirmation_screen_recovery_and_go_no_go_without_real_payment_execution":
+    if data.get("next_gate") != "finalize_catalog_review_actual_confirmation_screen_then_separate_publication_execution_recovery_and_go_no_go_without_real_payment_execution":
         fail("next executable gate drift")
     if data.get("production_publish_authorized") is not False:
         fail("preproduction readiness gained production publication authority")
@@ -65,6 +78,8 @@ def main() -> None:
         fail("fulfillment source drift")
     if fulfillment.get("production_shipping_configuration_verified") is not True or fulfillment.get("production_shipping_rates_verified") is not True:
         fail("verified pre-production shipping state regressed")
+    if fulfillment.get("mid_september_hours_recheck_required") is not True:
+        fail("pickup-hours recheck requirement was lost")
 
     komoju = data["komoju"]
     if komoju.get("current_connection_state") != "live_dashboard_selected":
@@ -85,12 +100,10 @@ def main() -> None:
         fail("initially disabled production payment subset drift")
     if komoju.get("production_checkout_verification_run_id") != 33776964709 or komoju.get("production_checkout_verification_attempt") != 2:
         fail("checkout verification evidence drift")
-    if komoju.get("konbini_live_expiry_days") != 3:
-        fail("Live Konbini expiry must remain exactly 3 days")
-    if komoju.get("konbini_live_expiry_evidence_class") != "owner_confirmed_live_dashboard_configuration":
-        fail("Live Konbini expiry evidence classification drift")
+    if komoju.get("konbini_live_expiry_days") != 3 or komoju.get("konbini_live_expiry_evidence_class") != "owner_confirmed_live_dashboard_configuration":
+        fail("Live Konbini expiry evidence drift")
     if komoju.get("paypay_status") != "application_under_review":
-        fail("PayPay review status drift")
+        fail("recorded merchant PayPay review status drift")
     if komoju.get("rakuten_pay_status") != "not_available_declined_or_no_longer_eligible":
         fail("Rakuten Pay availability status drift")
     for key in ("live_mode_authorized", "payment_execution_authorized"):
@@ -98,24 +111,21 @@ def main() -> None:
             fail(f"KOMOJU execution authority must remain false: {key}")
 
     legal = data["legal_checkout_sync"]
-    if legal.get("tokushoho_payment_methods_match_checkout") is not True or legal.get("tokushoho_shipping_fees_match_checkout") is not True:
-        fail("verified payment-method/shipping legal sync regressed")
-    if legal.get("tokushoho_payment_timing_match_checkout") is not True:
-        fail("verified payment-timing legal sync regressed")
+    for key in ("tokushoho_payment_methods_match_checkout", "tokushoho_payment_timing_match_checkout", "tokushoho_shipping_fees_match_checkout", "tokushoho_publication_candidate_ready", "tokushoho_candidate_text_approved", "static_confirmation_screen_checklist_ready", "privacy_terms_implementation_reviewed"):
+        if legal.get(key) is not True:
+            fail(f"legal checkout readiness regressed: {key}")
     if legal.get("payment_timing_reconciliation_doc") != "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md" or not TIMING_DOC.is_file():
         fail("payment-timing reconciliation evidence missing")
-    if legal.get("tokushoho_publication_candidate_ready") is not True:
-        fail("Tokushoho publication candidate readiness regressed")
     if legal.get("tokushoho_publication_candidate_ref") != "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md" or not CANDIDATE_DOC.is_file():
         fail("Tokushoho publication candidate evidence missing")
-    if legal.get("static_confirmation_screen_checklist_ready") is not True:
-        fail("static final confirmation-screen checklist readiness regressed")
+    if legal.get("tokushoho_candidate_text_approval_ref") != "ops/readiness/ruby-tokushoho-owner-approval-2026-09-04.json":
+        fail("Tokushoho approval reference drift")
+    if legal.get("tokushoho_publication_execution_approved") is not False:
+        fail("publication execution unexpectedly approved")
     if legal.get("static_confirmation_screen_checklist_ref") != "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md" or not SCREEN_CHECKLIST.is_file():
         fail("final confirmation-screen checklist evidence missing")
     if legal.get("final_confirmation_screen_reviewed") is not False:
         fail("actual final confirmation screen must remain pending")
-    if legal.get("privacy_terms_implementation_reviewed") is not True:
-        fail("verified privacy/terms implementation review regressed")
 
     expected_historical_evidence = {
         "public_domain_unchanged": True,
@@ -152,9 +162,9 @@ def main() -> None:
             fail(f"final-screen checklist safeguard missing: {phrase}")
 
     print("PHIL_AI_OS_RUBY_HOSTINGER_PREPRODUCTION_ENVIRONMENT_GREEN created=true wordpress=true woocommerce=true ssl=true checkout_qa=true shipping=true")
-    print("PHIL_AI_OS_RUBY_TOKUSHOHO_CANDIDATE_GREEN candidate=true approved=false publish=false")
+    print("PHIL_AI_OS_RUBY_TOKUSHOHO_TEXT_APPROVAL_GREEN candidate_text=true publication_execution=false publish=false")
     print("PHIL_AI_OS_RUBY_CONFIRMATION_SCREEN_CHECKLIST_GREEN static=true actual=false payment_execution=false")
-    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=finalize_catalog_owner_approval_actual_confirmation_screen_recovery_go_no_go")
+    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=finalize_catalog_actual_confirmation_screen_then_separate_publication_execution_recovery_go_no_go")
 
 
 if __name__ == "__main__":
