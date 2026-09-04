@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v19";
-// 2026-09-05: refresh cached mobile checkout context summary and preserve prior CX guards.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v18";
+// 2026-09-05: refresh cached mobile checkout context summary while preserving the Sprint 4 cache generation.
 const APP_SHELL = [
   "./",
   "./index.html",
