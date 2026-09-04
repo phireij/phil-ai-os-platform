@@ -8,16 +8,16 @@ const css = readFileSync(new URL("../product-browse-ux.css", import.meta.url), "
 const sw = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
 
 test("mobile catalog supports fast all versus available-now scanning", () => {
-  assert.match(source, /data-filter=\\"all\\"/);
-  assert.match(source, /data-filter=\\"available\\"/);
+  assert.ok(source.includes('data-filter="all"'));
+  assert.ok(source.includes('data-filter="available"'));
   assert.match(source, /availability\.in_stock/);
-  assert.match(source, /Showing \$\{visible\} of \$\{total\}/);
+  assert.ok(source.includes("Showing ${visible} of ${total}"));
   assert.match(source, /現在購入可能/);
 });
 
 test("product detail offers a locale-preserving cart continuation", () => {
   assert.match(source, /mobile-detail-continuation/);
-  assert.match(source, /localeHref\("\.\/cart-preview\.html", lang\)/);
+  assert.ok(source.includes('localeHref("./cart-preview.html", lang)'));
   assert.match(source, /Review cart/);
   assert.match(source, /カートを確認/);
 });
