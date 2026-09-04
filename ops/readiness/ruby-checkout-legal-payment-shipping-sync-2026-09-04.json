@@ -1,11 +1,12 @@
 {
-  "version": "ruby-checkout-legal-payment-shipping-sync-v3",
+  "version": "ruby-checkout-legal-payment-shipping-sync-v4",
   "date": "2026-09-04",
   "production_payment_subset": {
     "ceo_approved": true,
     "selected": ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy"],
     "disabled_initial_launch": ["bank_transfer", "pay_easy"],
-    "pending_provider_review": ["paypay"],
+    "provider_capability_confirmed_not_selected": ["paypay"],
+    "pending_merchant_live_availability": ["paypay"],
     "excluded": ["rakuten_pay"]
   },
   "verified_prerequisites": {
@@ -68,7 +69,11 @@
     "tokushoho_payment_method_subset_reconciled_in_readiness_record": true,
     "tokushoho_publication_candidate_ready": true,
     "tokushoho_publication_candidate_ref": "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md",
-    "tokushoho_publication_text_finalized": false,
+    "tokushoho_candidate_text_approval_recorded": true,
+    "tokushoho_candidate_text_approved": true,
+    "tokushoho_candidate_text_approval_ref": "ops/readiness/ruby-tokushoho-owner-approval-2026-09-04.json",
+    "tokushoho_publication_execution_approved": false,
+    "tokushoho_published": false,
     "tokushoho_payment_methods_match_checkout": true,
     "tokushoho_payment_timing_match_checkout": true,
     "tokushoho_shipping_fees_match_checkout": true,
@@ -85,8 +90,9 @@
     "automatic_production_execution_authorized": false
   },
   "next_evidence_needed": [
-    "obtain explicit owner approval of the Tokushoho publication candidate before publication",
-    "capture safe non-transactional evidence of the actual final WooCommerce confirmation screen and review it against the static checklist"
+    "final owner-approved production catalog and a usable preproduction catalog item for the guarded actual-screen review",
+    "capture safe non-transactional evidence of the actual final WooCommerce confirmation screen and review it against the static checklist",
+    "obtain separate publication-execution approval only at the appropriate later gate"
   ],
-  "decision": "CHECKOUT_PAYMENT_TIMING_AND_TOKUSHOHO_CANDIDATE_GREEN_APPROVAL_AND_FINAL_SCREEN_PENDING_FAIL_CLOSED"
+  "decision": "CHECKOUT_PAYMENT_TIMING_AND_TOKUSHOHO_TEXT_APPROVED_FINAL_SCREEN_AND_PUBLICATION_EXECUTION_PENDING_FAIL_CLOSED"
 }
