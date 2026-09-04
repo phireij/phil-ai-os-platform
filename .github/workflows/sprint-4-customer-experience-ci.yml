@@ -166,7 +166,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/fixtures/air-mobile-quick-pickup.json | grep -F '"automatic_publication_authorized": false'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"provider": "komoju"'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"connection_state": "not_configured"'
-          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v19'
+          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v20'
           curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F './src/cart-form-guard.mjs'
           curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F './src/cart-dock-status.mjs'
           curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F './src/cart-session-recovery.mjs'
