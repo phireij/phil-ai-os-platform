@@ -35,6 +35,25 @@
       <p><a class="detail-link" href="./confirmation-preview.html">Open final confirmation compliance preview</a></p>
     </section>
 
+    <section class="journey-panel checkout-confidence" aria-labelledby="confidence-title">
+      <p class="eyebrow" id="confidence-eyebrow">Before you continue</p>
+      <h2 id="confidence-title">You stay in control before the final action</h2>
+      <div class="journey-grid">
+        <article class="journey-step">
+          <span class="step-number" aria-hidden="true">1</span>
+          <div><h3 id="confidence-order-title">Review your order</h3><p id="confidence-order-copy">Check products, quantities and the running total on your phone.</p></div>
+        </article>
+        <article class="journey-step">
+          <span class="step-number" aria-hidden="true">2</span>
+          <div><h3 id="confidence-fulfillment-title">Confirm pickup or shipping</h3><p id="confidence-fulfillment-copy">The final experience must show the applicable shipping fee before order submission.</p></div>
+        </article>
+        <article class="journey-step">
+          <span class="step-number" aria-hidden="true">3</span>
+          <div><h3 id="confidence-payment-title">Confirm payment details</h3><p id="confidence-payment-copy">Payment method and timing are reviewed before the final order action.</p></div>
+        </article>
+      </div>
+    </section>
+
     <section class="detail-panel" aria-labelledby="cart-title">
       <div class="section-heading">
         <div>
@@ -51,6 +70,7 @@
             <label id="pickup-label" for="pickup-at">Preferred pickup time</label>
             <input id="pickup-at" name="pickup-at" type="datetime-local" required>
           </div>
+          <p class="checkout-reassurance" id="checkout-reassurance">You will still review the final information before any order-submission action.</p>
           <p><button id="evaluate-button" class="primary-button" type="submit">Evaluate checkout & KOMOJU handoff</button></p>
         </div>
       </form>
@@ -71,10 +91,17 @@
     </section>
   </main>
 
+  <nav class="mobile-action-dock" aria-label="Mobile checkout navigation">
+    <a href="./#catalog-section"><span aria-hidden="true">⌕</span><span id="dock-shop-label">Shop</span></a>
+    <a href="./cart-preview.html" aria-current="page"><span aria-hidden="true">▣</span><span id="dock-cart-label">Cart</span></a>
+    <a href="./quick-pickup-preview.html"><span aria-hidden="true">◎</span><span id="dock-pickup-label">Pickup</span></a>
+  </nav>
+
   <footer>
     <p>Phil AI OS · Sprint 4 · synthetic cart/payment-handoff environment</p>
   </footer>
 
   <script type="module" src="./src/cart-preview.mjs"></script>
+  <script type="module" src="./src/checkout-confidence.mjs"></script>
 </body>
 </html>
