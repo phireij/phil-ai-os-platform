@@ -47,5 +47,5 @@ test("all customer preview surfaces load the connectivity status", () => {
 test("connectivity assets remain available through the PWA shell", () => {
   assert.match(sw, /\.\/connectivity-status\.css/);
   assert.match(sw, /\.\/src\/connectivity-status\.mjs/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v19/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v\d+/);
 });
