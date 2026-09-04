@@ -23,6 +23,7 @@ class OwnerCatalogPackageValidatorTests(unittest.TestCase):
 
     def ready_package(self):
         payload = self.pending_template()
+        payload["catalog_scope"]["scope_complete_for_intended_initial_launch"] = True
         payload.update(
             {
                 "package_state": "approved",
@@ -78,14 +79,22 @@ class OwnerCatalogPackageValidatorTests(unittest.TestCase):
     def test_pending_template_reports_blockers_without_authority(self):
         result = validator.validate_package(self.pending_template())
         self.assertTrue(result["valid_contract"])
+        self.assertFalse(result["scope_ready"])
         self.assertFalse(result["ready_for_preproduction_configuration"])
         self.assertIn("catalog approval is pending", result["blockers"])
+        self.assertIn(
+            "owner must confirm the submitted subset is complete for the intended initial launch",
+            result["blockers"],
+        )
         self.assertFalse(result["mutation_authorized"])
         self.assertFalse(result["production_publish_authorized"])
 
-    def test_owner_complete_package_can_be_ready_without_write_authority(self):
+    def test_owner_complete_initial_launch_subset_can_be_ready_without_full_catalog(self):
         result = validator.validate_package(self.ready_package())
         self.assertTrue(result["valid_contract"])
+        self.assertEqual(result["catalog_scope_type"], "initial_launch_subset")
+        self.assertFalse(result["full_product_range_required_for_sprint3_closure"])
+        self.assertTrue(result["scope_ready"])
         self.assertTrue(result["catalog_ready"])
         self.assertTrue(result["tax_decision_ready"])
         self.assertTrue(result["current_state_reconciled"])
@@ -93,6 +102,24 @@ class OwnerCatalogPackageValidatorTests(unittest.TestCase):
         self.assertEqual(result["blockers"], [])
         self.assertFalse(result["mutation_authorized"])
         self.assertFalse(result["production_publish_authorized"])
+
+    def test_scope_must_not_claim_full_product_range_required(self):
+        payload = self.ready_package()
+        payload["catalog_scope"]["full_product_range_required_for_sprint3_closure"] = True
+        result = validator.validate_package(payload)
+        self.assertFalse(result["scope_ready"])
+        self.assertFalse(result["ready_for_preproduction_configuration"])
+        self.assertIn(
+            "Sprint 3 catalog scope must not require Ruby's full product range",
+            result["blockers"],
+        )
+
+    def test_scope_must_be_confirmed_complete_for_intended_initial_launch(self):
+        payload = self.ready_package()
+        payload["catalog_scope"]["scope_complete_for_intended_initial_launch"] = False
+        result = validator.validate_package(payload)
+        self.assertFalse(result["scope_ready"])
+        self.assertFalse(result["ready_for_preproduction_configuration"])
 
     def test_stale_tax_posture_blocks_handoff(self):
         payload = self.ready_package()
