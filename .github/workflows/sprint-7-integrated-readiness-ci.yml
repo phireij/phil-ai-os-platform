@@ -60,6 +60,7 @@ jobs:
           node --check apps/customer-experience/src/core.mjs
           node --check apps/customer-experience/src/cart.mjs
           node --check apps/customer-experience/src/cart-preview.mjs
+          node --check apps/customer-experience/src/confirmation-preview.mjs
           node --check apps/customer-experience/src/flow.mjs
           node --check apps/customer-experience/src/payment.mjs
           node --check apps/customer-experience/src/pickup.mjs
@@ -103,6 +104,9 @@ jobs:
 
       - name: Validate checkout legal payment and shipping synchronization
         run: python scripts/validate_sprint7_checkout_legal_sync.py
+
+      - name: Validate isolated final confirmation preview readiness
+        run: python scripts/validate_sprint7_isolated_confirmation_preview.py
 
       - name: Validate external channel activation readiness
         run: python scripts/validate_sprint7_channel_activation.py
@@ -162,6 +166,8 @@ jobs:
           done
           curl --fail --silent http://127.0.0.1:8094/ | grep -F 'Customer Experience'
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F 'KOMOJU not connected'
+          curl --fail --silent http://127.0.0.1:8094/confirmation-preview.html | grep -F 'No order submission'
+          curl --fail --silent http://127.0.0.1:8094/fixtures/final-confirmation.json | grep -F '"actual_final_confirmation_screen_reviewed": false'
           echo PHIL_AI_OS_SPRINT_7_ISOLATED_RUNTIME_SMOKE_GREEN
 
       - name: Destroy isolated runtimes
