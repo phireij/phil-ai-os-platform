@@ -26,7 +26,7 @@
     "capture_method": {"enum": ["manual_browser_sanitized", "browser_screenshot_and_dom_notes"]},
     "captured_at": {"type": ["string", "null"], "format": "date-time"},
     "source_url_class": {"const": "sanitized_preproduction_checkout"},
-    "synthetic_customer_data_only": {"type": "boolean"},
+    "synthetic_customer_data_only": {"const": true},
     "contains_personal_data": {"const": false},
     "contains_secret_material": {"const": false},
     "screen_capture_refs": {
