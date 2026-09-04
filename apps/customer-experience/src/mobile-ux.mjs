@@ -1,3 +1,5 @@
+import { syncLocaleLinks } from "./locale-links.mjs";
+
 const localized = {
   en: {
     browseProducts: "Browse products",
@@ -89,6 +91,7 @@ export function applyMobileUxLocale(locale = currentLocale()) {
   document.querySelectorAll(".pickup-chip").forEach((node) => {
     node.textContent = copy.pickup;
   });
+  syncLocaleLinks(lang);
 }
 
 const localeSelect = document.querySelector("#locale-select");
