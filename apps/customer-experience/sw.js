@@ -24,6 +24,7 @@ const APP_SHELL = [
   "./src/cart-locale-state.mjs",
   "./src/fulfillment-choice.mjs",
   "./src/cart-form-guard.mjs",
+  "./src/cart-dock-status.mjs",
   "./src/checkout-confidence.mjs",
   "./src/confirmation-preview.mjs",
   "./src/flow.mjs",
