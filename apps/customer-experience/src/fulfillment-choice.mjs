@@ -11,6 +11,7 @@ const copy = {
     kantoFee: "Kanto: ¥1,350 flat rate",
     otherFee: "Other regions: ¥1,500–¥1,800 depending on delivery area",
     exactFee: "The exact shipping fee will be displayed on the final order confirmation screen before the order is submitted.",
+    reviewPickup: "Evaluate checkout & KOMOJU handoff",
     reviewDelivery: "Review delivery readiness",
     deliveryTitle: "Delivery path preview",
     deliveryReady: "Delivery preference recorded locally for review only.",
@@ -29,6 +30,7 @@ const copy = {
     kantoFee: "関東：一律 1,350円",
     otherFee: "その他の地域：配送地域により 1,500円〜1,800円",
     exactFee: "最終的な送料は、ご注文確定前の最終確認画面に表示されます。",
+    reviewPickup: "チェックアウトとKOMOJU引継ぎを確認",
     reviewDelivery: "配送内容を確認",
     deliveryTitle: "配送プレビュー",
     deliveryReady: "配送希望をローカルプレビューに記録しました。",
@@ -67,7 +69,7 @@ function updateMode() {
   if (pickupField) pickupField.hidden = mode !== "pickup";
   if (pickupInput) pickupInput.required = mode === "pickup";
   if (deliveryPanel) deliveryPanel.hidden = mode !== "delivery";
-  if (button && mode === "delivery") button.textContent = copy[lang].reviewDelivery;
+  if (button) button.textContent = mode === "delivery" ? copy[lang].reviewDelivery : copy[lang].reviewPickup;
   document.querySelectorAll(".fulfillment-option").forEach((option) => {
     const radio = option.querySelector('input[name="fulfillment-mode"]');
     option.classList.toggle("is-selected", Boolean(radio?.checked));
