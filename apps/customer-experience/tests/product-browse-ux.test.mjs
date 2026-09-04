@@ -35,7 +35,7 @@ test("mobile browse assets are loaded and cached for weak connections", () => {
   assert.match(html, /src\/product-browse-ux\.mjs/);
   assert.match(css, /min-height: 48px/);
   assert.match(css, /position: sticky/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v12/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v13/);
   assert.match(sw, /\.\/src\/product-browse-ux\.mjs/);
   assert.match(sw, /\.\/product-browse-ux\.css/);
 });
