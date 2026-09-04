@@ -1,0 +1,9 @@
+{
+  "fixture_only": true,
+  "provider": "air_mobile_order_quick_pickup",
+  "production_url": null,
+  "owner_confirmed": false,
+  "validation_complete": false,
+  "activation_authorized": false,
+  "automatic_publication_authorized": false
+}
