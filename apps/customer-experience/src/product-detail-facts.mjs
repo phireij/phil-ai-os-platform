@@ -58,6 +58,7 @@ export function keyFactsForProduct(product, lang = locale()) {
     pickupLabel: c.pickup,
     pickup: product.pickup?.supported === true ? c.pickupYes : c.pickupNo,
     pickupSupported: product.pickup?.supported === true,
+    mediaAlt: product.media?.[0]?.alt ? localized(product.media[0].alt, lang) : null,
   });
 }
 
@@ -66,6 +67,12 @@ function renderFacts(product) {
   if (!detail) return;
   const facts = keyFactsForProduct(product);
   if (!facts) return;
+
+  const media = document.querySelector("#product-detail .detail-media");
+  if (media && facts.mediaAlt) {
+    media.setAttribute("role", "img");
+    media.setAttribute("aria-label", facts.mediaAlt);
+  }
 
   let list = detail.querySelector(".product-key-facts");
   if (!list) {
