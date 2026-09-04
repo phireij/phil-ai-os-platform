@@ -7,6 +7,7 @@ const APP_SHELL = [
   "./quick-pickup-preview.html",
   "./styles.css",
   "./product-browse-ux.css",
+  "./mobile-performance.css",
   "./cart-mobile-controls.css",
   "./fulfillment-choice.css",
   "./manifest.webmanifest",
