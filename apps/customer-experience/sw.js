@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v18";
-// 2026-09-05: refresh cached mobile checkout context summary while preserving the Sprint 4 cache generation.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v19";
+// 2026-09-05: refresh cached mobile payment guidance and checkout context assets.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -12,6 +12,7 @@ const APP_SHELL = [
   "./cart-mobile-controls.css",
   "./fulfillment-choice.css",
   "./checkout-context-summary.css",
+  "./payment-method-guidance.css",
   "./manifest.webmanifest",
   "./app-icon.svg",
   "./src/app.mjs",
@@ -29,6 +30,7 @@ const APP_SHELL = [
   "./src/cart-dock-status.mjs",
   "./src/cart-session-recovery.mjs",
   "./src/checkout-context-summary.mjs",
+  "./src/payment-method-guidance.mjs",
   "./src/checkout-confidence.mjs",
   "./src/confirmation-preview.mjs",
   "./src/flow.mjs",
