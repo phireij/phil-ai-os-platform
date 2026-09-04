@@ -118,9 +118,12 @@ def main() -> None:
         require(phrase in module, f"preview module safeguard missing: {phrase}")
 
     require(record["decision"] == "ISOLATED_FINAL_CONFIRMATION_PREVIEW_GREEN_ACTUAL_WOOCOMMERCE_SCREEN_PENDING_FAIL_CLOSED", "readiness decision drift")
-    require(candidate["decision"] == "TOKUSHOHO_CANDIDATE_GREEN_ACTUAL_SCREEN_CAPTURE_BLOCKED_BY_PREPRODUCTION_CATALOG_FAIL_CLOSED", "candidate decision drift")
+    require(candidate["decision"] in {
+        "TOKUSHOHO_CANDIDATE_GREEN_ACTUAL_SCREEN_CAPTURE_BLOCKED_BY_PREPRODUCTION_CATALOG_FAIL_CLOSED",
+        "TOKUSHOHO_CANDIDATE_TEXT_APPROVED_ACTUAL_SCREEN_CAPTURE_BLOCKED_PUBLICATION_EXECUTION_FAIL_CLOSED",
+    }, "candidate decision drift")
 
-    print("PHIL_AI_OS_ISOLATED_FINAL_CONFIRMATION_PREVIEW_GREEN actual_woocommerce_screen=false order_creation=false payment_execution=false")
+    print("PHIL_AI_OS_ISOLATED_CONFIRMATION_PREVIEW_GREEN actual_woocommerce_screen=false order_creation=false payment_execution=false")
     print("PHIL_AI_OS_ACTUAL_WOOCOMMERCE_CONFIRMATION_SCREEN_PENDING_FAIL_CLOSED")
 
 
