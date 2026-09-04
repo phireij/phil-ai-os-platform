@@ -1,5 +1,5 @@
 const CACHE_NAME = "phil-ai-os-cx-sprint4-v19";
-// 2026-09-05: refresh cached mobile payment guidance and checkout context assets.
+// 2026-09-05: keep mobile payment guidance and final-review summary available offline.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -13,6 +13,7 @@ const APP_SHELL = [
   "./fulfillment-choice.css",
   "./checkout-context-summary.css",
   "./payment-method-guidance.css",
+  "./final-review-summary.css",
   "./manifest.webmanifest",
   "./app-icon.svg",
   "./src/app.mjs",
@@ -33,6 +34,7 @@ const APP_SHELL = [
   "./src/payment-method-guidance.mjs",
   "./src/checkout-confidence.mjs",
   "./src/confirmation-preview.mjs",
+  "./src/final-review-summary.mjs",
   "./src/flow.mjs",
   "./src/payment.mjs",
   "./src/pickup.mjs",
