@@ -1,0 +1,14 @@
+.fulfillment-choice { margin: 0 0 1rem; padding: 0; border: 0; }
+.fulfillment-choice legend { margin-bottom: .65rem; font-weight: 800; }
+.fulfillment-option-grid { display: grid; gap: .7rem; }
+.fulfillment-option { min-height: 72px; display: grid; grid-template-columns: 24px 1fr; gap: .7rem; align-items: start; padding: .8rem; border: 1px solid var(--line); border-radius: 1rem; background: white; cursor: pointer; }
+.fulfillment-option.is-selected { border-color: var(--accent-strong); box-shadow: 0 0 0 2px rgba(100,41,58,.08); }
+.fulfillment-option input { width: 20px; height: 20px; margin-top: .1rem; }
+.fulfillment-option span { display: grid; gap: .15rem; }
+.fulfillment-option small { color: var(--muted); line-height: 1.4; }
+.delivery-options { margin-top: .8rem; padding: .85rem; border-radius: .9rem; background: #fff; border: 1px solid var(--line); }
+.delivery-options label { display: block; margin-bottom: .35rem; font-weight: 800; }
+.delivery-options select { width: 100%; min-height: 48px; border: 1px solid var(--line); border-radius: .75rem; background: white; padding: .65rem .75rem; }
+.shipping-guidance { margin-top: .75rem; padding: .75rem; border-radius: .75rem; background: var(--soft); }
+.shipping-guidance p { margin: .25rem 0; }
+@media (min-width: 680px) { .fulfillment-option-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
