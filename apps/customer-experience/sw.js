@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v19";
-// 2026-09-05: keep connectivity, narrow-screen and product-media resilience available offline while preserving the current cache generation.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v20";
+// 2026-09-05: refresh mobile catalog return-focus and accessibility behavior while retaining the isolated offline shell.
 const APP_SHELL = [
   "./",
   "./index.html",
