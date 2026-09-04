@@ -7,6 +7,8 @@ on:
       - 'contracts/commerce/**'
       - 'ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json'
       - 'ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-04.json'
+      - 'ops/readiness/ruby-tokushoho-owner-approval.template.json'
+      - 'scripts/validate_sprint7_tokushoho_owner_approval_handoff.py'
       - '.github/workflows/commerce-woocommerce-tests.yml'
   push:
     branches:
@@ -16,6 +18,8 @@ on:
       - 'contracts/commerce/**'
       - 'ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json'
       - 'ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-04.json'
+      - 'ops/readiness/ruby-tokushoho-owner-approval.template.json'
+      - 'scripts/validate_sprint7_tokushoho_owner_approval_handoff.py'
       - '.github/workflows/commerce-woocommerce-tests.yml'
 
 permissions:
@@ -48,3 +52,5 @@ jobs:
         env:
           PYTHONPATH: src
         run: python tools_validate_owner_catalog_package.py fixtures/production-catalog-intake.template.json --expect-pending
+      - name: Validate Tokushoho owner approval handoff boundary
+        run: python scripts/validate_sprint7_tokushoho_owner_approval_handoff.py

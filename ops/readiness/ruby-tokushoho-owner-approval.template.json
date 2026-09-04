@@ -1,0 +1,29 @@
+{
+  "version": "ruby-tokushoho-owner-approval-v1",
+  "candidate_ref": "ops/readiness/ruby-tokushoho-publication-candidate-2026-09-04.json",
+  "candidate_document_ref": "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md",
+  "decision_scope": "candidate_text_approval_only",
+  "decision_status": "pending",
+  "approval_recorded": false,
+  "candidate_text_approved": false,
+  "decision_by_role": "CEO",
+  "decision_by": null,
+  "decision_at": null,
+  "decision_note": null,
+  "acknowledgements": {
+    "actual_woocommerce_final_screen_is_separate_gate": true,
+    "catalog_closure_is_separate_gate": true,
+    "approval_does_not_authorize_real_payment": true,
+    "approval_does_not_authorize_publication_execution": true,
+    "approval_does_not_authorize_dns_cutover": true
+  },
+  "authority": {
+    "checkout_mutation_authorized": false,
+    "catalog_mutation_authorized": false,
+    "payment_execution_authorized": false,
+    "production_publication_execution_authorized": false,
+    "dns_cutover_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "decision": "TOKUSHOHO_OWNER_APPROVAL_PENDING_FAIL_CLOSED"
+}
