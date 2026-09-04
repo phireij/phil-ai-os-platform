@@ -49,6 +49,7 @@ def main() -> None:
     require(nested_const(schema, "properties", "version") == "ruby-woocommerce-final-confirmation-screen-evidence-v1", "schema version drift")
     require(nested_const(schema, "properties", "environment") == "preproduction", "screen evidence must remain preproduction-only")
     require(nested_const(schema, "properties", "source_url_class") == "sanitized_preproduction_checkout", "source URL class drift")
+    require(nested_const(schema, "properties", "synthetic_customer_data_only") is True, "schema must require synthetic customer data only")
     require(nested_const(schema, "properties", "contains_personal_data") is False, "schema must forbid personal data")
     require(nested_const(schema, "properties", "contains_secret_material") is False, "schema must forbid secret material")
     require(nested_const(schema, "properties", "observations", "properties", "final_action_not_invoked") is True, "schema must require final action not invoked")
@@ -107,7 +108,7 @@ def main() -> None:
     ):
         require(phrase in plan, f"capture plan safeguard missing: {phrase}")
 
-    print("PHIL_AI_OS_RUBY_ACTUAL_WOOCOMMERCE_FINAL_SCREEN_EVIDENCE_CONTRACT_GREEN preproduction=true pii=false secrets=false")
+    print("PHIL_AI_OS_RUBY_ACTUAL_WOOCOMMERCE_FINAL_SCREEN_EVIDENCE_CONTRACT_GREEN preproduction=true pii=false secrets=false synthetic_only=true")
     print("PHIL_AI_OS_RUBY_ACTUAL_WOOCOMMERCE_FINAL_SCREEN_REVIEW_PENDING_FAIL_CLOSED order_creation=false payment_execution=false")
 
 
