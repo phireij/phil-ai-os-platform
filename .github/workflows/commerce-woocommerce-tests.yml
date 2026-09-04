@@ -5,6 +5,8 @@ on:
     paths:
       - 'commerce/woocommerce/**'
       - 'contracts/commerce/**'
+      - 'ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json'
+      - 'ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-04.json'
       - '.github/workflows/commerce-woocommerce-tests.yml'
   push:
     branches:
@@ -12,6 +14,8 @@ on:
     paths:
       - 'commerce/woocommerce/**'
       - 'contracts/commerce/**'
+      - 'ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json'
+      - 'ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-04.json'
       - '.github/workflows/commerce-woocommerce-tests.yml'
 
 permissions:
@@ -36,3 +40,6 @@ jobs:
         env:
           PYTHONPATH: src
         run: python tools_validate_catalog_readiness.py
+      - name: Validate final catalog handoff contract
+        working-directory: commerce/woocommerce
+        run: python tools_validate_catalog_handoff.py
