@@ -26,6 +26,9 @@
   "confirmation_screen": {
     "static_compliance_checklist_ready": true,
     "checklist_document": "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md",
+    "isolated_final_confirmation_preview_green": true,
+    "isolated_final_confirmation_preview_evidence_ref": "ops/readiness/ruby-isolated-final-confirmation-preview-2026-09-04.json",
+    "isolated_preview_satisfies_actual_screen_gate": false,
     "actual_final_screen_reviewed": false,
     "actual_final_screen_evidence_captured": false,
     "real_order_required_for_review": false,
@@ -51,9 +54,9 @@
   },
   "next_evidence_needed": [
     "owner approval of the final Tokushoho publication candidate before publication",
-    "safe non-transactional evidence of the actual final WooCommerce confirmation screen against the static checklist",
+    "safe non-transactional evidence of the actual final WooCommerce confirmation screen against the static checklist; the GREEN isolated preview does not satisfy this actual-screen gate",
     "final owner-approved production catalog for Sprint 3 closure",
     "fresh near-cutover recovery validation and final Go/No-Go at the appropriate later gate"
   ],
-  "decision": "TOKUSHOHO_PUBLICATION_CANDIDATE_AND_STATIC_SCREEN_CHECKLIST_READY_APPROVAL_AND_ACTUAL_SCREEN_PENDING_FAIL_CLOSED"
+  "decision": "TOKUSHOHO_CANDIDATE_AND_ISOLATED_CONFIRMATION_PREVIEW_GREEN_APPROVAL_AND_ACTUAL_WOOCOMMERCE_SCREEN_PENDING_FAIL_CLOSED"
 }
