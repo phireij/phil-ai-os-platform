@@ -1,0 +1,95 @@
+.browse-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  align-items: center;
+  margin: -.25rem 0 1rem;
+}
+
+.filter-chip-row {
+  display: flex;
+  gap: .5rem;
+  overflow-x: auto;
+  padding: .15rem 0;
+  scrollbar-width: none;
+}
+.filter-chip-row::-webkit-scrollbar { display: none; }
+.filter-chip {
+  flex: 0 0 auto;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  color: var(--accent-strong);
+  padding: .55rem .85rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.filter-chip.is-active {
+  background: var(--accent-strong);
+  color: white;
+  border-color: var(--accent-strong);
+}
+.filter-chip:focus-visible,
+.mobile-detail-cart-link:focus-visible {
+  outline: 3px solid #2b6fff;
+  outline-offset: 3px;
+}
+.browse-filter-summary {
+  flex: 0 0 auto;
+  margin: 0;
+  color: var(--muted);
+  font-size: .82rem;
+  font-weight: 700;
+}
+.product-card[hidden] { display: none; }
+.mobile-detail-continuation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: 1rem;
+  padding: .8rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: #fffaf8;
+}
+.mobile-detail-hint {
+  color: var(--muted);
+  font-size: .86rem;
+}
+.mobile-detail-cart-link { flex: 0 0 auto; }
+
+@media (max-width: 679px) {
+  .browse-controls {
+    position: sticky;
+    top: 72px;
+    z-index: 4;
+    display: grid;
+    gap: .35rem;
+    margin: 0 -.25rem .85rem;
+    padding: .55rem .25rem .65rem;
+    background: rgba(255,247,245,.96);
+    backdrop-filter: blur(12px);
+  }
+  .browse-filter-summary { padding-left: .15rem; }
+  .filter-chip { min-height: 48px; }
+  .product-card { scroll-margin-top: 9rem; }
+  .mobile-detail-continuation {
+    position: sticky;
+    bottom: calc(var(--mobile-dock-height) + env(safe-area-inset-bottom) + .5rem);
+    z-index: 6;
+    display: grid;
+    padding: .65rem;
+    box-shadow: 0 12px 34px rgba(54,36,36,.14);
+  }
+  .mobile-detail-cart-link { width: 100%; }
+}
+
+@media (prefers-contrast: more) {
+  .filter-chip, .mobile-detail-continuation { border-color: var(--muted); }
+}
+
+@media (forced-colors: active) {
+  .filter-chip, .mobile-detail-continuation { border: 1px solid CanvasText; }
+}
