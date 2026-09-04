@@ -11,6 +11,7 @@ const copy = {
     noResultsTitle: "No products match this filter",
     noResultsCopy: "Nothing is available in this view right now. Show all products to keep browsing.",
     showAll: "Show all products",
+    viewDetails: "View details",
     pickup: "Pickup supported",
     reviewCart: "Review cart",
     reviewCartHint: "Continue to the cart preview while keeping your language and selected product.",
@@ -25,6 +26,7 @@ const copy = {
     noResultsTitle: "この条件に一致する商品はありません",
     noResultsCopy: "現在、この表示条件で購入可能な商品はありません。すべての商品に戻って引き続きご覧いただけます。",
     showAll: "すべての商品を見る",
+    viewDetails: "詳細を見る",
     pickup: "店頭受取対応",
     reviewCart: "カートを確認",
     reviewCartHint: "言語設定と選択した商品を保ったままカートプレビューへ進みます。",
@@ -54,6 +56,26 @@ function productKeyFromHref(href) {
   } catch {
     return null;
   }
+}
+
+function safeIdPart(value) {
+  return String(value || "product").replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+function decorateProductCardScanability(card, index) {
+  const link = card.querySelector(".detail-link");
+  const availability = card.querySelector(".availability");
+  const price = card.querySelector(".price");
+  const title = card.querySelector("h3")?.textContent?.trim() || "";
+  if (!link || !availability || !price) return;
+
+  const key = safeIdPart(card.dataset.productKey || productKeyFromHref(link.getAttribute("href") || link.href) || index);
+  availability.id ||= `product-${key}-availability`;
+  price.id ||= `product-${key}-price`;
+  link.textContent = copy[locale()].viewDetails;
+  link.setAttribute("aria-label", title ? `${copy[locale()].viewDetails}: ${title}` : copy[locale()].viewDetails);
+  link.setAttribute("aria-describedby", `${availability.id} ${price.id}`);
+  card.dataset.cardAvailability = availability.classList.contains("in_stock") ? "in_stock" : "unavailable";
 }
 
 function rememberCatalogReturnTarget(link) {
@@ -158,12 +180,13 @@ function syncNoResults(visible) {
 function applyFilter() {
   const cards = productCards();
   let visible = 0;
-  for (const card of cards) {
+  cards.forEach((card, index) => {
+    decorateProductCardScanability(card, index);
     const available = Boolean(card.querySelector(".availability.in_stock"));
     const show = filterMode === "all" || available;
     card.hidden = !show;
     if (show) visible += 1;
-  }
+  });
   const summary = document.querySelector("#browse-filter-summary");
   if (summary) summary.textContent = copy[locale()].showing(visible, cards.length);
   syncFilterControls();

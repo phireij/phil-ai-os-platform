@@ -15,6 +15,18 @@ test("mobile catalog supports fast all versus available-now scanning", () => {
   assert.match(source, /現在購入可能/);
 });
 
+test("product cards expose clearer bilingual details actions with price and availability context", () => {
+  assert.match(source, /View details/);
+  assert.match(source, /詳細を見る/);
+  assert.match(source, /decorateProductCardScanability/);
+  assert.match(source, /aria-describedby/);
+  assert.match(source, /product-\$\{key\}-availability/);
+  assert.match(source, /product-\$\{key\}-price/);
+  assert.match(source, /dataset\.cardAvailability/);
+  assert.match(css, /fulfillment-chip:empty/);
+  assert.match(css, /data-card-availability="unavailable"/);
+});
+
 test("catalog no-results state offers a bilingual one-tap recovery", () => {
   assert.match(source, /No products match this filter/);
   assert.match(source, /この条件に一致する商品はありません/);
