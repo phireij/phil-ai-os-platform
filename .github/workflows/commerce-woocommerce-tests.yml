@@ -43,3 +43,8 @@ jobs:
       - name: Validate final catalog handoff contract
         working-directory: commerce/woocommerce
         run: python tools_validate_catalog_handoff.py
+      - name: Exercise owner catalog package CLI against pending template
+        working-directory: commerce/woocommerce
+        env:
+          PYTHONPATH: src
+        run: python tools_validate_owner_catalog_package.py fixtures/production-catalog-intake.template.json --expect-pending
