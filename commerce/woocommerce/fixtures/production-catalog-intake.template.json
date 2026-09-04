@@ -4,6 +4,12 @@
   "package_state": "draft",
   "catalog_approved": false,
   "catalog_approval_ref": null,
+  "catalog_scope": {
+    "scope_type": "initial_launch_subset",
+    "full_product_range_required_for_sprint3_closure": false,
+    "additional_products_may_be_added_after_sprint3": true,
+    "scope_complete_for_intended_initial_launch": false
+  },
   "source_contract": {
     "owner_source_required": true,
     "owner_approval_required": true,
@@ -16,8 +22,9 @@
     "production_write_authority_granted_by_handoff": false
   },
   "handoff_requirements": [
-    "final owner-approved product list",
-    "approved category hierarchy",
+    "final owner-approved Initial Launch Catalog V1 product subset",
+    "owner confirmation that the submitted subset is complete for the intended initial launch",
+    "approved category hierarchy for the submitted launch subset",
     "English and Japanese product names/descriptions/slugs",
     "JPY regular prices",
     "fulfillment and temperature/shipping-class data",

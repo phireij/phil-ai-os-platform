@@ -14,6 +14,7 @@ spec.loader.exec_module(planner)
 class PreproductionCatalogDryRunPlannerTests(unittest.TestCase):
     def ready_package(self):
         payload = json.loads((ROOT / "fixtures/production-catalog-intake.template.json").read_text(encoding="utf-8"))
+        payload["catalog_scope"]["scope_complete_for_intended_initial_launch"] = True
         payload.update(
             {
                 "package_state": "approved",
