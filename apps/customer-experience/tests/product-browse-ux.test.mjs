@@ -26,6 +26,27 @@ test("catalog filter context survives product-detail navigation and return", () 
   assert.match(source, /popstate/);
 });
 
+test("catalog return restores focus near the previously opened product only", () => {
+  assert.match(source, /RETURN_TARGET_KEY/);
+  assert.match(source, /sessionStorage\.setItem\(RETURN_TARGET_KEY, productKey\)/);
+  assert.match(source, /sessionStorage\.getItem\(RETURN_TARGET_KEY\)/);
+  assert.match(source, /sessionStorage\.removeItem\(RETURN_TARGET_KEY\)/);
+  assert.match(source, /if \(returnFocusRestored \|\| selectedProductKey\(\)\) return/);
+  assert.match(source, /targetLink\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(source, /scrollIntoView\(\{ block: "center", inline: "nearest" \}\)/);
+  assert.doesNotMatch(source, /localStorage/);
+});
+
+test("filter controls expose target and status semantics with visible focus", () => {
+  assert.match(source, /aria-controls="catalog-grid"/);
+  assert.match(source, /role="status"/);
+  assert.match(source, /aria-live="polite"/);
+  assert.match(source, /aria-atomic="true"/);
+  assert.match(css, /filter-chip:focus-visible/);
+  assert.match(css, /@media \(forced-colors: active\)/);
+  assert.match(css, /Highlight/);
+});
+
 test("available product detail offers a locale-and-product-preserving cart continuation", () => {
   assert.match(source, /mobile-detail-continuation/);
   assert.match(source, /selectedProductKey/);
