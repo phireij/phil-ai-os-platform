@@ -25,7 +25,11 @@ const copy = {
   },
 };
 
-let filterMode = "all";
+function filterFromUrl() {
+  return new URLSearchParams(location.search).get("filter") === "available" ? "available" : "all";
+}
+
+let filterMode = filterFromUrl();
 
 function locale() {
   return document.documentElement.lang === "ja" ? "ja" : "en";
@@ -33,6 +37,49 @@ function locale() {
 
 function productCards() {
   return [...document.querySelectorAll("#catalog-grid .product-card")];
+}
+
+function catalogReturnHref(lang = locale()) {
+  const url = new URL("./", location.href);
+  url.searchParams.set("lang", lang);
+  if (filterMode === "available") url.searchParams.set("filter", "available");
+  else url.searchParams.delete("filter");
+  url.hash = "catalog-section";
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function syncFilterUrl() {
+  const url = new URL(location.href);
+  if (filterMode === "available") url.searchParams.set("filter", "available");
+  else url.searchParams.delete("filter");
+  history.replaceState(null, "", url);
+}
+
+function decorateCatalogDetailLinks() {
+  for (const card of productCards()) {
+    const link = card.querySelector(".detail-link");
+    if (!link) continue;
+    const url = new URL(link.getAttribute("href") || link.href, location.href);
+    if (filterMode === "available") url.searchParams.set("filter", "available");
+    else url.searchParams.delete("filter");
+    link.href = `${url.pathname}${url.search}${url.hash}`;
+  }
+}
+
+function syncBackLink() {
+  const back = document.querySelector("#back-link");
+  if (!back) return;
+  back.href = catalogReturnHref(locale());
+}
+
+function syncFilterControls() {
+  const bar = document.querySelector("#browse-filter-bar");
+  if (!bar) return;
+  bar.querySelectorAll("[data-filter]").forEach((node) => {
+    const active = node.dataset.filter === filterMode;
+    node.classList.toggle("is-active", active);
+    node.setAttribute("aria-pressed", active ? "true" : "false");
+  });
 }
 
 function applyFilter() {
@@ -46,6 +93,9 @@ function applyFilter() {
   }
   const summary = document.querySelector("#browse-filter-summary");
   if (summary) summary.textContent = copy[locale()].showing(visible, cards.length);
+  syncFilterControls();
+  decorateCatalogDetailLinks();
+  syncBackLink();
 }
 
 function updateFilterCopy() {
@@ -69,7 +119,7 @@ function ensureFilterBar() {
   wrapper.className = "browse-controls";
   wrapper.innerHTML = `
     <div id="browse-filter-bar" class="filter-chip-row" role="group">
-      <button class="filter-chip is-active" type="button" data-filter="all"></button>
+      <button class="filter-chip" type="button" data-filter="all"></button>
       <button class="filter-chip" type="button" data-filter="available"></button>
     </div>
     <p id="browse-filter-summary" class="browse-filter-summary" aria-live="polite"></p>`;
@@ -79,11 +129,7 @@ function ensureFilterBar() {
     const button = event.target.closest("[data-filter]");
     if (!button) return;
     filterMode = button.dataset.filter === "available" ? "available" : "all";
-    wrapper.querySelectorAll("[data-filter]").forEach((node) => {
-      const active = node.dataset.filter === filterMode;
-      node.classList.toggle("is-active", active);
-      node.setAttribute("aria-pressed", active ? "true" : "false");
-    });
+    syncFilterUrl();
     applyFilter();
   });
   updateFilterCopy();
@@ -125,13 +171,15 @@ function ensureDetailContinuation() {
   const link = panel.querySelector(".mobile-detail-cart-link");
   const available = selectedDetailIsAvailable(detail);
   syncDetailCheckoutAvailability(detail, available);
+  syncBackLink();
 
   if (!available) {
     panel.dataset.detailMode = "browse_only";
     hint.textContent = copy[lang].unavailableHint;
     link.textContent = copy[lang].unavailableAction;
     link.classList.add("is-unavailable-redirect");
-    link.href = localeHref("./#catalog-section", lang);
+    filterMode = "available";
+    link.href = catalogReturnHref(lang);
     link.removeAttribute("data-selected-product");
     return;
   }
@@ -151,10 +199,12 @@ function ensureDetailContinuation() {
   link.href = localeHref(`${cartUrl.pathname}${cartUrl.search}`, lang);
 }
 
-function refresh() {
+function refresh({ restoreFilterFromUrl = false } = {}) {
+  if (restoreFilterFromUrl) filterMode = filterFromUrl();
   ensureFilterBar();
   updateFilterCopy();
   ensureDetailContinuation();
+  syncBackLink();
 }
 
 const catalog = document.querySelector("#catalog-grid");
@@ -162,5 +212,5 @@ if (catalog) new MutationObserver(refresh).observe(catalog, { childList: true, s
 const detail = document.querySelector("#product-detail");
 if (detail) new MutationObserver(refresh).observe(detail, { childList: true, subtree: true });
 document.querySelector("#locale-select")?.addEventListener("change", () => queueMicrotask(refresh));
-addEventListener("popstate", () => queueMicrotask(refresh));
-refresh();
+addEventListener("popstate", () => queueMicrotask(() => refresh({ restoreFilterFromUrl: true })));
+refresh({ restoreFilterFromUrl: true });

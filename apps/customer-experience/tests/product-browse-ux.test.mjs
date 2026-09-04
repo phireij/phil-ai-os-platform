@@ -15,6 +15,17 @@ test("mobile catalog supports fast all versus available-now scanning", () => {
   assert.match(source, /現在購入可能/);
 });
 
+test("catalog filter context survives product-detail navigation and return", () => {
+  assert.match(source, /filterFromUrl/);
+  assert.match(source, /URLSearchParams\(location\.search\)\.get\("filter"\)/);
+  assert.match(source, /searchParams\.set\("filter", "available"\)/);
+  assert.match(source, /decorateCatalogDetailLinks/);
+  assert.match(source, /catalogReturnHref/);
+  assert.match(source, /syncBackLink/);
+  assert.match(source, /restoreFilterFromUrl/);
+  assert.match(source, /popstate/);
+});
+
 test("available product detail offers a locale-and-product-preserving cart continuation", () => {
   assert.match(source, /mobile-detail-continuation/);
   assert.match(source, /selectedProductKey/);
@@ -32,7 +43,8 @@ test("unavailable product detail never presents a misleading cart continuation",
   assert.match(source, /購入可能な商品を見る/);
   assert.match(source, /if \(!available\)/);
   assert.match(source, /is-unavailable-redirect/);
-  assert.match(source, /localeHref\("\.\/#catalog-section", lang\)/);
+  assert.match(source, /filterMode = "available"/);
+  assert.match(source, /link\.href = catalogReturnHref\(lang\)/);
   assert.match(source, /removeAttribute\("data-selected-product"\)/);
 });
 
