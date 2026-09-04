@@ -1,0 +1,49 @@
+{
+  "version": "ruby-komoju-paypay-provider-capability-v1",
+  "date": "2026-09-04",
+  "scope": "provider_capability_only",
+  "provider": "KOMOJU",
+  "payment_method": "PayPay",
+  "payment_method_slug": "paypay",
+  "currency": "JPY",
+  "official_provider_capability_confirmed": true,
+  "official_woocommerce_documentation_lists_paypay": true,
+  "evidence": [
+    {
+      "type": "official_komoju_supported_payment_methods",
+      "url": "https://doc.komoju.com/page/supported-payment-methods",
+      "observed": "PayPay is listed for Japan with slug paypay and JPY processing support"
+    },
+    {
+      "type": "official_komoju_woocommerce_guide",
+      "url": "https://doc.komoju.com/docs/getting-started-with-woocommerce",
+      "observed": "KOMOJU WooCommerce documentation explicitly lists PayPay among supported local payment methods and describes per-method enablement"
+    }
+  ],
+  "ruby_merchant_live_state": {
+    "merchant_specific_paypay_availability_verified": false,
+    "merchant_specific_live_dashboard_evidence_captured": false,
+    "woocommerce_paypay_gateway_exposed": false,
+    "woocommerce_paypay_gateway_enabled": false,
+    "initial_launch_selection_approved": false,
+    "status": "merchant_specific_live_availability_pending_readonly_evidence"
+  },
+  "interpretation": {
+    "provider_support_question_resolved": true,
+    "merchant_enablement_question_resolved": false,
+    "does_not_change_approved_initial_payment_subset": true,
+    "does_not_authorize_paypay_activation": true
+  },
+  "authority": {
+    "woocommerce_configuration_mutation_authorized": false,
+    "paypay_activation_authorized": false,
+    "payment_execution_authorized": false,
+    "production_publish_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "next_evidence_needed": [
+    "read-only evidence from Ruby's KOMOJU Live merchant account showing whether PayPay is available for activation",
+    "if merchant availability is confirmed, a separate CEO decision on whether PayPay should join a future launch payment subset before any WooCommerce activation"
+  ],
+  "decision": "PAYPAY_PROVIDER_CAPABILITY_GREEN_MERCHANT_LIVE_AVAILABILITY_PENDING_FAIL_CLOSED"
+}
