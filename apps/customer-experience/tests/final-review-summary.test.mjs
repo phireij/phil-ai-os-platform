@@ -1,12 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const source = readFileSync(new URL("../src/final-review-summary.mjs", import.meta.url), "utf8");
+const sourceUrl = new URL("../src/final-review-summary.mjs", import.meta.url);
+const source = readFileSync(sourceUrl, "utf8");
 const html = readFileSync(new URL("../confirmation-preview.html", import.meta.url), "utf8");
 const css = readFileSync(new URL("../final-review-summary.css", import.meta.url), "utf8");
 const sw = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
 const fixture = JSON.parse(readFileSync(new URL("../fixtures/final-confirmation.json", import.meta.url), "utf8"));
+
+test("final review module passes JavaScript syntax validation", () => {
+  execFileSync(process.execPath, ["--check", fileURLToPath(sourceUrl)], { stdio: "pipe" });
+});
 
 test("mobile final review summarizes total, fulfillment, payment and policies", () => {
   assert.match(source, /Final review at a glance/);
