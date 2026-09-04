@@ -9,6 +9,8 @@ const copy = {
     pickup: "Pickup supported",
     reviewCart: "Review cart",
     reviewCartHint: "Continue to the cart preview while keeping your language and selected product.",
+    unavailableAction: "See available products",
+    unavailableHint: "This item is currently unavailable. Choose another available product before continuing to cart.",
   },
   ja: {
     filtersLabel: "商品フィルター",
@@ -18,6 +20,8 @@ const copy = {
     pickup: "店頭受取対応",
     reviewCart: "カートを確認",
     reviewCartHint: "言語設定と選択した商品を保ったままカートプレビューへ進みます。",
+    unavailableAction: "購入可能な商品を見る",
+    unavailableHint: "この商品は現在購入できません。カートへ進む前に、購入可能な商品を選択してください。",
   },
 };
 
@@ -89,6 +93,10 @@ function selectedProductKey() {
   return new URLSearchParams(location.search).get("product");
 }
 
+function selectedDetailIsAvailable(detail) {
+  return Boolean(detail?.querySelector(".availability.in_stock"));
+}
+
 function ensureDetailContinuation() {
   const section = document.querySelector("#product-section");
   const detail = document.querySelector("#product-detail");
@@ -98,16 +106,35 @@ function ensureDetailContinuation() {
     panel = document.createElement("aside");
     panel.id = "mobile-detail-continuation";
     panel.className = "mobile-detail-continuation";
-    panel.innerHTML = `<span class="mobile-detail-hint"></span><a class="detail-link mobile-detail-cart-link" href="./cart-preview.html"></a>`;
+    panel.setAttribute("aria-live", "polite");
+    panel.innerHTML = `<span class="mobile-detail-hint"></span><a class="detail-link mobile-detail-cart-link"></a>`;
     section.append(panel);
   }
   const lang = locale();
-  panel.querySelector(".mobile-detail-hint").textContent = copy[lang].reviewCartHint;
+  const hint = panel.querySelector(".mobile-detail-hint");
   const link = panel.querySelector(".mobile-detail-cart-link");
+  const available = selectedDetailIsAvailable(detail);
+
+  if (!available) {
+    hint.textContent = copy[lang].unavailableHint;
+    link.textContent = copy[lang].unavailableAction;
+    link.classList.add("is-unavailable-redirect");
+    link.href = localeHref("./#catalog-section", lang);
+    link.removeAttribute("data-selected-product");
+    return;
+  }
+
+  hint.textContent = copy[lang].reviewCartHint;
   link.textContent = copy[lang].reviewCart;
+  link.classList.remove("is-unavailable-redirect");
   const cartUrl = new URL("./cart-preview.html", location.href);
   const productKey = selectedProductKey();
-  if (productKey) cartUrl.searchParams.set("product", productKey);
+  if (productKey) {
+    cartUrl.searchParams.set("product", productKey);
+    link.dataset.selectedProduct = productKey;
+  } else {
+    link.removeAttribute("data-selected-product");
+  }
   link.href = localeHref(`${cartUrl.pathname}${cartUrl.search}`, lang);
 }
 
