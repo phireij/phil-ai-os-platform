@@ -46,6 +46,8 @@ jobs:
           node --check apps/customer-experience/src/cart-form-guard.mjs
           node --check apps/customer-experience/src/cart-dock-status.mjs
           node --check apps/customer-experience/src/cart-session-recovery.mjs
+          node --check apps/customer-experience/src/checkout-context-summary.mjs
+          node --check apps/customer-experience/src/payment-method-guidance.mjs
           node --check apps/customer-experience/src/checkout-confidence.mjs
           node --check apps/customer-experience/src/confirmation-preview.mjs
           node --check apps/customer-experience/src/flow.mjs
@@ -114,6 +116,9 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "cart-form-guard.mjs"
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "cart-dock-status.mjs"
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "cart-session-recovery.mjs"
+          curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "checkout-context-summary.mjs"
+          curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "payment-method-guidance.mjs"
+          curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "payment-method-guidance.css"
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "cart-mobile-controls.css"
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "fulfillment-choice.mjs"
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "fulfillment-choice.css"
@@ -128,11 +133,15 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/src/cart-dock-status.mjs | grep -F "dataset.cartCount"
           curl --fail --silent http://127.0.0.1:8094/src/cart-session-recovery.mjs | grep -F "sessionStorage"
           curl --fail --silent http://127.0.0.1:8094/src/cart-session-recovery.mjs | grep -F "explicitProductSelectionPresent"
+          curl --fail --silent http://127.0.0.1:8094/src/payment-method-guidance.mjs | grep -F "Pay within 3 days"
+          curl --fail --silent http://127.0.0.1:8094/src/payment-method-guidance.mjs | grep -F "3日以内にお支払いください"
+          curl --fail --silent http://127.0.0.1:8094/src/payment-method-guidance.mjs | grep -F "payment_execution_authorized !== false"
           curl --fail --silent http://127.0.0.1:8094/cart-mobile-controls.css | grep -F ".quantity-stepper"
           curl --fail --silent http://127.0.0.1:8094/cart-mobile-controls.css | grep -F ".cart-guidance-action"
           curl --fail --silent http://127.0.0.1:8094/src/fulfillment-choice.mjs | grep -F "Kanto: ¥1,350 flat rate"
           curl --fail --silent http://127.0.0.1:8094/src/fulfillment-choice.mjs | grep -F "その他の地域：配送地域により 1,500円〜1,800円"
           curl --fail --silent http://127.0.0.1:8094/fulfillment-choice.css | grep -F ".fulfillment-option"
+          curl --fail --silent http://127.0.0.1:8094/payment-method-guidance.css | grep -F ".payment-method-guidance"
           curl --fail --silent http://127.0.0.1:8094/confirmation-preview.html | grep -F "No order submission"
           curl --fail --silent http://127.0.0.1:8094/confirmation-preview.html | grep -F "Place order (preview only — disabled)"
           curl --fail --silent http://127.0.0.1:8094/quick-pickup-preview.html | grep -F "No external activation"
@@ -157,10 +166,11 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/fixtures/air-mobile-quick-pickup.json | grep -F '"automatic_publication_authorized": false'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"provider": "komoju"'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"connection_state": "not_configured"'
-          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v18'
+          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v19'
           curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F './src/cart-form-guard.mjs'
           curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F './src/cart-dock-status.mjs'
           curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F './src/cart-session-recovery.mjs'
+          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F './src/payment-method-guidance.mjs'
 
       - name: Stop isolated server
         if: always()
