@@ -29,6 +29,10 @@
     "isolated_final_confirmation_preview_green": true,
     "isolated_final_confirmation_preview_evidence_ref": "ops/readiness/ruby-isolated-final-confirmation-preview-2026-09-04.json",
     "isolated_preview_satisfies_actual_screen_gate": false,
+    "actual_screen_evidence_contract_ready": true,
+    "actual_screen_evidence_schema_ref": "contracts/cx/final-confirmation-screen-evidence.schema.json",
+    "actual_screen_evidence_template_ref": "ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence.template.json",
+    "actual_screen_capture_plan_ref": "docs/RUBY_ACTUAL_WOOCOMMERCE_FINAL_SCREEN_EVIDENCE_CAPTURE_PLAN_2026-09-04.md",
     "actual_final_screen_reviewed": false,
     "actual_final_screen_evidence_captured": false,
     "real_order_required_for_review": false,
@@ -54,7 +58,7 @@
   },
   "next_evidence_needed": [
     "owner approval of the final Tokushoho publication candidate before publication",
-    "safe non-transactional evidence of the actual final WooCommerce confirmation screen against the static checklist; the GREEN isolated preview does not satisfy this actual-screen gate",
+    "capture and validate sanitized non-transactional evidence of the actual WooCommerce preproduction final confirmation screen using the prepared evidence contract; the GREEN isolated preview does not satisfy this actual-screen gate",
     "final owner-approved production catalog for Sprint 3 closure",
     "fresh near-cutover recovery validation and final Go/No-Go at the appropriate later gate"
   ],
