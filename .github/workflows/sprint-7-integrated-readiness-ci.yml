@@ -114,6 +114,9 @@ jobs:
       - name: Self-test actual final confirmation screen evidence acceptance harness
         run: python scripts/validate_sprint7_actual_confirmation_screen_evidence.py --self-test
 
+      - name: Validate guarded preproduction final-screen capture workflow
+        run: python scripts/validate_sprint7_preproduction_final_screen_capture_workflow.py
+
       - name: Validate external channel activation readiness
         run: python scripts/validate_sprint7_channel_activation.py
 
