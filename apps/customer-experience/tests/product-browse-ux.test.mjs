@@ -15,13 +15,25 @@ test("mobile catalog supports fast all versus available-now scanning", () => {
   assert.match(source, /現在購入可能/);
 });
 
-test("product detail offers a locale-and-product-preserving cart continuation", () => {
+test("available product detail offers a locale-and-product-preserving cart continuation", () => {
   assert.match(source, /mobile-detail-continuation/);
   assert.match(source, /selectedProductKey/);
+  assert.match(source, /selectedDetailIsAvailable/);
   assert.match(source, /searchParams\.set\("product", productKey\)/);
   assert.match(source, /localeHref\(`\$\{cartUrl\.pathname\}\$\{cartUrl\.search\}`, lang\)/);
   assert.match(source, /Review cart/);
   assert.match(source, /カートを確認/);
+});
+
+test("unavailable product detail never presents a misleading cart continuation", () => {
+  assert.match(source, /This item is currently unavailable/);
+  assert.match(source, /この商品は現在購入できません/);
+  assert.match(source, /See available products/);
+  assert.match(source, /購入可能な商品を見る/);
+  assert.match(source, /if \(!available\)/);
+  assert.match(source, /is-unavailable-redirect/);
+  assert.match(source, /localeHref\("\.\/#catalog-section", lang\)/);
+  assert.match(source, /removeAttribute\("data-selected-product"\)/);
 });
 
 test("browsing enhancement remains non-authorizing and network inert", () => {
