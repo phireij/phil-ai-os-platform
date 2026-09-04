@@ -65,9 +65,9 @@ Ruby's Cake Delights は、現在確認済みの2026年事業状況に基づき�
 ヤマト運輸（クール宅急便）を利用します。
 
 - 関東：一律 1,350円
-- その他の地域：1,500円〜1,800円
+- その他の地域：配送地域により 1,500円〜1,800円
 
-配送地域・ご注文内容等により適用可否を確認し、最終送料は注文の最終確認画面に表示します。
+配送地域・ご注文内容等により適用可否を確認します。最終的な送料は、ご注文確定前の最終確認画面に表示されます。
 
 ### お支払い方法
 初期公開で提供する予定の支払方法は、現在確認済みのWooCommerce/KOMOJU設定に基づき以下のとおりです。
@@ -173,9 +173,9 @@ Customers pay the selling price displayed on the relevant product page and final
 Yamato Cool delivery is currently configured at:
 
 - Kanto: ¥1,350 flat rate
-- Other regions: ¥1,500–¥1,800
+- Other regions: ¥1,500–¥1,800 depending on delivery area
 
-The actual shipping amount must be displayed before the order is submitted. Paidy may charge a customer fee depending on the customer's Paidy payment method; bank debit is free and other applicable fees are shown by Paidy.
+The exact shipping fee will be displayed on the final order confirmation screen before the order is submitted. Paidy may charge a customer fee depending on the customer's Paidy payment method; bank debit is free and other applicable fees are shown by Paidy.
 
 ### Payment Methods
 Initial production candidate:
