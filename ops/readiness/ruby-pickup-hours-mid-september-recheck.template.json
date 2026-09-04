@@ -1,0 +1,35 @@
+{
+  "version": "ruby-pickup-hours-mid-september-recheck-v1",
+  "date": "2026-09-04",
+  "recheck_window": "mid_september_2026",
+  "recheck_required": true,
+  "recheck_completed": false,
+  "current_reference": {
+    "pickup_days": ["wednesday", "thursday", "friday", "saturday"],
+    "pickup_start_local": "14:00",
+    "pickup_end_local": "20:00",
+    "timezone": "Asia/Tokyo",
+    "status": "reference_only_pending_recheck"
+  },
+  "owner_or_operator_confirmation": {
+    "confirmed": false,
+    "confirmed_by": null,
+    "confirmed_at": null,
+    "evidence_ref": null
+  },
+  "customer_experience": {
+    "copy_revalidated": false,
+    "pickup_selector_revalidated": false,
+    "tokushoho_pickup_wording_revalidated": false,
+    "production_copy_update_authorized": false
+  },
+  "authority": {
+    "checkout_mutation_authorized": false,
+    "catalog_mutation_authorized": false,
+    "payment_execution_authorized": false,
+    "production_publication_authorized": false,
+    "dns_cutover_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "decision": "PICKUP_HOURS_MID_SEPTEMBER_RECHECK_PENDING_FAIL_CLOSED"
+}
