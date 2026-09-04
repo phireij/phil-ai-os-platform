@@ -21,6 +21,12 @@ Pending evidence is staged in:
 
 `ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence.template.json`
 
+Completed evidence is accepted only by:
+
+`scripts/validate_sprint7_actual_confirmation_screen_evidence.py`
+
+The acceptance harness rejects the pending template, rejects expanded authority, rejects PII/credential-like text in retained metadata, requires at least one sanitized capture with a SHA-256 digest, and requires every final-screen observation to be GREEN.
+
 ## Safe capture procedure
 
 1. Use the existing Ruby WooCommerce **preproduction** site only.
@@ -29,9 +35,16 @@ Pending evidence is staged in:
 4. Reach the final review state immediately before the final order-submission action.
 5. **Do not click** `Place order`, `注文する`, or any equivalent order-submission/payment action.
 6. Capture sanitized evidence showing the relevant customer-facing fields. Redact any accidental PII, cookies/session IDs, credentials, API keys, tokens, internal account identifiers or sensitive provider data before retention.
-7. Record artifact references and SHA-256 hashes in the evidence JSON. Do not embed sensitive screenshots or secrets in the readiness record itself.
+7. Record non-web artifact references and SHA-256 hashes in the evidence JSON. Do not embed sensitive screenshots, public share URLs with tokens, or secrets in the readiness record itself.
 8. Mark an observation true only when the actual WooCommerce screen visibly proves it.
-9. Keep `evidence_complete=false` and `actual_final_confirmation_screen_reviewed=false` until every required observation is evidenced and the validator is updated for the completed evidence instance.
+9. Keep `evidence_complete=false` and `actual_final_confirmation_screen_reviewed=false` until every required observation is evidenced.
+10. When a completed sanitized evidence JSON is ready, validate it before changing any readiness gate:
+
+```text
+python scripts/validate_sprint7_actual_confirmation_screen_evidence.py path/to/completed-evidence.json
+```
+
+The validator must print `PHIL_AI_OS_RUBY_ACTUAL_WOOCOMMERCE_FINAL_SCREEN_EVIDENCE_GREEN` before a later readiness reconciliation may mark the actual-screen gate GREEN.
 
 ## Required screen observations
 
@@ -66,11 +79,12 @@ Prohibited evidence:
 - raw payment tokens;
 - order submission evidence;
 - real payment/capture/refund evidence;
+- public screenshot URLs containing access tokens or query-string secrets;
 - any production mutation introduced merely to satisfy this review.
 
 ## Acceptance boundary
 
-This contract enables a safe actual-screen review but does not itself make the gate GREEN.
+This contract and acceptance harness enable a safe actual-screen review but do not themselves make the gate GREEN.
 
 Current required state remains:
 
