@@ -84,6 +84,14 @@ Unless a product/order explicitly has separately disclosed conditions:
 
 The actual final-screen gate may become GREEN only after safe evidence is captured from the final WooCommerce checkout/order-confirmation implementation showing the items above. The evidence review must remain non-transactional where possible.
 
+The project now has a dedicated evidence contract and fail-closed capture template:
+
+- Schema: `contracts/cx/final-confirmation-screen-evidence.schema.json`
+- Pending template: `ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence.template.json`
+- Capture plan: `docs/RUBY_ACTUAL_WOOCOMMERCE_FINAL_SCREEN_EVIDENCE_CAPTURE_PLAN_2026-09-04.md`
+
+The contract requires the capture to remain on WooCommerce **preproduction**, use synthetic customer data only, contain no retained PII or secret material, and keep order creation/payment/publication authority false.
+
 Acceptable evidence may include:
 
 - a read-only rendered checkout/final-confirmation screen review using a non-submitted cart/session;
@@ -102,13 +110,16 @@ The following are **not** required or authorized merely to satisfy this checklis
 ## Current review state
 
 - Static checklist/specification: **GREEN / READY**.
+- Actual-screen sanitized evidence contract/capture plan: **GREEN / READY**.
 - Tokushoho publication candidate: **READY, NOT APPROVED**.
 - Actual final WooCommerce confirmation screen reviewed against this checklist: **FALSE / PENDING**.
+- Actual final-screen evidence captured: **FALSE / PENDING**.
 - Checkout legal synchronization complete: **FALSE / PENDING ACTUAL SCREEN + APPROVAL**.
 - Real payment execution authorized: **FALSE**.
 - Production publishing authorized: **FALSE**.
 
 `static_confirmation_screen_checklist_ready: true`  
+`actual_screen_evidence_contract_ready: true`  
 `actual_final_confirmation_screen_reviewed: false`  
 `tokushoho_publication_approved: false`  
 `payment_execution_authorized: false`  
