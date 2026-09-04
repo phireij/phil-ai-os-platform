@@ -1,5 +1,5 @@
 const CACHE_NAME = "phil-ai-os-cx-sprint4-v19";
-// 2026-09-05: keep mobile product media sizing stable offline while preserving the current cache generation.
+// 2026-09-05: keep narrow-screen and product-media resilience available offline while preserving the current cache generation.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -10,6 +10,7 @@ const APP_SHELL = [
   "./product-browse-ux.css",
   "./mobile-performance.css",
   "./product-media-resilience.css",
+  "./mobile-narrow-screen.css",
   "./cart-mobile-controls.css",
   "./fulfillment-choice.css",
   "./checkout-context-summary.css",
