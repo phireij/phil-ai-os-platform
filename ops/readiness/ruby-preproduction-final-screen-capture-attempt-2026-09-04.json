@@ -1,0 +1,51 @@
+{
+  "version": "ruby-preproduction-final-screen-capture-attempt-v1",
+  "date": "2026-09-04",
+  "workflow": {
+    "name": "Ruby Preproduction Final-Screen Capture",
+    "run_id": 33826576950,
+    "run_number": 1,
+    "head_branch": "main",
+    "head_sha": "c4d229c0930b3288f94fee8b53c1186ab7edea34",
+    "conclusion": "failure",
+    "failure_stage": "product_discovery_before_checkout"
+  },
+  "capture_result": {
+    "attempted": true,
+    "target_environment": "preproduction",
+    "target_host": "darkgreen-wallaby-680439.hostingersite.com",
+    "purchasable_preproduction_product_found": false,
+    "checkout_reached": false,
+    "final_action_reached": false,
+    "final_action_invoked": false,
+    "screen_evidence_captured": false,
+    "artifact_uploaded": false,
+    "retained_personal_data": false,
+    "retained_secret_material": false,
+    "blocking_reason": "no_purchasable_preproduction_product_available_for_disposable_qa_cart"
+  },
+  "sprint_dependency": {
+    "current_primary_sprint": 3,
+    "current_primary_sprint_name": "WooCommerce Foundation",
+    "sprint4_parallel_acceleration": true,
+    "formal_sprint4_entry": false,
+    "final_owner_approved_production_catalog_ready": false,
+    "actual_screen_capture_depends_on_preproduction_catalog_item": true
+  },
+  "authority": {
+    "order_creation_authorized": false,
+    "payment_execution_authorized": false,
+    "production_publish_authorized": false,
+    "catalog_mutation_authorized": false,
+    "dns_cutover_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "acceptance": {
+    "actual_final_confirmation_screen_reviewed": false,
+    "actual_final_confirmation_screen_green": false,
+    "checkout_legal_sync_complete": false,
+    "failure_is_fail_closed": true
+  },
+  "next_gate": "finalize_owner_approved_catalog_then_revalidate_preproduction_catalog_availability_before_repeating_non_transactional_final_screen_capture",
+  "decision": "PREPRODUCTION_FINAL_SCREEN_CAPTURE_BLOCKED_NO_PURCHASABLE_PRODUCT_FAIL_CLOSED"
+}

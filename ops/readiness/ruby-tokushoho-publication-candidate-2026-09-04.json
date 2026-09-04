@@ -33,6 +33,11 @@
     "actual_screen_evidence_schema_ref": "contracts/cx/final-confirmation-screen-evidence.schema.json",
     "actual_screen_evidence_template_ref": "ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence.template.json",
     "actual_screen_capture_plan_ref": "docs/RUBY_ACTUAL_WOOCOMMERCE_FINAL_SCREEN_EVIDENCE_CAPTURE_PLAN_2026-09-04.md",
+    "latest_capture_attempt_ref": "ops/readiness/ruby-preproduction-final-screen-capture-attempt-2026-09-04.json",
+    "latest_capture_attempt_run_id": 33826576950,
+    "latest_capture_attempted": true,
+    "latest_capture_blocked_before_checkout": true,
+    "latest_capture_blocking_reason": "no_purchasable_preproduction_product_available_for_disposable_qa_cart",
     "actual_final_screen_reviewed": false,
     "actual_final_screen_evidence_captured": false,
     "real_order_required_for_review": false,
@@ -58,9 +63,9 @@
   },
   "next_evidence_needed": [
     "owner approval of the final Tokushoho publication candidate before publication",
-    "capture and validate sanitized non-transactional evidence of the actual WooCommerce preproduction final confirmation screen using the prepared evidence contract; the GREEN isolated preview does not satisfy this actual-screen gate",
-    "final owner-approved production catalog for Sprint 3 closure",
+    "final owner-approved production catalog for Sprint 3 closure and a usable preproduction catalog item for the disposable QA cart",
+    "repeat the guarded non-transactional actual WooCommerce final-screen capture after preproduction catalog availability is revalidated",
     "fresh near-cutover recovery validation and final Go/No-Go at the appropriate later gate"
   ],
-  "decision": "TOKUSHOHO_CANDIDATE_AND_ISOLATED_CONFIRMATION_PREVIEW_GREEN_APPROVAL_AND_ACTUAL_WOOCOMMERCE_SCREEN_PENDING_FAIL_CLOSED"
+  "decision": "TOKUSHOHO_CANDIDATE_GREEN_ACTUAL_SCREEN_CAPTURE_BLOCKED_BY_PREPRODUCTION_CATALOG_FAIL_CLOSED"
 }

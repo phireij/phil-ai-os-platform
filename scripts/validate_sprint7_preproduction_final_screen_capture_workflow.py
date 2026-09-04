@@ -3,10 +3,13 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/ruby-preproduction-final-screen-capture.yml"
 CAPTURE = ROOT / "scripts/capture_ruby_preproduction_final_screen.mjs"
+ATTEMPT_VALIDATOR = ROOT / "scripts/validate_sprint7_preproduction_final_screen_capture_attempt.py"
 
 
 def require(condition: bool, message: str) -> None:
@@ -65,6 +68,9 @@ def main() -> None:
     combined = workflow + "\n" + capture
     for label, pattern in forbidden.items():
         require(re.search(pattern, combined, flags=re.I) is None, f"forbidden {label} found")
+
+    require(ATTEMPT_VALIDATOR.exists(), "capture-attempt validator missing")
+    subprocess.run([sys.executable, str(ATTEMPT_VALIDATOR)], check=True)
 
     print("PHIL_AI_OS_RUBY_PREPRODUCTION_FINAL_SCREEN_CAPTURE_WORKFLOW_GREEN manual_only=true preproduction=true no_order=true payment_execution=false")
 
