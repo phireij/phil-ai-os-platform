@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v18";
-// 2026-09-05: refresh cached product-browse UX so unavailable details are browse-only on mobile.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v19";
+// 2026-09-05: refresh cached mobile checkout context summary and preserve prior CX guards.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -11,6 +11,7 @@ const APP_SHELL = [
   "./mobile-performance.css",
   "./cart-mobile-controls.css",
   "./fulfillment-choice.css",
+  "./checkout-context-summary.css",
   "./manifest.webmanifest",
   "./app-icon.svg",
   "./src/app.mjs",
@@ -27,6 +28,7 @@ const APP_SHELL = [
   "./src/cart-form-guard.mjs",
   "./src/cart-dock-status.mjs",
   "./src/cart-session-recovery.mjs",
+  "./src/checkout-context-summary.mjs",
   "./src/checkout-confidence.mjs",
   "./src/confirmation-preview.mjs",
   "./src/flow.mjs",
