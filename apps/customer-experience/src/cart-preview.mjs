@@ -24,7 +24,7 @@ const copy = {
     safetyTitle: "KOMOJU is configured as intent only",
     safetyCopy: "Provider: KOMOJU · integration: WooCommerce plugin · connection: not configured · order creation: false · payment execution: false · live mode: false.",
     selected: (count, total) => `${count} selected item types · ${total}`,
-    noItems: "Select at least one available item.",
+    noItems: "Your cart is empty. Choose a product to continue.",
     error: "Cart preview unavailable",
   },
   ja: {
@@ -46,7 +46,7 @@ const copy = {
     safetyTitle: "KOMOJUはインテントのみとして設定されています",
     safetyCopy: "プロバイダー: KOMOJU · 連携: WooCommerceプラグイン · 接続: 未設定 · 注文作成: false · 決済実行: false · ライブモード: false。",
     selected: (count, total) => `選択商品 ${count} 種類 · ${total}`,
-    noItems: "利用可能な商品を1つ以上選択してください。",
+    noItems: "カートは空です。商品を選択して続行してください。",
     error: "カートプレビューを利用できません",
   },
 };
@@ -98,9 +98,8 @@ function updateLocaleUrl() {
   history.replaceState(null, "", url);
 }
 
-function defaultQuantity(product, index) {
-  if (product.availability !== "in_stock") return 0;
-  return index < 3 ? 1 : 0;
+function defaultQuantity() {
+  return 0;
 }
 
 function selectedItems() {
@@ -115,7 +114,7 @@ function selectedItems() {
 function renderCart() {
   setCopy();
   cartItems.replaceChildren();
-  state.catalog.forEach((product, index) => {
+  state.catalog.forEach((product) => {
     const disabled = product.availability !== "in_stock";
     const article = document.createElement("article");
     article.className = "product-card";
@@ -129,7 +128,7 @@ function renderCart() {
         <p class="price">${escapeHtml(formatMoney(product.price.amount, product.price.currency, state.locale))}</p>
         <div class="form-field">
           <label for="cart-${escapeHtml(product.sku)}">${escapeHtml(copy[state.locale].quantity)}</label>
-          <input id="cart-${escapeHtml(product.sku)}" data-cart-sku="${escapeHtml(product.sku)}" type="number" inputmode="numeric" min="0" step="1" value="${defaultQuantity(product, index)}" ${disabled ? "disabled" : ""}>
+          <input id="cart-${escapeHtml(product.sku)}" data-cart-sku="${escapeHtml(product.sku)}" type="number" inputmode="numeric" min="0" step="1" value="${defaultQuantity()}" ${disabled ? "disabled" : ""}>
         </div>
       </div>`;
     cartItems.append(article);
