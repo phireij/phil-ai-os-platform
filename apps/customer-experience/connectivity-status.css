@@ -1,0 +1,35 @@
+.connectivity-status {
+  width: min(1120px, calc(100% - 2rem));
+  margin: .65rem auto 0;
+  padding: .55rem .75rem;
+  border: 1px solid var(--line);
+  border-radius: .85rem;
+  background: rgba(255,255,255,.92);
+  color: var(--muted);
+  font-size: .82rem;
+  font-weight: 750;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.connectivity-status[data-connection="offline"] {
+  border-style: dashed;
+  color: var(--bad);
+  background: #fff;
+}
+
+@media (max-width: 679px) {
+  .connectivity-status {
+    width: calc(100% - 1.5rem);
+    margin-top: .5rem;
+    font-size: .8rem;
+  }
+}
+
+@media (forced-colors: active) {
+  .connectivity-status {
+    border: 1px solid CanvasText;
+    color: CanvasText;
+    background: Canvas;
+  }
+}
