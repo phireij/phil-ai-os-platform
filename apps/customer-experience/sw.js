@@ -1,4 +1,4 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v13";
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v14";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const APP_SHELL = [
   "./styles.css",
   "./product-browse-ux.css",
   "./cart-mobile-controls.css",
+  "./fulfillment-choice.css",
   "./manifest.webmanifest",
   "./app-icon.svg",
   "./src/app.mjs",
@@ -19,6 +20,7 @@ const APP_SHELL = [
   "./src/cart-preview.mjs",
   "./src/cart-selection-continuity.mjs",
   "./src/cart-mobile-controls.mjs",
+  "./src/fulfillment-choice.mjs",
   "./src/checkout-confidence.mjs",
   "./src/confirmation-preview.mjs",
   "./src/flow.mjs",
@@ -82,7 +84,5 @@ async function staticResponse(request) {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
-  event.respondWith(
-    event.request.mode === "navigate" ? navigationResponse(event.request) : staticResponse(event.request)
-  );
+  event.respondWith(event.request.mode === "navigate" ? navigationResponse(event.request) : staticResponse(event.request));
 });
