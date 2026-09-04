@@ -1,5 +1,5 @@
 const CACHE_NAME = "phil-ai-os-cx-sprint4-v19";
-// 2026-09-05: refresh mobile final-review correction navigation while preserving the current cache generation.
+// 2026-09-05: keep mobile product media sizing stable offline while preserving the current cache generation.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const APP_SHELL = [
   "./styles.css",
   "./product-browse-ux.css",
   "./mobile-performance.css",
+  "./product-media-resilience.css",
   "./cart-mobile-controls.css",
   "./fulfillment-choice.css",
   "./checkout-context-summary.css",
