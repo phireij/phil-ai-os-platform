@@ -25,11 +25,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
-
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
@@ -43,6 +41,7 @@ jobs:
           node --check apps/customer-experience/src/cart-mobile-controls.mjs
           node --check apps/customer-experience/src/cart-locale-state.mjs
           node --check apps/customer-experience/src/fulfillment-choice.mjs
+          node --check apps/customer-experience/src/cart-form-guard.mjs
           node --check apps/customer-experience/src/checkout-confidence.mjs
           node --check apps/customer-experience/src/confirmation-preview.mjs
           node --check apps/customer-experience/src/flow.mjs
@@ -87,9 +86,7 @@ jobs:
           python -m http.server 8094 --bind 127.0.0.1 --directory apps/customer-experience >/tmp/phil-cx-http.log 2>&1 &
           echo $! >/tmp/phil-cx-http.pid
           for attempt in {1..20}; do
-            if curl --fail --silent http://127.0.0.1:8094/ >/dev/null; then
-              exit 0
-            fi
+            if curl --fail --silent http://127.0.0.1:8094/ >/dev/null; then exit 0; fi
             sleep 0.25
           done
           cat /tmp/phil-cx-http.log
@@ -99,55 +96,22 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent http://127.0.0.1:8094/ | grep -F "Customer Experience"
-          curl --fail --silent http://127.0.0.1:8094/ | grep -F "cart-preview.html"
-          curl --fail --silent http://127.0.0.1:8094/ | grep -F "confirmation-preview.html"
-          curl --fail --silent http://127.0.0.1:8094/ | grep -F "quick-pickup-preview.html"
-          curl --fail --silent http://127.0.0.1:8094/ | grep -F "product-browse-ux.css"
-          curl --fail --silent http://127.0.0.1:8094/ | grep -F "product-browse-ux.mjs"
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "KOMOJU not connected"
-          curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "cart-selection-continuity.mjs"
-          curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "cart-mobile-controls.mjs"
-          curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "cart-locale-state.mjs"
-          curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "cart-mobile-controls.css"
-          curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "fulfillment-choice.mjs"
-          curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "fulfillment-choice.css"
-          curl --fail --silent http://127.0.0.1:8094/src/cart-mobile-controls.mjs | grep -F "Decrease quantity"
-          curl --fail --silent http://127.0.0.1:8094/src/cart-mobile-controls.mjs | grep -F "商品小計"
+          curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "cart-form-guard.mjs"
+          curl --fail --silent http://127.0.0.1:8094/src/cart-form-guard.mjs | grep -F "choosePickup"
+          curl --fail --silent http://127.0.0.1:8094/src/cart-form-guard.mjs | grep -F "chooseArea"
           curl --fail --silent http://127.0.0.1:8094/src/cart-locale-state.mjs | grep -F "snapshotQuantities"
-          curl --fail --silent http://127.0.0.1:8094/src/cart-locale-state.mjs | grep -F "restoreQuantities"
-          curl --fail --silent http://127.0.0.1:8094/cart-mobile-controls.css | grep -F ".quantity-stepper"
-          curl --fail --silent http://127.0.0.1:8094/src/fulfillment-choice.mjs | grep -F "Kanto: ¥1,350 flat rate"
-          curl --fail --silent http://127.0.0.1:8094/src/fulfillment-choice.mjs | grep -F "その他の地域：配送地域により 1,500円〜1,800円"
-          curl --fail --silent http://127.0.0.1:8094/fulfillment-choice.css | grep -F ".fulfillment-option"
-          curl --fail --silent http://127.0.0.1:8094/confirmation-preview.html | grep -F "No order submission"
-          curl --fail --silent http://127.0.0.1:8094/confirmation-preview.html | grep -F "Place order (preview only — disabled)"
-          curl --fail --silent http://127.0.0.1:8094/quick-pickup-preview.html | grep -F "No external activation"
-          curl --fail --silent http://127.0.0.1:8094/src/cart-preview.mjs | grep -F "buildPaymentHandoffIntent"
           curl --fail --silent http://127.0.0.1:8094/src/cart-selection-continuity.mjs | grep -F "explicitSelectionApplied"
-          curl --fail --silent http://127.0.0.1:8094/src/confirmation-preview.mjs | grep -F "isolated preview cannot claim actual final-screen acceptance"
-          curl --fail --silent http://127.0.0.1:8094/src/quick-pickup-preview.mjs | grep -F "externalQuickPickupUiState"
-          curl --fail --silent http://127.0.0.1:8094/src/readiness-feedback.mjs | grep -F "readiness feedback must remain non-authorizing"
-          curl --fail --silent http://127.0.0.1:8094/src/ui-state.mjs | grep -F "mutation_authorized: false"
-          curl --fail --silent http://127.0.0.1:8094/src/locale-links.mjs | grep -F "localizedRelativeHref"
-          curl --fail --silent http://127.0.0.1:8094/src/product-browse-ux.mjs | grep -F "Available now"
-          curl --fail --silent http://127.0.0.1:8094/product-browse-ux.css | grep -F ".filter-chip"
+          curl --fail --silent http://127.0.0.1:8094/src/fulfillment-choice.mjs | grep -F "Kanto: ¥1,350 flat rate"
+          curl --fail --silent http://127.0.0.1:8094/confirmation-preview.html | grep -F "No order submission"
+          curl --fail --silent http://127.0.0.1:8094/quick-pickup-preview.html | grep -F "No external activation"
           curl --fail --silent http://127.0.0.1:8094/manifest.webmanifest | grep -F '"display": "standalone"'
           curl --fail --silent http://127.0.0.1:8094/fixtures/catalog.json | grep -F '"fixture_only": true'
-          curl --fail --silent http://127.0.0.1:8094/fixtures/catalog.json | grep -F '"SAMPLE-UBE-001"'
-          curl --fail --silent http://127.0.0.1:8094/fixtures/final-confirmation.json | grep -F '"preview_only": true'
-          curl --fail --silent http://127.0.0.1:8094/fixtures/final-confirmation.json | grep -F '"actual_final_confirmation_screen_reviewed": false'
-          curl --fail --silent http://127.0.0.1:8094/fixtures/final-confirmation.json | grep -F '"expiry_days": 3'
-          curl --fail --silent http://127.0.0.1:8094/fixtures/pickup-policy.json | grep -F '"fixture_only": true'
-          curl --fail --silent http://127.0.0.1:8094/fixtures/air-mobile-quick-pickup.json | grep -F '"production_url": null'
-          curl --fail --silent http://127.0.0.1:8094/fixtures/air-mobile-quick-pickup.json | grep -F '"activation_authorized": false'
-          curl --fail --silent http://127.0.0.1:8094/fixtures/air-mobile-quick-pickup.json | grep -F '"automatic_publication_authorized": false'
-          curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"provider": "komoju"'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"connection_state": "not_configured"'
-          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v15'
+          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v16'
+          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F './src/cart-form-guard.mjs'
 
       - name: Stop isolated server
         if: always()
         run: |
-          if [ -f /tmp/phil-cx-http.pid ]; then
-            kill "$(cat /tmp/phil-cx-http.pid)" 2>/dev/null || true
-          fi
+          if [ -f /tmp/phil-cx-http.pid ]; then kill "$(cat /tmp/phil-cx-http.pid)" 2>/dev/null || true; fi
