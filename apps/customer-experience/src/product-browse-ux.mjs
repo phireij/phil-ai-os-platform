@@ -97,6 +97,16 @@ function selectedDetailIsAvailable(detail) {
   return Boolean(detail?.querySelector(".availability.in_stock"));
 }
 
+function syncDetailCheckoutAvailability(detail, available) {
+  const checkout = detail?.querySelector(".checkout-card");
+  if (!checkout) return;
+  checkout.hidden = !available;
+  checkout.setAttribute("aria-hidden", available ? "false" : "true");
+  checkout.querySelectorAll("input, select, textarea, button").forEach((control) => {
+    control.disabled = !available;
+  });
+}
+
 function ensureDetailContinuation() {
   const section = document.querySelector("#product-section");
   const detail = document.querySelector("#product-detail");
@@ -114,8 +124,10 @@ function ensureDetailContinuation() {
   const hint = panel.querySelector(".mobile-detail-hint");
   const link = panel.querySelector(".mobile-detail-cart-link");
   const available = selectedDetailIsAvailable(detail);
+  syncDetailCheckoutAvailability(detail, available);
 
   if (!available) {
+    panel.dataset.detailMode = "browse_only";
     hint.textContent = copy[lang].unavailableHint;
     link.textContent = copy[lang].unavailableAction;
     link.classList.add("is-unavailable-redirect");
@@ -124,6 +136,7 @@ function ensureDetailContinuation() {
     return;
   }
 
+  panel.dataset.detailMode = "checkout_preview";
   hint.textContent = copy[lang].reviewCartHint;
   link.textContent = copy[lang].reviewCart;
   link.classList.remove("is-unavailable-redirect");
