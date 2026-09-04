@@ -1,4 +1,4 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v17";
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v16";
 const APP_SHELL = [
   "./",
   "./index.html",
