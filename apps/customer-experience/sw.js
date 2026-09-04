@@ -1,5 +1,5 @@
 const CACHE_NAME = "phil-ai-os-cx-sprint4-v22";
-// 2026-09-05: refresh catalog no-results recovery in the isolated offline shell without expanding commerce authority.
+// 2026-09-05: refresh product-card scanability in the isolated offline shell while preserving the v22 cache contract and commerce boundary.
 const APP_SHELL = [
   "./",
   "./index.html",
