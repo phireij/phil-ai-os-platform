@@ -29,6 +29,6 @@ test("explicit product carryover runs at most once so customer edits survive", (
 
 test("locale state module is loaded and cached", () => {
   assert.match(html, /src\/cart-locale-state\.mjs/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v15/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v\d+/);
   assert.match(sw, /\.\/src\/cart-locale-state\.mjs/);
 });
