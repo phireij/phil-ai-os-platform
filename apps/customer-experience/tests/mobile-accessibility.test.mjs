@@ -5,9 +5,9 @@ import { readFileSync } from "node:fs";
 const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 const index = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
-test("mobile controls retain minimum touch targets and iOS-safe form sizing", () => {
-  assert.match(styles, /min-height:\s*44px/);
-  assert.match(styles, /@media \(max-width: 479px\)/);
+test("mobile controls retain generous touch targets and iOS-safe form sizing", () => {
+  assert.match(styles, /min-height:\s*48px/);
+  assert.match(styles, /@media \(max-width: 679px\)/);
   assert.match(styles, /font-size:\s*16px/);
   assert.match(styles, /\.primary-button\s*\{\s*width:\s*100%/);
 });
@@ -30,4 +30,5 @@ test("document keeps mobile viewport and keyboard navigation landmarks", () => {
   assert.match(index, /class="skip-link" href="#main"/);
   assert.match(index, /<main id="main" tabindex="-1">/);
   assert.match(index, /id="catalog-grid"[^>]*aria-live="polite"/);
+  assert.match(index, /class="mobile-action-dock"[^>]*aria-label=/);
 });

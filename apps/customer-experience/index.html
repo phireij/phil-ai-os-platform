@@ -31,9 +31,33 @@
       <p class="status-pill">Isolated preview · No live checkout</p>
       <h1 id="hero-title">Mobile-first bilingual storefront foundation</h1>
       <p id="hero-copy">Synthetic data only. This preview proves customer flow without production WooCommerce connectivity.</p>
-      <p><a class="detail-link" href="./cart-preview.html">Open cart & KOMOJU handoff preview</a></p>
-      <p><a class="detail-link" href="./confirmation-preview.html">Open final confirmation compliance preview</a></p>
-      <p><a class="detail-link" href="./quick-pickup-preview.html">Open Quick Pickup readiness preview</a></p>
+      <div class="hero-actions" aria-label="Preview actions">
+        <a class="detail-link" href="#catalog-section">Browse products</a>
+        <a class="secondary-link" href="./cart-preview.html">Review cart flow</a>
+      </div>
+    </section>
+
+    <section class="journey-panel" aria-labelledby="journey-title">
+      <div class="section-heading compact-heading">
+        <div>
+          <p class="eyebrow">Simple ordering</p>
+          <h2 id="journey-title">From craving to confirmation</h2>
+        </div>
+      </div>
+      <div class="journey-grid">
+        <article class="journey-step">
+          <span class="step-number" aria-hidden="true">1</span>
+          <div><h3 id="journey-browse-title">Choose your favorites</h3><p id="journey-browse-copy">Browse clear product details, price and availability.</p></div>
+        </article>
+        <article class="journey-step">
+          <span class="step-number" aria-hidden="true">2</span>
+          <div><h3 id="journey-fulfillment-title">Choose fulfillment</h3><p id="journey-fulfillment-copy">See pickup and delivery guidance before checkout.</p></div>
+        </article>
+        <article class="journey-step">
+          <span class="step-number" aria-hidden="true">3</span>
+          <div><h3 id="journey-review-title">Review before submitting</h3><p id="journey-review-copy">Confirm item, price, shipping and payment details before the final action.</p></div>
+        </article>
+      </div>
     </section>
 
     <section id="catalog-section" aria-labelledby="catalog-title">
@@ -52,12 +76,28 @@
       <div id="product-detail"></div>
     </section>
 
+    <section class="preview-links" aria-labelledby="preview-links-title">
+      <p class="eyebrow">Customer-flow previews</p>
+      <h2 id="preview-links-title">Review the journey</h2>
+      <div class="preview-link-grid">
+        <a class="preview-link-card" href="./cart-preview.html"><strong>Cart & payment handoff</strong><span>Review order guidance and payment-method presentation.</span></a>
+        <a class="preview-link-card" href="./confirmation-preview.html"><strong>Final confirmation</strong><span>Review the final-order information hierarchy before submission.</span></a>
+        <a class="preview-link-card" href="./quick-pickup-preview.html"><strong>Quick Pickup</strong><span>Review the fail-closed Quick Pickup readiness experience.</span></a>
+      </div>
+    </section>
+
     <section class="safety-panel" aria-labelledby="safety-title">
       <p class="eyebrow">Authority boundary</p>
       <h2 id="safety-title">Checkout remains an intent</h2>
       <p id="safety-copy">This Sprint 4 preview can compose and evaluate checkout intent locally. It cannot create an order, charge a payment, or mutate WooCommerce.</p>
     </section>
   </main>
+
+  <nav class="mobile-action-dock" aria-label="Mobile preview navigation">
+    <a href="#catalog-section"><span aria-hidden="true">⌕</span><span id="dock-shop-label">Shop</span></a>
+    <a href="./cart-preview.html"><span aria-hidden="true">▣</span><span id="dock-cart-label">Cart</span></a>
+    <a href="./quick-pickup-preview.html"><span aria-hidden="true">◎</span><span id="dock-pickup-label">Pickup</span></a>
+  </nav>
 
   <footer>
     <p>Phil AI OS · Sprint 4 Customer Experience · synthetic fixture environment</p>
@@ -67,7 +107,10 @@
     <article class="product-card">
       <div class="product-media" aria-hidden="true"><span>CX</span></div>
       <div class="product-card-body">
-        <p class="availability"></p>
+        <div class="product-status-row">
+          <p class="availability"></p>
+          <span class="fulfillment-chip pickup-chip"></span>
+        </div>
         <h3></h3>
         <p class="description"></p>
         <div class="product-card-footer">
@@ -79,5 +122,6 @@
   </template>
 
   <script type="module" src="./src/app.mjs"></script>
+  <script type="module" src="./src/mobile-ux.mjs"></script>
 </body>
 </html>
