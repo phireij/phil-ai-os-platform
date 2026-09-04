@@ -24,6 +24,13 @@ class CatalogHandoffTemplateTests(unittest.TestCase):
         self.assertEqual(tax["cod_fee_treatment"], "not_offered")
         self.assertEqual(tax["implementation_route"], "tax_disabled_candidate")
 
+    def test_template_explicitly_allows_initial_launch_subset(self):
+        scope = self.template()["catalog_scope"]
+        self.assertEqual(scope["scope_type"], "initial_launch_subset")
+        self.assertFalse(scope["full_product_range_required_for_sprint3_closure"])
+        self.assertTrue(scope["additional_products_may_be_added_after_sprint3"])
+        self.assertFalse(scope["scope_complete_for_intended_initial_launch"])
+
     def test_template_remains_empty_pending_owner_catalog(self):
         payload = self.template()
         self.assertEqual(payload["package_state"], "draft")
