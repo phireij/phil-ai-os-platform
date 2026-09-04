@@ -108,6 +108,9 @@ jobs:
       - name: Validate isolated final confirmation preview readiness
         run: python scripts/validate_sprint7_isolated_confirmation_preview.py
 
+      - name: Validate actual final confirmation screen evidence contract
+        run: python scripts/validate_sprint7_actual_confirmation_screen_evidence_contract.py
+
       - name: Validate external channel activation readiness
         run: python scripts/validate_sprint7_channel_activation.py
 
