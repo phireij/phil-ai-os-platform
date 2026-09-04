@@ -127,6 +127,9 @@ jobs:
       - name: Validate Air Mobile Quick Pickup handoff
         run: python scripts/validate_sprint7_air_mobile_quick_pickup_handoff.py
 
+      - name: Validate pickup hours recheck handoff
+        run: python scripts/validate_sprint7_pickup_hours_recheck_handoff.py
+
       - name: Validate external channel activation readiness
         run: python scripts/validate_sprint7_channel_activation.py
 
