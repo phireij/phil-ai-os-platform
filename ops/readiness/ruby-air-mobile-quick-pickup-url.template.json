@@ -1,0 +1,35 @@
+{
+  "version": "ruby-air-mobile-quick-pickup-url-v1",
+  "date": "2026-09-04",
+  "dependency_class": "later_launch_input",
+  "blocks_sprint3_closure": false,
+  "service": "Air Mobile Order Quick Pickup",
+  "production_url": null,
+  "url_status": "pending_owner_input",
+  "owner_confirmed": false,
+  "owner_confirmation_ref": null,
+  "validation": {
+    "https_required": true,
+    "public_http_reachability_required_before_launch": true,
+    "customer_facing_page_review_required": true,
+    "pickup_flow_review_required": true,
+    "bilingual_copy_review_required_if_exposed_in_ruby_cx": true,
+    "no_credentials_embedded_in_url": true,
+    "redirect_chain_review_required": true
+  },
+  "integration": {
+    "cx_link_activation_ready": false,
+    "operations_reference_ready": false,
+    "production_link_activation_authorized": false,
+    "automatic_link_publication_authorized": false
+  },
+  "authority": {
+    "checkout_mutation_authorized": false,
+    "catalog_mutation_authorized": false,
+    "payment_execution_authorized": false,
+    "production_publication_authorized": false,
+    "dns_cutover_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "decision": "AIR_MOBILE_QUICK_PICKUP_URL_PENDING_OWNER_INPUT_FAIL_CLOSED"
+}

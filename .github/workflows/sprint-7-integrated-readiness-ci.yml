@@ -124,6 +124,9 @@ jobs:
           node --check scripts/capture_ruby_preproduction_final_screen.mjs
           python scripts/validate_sprint7_preproduction_final_screen_capture_workflow.py
 
+      - name: Validate Air Mobile Quick Pickup handoff
+        run: python scripts/validate_sprint7_air_mobile_quick_pickup_handoff.py
+
       - name: Validate external channel activation readiness
         run: python scripts/validate_sprint7_channel_activation.py
 
