@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v20";
-// 2026-09-05: refresh mobile final-review correction navigation and preserve offline review assets.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v19";
+// 2026-09-05: refresh mobile final-review correction navigation while preserving the current cache generation.
 const APP_SHELL = [
   "./",
   "./index.html",
