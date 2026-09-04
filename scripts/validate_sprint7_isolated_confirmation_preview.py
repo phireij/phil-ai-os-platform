@@ -78,6 +78,8 @@ def main() -> None:
     require(screen["isolated_preview_satisfies_actual_screen_gate"] is False, "candidate incorrectly treats isolated preview as actual evidence")
     require(screen["actual_final_screen_reviewed"] is False, "actual final screen unexpectedly GREEN")
     require(screen["actual_final_screen_evidence_captured"] is False, "actual screen evidence unexpectedly captured")
+    require(screen["latest_capture_attempted"] is True, "candidate must retain the latest actual-screen capture attempt")
+    require(screen["latest_capture_blocked_before_checkout"] is True, "candidate must retain fail-closed capture blocker")
     require(candidate["sprint3"]["formal_sprint3_closure"] is False, "Sprint 3 closed without final catalog")
     for key, value in candidate["authority"].items():
         require(value is False, f"candidate authority expanded unexpectedly: {key}")
@@ -116,7 +118,7 @@ def main() -> None:
         require(phrase in module, f"preview module safeguard missing: {phrase}")
 
     require(record["decision"] == "ISOLATED_FINAL_CONFIRMATION_PREVIEW_GREEN_ACTUAL_WOOCOMMERCE_SCREEN_PENDING_FAIL_CLOSED", "readiness decision drift")
-    require(candidate["decision"] == "TOKUSHOHO_CANDIDATE_AND_ISOLATED_CONFIRMATION_PREVIEW_GREEN_APPROVAL_AND_ACTUAL_WOOCOMMERCE_SCREEN_PENDING_FAIL_CLOSED", "candidate decision drift")
+    require(candidate["decision"] == "TOKUSHOHO_CANDIDATE_GREEN_ACTUAL_SCREEN_CAPTURE_BLOCKED_BY_PREPRODUCTION_CATALOG_FAIL_CLOSED", "candidate decision drift")
 
     print("PHIL_AI_OS_ISOLATED_FINAL_CONFIRMATION_PREVIEW_GREEN actual_woocommerce_screen=false order_creation=false payment_execution=false")
     print("PHIL_AI_OS_ACTUAL_WOOCOMMERCE_CONFIRMATION_SCREEN_PENDING_FAIL_CLOSED")
