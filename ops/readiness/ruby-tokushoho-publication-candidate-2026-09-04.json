@@ -44,6 +44,9 @@
     "real_payment_required_for_review": false
   },
   "approval_and_publication": {
+    "candidate_text_approval_recorded": true,
+    "candidate_text_approved": true,
+    "candidate_text_approval_ref": "ops/readiness/ruby-tokushoho-owner-approval-2026-09-04.json",
     "owner_publication_approval_recorded": false,
     "tokushoho_publication_approved": false,
     "published": false,
@@ -62,10 +65,10 @@
     "automatic_production_execution_authorized": false
   },
   "next_evidence_needed": [
-    "owner approval of the final Tokushoho publication candidate before publication",
+    "separate publication-execution approval at the appropriate later gate",
     "final owner-approved production catalog for Sprint 3 closure and a usable preproduction catalog item for the disposable QA cart",
     "repeat the guarded non-transactional actual WooCommerce final-screen capture after preproduction catalog availability is revalidated",
     "fresh near-cutover recovery validation and final Go/No-Go at the appropriate later gate"
   ],
-  "decision": "TOKUSHOHO_CANDIDATE_GREEN_ACTUAL_SCREEN_CAPTURE_BLOCKED_BY_PREPRODUCTION_CATALOG_FAIL_CLOSED"
+  "decision": "TOKUSHOHO_CANDIDATE_TEXT_APPROVED_ACTUAL_SCREEN_CAPTURE_BLOCKED_PUBLICATION_EXECUTION_FAIL_CLOSED"
 }
