@@ -1,0 +1,100 @@
+name: Ruby Preproduction Final-Screen Capture
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_preproduction_only:
+        description: "Confirm the capture must target Ruby WooCommerce preproduction only"
+        required: true
+        type: boolean
+        default: false
+      confirm_no_order_submission:
+        description: "Confirm Place order / 注文する must never be invoked"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    if: ${{ inputs.confirm_preproduction_only == true && inputs.confirm_no_order_submission == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      RUBY_WOO_PREPRODUCTION_BASE_URL: https://darkgreen-wallaby-680439.hostingersite.com
+      RUBY_FINAL_SCREEN_CAPTURE_OUTPUT: /tmp/philaios-ruby-final-screen
+      PLAYWRIGHT_BROWSERS_PATH: /tmp/ms-playwright
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - name: Validate capture script syntax and target lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/capture_ruby_preproduction_final_screen.mjs
+          grep -F 'darkgreen-wallaby-680439.hostingersite.com' scripts/capture_ruby_preproduction_final_screen.mjs
+          grep -F 'woocommerce_place_order_ajax_blocked' scripts/capture_ruby_preproduction_final_screen.mjs
+          grep -F 'woocommerce_order_endpoint_blocked' scripts/capture_ruby_preproduction_final_screen.mjs
+          ! grep -F '.click(' scripts/capture_ruby_preproduction_final_screen.mjs
+          echo PHIL_AI_OS_RUBY_PREPRODUCTION_CAPTURE_SOURCE_GUARD_GREEN
+
+      - name: Install pinned Playwright Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.62.1
+          npx playwright install --with-deps chromium
+
+      - name: Capture sanitized non-submitted checkout evidence draft
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUBY_FINAL_SCREEN_CAPTURE_OUTPUT"
+          node scripts/capture_ruby_preproduction_final_screen.mjs
+
+      - name: Validate captured draft remains non-authorizing and incomplete
+        shell: bash
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          draft="$RUBY_FINAL_SCREEN_CAPTURE_OUTPUT/draft-evidence.json"
+          summary="$RUBY_FINAL_SCREEN_CAPTURE_OUTPUT/capture-summary.json"
+          if [ ! -f "$draft" ] || [ ! -f "$summary" ]; then
+            echo "PHIL_AI_OS_RUBY_PREPRODUCTION_FINAL_SCREEN_DRAFT_MISSING"
+            exit 1
+          fi
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUBY_FINAL_SCREEN_CAPTURE_OUTPUT'])
+          draft = json.loads((root / 'draft-evidence.json').read_text())
+          summary = json.loads((root / 'capture-summary.json').read_text())
+          assert draft['environment'] == 'preproduction'
+          assert draft['synthetic_customer_data_only'] is True
+          assert draft['contains_personal_data'] is False
+          assert draft['contains_secret_material'] is False
+          assert draft['evidence_complete'] is False
+          assert draft['actual_final_confirmation_screen_reviewed'] is False
+          assert draft['observations']['final_action_not_invoked'] is True
+          assert len(draft['screen_capture_refs']) >= 1
+          assert all(value is False for value in draft['authority'].values())
+          assert summary['final_action_invoked'] is False
+          assert summary['blocked_dangerous_request_count'] == 0
+          assert summary['actual_screen_reviewed'] is False
+          assert summary['payment_execution_authorized'] is False
+          print('PHIL_AI_OS_RUBY_PREPRODUCTION_FINAL_SCREEN_DRAFT_FAIL_CLOSED_GREEN')
+          PY
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ always() }}
+        with:
+          name: ruby-preproduction-final-screen-sanitized-draft
+          path: /tmp/philaios-ruby-final-screen/
+          if-no-files-found: warn
+          retention-days: 1
