@@ -31,7 +31,8 @@
   border-color: var(--accent-strong);
 }
 .filter-chip:focus-visible,
-.mobile-detail-cart-link:focus-visible {
+.mobile-detail-cart-link:focus-visible,
+.browse-no-results-action:focus-visible {
   outline: 3px solid #2b6fff;
   outline-offset: 3px;
 }
@@ -43,6 +44,37 @@
   font-weight: 700;
 }
 .product-card[hidden] { display: none; }
+
+.browse-no-results {
+  margin: 0 0 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: #fffaf8;
+}
+.browse-no-results[hidden] { display: none; }
+.browse-no-results-title {
+  margin: 0 0 .3rem;
+  color: var(--ink);
+  font-weight: 900;
+}
+.browse-no-results-copy {
+  margin: 0 0 .75rem;
+  color: var(--muted);
+}
+.browse-no-results-action {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: .8rem;
+  background: white;
+  color: var(--accent-strong);
+  padding: .6rem .85rem;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 .mobile-detail-continuation {
   display: flex;
   align-items: center;
@@ -74,6 +106,7 @@
   }
   .browse-filter-summary { padding-left: .15rem; }
   .filter-chip { min-height: 48px; }
+  .browse-no-results-action { min-height: 48px; width: 100%; }
   .product-card { scroll-margin-top: 9rem; }
   .mobile-detail-continuation {
     position: sticky;
@@ -87,14 +120,17 @@
 }
 
 @media (prefers-contrast: more) {
-  .filter-chip, .mobile-detail-continuation { border-color: var(--muted); }
+  .filter-chip, .mobile-detail-continuation, .browse-no-results { border-color: var(--muted); }
 }
 
 @media (forced-colors: active) {
   .filter-chip,
-  .mobile-detail-continuation { border: 1px solid CanvasText; }
+  .mobile-detail-continuation,
+  .browse-no-results,
+  .browse-no-results-action { border: 1px solid CanvasText; }
   .filter-chip:focus-visible,
-  .mobile-detail-cart-link:focus-visible {
+  .mobile-detail-cart-link:focus-visible,
+  .browse-no-results-action:focus-visible {
     outline: 3px solid Highlight;
     forced-color-adjust: auto;
   }

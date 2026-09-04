@@ -158,7 +158,10 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/src/ui-state.mjs | grep -F "mutation_authorized: false"
           curl --fail --silent http://127.0.0.1:8094/src/locale-links.mjs | grep -F "localizedRelativeHref"
           curl --fail --silent http://127.0.0.1:8094/src/product-browse-ux.mjs | grep -F "Available now"
+          curl --fail --silent http://127.0.0.1:8094/src/product-browse-ux.mjs | grep -F "No products match this filter"
+          curl --fail --silent http://127.0.0.1:8094/src/product-browse-ux.mjs | grep -F "すべての商品を見る"
           curl --fail --silent http://127.0.0.1:8094/product-browse-ux.css | grep -F ".filter-chip"
+          curl --fail --silent http://127.0.0.1:8094/product-browse-ux.css | grep -F ".browse-no-results"
           curl --fail --silent http://127.0.0.1:8094/manifest.webmanifest | grep -F '"display": "standalone"'
           curl --fail --silent http://127.0.0.1:8094/fixtures/catalog.json | grep -F '"fixture_only": true'
           curl --fail --silent http://127.0.0.1:8094/fixtures/catalog.json | grep -F '"SAMPLE-UBE-001"'
@@ -171,7 +174,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/fixtures/air-mobile-quick-pickup.json | grep -F '"automatic_publication_authorized": false'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"provider": "komoju"'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"connection_state": "not_configured"'
-          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v21'
+          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v22'
           curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F './src/empty-cart-recovery.mjs'
           curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F './src/cart-form-guard.mjs'
           curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F './src/cart-dock-status.mjs'

@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v21";
-// 2026-09-05: add empty-cart recovery to the isolated offline shell without expanding commerce authority.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v22";
+// 2026-09-05: refresh catalog no-results recovery in the isolated offline shell without expanding commerce authority.
 const APP_SHELL = [
   "./",
   "./index.html",

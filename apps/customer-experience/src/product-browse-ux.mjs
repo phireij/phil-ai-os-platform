@@ -8,6 +8,9 @@ const copy = {
     all: "All products",
     available: "Available now",
     showing: (visible, total) => `Showing ${visible} of ${total}`,
+    noResultsTitle: "No products match this filter",
+    noResultsCopy: "Nothing is available in this view right now. Show all products to keep browsing.",
+    showAll: "Show all products",
     pickup: "Pickup supported",
     reviewCart: "Review cart",
     reviewCartHint: "Continue to the cart preview while keeping your language and selected product.",
@@ -19,6 +22,9 @@ const copy = {
     all: "すべての商品",
     available: "現在購入可能",
     showing: (visible, total) => `${total}件中 ${visible}件を表示`,
+    noResultsTitle: "この条件に一致する商品はありません",
+    noResultsCopy: "現在、この表示条件で購入可能な商品はありません。すべての商品に戻って引き続きご覧いただけます。",
+    showAll: "すべての商品を見る",
     pickup: "店頭受取対応",
     reviewCart: "カートを確認",
     reviewCartHint: "言語設定と選択した商品を保ったままカートプレビューへ進みます。",
@@ -137,6 +143,18 @@ function syncFilterControls() {
   });
 }
 
+function syncNoResults(visible) {
+  const panel = document.querySelector("#browse-no-results");
+  if (!panel) return;
+  const lang = locale();
+  const show = visible === 0 && filterMode !== "all";
+  panel.hidden = !show;
+  panel.setAttribute("aria-hidden", show ? "false" : "true");
+  panel.querySelector(".browse-no-results-title").textContent = copy[lang].noResultsTitle;
+  panel.querySelector(".browse-no-results-copy").textContent = copy[lang].noResultsCopy;
+  panel.querySelector("[data-reset-filter]").textContent = copy[lang].showAll;
+}
+
 function applyFilter() {
   const cards = productCards();
   let visible = 0;
@@ -149,6 +167,7 @@ function applyFilter() {
   const summary = document.querySelector("#browse-filter-summary");
   if (summary) summary.textContent = copy[locale()].showing(visible, cards.length);
   syncFilterControls();
+  syncNoResults(visible);
   decorateCatalogDetailLinks();
   syncBackLink();
   queueMicrotask(restoreCatalogReturnFocus);
@@ -166,6 +185,14 @@ function updateFilterCopy() {
   applyFilter();
 }
 
+function resetToAllProducts() {
+  filterMode = "all";
+  returnFocusRestored = false;
+  syncFilterUrl();
+  applyFilter();
+  document.querySelector('[data-filter="all"]')?.focus();
+}
+
 function ensureFilterBar() {
   const catalog = document.querySelector("#catalog-section");
   const grid = document.querySelector("#catalog-grid");
@@ -175,11 +202,22 @@ function ensureFilterBar() {
   wrapper.className = "browse-controls";
   wrapper.innerHTML = `
     <div id="browse-filter-bar" class="filter-chip-row" role="group">
-      <button class="filter-chip" type="button" data-filter="all" aria-controls="catalog-grid"></button>
-      <button class="filter-chip" type="button" data-filter="available" aria-controls="catalog-grid"></button>
+      <button class="filter-chip" type="button" data-filter="all" aria-controls="catalog-grid browse-no-results"></button>
+      <button class="filter-chip" type="button" data-filter="available" aria-controls="catalog-grid browse-no-results"></button>
     </div>
     <p id="browse-filter-summary" class="browse-filter-summary" role="status" aria-live="polite" aria-atomic="true"></p>`;
   grid.before(wrapper);
+
+  const noResults = document.createElement("div");
+  noResults.id = "browse-no-results";
+  noResults.className = "browse-no-results";
+  noResults.hidden = true;
+  noResults.setAttribute("aria-hidden", "true");
+  noResults.innerHTML = `
+    <p class="browse-no-results-title"></p>
+    <p class="browse-no-results-copy"></p>
+    <button type="button" class="browse-no-results-action" data-reset-filter></button>`;
+  wrapper.after(noResults);
 
   wrapper.addEventListener("click", (event) => {
     const detailLink = event.target.closest("#catalog-grid .detail-link");
@@ -193,6 +231,9 @@ function ensureFilterBar() {
     returnFocusRestored = false;
     syncFilterUrl();
     applyFilter();
+  });
+  noResults.addEventListener("click", (event) => {
+    if (event.target.closest("[data-reset-filter]")) resetToAllProducts();
   });
   updateFilterCopy();
 }

@@ -15,6 +15,20 @@ test("mobile catalog supports fast all versus available-now scanning", () => {
   assert.match(source, /現在購入可能/);
 });
 
+test("catalog no-results state offers a bilingual one-tap recovery", () => {
+  assert.match(source, /No products match this filter/);
+  assert.match(source, /この条件に一致する商品はありません/);
+  assert.match(source, /Show all products/);
+  assert.match(source, /すべての商品を見る/);
+  assert.match(source, /visible === 0 && filterMode !== "all"/);
+  assert.match(source, /data-reset-filter/);
+  assert.match(source, /resetToAllProducts/);
+  assert.match(source, /filterMode = "all"/);
+  assert.ok(source.includes(`document.querySelector('[data-filter="all"]')?.focus();`));
+  assert.match(css, /browse-no-results-action/);
+  assert.match(css, /min-height: 48px/);
+});
+
 test("catalog filter context survives product-detail navigation and return", () => {
   assert.match(source, /filterFromUrl/);
   assert.match(source, /URLSearchParams\(location\.search\)\.get\("filter"\)/);
@@ -38,11 +52,12 @@ test("catalog return restores focus near the previously opened product only", ()
 });
 
 test("filter controls expose target and status semantics with visible focus", () => {
-  assert.match(source, /aria-controls="catalog-grid"/);
+  assert.match(source, /aria-controls="catalog-grid browse-no-results"/);
   assert.match(source, /role="status"/);
   assert.match(source, /aria-live="polite"/);
   assert.match(source, /aria-atomic="true"/);
   assert.match(css, /filter-chip:focus-visible/);
+  assert.match(css, /browse-no-results-action:focus-visible/);
   assert.match(css, /@media \(forced-colors: active\)/);
   assert.match(css, /Highlight/);
 });
