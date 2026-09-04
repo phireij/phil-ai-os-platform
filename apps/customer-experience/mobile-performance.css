@@ -1,0 +1,40 @@
+#catalog-grid {
+  min-height: 12rem;
+}
+
+.product-card,
+.preview-link-card,
+.journey-step {
+  content-visibility: auto;
+  contain-intrinsic-size: 320px;
+}
+
+.cx-state-loading {
+  position: relative;
+  min-height: 9rem;
+  overflow: hidden;
+}
+
+.cx-state-loading::after {
+  content: "";
+  position: absolute;
+  inset: auto 1rem 1rem;
+  height: 3rem;
+  border-radius: .8rem;
+  background: linear-gradient(90deg, rgba(255,255,255,.35), rgba(255,255,255,.9), rgba(255,255,255,.35));
+  background-size: 220% 100%;
+  animation: cx-loading-sheen 1.15s linear infinite;
+}
+
+@keyframes cx-loading-sheen {
+  to { background-position: -220% 0; }
+}
+
+@media (max-width: 679px) {
+  .product-card { contain-intrinsic-size: 420px; }
+  .preview-link-card, .journey-step { contain-intrinsic-size: 180px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cx-state-loading::after { animation: none; }
+}
