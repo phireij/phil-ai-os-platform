@@ -24,7 +24,7 @@ test("catalog no-results state offers a bilingual one-tap recovery", () => {
   assert.match(source, /data-reset-filter/);
   assert.match(source, /resetToAllProducts/);
   assert.match(source, /filterMode = "all"/);
-  assert.match(source, /data-filter="all"\]\'\)\?\.focus/);
+  assert.ok(source.includes(`document.querySelector('[data-filter="all"]')?.focus();`));
   assert.match(css, /browse-no-results-action/);
   assert.match(css, /min-height: 48px/);
 });
