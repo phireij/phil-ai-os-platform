@@ -1,5 +1,6 @@
 const requestedProductKey = new URLSearchParams(location.search).get("product");
 let catalog = [];
+let explicitSelectionApplied = false;
 
 function localizedUnavailable() {
   return document.documentElement.lang === "ja"
@@ -8,25 +9,25 @@ function localizedUnavailable() {
 }
 
 function applyExplicitSelection() {
+  if (explicitSelectionApplied || !requestedProductKey) return;
   const inputs = [...document.querySelectorAll("#cart-items [data-cart-sku]")];
-  if (!inputs.length) return;
+  if (!inputs.length || !catalog.length) return;
 
+  explicitSelectionApplied = true;
   for (const input of inputs) input.value = "0";
   let matched = false;
-  if (requestedProductKey) {
-    const requested = catalog.find((item) => item.product_key === requestedProductKey);
-    const input = requested
-      ? document.querySelector(`#cart-items [data-cart-sku="${CSS.escape(requested.sku)}"]`)
-      : null;
-    if (input && !input.disabled) {
-      input.value = "1";
-      matched = true;
-    }
+  const requested = catalog.find((item) => item.product_key === requestedProductKey);
+  const input = requested
+    ? document.querySelector(`#cart-items [data-cart-sku="${CSS.escape(requested.sku)}"]`)
+    : null;
+  if (input && !input.disabled) {
+    input.value = "1";
+    matched = true;
   }
 
   document.querySelector("#cart-form")?.dispatchEvent(new Event("input", { bubbles: true }));
   document.querySelector("#cart-selection-notice")?.remove();
-  if (requestedProductKey && !matched) {
+  if (!matched) {
     const summary = document.querySelector("#cart-summary");
     if (summary) {
       const message = document.createElement("span");
@@ -40,6 +41,7 @@ function applyExplicitSelection() {
 }
 
 async function bootSelectionContinuity() {
+  if (!requestedProductKey) return;
   const response = await fetch("./fixtures/catalog.json", { cache: "no-store" });
   if (!response.ok) return;
   const payload = await response.json();
@@ -50,5 +52,4 @@ async function bootSelectionContinuity() {
 
 const cartItems = document.querySelector("#cart-items");
 if (cartItems) new MutationObserver(() => queueMicrotask(applyExplicitSelection)).observe(cartItems, { childList: true });
-document.querySelector("#locale-select")?.addEventListener("change", () => queueMicrotask(applyExplicitSelection));
 bootSelectionContinuity().catch(() => undefined);
