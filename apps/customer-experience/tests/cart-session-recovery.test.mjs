@@ -36,6 +36,6 @@ test("session recovery remains network-inert and non-authorizing", () => {
 
 test("session recovery is loaded and available in the PWA shell", () => {
   assert.match(html, /src\/cart-session-recovery\.mjs/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v19/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v18/);
   assert.match(sw, /\.\/src\/cart-session-recovery\.mjs/);
 });
