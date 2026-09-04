@@ -15,8 +15,19 @@ test("cart quantities are snapshotted before locale rerender and restored after"
   assert.match(source, /true\);/);
 });
 
-test("restoration updates totals without network or authority", () => {
+test("fulfillment choices survive locale changes", () => {
+  assert.match(source, /snapshotFulfillment/);
+  assert.match(source, /restoreFulfillment/);
+  assert.match(source, /fulfillment-mode/);
+  assert.match(source, /pickupAt/);
+  assert.match(source, /deliveryArea/);
+  assert.match(source, /dispatchEvent\(new Event\("change"/);
+});
+
+test("restoration updates totals and form guards without network or authority", () => {
+  assert.match(source, /restoreCartState/);
   assert.match(source, /dispatchEvent\(new Event\("input"/);
+  assert.match(source, /dispatchEvent\(new Event\("change"/);
   assert.doesNotMatch(source, /fetch\s*\(/);
   assert.doesNotMatch(source, /POST|PUT|PATCH|DELETE/);
   assert.doesNotMatch(source, /mutation_authorized\s*:\s*true/);
