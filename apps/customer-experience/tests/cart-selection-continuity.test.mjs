@@ -29,6 +29,6 @@ test("missing or unavailable carried product fails visibly without execution", (
 
 test("continuity module is loaded and cached", () => {
   assert.match(html, /src\/cart-selection-continuity\.mjs/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v13/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v14/);
   assert.match(sw, /\.\/src\/cart-selection-continuity\.mjs/);
 });
