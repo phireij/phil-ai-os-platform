@@ -8,7 +8,7 @@ const copy = {
     showing: (visible, total) => `Showing ${visible} of ${total}`,
     pickup: "Pickup supported",
     reviewCart: "Review cart",
-    reviewCartHint: "Continue to the cart preview while keeping your language.",
+    reviewCartHint: "Continue to the cart preview while keeping your language and selected product.",
   },
   ja: {
     filtersLabel: "商品フィルター",
@@ -17,7 +17,7 @@ const copy = {
     showing: (visible, total) => `${total}件中 ${visible}件を表示`,
     pickup: "店頭受取対応",
     reviewCart: "カートを確認",
-    reviewCartHint: "言語設定を保ったままカートプレビューへ進みます。",
+    reviewCartHint: "言語設定と選択した商品を保ったままカートプレビューへ進みます。",
   },
 };
 
@@ -85,6 +85,10 @@ function ensureFilterBar() {
   updateFilterCopy();
 }
 
+function selectedProductKey() {
+  return new URLSearchParams(location.search).get("product");
+}
+
 function ensureDetailContinuation() {
   const section = document.querySelector("#product-section");
   const detail = document.querySelector("#product-detail");
@@ -101,7 +105,10 @@ function ensureDetailContinuation() {
   panel.querySelector(".mobile-detail-hint").textContent = copy[lang].reviewCartHint;
   const link = panel.querySelector(".mobile-detail-cart-link");
   link.textContent = copy[lang].reviewCart;
-  link.href = localeHref("./cart-preview.html", lang);
+  const cartUrl = new URL("./cart-preview.html", location.href);
+  const productKey = selectedProductKey();
+  if (productKey) cartUrl.searchParams.set("product", productKey);
+  link.href = localeHref(`${cartUrl.pathname}${cartUrl.search}`, lang);
 }
 
 function refresh() {
