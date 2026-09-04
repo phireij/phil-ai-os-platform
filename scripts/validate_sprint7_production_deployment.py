@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 READINESS = ROOT / "ops/readiness/sprint7-production-deployment-readiness.json"
 PROFILE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
 STAGING = ROOT / "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json"
+APPROVAL = ROOT / "ops/readiness/ruby-tokushoho-owner-approval-2026-09-04.json"
 TIMING_DOC = ROOT / "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md"
 CANDIDATE_DOC = ROOT / "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md"
 SCREEN_CHECKLIST = ROOT / "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md"
@@ -21,7 +22,10 @@ def main() -> None:
     data = json.loads(READINESS.read_text(encoding="utf-8"))
     profile = json.loads(PROFILE.read_text(encoding="utf-8"))
     staging = json.loads(STAGING.read_text(encoding="utf-8"))
+    approval_record = json.loads(APPROVAL.read_text(encoding="utf-8"))
 
+    if data.get("version") != "sprint7-production-deployment-readiness-v5":
+        fail("deployment readiness schema drift")
     if profile.get("profile_complete") is not True or profile.get("production_publish_authorized") is not False:
         fail("canonical profile state drift")
 
@@ -59,25 +63,27 @@ def main() -> None:
             fail(f"KOMOJU live authority drift: {key}")
 
     legal = data["legal_and_fulfillment"]
-    if legal.get("tokushoho_source_reconciled") is not True or legal.get("store_pickup_supported") is not True or legal.get("production_shipping_rates_verified") is not True:
-        fail("legal/fulfillment source drift")
-    if legal.get("production_payment_methods_verified") is not True:
-        fail("production payment-method verification regressed")
-    if legal.get("production_payment_timing_verified") is not True:
-        fail("production payment-timing wording reconciliation regressed")
-    if legal.get("payment_timing_reconciliation_ref") != "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md" or not TIMING_DOC.is_file():
-        fail("payment-timing reconciliation evidence missing")
-    if legal.get("tokushoho_publication_candidate_ready") is not True:
-        fail("Tokushoho publication candidate readiness regressed")
+    for key in ("tokushoho_source_reconciled", "tokushoho_publication_candidate_ready", "tokushoho_candidate_text_approved", "store_pickup_supported", "production_shipping_rates_verified", "production_payment_methods_verified", "production_payment_timing_verified", "static_confirmation_screen_checklist_ready"):
+        if legal.get(key) is not True:
+            fail(f"legal/fulfillment readiness drift: {key}")
     if legal.get("tokushoho_publication_candidate_ref") != "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md" or not CANDIDATE_DOC.is_file():
         fail("Tokushoho publication candidate evidence missing")
-    if legal.get("static_confirmation_screen_checklist_ready") is not True:
-        fail("static confirmation-screen checklist readiness regressed")
+    if legal.get("tokushoho_candidate_text_approval_ref") != "ops/readiness/ruby-tokushoho-owner-approval-2026-09-04.json":
+        fail("Tokushoho text-approval evidence ref drift")
+    if legal.get("payment_timing_reconciliation_ref") != "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md" or not TIMING_DOC.is_file():
+        fail("payment-timing reconciliation evidence missing")
     if legal.get("static_confirmation_screen_checklist_ref") != "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md" or not SCREEN_CHECKLIST.is_file():
         fail("static confirmation-screen checklist evidence missing")
-    for key in ("tokushoho_publication_approved", "final_confirmation_screen_reviewed"):
-        if legal.get(key) is not False:
-            fail(f"remaining legal/publication gate unexpectedly closed: {key}")
+    if legal.get("tokushoho_publication_execution_approved") is not False or legal.get("tokushoho_publication_approved") is not False:
+        fail("candidate-text approval leaked into publication execution")
+    if legal.get("final_confirmation_screen_reviewed") is not False:
+        fail("actual final confirmation screen changed without evidence")
+
+    if approval_record.get("decision_scope") != "candidate_text_approval_only" or approval_record.get("approval_recorded") is not True or approval_record.get("candidate_text_approved") is not True:
+        fail("canonical CEO text-approval evidence drift")
+    for key, value in approval_record["authority"].items():
+        if value is not False:
+            fail(f"CEO candidate-text approval expanded authority: {key}")
 
     sfront = staging["storefront"]
     expected = {
@@ -94,27 +100,29 @@ def main() -> None:
     for key, value in expected.items():
         if sfront.get(key) != value:
             fail(f"preproduction record drift: {key}")
-    if staging.get("next_gate") != "finalize_catalog_obtain_tokushoho_publication_approval_review_actual_confirmation_screen_recovery_and_go_no_go_without_real_payment_execution":
+
+    if staging.get("version") != "ruby-woocommerce-komoju-staging-readiness-v5":
+        fail("staging readiness schema not reconciled")
+    if staging.get("next_gate") != "finalize_catalog_review_actual_confirmation_screen_then_separate_publication_execution_recovery_and_go_no_go_without_real_payment_execution":
         fail("next gate drift")
+
     skomoju = staging["komoju"]
     for key in ("test_mode_connected", "merchant_live_dashboard_access_verified", "merchant_available_payment_methods_verified", "live_mode_merchant_approval_verified", "production_enabled_payment_methods_finalized", "production_checkout_configuration_verified", "konbini_live_expiry_setting_verified"):
         if skomoju.get(key) is not True:
             fail(f"KOMOJU staging evidence regressed: {key}")
-    if skomoju.get("production_enabled_payment_methods") != approved:
-        fail("KOMOJU staging production subset drift")
-    if skomoju.get("konbini_live_expiry_days") != 3:
-        fail("KOMOJU staging Konbini expiry drift")
-    slegal = staging["legal_checkout_sync"]
-    if slegal.get("tokushoho_payment_timing_match_checkout") is not True:
-        fail("staging payment timing sync regressed")
-    if slegal.get("tokushoho_publication_candidate_ready") is not True:
-        fail("staging Tokushoho candidate readiness regressed")
-    if slegal.get("static_confirmation_screen_checklist_ready") is not True:
-        fail("staging static confirmation-screen checklist readiness regressed")
-    if slegal.get("final_confirmation_screen_reviewed") is not False:
-        fail("actual final confirmation screen changed without evidence")
+    if skomoju.get("production_enabled_payment_methods") != approved or skomoju.get("konbini_live_expiry_days") != 3:
+        fail("KOMOJU staging payment subset/expiry drift")
     if skomoju.get("live_mode_authorized") is not False or skomoju.get("payment_execution_authorized") is not False:
         fail("KOMOJU staging live/payment authority drift")
+
+    slegal = staging["legal_checkout_sync"]
+    for key in ("tokushoho_payment_timing_match_checkout", "tokushoho_publication_candidate_ready", "tokushoho_candidate_text_approved", "static_confirmation_screen_checklist_ready"):
+        if slegal.get(key) is not True:
+            fail(f"staging legal sync regressed: {key}")
+    if slegal.get("tokushoho_publication_execution_approved") is not False:
+        fail("staging publication execution unexpectedly approved")
+    if slegal.get("final_confirmation_screen_reviewed") is not False:
+        fail("actual final confirmation screen changed without evidence")
     if staging.get("production_publish_authorized") is not False:
         fail("preproduction record gained publication authority")
 
@@ -123,7 +131,7 @@ def main() -> None:
             fail(f"missing deployment evidence file: {rel}")
 
     print("PHIL_AI_OS_SPRINT_7_DEPLOYMENT_READINESS_GREEN preproduction_created=true komoju_subset=true checkout_config_verified=true konbini_expiry_days=3 payment_timing=true")
-    print("PHIL_AI_OS_SPRINT_7_TOKUSHOHO_CANDIDATE_GREEN candidate=true approved=false actual_screen=false")
+    print("PHIL_AI_OS_SPRINT_7_TOKUSHOHO_TEXT_APPROVAL_GREEN candidate_text=true publication_execution=false actual_screen=false")
     print("PHIL_AI_OS_SPRINT_7_PRODUCTION_ACTIVATION_BOUNDARY_GREEN woo=false komoju_payment_execution=false publish=false dns=false")
 
 
