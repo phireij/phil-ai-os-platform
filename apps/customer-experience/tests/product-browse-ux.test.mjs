@@ -15,9 +15,11 @@ test("mobile catalog supports fast all versus available-now scanning", () => {
   assert.match(source, /現在購入可能/);
 });
 
-test("product detail offers a locale-preserving cart continuation", () => {
+test("product detail offers a locale-and-product-preserving cart continuation", () => {
   assert.match(source, /mobile-detail-continuation/);
-  assert.ok(source.includes('localeHref("./cart-preview.html", lang)'));
+  assert.match(source, /selectedProductKey/);
+  assert.match(source, /searchParams\.set\("product", productKey\)/);
+  assert.match(source, /localeHref\(`\$\{cartUrl\.pathname\}\$\{cartUrl\.search\}`, lang\)/);
   assert.match(source, /Review cart/);
   assert.match(source, /カートを確認/);
 });
@@ -33,7 +35,7 @@ test("mobile browse assets are loaded and cached for weak connections", () => {
   assert.match(html, /src\/product-browse-ux\.mjs/);
   assert.match(css, /min-height: 48px/);
   assert.match(css, /position: sticky/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v11/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v12/);
   assert.match(sw, /\.\/src\/product-browse-ux\.mjs/);
   assert.match(sw, /\.\/product-browse-ux\.css/);
 });
