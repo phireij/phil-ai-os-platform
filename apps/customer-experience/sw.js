@@ -1,4 +1,5 @@
 const CACHE_NAME = "phil-ai-os-cx-sprint4-v18";
+// 2026-09-05: refresh cached product-browse UX so unavailable-detail cart guards reach mobile clients.
 const APP_SHELL = [
   "./",
   "./index.html",
