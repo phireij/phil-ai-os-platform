@@ -23,6 +23,17 @@ test("cart guard is bilingual and reacts to pickup or delivery mode", () => {
   assert.match(source, /#pickup-at/);
 });
 
+test("blocked customers can jump directly to the required mobile field", () => {
+  assert.match(source, /Go to required field/);
+  assert.match(source, /必要な項目へ移動/);
+  assert.match(source, /focusRequiredField/);
+  assert.match(source, /scrollIntoView/);
+  assert.match(source, /preventScroll: true/);
+  assert.match(source, /aria-describedby/);
+  assert.match(css, /cart-guidance-action/);
+  assert.match(css, /min-height:\s*48px/);
+});
+
 test("cart guard remains network-inert and non-authorizing", () => {
   assert.doesNotMatch(source, /fetch\s*\(/);
   assert.doesNotMatch(source, /POST|PUT|PATCH|DELETE/);
@@ -33,6 +44,6 @@ test("cart guard is loaded, styled and cached", () => {
   assert.match(html, /src\/cart-form-guard\.mjs/);
   assert.match(css, /cart-form-guidance/);
   assert.match(css, /#evaluate-button:disabled/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v16/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v17/);
   assert.match(sw, /\.\/src\/cart-form-guard\.mjs/);
 });

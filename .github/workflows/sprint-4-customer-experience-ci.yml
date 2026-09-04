@@ -119,7 +119,9 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/src/cart-locale-state.mjs | grep -F "restoreQuantities"
           curl --fail --silent http://127.0.0.1:8094/src/cart-form-guard.mjs | grep -F "choosePickup"
           curl --fail --silent http://127.0.0.1:8094/src/cart-form-guard.mjs | grep -F "chooseArea"
+          curl --fail --silent http://127.0.0.1:8094/src/cart-form-guard.mjs | grep -F "focusRequiredField"
           curl --fail --silent http://127.0.0.1:8094/cart-mobile-controls.css | grep -F ".quantity-stepper"
+          curl --fail --silent http://127.0.0.1:8094/cart-mobile-controls.css | grep -F ".cart-guidance-action"
           curl --fail --silent http://127.0.0.1:8094/src/fulfillment-choice.mjs | grep -F "Kanto: ¥1,350 flat rate"
           curl --fail --silent http://127.0.0.1:8094/src/fulfillment-choice.mjs | grep -F "その他の地域：配送地域により 1,500円〜1,800円"
           curl --fail --silent http://127.0.0.1:8094/fulfillment-choice.css | grep -F ".fulfillment-option"
@@ -147,7 +149,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/fixtures/air-mobile-quick-pickup.json | grep -F '"automatic_publication_authorized": false'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"provider": "komoju"'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"connection_state": "not_configured"'
-          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v16'
+          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v17'
           curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F './src/cart-form-guard.mjs'
 
       - name: Stop isolated server
