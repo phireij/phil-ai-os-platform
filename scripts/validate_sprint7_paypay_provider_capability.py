@@ -54,7 +54,8 @@ def main() -> None:
     require(interpretation["does_not_authorize_paypay_activation"] is True, "PayPay activation boundary lost")
 
     subset = checkout["production_payment_subset"]
-    require(subset["pending_provider_review"] == ["paypay"], "canonical checkout record changed before merchant evidence")
+    require(subset["provider_capability_confirmed_not_selected"] == ["paypay"], "canonical checkout provider-capability classification drift")
+    require(subset["pending_merchant_live_availability"] == ["paypay"], "canonical checkout merchant-availability classification drift")
     require("paypay" not in subset["selected"], "PayPay entered approved initial subset")
     require(checkout["woocommerce_checkout_verification"]["paypay_not_exposed"] is True, "verified WooCommerce snapshot unexpectedly exposes PayPay")
 
