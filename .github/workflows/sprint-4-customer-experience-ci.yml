@@ -41,6 +41,7 @@ jobs:
           node --check apps/customer-experience/src/cart-preview.mjs
           node --check apps/customer-experience/src/cart-selection-continuity.mjs
           node --check apps/customer-experience/src/cart-mobile-controls.mjs
+          node --check apps/customer-experience/src/cart-locale-state.mjs
           node --check apps/customer-experience/src/fulfillment-choice.mjs
           node --check apps/customer-experience/src/checkout-confidence.mjs
           node --check apps/customer-experience/src/confirmation-preview.mjs
@@ -106,11 +107,14 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "KOMOJU not connected"
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "cart-selection-continuity.mjs"
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "cart-mobile-controls.mjs"
+          curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "cart-locale-state.mjs"
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "cart-mobile-controls.css"
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "fulfillment-choice.mjs"
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F "fulfillment-choice.css"
           curl --fail --silent http://127.0.0.1:8094/src/cart-mobile-controls.mjs | grep -F "Decrease quantity"
           curl --fail --silent http://127.0.0.1:8094/src/cart-mobile-controls.mjs | grep -F "商品小計"
+          curl --fail --silent http://127.0.0.1:8094/src/cart-locale-state.mjs | grep -F "snapshotQuantities"
+          curl --fail --silent http://127.0.0.1:8094/src/cart-locale-state.mjs | grep -F "restoreQuantities"
           curl --fail --silent http://127.0.0.1:8094/cart-mobile-controls.css | grep -F ".quantity-stepper"
           curl --fail --silent http://127.0.0.1:8094/src/fulfillment-choice.mjs | grep -F "Kanto: ¥1,350 flat rate"
           curl --fail --silent http://127.0.0.1:8094/src/fulfillment-choice.mjs | grep -F "その他の地域：配送地域により 1,500円〜1,800円"
@@ -119,7 +123,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/confirmation-preview.html | grep -F "Place order (preview only — disabled)"
           curl --fail --silent http://127.0.0.1:8094/quick-pickup-preview.html | grep -F "No external activation"
           curl --fail --silent http://127.0.0.1:8094/src/cart-preview.mjs | grep -F "buildPaymentHandoffIntent"
-          curl --fail --silent http://127.0.0.1:8094/src/cart-selection-continuity.mjs | grep -F "requestedProductKey"
+          curl --fail --silent http://127.0.0.1:8094/src/cart-selection-continuity.mjs | grep -F "explicitSelectionApplied"
           curl --fail --silent http://127.0.0.1:8094/src/confirmation-preview.mjs | grep -F "isolated preview cannot claim actual final-screen acceptance"
           curl --fail --silent http://127.0.0.1:8094/src/quick-pickup-preview.mjs | grep -F "externalQuickPickupUiState"
           curl --fail --silent http://127.0.0.1:8094/src/readiness-feedback.mjs | grep -F "readiness feedback must remain non-authorizing"
@@ -139,7 +143,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/fixtures/air-mobile-quick-pickup.json | grep -F '"automatic_publication_authorized": false'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"provider": "komoju"'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"connection_state": "not_configured"'
-          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v14'
+          curl --fail --silent http://127.0.0.1:8094/sw.js | grep -F 'phil-ai-os-cx-sprint4-v15'
 
       - name: Stop isolated server
         if: always()

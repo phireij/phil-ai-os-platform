@@ -13,11 +13,12 @@ test("product detail continuation carries explicit product identity into cart", 
   assert.match(browse, /selected product/);
 });
 
-test("cart defaults to only the explicitly requested available product", () => {
+test("explicit product selection applies once and does not erase ordinary cart defaults", () => {
+  assert.match(source, /explicitSelectionApplied/);
+  assert.match(source, /!requestedProductKey/);
   assert.match(source, /for \(const input of inputs\) input\.value = "0"/);
   assert.match(source, /product_key === requestedProductKey/);
   assert.match(source, /input\.value = "1"/);
-  assert.match(source, /input && !input\.disabled/);
 });
 
 test("missing or unavailable carried product fails visibly without execution", () => {
@@ -29,6 +30,6 @@ test("missing or unavailable carried product fails visibly without execution", (
 
 test("continuity module is loaded and cached", () => {
   assert.match(html, /src\/cart-selection-continuity\.mjs/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v14/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v15/);
   assert.match(sw, /\.\/src\/cart-selection-continuity\.mjs/);
 });

@@ -1,4 +1,4 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v14";
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v15";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -20,6 +20,7 @@ const APP_SHELL = [
   "./src/cart-preview.mjs",
   "./src/cart-selection-continuity.mjs",
   "./src/cart-mobile-controls.mjs",
+  "./src/cart-locale-state.mjs",
   "./src/fulfillment-choice.mjs",
   "./src/checkout-confidence.mjs",
   "./src/confirmation-preview.mjs",
@@ -43,9 +44,7 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
-  );
+  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))));
   self.clients.claim();
 });
 
