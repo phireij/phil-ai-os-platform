@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v19";
-// 2026-09-05: keep mobile payment guidance and final-review summary available offline.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v20";
+// 2026-09-05: refresh mobile final-review correction navigation and preserve offline review assets.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -35,6 +35,7 @@ const APP_SHELL = [
   "./src/checkout-confidence.mjs",
   "./src/confirmation-preview.mjs",
   "./src/final-review-summary.mjs",
+  "./src/final-review-navigation.mjs",
   "./src/flow.mjs",
   "./src/payment.mjs",
   "./src/pickup.mjs",
