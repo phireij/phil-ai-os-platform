@@ -18,7 +18,6 @@ const APP_SHELL = [
   "./src/flow.mjs",
   "./src/payment.mjs",
   "./src/pickup.mjs",
-  "./src/quick-pickup-link.mjs",
   "./src/quick-pickup-preview.mjs",
   "./src/readiness-feedback.mjs",
   "./src/seo.mjs",
@@ -27,7 +26,7 @@ const APP_SHELL = [
   "./fixtures/final-confirmation.json",
   "./fixtures/payment-provider.json",
   "./fixtures/pickup-policy.json",
-  "./fixtures/quick-pickup-link.json",
+  "./fixtures/air-mobile-quick-pickup.json",
 ];
 
 self.addEventListener("install", (event) => {
