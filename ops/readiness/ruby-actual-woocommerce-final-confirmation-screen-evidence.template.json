@@ -1,0 +1,40 @@
+{
+  "version": "ruby-woocommerce-final-confirmation-screen-evidence-v1",
+  "evidence_id": "pending",
+  "environment": "preproduction",
+  "capture_method": "manual_browser_sanitized",
+  "captured_at": null,
+  "source_url_class": "sanitized_preproduction_checkout",
+  "synthetic_customer_data_only": true,
+  "contains_personal_data": false,
+  "contains_secret_material": false,
+  "screen_capture_refs": [],
+  "observations": {
+    "product_name_quantity_options_visible": false,
+    "subtotal_shipping_total_visible": false,
+    "payment_method_visible": false,
+    "payment_timing_or_deadline_visible": false,
+    "fulfillment_timing_visible": false,
+    "cancellation_returns_terms_visible_or_linked": false,
+    "correction_path_available_before_submission": false,
+    "final_action_label_unambiguous": false,
+    "final_action_not_invoked": true,
+    "tokushoho_disclosure_visible_or_linked": false,
+    "tax_display_matches_exempt_posture": false,
+    "konbini_three_day_deadline_reconciled_when_selected": false
+  },
+  "authority": {
+    "order_creation_authorized": false,
+    "payment_execution_authorized": false,
+    "production_publish_authorized": false,
+    "catalog_mutation_authorized": false,
+    "dns_cutover_authorized": false
+  },
+  "review_notes": [
+    "Template only. Populate only from sanitized evidence of the actual WooCommerce preproduction final confirmation screen.",
+    "Do not submit Place order / 注文する and do not execute a payment.",
+    "Do not store customer PII, credentials, cookies, tokens, session identifiers or unredacted payment/provider data."
+  ],
+  "evidence_complete": false,
+  "actual_final_confirmation_screen_reviewed": false
+}
