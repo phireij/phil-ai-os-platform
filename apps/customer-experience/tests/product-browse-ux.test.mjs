@@ -36,6 +36,15 @@ test("unavailable product detail never presents a misleading cart continuation",
   assert.match(source, /removeAttribute\("data-selected-product"\)/);
 });
 
+test("unavailable product detail becomes browse-only instead of showing an active checkout form", () => {
+  assert.match(source, /syncDetailCheckoutAvailability/);
+  assert.match(source, /checkout\.hidden = !available/);
+  assert.match(source, /aria-hidden/);
+  assert.match(source, /control\.disabled = !available/);
+  assert.match(source, /panel\.dataset\.detailMode = "browse_only"/);
+  assert.match(source, /panel\.dataset\.detailMode = "checkout_preview"/);
+});
+
 test("browsing enhancement remains non-authorizing and network inert", () => {
   assert.doesNotMatch(source, /fetch\s*\(/);
   assert.doesNotMatch(source, /POST|PUT|PATCH|DELETE/);
