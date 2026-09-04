@@ -1,0 +1,56 @@
+.final-review-summary {
+  margin: 1rem auto 1.25rem;
+  max-width: 1120px;
+  padding: 1rem;
+  border: 1px solid var(--border, #ded7d3);
+  border-radius: 1rem;
+  background: Canvas;
+}
+
+.final-review-summary h2 {
+  margin-top: 0;
+}
+
+.final-review-summary-grid {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+}
+
+.final-review-summary-grid > div {
+  display: grid;
+  gap: 0.25rem;
+  padding-block: 0.7rem;
+  border-bottom: 1px solid var(--border, #ded7d3);
+}
+
+.final-review-summary-grid dt {
+  font-weight: 700;
+}
+
+.final-review-summary-grid dd {
+  margin: 0;
+}
+
+#final-review-total {
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+@media (max-width: 679px) {
+  .final-review-summary {
+    position: sticky;
+    top: calc(env(safe-area-inset-top) + 0.5rem);
+    z-index: 4;
+    max-height: 46vh;
+    overflow: auto;
+    box-shadow: 0 0.4rem 1.2rem rgb(0 0 0 / 0.08);
+  }
+}
+
+@media (forced-colors: active) {
+  .final-review-summary,
+  .final-review-summary-grid > div {
+    border-color: CanvasText;
+  }
+}
