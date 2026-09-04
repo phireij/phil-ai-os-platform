@@ -1,0 +1,46 @@
+.product-media,
+.detail-media {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  min-height: 0;
+  overflow: hidden;
+  contain: paint;
+}
+
+.product-media > img,
+.detail-media > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.product-media > img[loading="lazy"],
+.detail-media > img[loading="lazy"] {
+  content-visibility: auto;
+}
+
+.product-media::after,
+.detail-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 1px solid transparent;
+  border-radius: inherit;
+}
+
+@media (max-width: 679px) {
+  .product-media,
+  .detail-media {
+    aspect-ratio: 4 / 3;
+  }
+}
+
+@media (forced-colors: active) {
+  .product-media::after,
+  .detail-media::after {
+    border-color: CanvasText;
+  }
+}
