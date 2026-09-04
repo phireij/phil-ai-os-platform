@@ -20,7 +20,7 @@ test("loading feedback reserves space and respects reduced motion", () => {
 });
 
 test("performance asset remains available on weak connections through the PWA shell", () => {
-  assert.match(sw, /phil-ai-os-cx-sprint4-v17/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v18/);
   assert.match(sw, /\.\/mobile-performance\.css/);
 });
 
