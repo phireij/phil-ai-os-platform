@@ -8,6 +8,7 @@
   <meta name="robots" content="noindex,nofollow">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./cart-mobile-controls.css">
   <title>Phil AI OS — Cart & KOMOJU Handoff Preview</title>
 </head>
 <body>
@@ -39,37 +40,18 @@
       <p class="eyebrow" id="confidence-eyebrow">Before you continue</p>
       <h2 id="confidence-title">You stay in control before the final action</h2>
       <div class="journey-grid">
-        <article class="journey-step">
-          <span class="step-number" aria-hidden="true">1</span>
-          <div><h3 id="confidence-order-title">Review your order</h3><p id="confidence-order-copy">Check products, quantities and the running total on your phone.</p></div>
-        </article>
-        <article class="journey-step">
-          <span class="step-number" aria-hidden="true">2</span>
-          <div><h3 id="confidence-fulfillment-title">Confirm pickup or shipping</h3><p id="confidence-fulfillment-copy">The final experience must show the applicable shipping fee before order submission.</p></div>
-        </article>
-        <article class="journey-step">
-          <span class="step-number" aria-hidden="true">3</span>
-          <div><h3 id="confidence-payment-title">Confirm payment details</h3><p id="confidence-payment-copy">Payment method and timing are reviewed before the final order action.</p></div>
-        </article>
+        <article class="journey-step"><span class="step-number" aria-hidden="true">1</span><div><h3 id="confidence-order-title">Review your order</h3><p id="confidence-order-copy">Check products, quantities and the running total on your phone.</p></div></article>
+        <article class="journey-step"><span class="step-number" aria-hidden="true">2</span><div><h3 id="confidence-fulfillment-title">Confirm pickup or shipping</h3><p id="confidence-fulfillment-copy">The final experience must show the applicable shipping fee before order submission.</p></div></article>
+        <article class="journey-step"><span class="step-number" aria-hidden="true">3</span><div><h3 id="confidence-payment-title">Confirm payment details</h3><p id="confidence-payment-copy">Payment method and timing are reviewed before the final order action.</p></div></article>
       </div>
     </section>
 
     <section class="detail-panel" aria-labelledby="cart-title">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">Cart lab</p>
-          <h2 id="cart-title">Synthetic cart</h2>
-        </div>
-        <p id="cart-summary" aria-live="polite"></p>
-      </div>
-
+      <div class="section-heading"><div><p class="eyebrow">Cart lab</p><h2 id="cart-title">Synthetic cart</h2></div><p id="cart-summary" aria-live="polite"></p></div>
       <form id="cart-form">
         <div id="cart-items" class="product-grid" aria-live="polite"></div>
         <div class="checkout-card">
-          <div class="form-field">
-            <label id="pickup-label" for="pickup-at">Preferred pickup time</label>
-            <input id="pickup-at" name="pickup-at" type="datetime-local" required>
-          </div>
+          <div class="form-field"><label id="pickup-label" for="pickup-at">Preferred pickup time</label><input id="pickup-at" name="pickup-at" type="datetime-local" required></div>
           <p class="checkout-reassurance" id="checkout-reassurance">You will still review the final information before any order-submission action.</p>
           <p><button id="evaluate-button" class="primary-button" type="submit">Evaluate checkout & KOMOJU handoff</button></p>
         </div>
@@ -77,16 +59,12 @@
     </section>
 
     <section class="detail-panel" aria-labelledby="result-title">
-      <p class="eyebrow">Readiness result</p>
-      <h2 id="result-title">No handoff prepared yet</h2>
-      <div id="result" class="intent-output" aria-live="polite">
-        <p id="result-copy">Choose quantities and a pickup time. This preview never creates an order or executes a payment.</p>
-      </div>
+      <p class="eyebrow">Readiness result</p><h2 id="result-title">No handoff prepared yet</h2>
+      <div id="result" class="intent-output" aria-live="polite"><p id="result-copy">Choose quantities and a pickup time. This preview never creates an order or executes a payment.</p></div>
     </section>
 
     <section class="safety-panel" aria-labelledby="safety-title">
-      <p class="eyebrow">Authority boundary</p>
-      <h2 id="safety-title">KOMOJU is configured as intent only</h2>
+      <p class="eyebrow">Authority boundary</p><h2 id="safety-title">KOMOJU is configured as intent only</h2>
       <p id="safety-copy">Provider: KOMOJU · integration: WooCommerce plugin · connection: not configured · order creation: false · payment execution: false · live mode: false.</p>
     </section>
   </main>
@@ -97,12 +75,11 @@
     <a href="./quick-pickup-preview.html"><span aria-hidden="true">◎</span><span id="dock-pickup-label">Pickup</span></a>
   </nav>
 
-  <footer>
-    <p>Phil AI OS · Sprint 4 · synthetic cart/payment-handoff environment</p>
-  </footer>
+  <footer><p>Phil AI OS · Sprint 4 · synthetic cart/payment-handoff environment</p></footer>
 
   <script type="module" src="./src/cart-preview.mjs"></script>
   <script type="module" src="./src/cart-selection-continuity.mjs"></script>
+  <script type="module" src="./src/cart-mobile-controls.mjs"></script>
   <script type="module" src="./src/checkout-confidence.mjs"></script>
 </body>
 </html>
