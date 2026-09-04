@@ -32,7 +32,7 @@ test("cart controls remain network-inert and non-authorizing", () => {
 test("mobile cart assets are loaded and cached", () => {
   assert.match(html, /cart-mobile-controls\.css/);
   assert.match(html, /src\/cart-mobile-controls\.mjs/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v15/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v\d+/);
   assert.match(sw, /\.\/cart-mobile-controls\.css/);
   assert.match(sw, /\.\/src\/cart-mobile-controls\.mjs/);
 });

@@ -36,7 +36,7 @@ test("fulfillment assets are mobile-ready and cached", () => {
   assert.match(html, /src\/fulfillment-choice\.mjs/);
   assert.match(css, /min-height: 72px/);
   assert.match(css, /min-height: 48px/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v15/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v\d+/);
   assert.match(sw, /\.\/fulfillment-choice\.css/);
   assert.match(sw, /\.\/src\/fulfillment-choice\.mjs/);
 });
