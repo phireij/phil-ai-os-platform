@@ -1,0 +1,19 @@
+{
+  "version": "ruby-tokushoho-shipping-wording-refinement-v1",
+  "date": "2026-09-04",
+  "candidate_document": "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md",
+  "amounts_unchanged": true,
+  "shipping_method_unchanged": "yamato_cool",
+  "kanto_rate_jpy": 1350,
+  "other_regions_min_jpy": 1500,
+  "other_regions_max_jpy": 1800,
+  "wording": {
+    "ja": "その他の地域：配送地域により 1,500円〜1,800円。最終的な送料は、ご注文確定前の最終確認画面に表示されます。",
+    "en": "Other regions: ¥1,500–¥1,800 depending on delivery area. The exact shipping fee will be displayed on the final order confirmation screen before the order is submitted."
+  },
+  "owner_candidate_text_approval_recorded": false,
+  "publication_authorized": false,
+  "payment_execution_authorized": false,
+  "production_mutation_authorized": false,
+  "decision": "TOKUSHOHO_SHIPPING_WORDING_REFINED_OWNER_APPROVAL_PENDING_FAIL_CLOSED"
+}
