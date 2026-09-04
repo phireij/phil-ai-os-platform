@@ -4,6 +4,27 @@
   "package_state": "draft",
   "catalog_approved": false,
   "catalog_approval_ref": null,
+  "source_contract": {
+    "owner_source_required": true,
+    "owner_approval_required": true,
+    "source_updated_at_required": true,
+    "bilingual_en_ja_required": true,
+    "verified_media_source_required": true,
+    "currency": "JPY",
+    "intake_product_status": "draft",
+    "intake_product_visibility": "hidden",
+    "production_write_authority_granted_by_handoff": false
+  },
+  "handoff_requirements": [
+    "final owner-approved product list",
+    "approved category hierarchy",
+    "English and Japanese product names/descriptions/slugs",
+    "JPY regular prices",
+    "fulfillment and temperature/shipping-class data",
+    "approved media references with exactly one primary image per product",
+    "approved source provenance and timezone-aware source_updated_at per product",
+    "explicit catalog approval reference"
+  ],
   "categories": [],
   "media": [],
   "products": [],
@@ -11,11 +32,15 @@
     "taxable_business_status": "exempt",
     "qualified_invoice_status": "not_registered",
     "qualified_invoice_registration_number": null,
-    "yamato_shipping_separately_charged": "pending",
-    "cod_fee_treatment": "pending",
+    "yamato_shipping_separately_charged": "yes",
+    "cod_fee_treatment": "not_offered",
     "implementation_route": "tax_disabled_candidate",
     "decision_evidence_ref": "ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json"
   },
+  "readiness_evidence_refs": [
+    "ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json",
+    "ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-04.json"
+  ],
   "mutation_authorized": false,
   "production_publish_authorized": false
 }
