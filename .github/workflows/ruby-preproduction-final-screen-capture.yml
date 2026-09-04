@@ -33,16 +33,26 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Validate capture script syntax and target lock
+      - name: Validate capture and probe source guards
         shell: bash
         run: |
           set -euo pipefail
+          node --check scripts/probe_ruby_preproduction_catalog.mjs
           node --check scripts/capture_ruby_preproduction_final_screen.mjs
+          grep -F 'darkgreen-wallaby-680439.hostingersite.com' scripts/probe_ruby_preproduction_catalog.mjs
+          grep -F 'method: "GET"' scripts/probe_ruby_preproduction_catalog.mjs
           grep -F 'darkgreen-wallaby-680439.hostingersite.com' scripts/capture_ruby_preproduction_final_screen.mjs
           grep -F 'woocommerce_place_order_ajax_blocked' scripts/capture_ruby_preproduction_final_screen.mjs
           grep -F 'woocommerce_order_endpoint_blocked' scripts/capture_ruby_preproduction_final_screen.mjs
           ! grep -F '.click(' scripts/capture_ruby_preproduction_final_screen.mjs
           echo PHIL_AI_OS_RUBY_PREPRODUCTION_CAPTURE_SOURCE_GUARD_GREEN
+
+      - name: GET-only preflight for a usable preproduction catalog item
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUBY_FINAL_SCREEN_CAPTURE_OUTPUT"
+          node scripts/probe_ruby_preproduction_catalog.mjs
 
       - name: Install pinned Playwright Chromium
         shell: bash
@@ -55,26 +65,43 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUBY_FINAL_SCREEN_CAPTURE_OUTPUT"
           node scripts/capture_ruby_preproduction_final_screen.mjs
 
-      - name: Validate captured draft remains non-authorizing and incomplete
+      - name: Validate probe/captured draft remains non-authorizing and incomplete
         shell: bash
         if: ${{ always() }}
         run: |
           set -euo pipefail
+          probe="$RUBY_FINAL_SCREEN_CAPTURE_OUTPUT/catalog-probe.json"
           draft="$RUBY_FINAL_SCREEN_CAPTURE_OUTPUT/draft-evidence.json"
           summary="$RUBY_FINAL_SCREEN_CAPTURE_OUTPUT/capture-summary.json"
-          if [ ! -f "$draft" ] || [ ! -f "$summary" ]; then
-            echo "PHIL_AI_OS_RUBY_PREPRODUCTION_FINAL_SCREEN_DRAFT_MISSING"
+          if [ ! -f "$probe" ]; then
+            echo "PHIL_AI_OS_RUBY_PREPRODUCTION_CATALOG_PROBE_MISSING"
             exit 1
           fi
           python - <<'PY'
-          import json, os
+          import json, os, sys
           from pathlib import Path
           root = Path(os.environ['RUBY_FINAL_SCREEN_CAPTURE_OUTPUT'])
-          draft = json.loads((root / 'draft-evidence.json').read_text())
-          summary = json.loads((root / 'capture-summary.json').read_text())
+          probe = json.loads((root / 'catalog-probe.json').read_text())
+          assert probe['environment'] == 'preproduction'
+          assert probe['endpoint_class'] == 'woocommerce_store_api_products_get_only'
+          assert probe['network_read_only'] is True
+          assert probe['mutation_authorized'] is False
+          assert probe['order_creation_authorized'] is False
+          assert probe['payment_execution_authorized'] is False
+          assert probe['production_publish_authorized'] is False
+          if probe['checkout_ready_for_non_submitted_screen_capture'] is False:
+              assert probe['purchasable_candidates'] == 0
+              assert probe['first_candidate_product_id'] is None
+              print('PHIL_AI_OS_RUBY_PREPRODUCTION_CATALOG_BLOCKER_EVIDENCE_GREEN no_purchasable_product=true mutation=false order_creation=false payment_execution=false')
+              sys.exit(3)
+          draft_path = root / 'draft-evidence.json'
+          summary_path = root / 'capture-summary.json'
+          if not draft_path.is_file() or not summary_path.is_file():
+              raise SystemExit('PHIL_AI_OS_RUBY_PREPRODUCTION_FINAL_SCREEN_DRAFT_MISSING')
+          draft = json.loads(draft_path.read_text())
+          summary = json.loads(summary_path.read_text())
           assert draft['environment'] == 'preproduction'
           assert draft['synthetic_customer_data_only'] is True
           assert draft['contains_personal_data'] is False
