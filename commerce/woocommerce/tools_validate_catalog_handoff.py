@@ -27,6 +27,12 @@ def main() -> int:
     require(payload["catalog_approved"] is False, "template cannot self-approve catalog")
     require(payload["catalog_approval_ref"] is None, "template cannot invent approval reference")
 
+    scope = payload["catalog_scope"]
+    require(scope["scope_type"] == "initial_launch_subset", "catalog scope must remain Initial Launch Catalog V1 subset")
+    require(scope["full_product_range_required_for_sprint3_closure"] is False, "Sprint 3 must not require Ruby's full product range")
+    require(scope["additional_products_may_be_added_after_sprint3"] is True, "post-Sprint-3 catalog expansion must remain supported")
+    require(scope["scope_complete_for_intended_initial_launch"] is False, "template cannot self-confirm launch-subset completeness")
+
     source = payload["source_contract"]
     for key in (
         "owner_source_required",
@@ -43,7 +49,8 @@ def main() -> int:
 
     requirements = payload["handoff_requirements"]
     expected_markers = (
-        "owner-approved product list",
+        "Initial Launch Catalog V1 product subset",
+        "complete for the intended initial launch",
         "category hierarchy",
         "English and Japanese",
         "JPY",
@@ -82,7 +89,8 @@ def main() -> int:
 
     print(
         "PHIL_AI_OS_CATALOG_HANDOFF_TEMPLATE_GREEN "
-        "owner_input_pending=true tax=exempt shipping=reconciled cod=not_offered "
+        "owner_input_pending=true scope=initial_launch_subset full_catalog_required=false "
+        "tax=exempt shipping=reconciled cod=not_offered "
         "mutation_authorized=false production_publish_authorized=false"
     )
     return 0
