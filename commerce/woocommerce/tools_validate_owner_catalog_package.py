@@ -17,6 +17,23 @@ from phil_ai_os_woocommerce.models import ContractValidationError
 TAX_EVIDENCE = REPO_ROOT / "ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json"
 CHECKOUT_EVIDENCE = REPO_ROOT / "ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-04.json"
 EXPECTED_TAX_REF = "ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json"
+EXPECTED_SCOPE_TYPE = "initial_launch_subset"
+
+
+def _catalog_scope_blockers(payload: dict[str, Any]) -> list[str]:
+    blockers: list[str] = []
+    scope = payload.get("catalog_scope")
+    if not isinstance(scope, dict):
+        return ["catalog_scope must be an object"]
+    if scope.get("scope_type") != EXPECTED_SCOPE_TYPE:
+        blockers.append("catalog scope must be initial_launch_subset")
+    if scope.get("full_product_range_required_for_sprint3_closure") is not False:
+        blockers.append("Sprint 3 catalog scope must not require Ruby's full product range")
+    if scope.get("additional_products_may_be_added_after_sprint3") is not True:
+        blockers.append("catalog scope must allow additional products after Sprint 3")
+    if scope.get("scope_complete_for_intended_initial_launch") is not True:
+        blockers.append("owner must confirm the submitted subset is complete for the intended initial launch")
+    return blockers
 
 
 def _current_state_blockers(payload: dict[str, Any]) -> list[str]:
@@ -63,16 +80,23 @@ def _current_state_blockers(payload: dict[str, Any]) -> list[str]:
 def validate_package(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         readiness = evaluate_catalog_tax_readiness(payload)
+        current_state_blockers = _current_state_blockers(payload)
+        scope_blockers = _catalog_scope_blockers(payload)
         blockers = list(readiness.blockers)
-        blockers.extend(_current_state_blockers(payload))
+        blockers.extend(current_state_blockers)
+        blockers.extend(scope_blockers)
         blockers = sorted(set(blockers))
         ready = readiness.catalog_ready and readiness.tax_decision_ready and not blockers
+        scope = payload.get("catalog_scope") if isinstance(payload.get("catalog_scope"), dict) else {}
         return {
-            "version": "ruby-owner-catalog-package-validation-v1",
+            "version": "ruby-owner-catalog-package-validation-v2",
             "valid_contract": True,
+            "catalog_scope_type": scope.get("scope_type"),
+            "full_product_range_required_for_sprint3_closure": scope.get("full_product_range_required_for_sprint3_closure"),
             "catalog_ready": readiness.catalog_ready,
             "tax_decision_ready": readiness.tax_decision_ready,
-            "current_state_reconciled": not _current_state_blockers(payload),
+            "current_state_reconciled": not current_state_blockers,
+            "scope_ready": not scope_blockers,
             "ready_for_preproduction_configuration": ready,
             "blockers": blockers,
             "mutation_authorized": False,
@@ -80,11 +104,14 @@ def validate_package(payload: dict[str, Any]) -> dict[str, Any]:
         }
     except (ContractValidationError, KeyError, TypeError, ValueError) as exc:
         return {
-            "version": "ruby-owner-catalog-package-validation-v1",
+            "version": "ruby-owner-catalog-package-validation-v2",
             "valid_contract": False,
+            "catalog_scope_type": None,
+            "full_product_range_required_for_sprint3_closure": None,
             "catalog_ready": False,
             "tax_decision_ready": False,
             "current_state_reconciled": False,
+            "scope_ready": False,
             "ready_for_preproduction_configuration": False,
             "blockers": [f"contract validation failed: {exc}"],
             "mutation_authorized": False,
@@ -94,7 +121,7 @@ def validate_package(payload: dict[str, Any]) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Validate a Ruby owner catalog package without granting WooCommerce write authority."
+        description="Validate a Ruby Initial Launch Catalog V1 owner package without granting WooCommerce write authority."
     )
     parser.add_argument("input_json", type=Path)
     parser.add_argument(
@@ -108,11 +135,14 @@ def main(argv: list[str] | None = None) -> int:
         payload = json.loads(args.input_json.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         result = {
-            "version": "ruby-owner-catalog-package-validation-v1",
+            "version": "ruby-owner-catalog-package-validation-v2",
             "valid_contract": False,
+            "catalog_scope_type": None,
+            "full_product_range_required_for_sprint3_closure": None,
             "catalog_ready": False,
             "tax_decision_ready": False,
             "current_state_reconciled": False,
+            "scope_ready": False,
             "ready_for_preproduction_configuration": False,
             "blockers": [f"input load failed: {exc}"],
             "mutation_authorized": False,
@@ -123,11 +153,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if not isinstance(payload, dict):
         result = {
-            "version": "ruby-owner-catalog-package-validation-v1",
+            "version": "ruby-owner-catalog-package-validation-v2",
             "valid_contract": False,
+            "catalog_scope_type": None,
+            "full_product_range_required_for_sprint3_closure": None,
             "catalog_ready": False,
             "tax_decision_ready": False,
             "current_state_reconciled": False,
+            "scope_ready": False,
             "ready_for_preproduction_configuration": False,
             "blockers": ["catalog package root must be a JSON object"],
             "mutation_authorized": False,
@@ -142,6 +175,7 @@ def main(argv: list[str] | None = None) -> int:
     if result["ready_for_preproduction_configuration"]:
         print(
             "PHIL_AI_OS_OWNER_CATALOG_PACKAGE_GREEN "
+            "scope=initial_launch_subset full_catalog_required=false "
             "preproduction_configuration_ready=true mutation_authorized=false production_publish_authorized=false"
         )
         return 0
@@ -149,7 +183,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.expect_pending and result["valid_contract"] and not result["ready_for_preproduction_configuration"]:
         print(
             "PHIL_AI_OS_OWNER_CATALOG_PACKAGE_PENDING_FAIL_CLOSED "
-            f"blockers={len(result['blockers'])} mutation_authorized=false production_publish_authorized=false"
+            f"blockers={len(result['blockers'])} scope=initial_launch_subset full_catalog_required=false "
+            "mutation_authorized=false production_publish_authorized=false"
         )
         return 0
 
