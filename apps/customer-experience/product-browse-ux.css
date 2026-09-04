@@ -91,5 +91,11 @@
 }
 
 @media (forced-colors: active) {
-  .filter-chip, .mobile-detail-continuation { border: 1px solid CanvasText; }
+  .filter-chip,
+  .mobile-detail-continuation { border: 1px solid CanvasText; }
+  .filter-chip:focus-visible,
+  .mobile-detail-cart-link:focus-visible {
+    outline: 3px solid Highlight;
+    forced-color-adjust: auto;
+  }
 }

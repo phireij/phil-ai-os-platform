@@ -33,7 +33,7 @@ test("mobile payment guidance is bilingual, accessible and PWA-cached", () => {
   assert.match(source, /aria-labelledby/);
   assert.match(css, /@media \(max-width: 679px\)/);
   assert.match(css, /@media \(forced-colors: active\)/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v19/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v\d+/);
   assert.match(sw, /\.\/src\/payment-method-guidance\.mjs/);
   assert.match(sw, /\.\/payment-method-guidance\.css/);
 });

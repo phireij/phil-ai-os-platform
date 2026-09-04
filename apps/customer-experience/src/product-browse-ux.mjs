@@ -1,5 +1,7 @@
 import { localeHref } from "./locale-links.mjs";
 
+const RETURN_TARGET_KEY = "phil-ai-os.cx.catalog-return-target.v1";
+
 const copy = {
   en: {
     filtersLabel: "Product filters",
@@ -30,6 +32,7 @@ function filterFromUrl() {
 }
 
 let filterMode = filterFromUrl();
+let returnFocusRestored = false;
 
 function locale() {
   return document.documentElement.lang === "ja" ? "ja" : "en";
@@ -37,6 +40,58 @@ function locale() {
 
 function productCards() {
   return [...document.querySelectorAll("#catalog-grid .product-card")];
+}
+
+function productKeyFromHref(href) {
+  try {
+    return new URL(href, location.href).searchParams.get("product");
+  } catch {
+    return null;
+  }
+}
+
+function rememberCatalogReturnTarget(link) {
+  const productKey = productKeyFromHref(link?.getAttribute("href") || link?.href || "");
+  if (!productKey) return;
+  try {
+    sessionStorage.setItem(RETURN_TARGET_KEY, productKey);
+  } catch {
+    // Session storage is an optional UX enhancement only.
+  }
+}
+
+function peekCatalogReturnTarget() {
+  try {
+    return sessionStorage.getItem(RETURN_TARGET_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function clearCatalogReturnTarget() {
+  try {
+    sessionStorage.removeItem(RETURN_TARGET_KEY);
+  } catch {
+    // No-op when storage is unavailable.
+  }
+}
+
+function restoreCatalogReturnFocus() {
+  if (returnFocusRestored || selectedProductKey()) return;
+  const productKey = peekCatalogReturnTarget();
+  if (!productKey) return;
+
+  const targetLink = productCards()
+    .filter((card) => !card.hidden)
+    .map((card) => card.querySelector(".detail-link"))
+    .find((link) => productKeyFromHref(link?.getAttribute("href") || link?.href || "") === productKey);
+
+  if (!targetLink) return;
+  const targetCard = targetLink.closest(".product-card");
+  returnFocusRestored = true;
+  clearCatalogReturnTarget();
+  targetLink.focus({ preventScroll: true });
+  targetCard?.scrollIntoView({ block: "center", inline: "nearest" });
 }
 
 function catalogReturnHref(lang = locale()) {
@@ -96,6 +151,7 @@ function applyFilter() {
   syncFilterControls();
   decorateCatalogDetailLinks();
   syncBackLink();
+  queueMicrotask(restoreCatalogReturnFocus);
 }
 
 function updateFilterCopy() {
@@ -119,16 +175,22 @@ function ensureFilterBar() {
   wrapper.className = "browse-controls";
   wrapper.innerHTML = `
     <div id="browse-filter-bar" class="filter-chip-row" role="group">
-      <button class="filter-chip" type="button" data-filter="all"></button>
-      <button class="filter-chip" type="button" data-filter="available"></button>
+      <button class="filter-chip" type="button" data-filter="all" aria-controls="catalog-grid"></button>
+      <button class="filter-chip" type="button" data-filter="available" aria-controls="catalog-grid"></button>
     </div>
-    <p id="browse-filter-summary" class="browse-filter-summary" aria-live="polite"></p>`;
+    <p id="browse-filter-summary" class="browse-filter-summary" role="status" aria-live="polite" aria-atomic="true"></p>`;
   grid.before(wrapper);
 
   wrapper.addEventListener("click", (event) => {
+    const detailLink = event.target.closest("#catalog-grid .detail-link");
+    if (detailLink) {
+      rememberCatalogReturnTarget(detailLink);
+      return;
+    }
     const button = event.target.closest("[data-filter]");
     if (!button) return;
     filterMode = button.dataset.filter === "available" ? "available" : "all";
+    returnFocusRestored = false;
     syncFilterUrl();
     applyFilter();
   });
@@ -200,7 +262,10 @@ function ensureDetailContinuation() {
 }
 
 function refresh({ restoreFilterFromUrl = false } = {}) {
-  if (restoreFilterFromUrl) filterMode = filterFromUrl();
+  if (restoreFilterFromUrl) {
+    filterMode = filterFromUrl();
+    returnFocusRestored = false;
+  }
   ensureFilterBar();
   updateFilterCopy();
   ensureDetailContinuation();
@@ -208,7 +273,13 @@ function refresh({ restoreFilterFromUrl = false } = {}) {
 }
 
 const catalog = document.querySelector("#catalog-grid");
-if (catalog) new MutationObserver(refresh).observe(catalog, { childList: true, subtree: true });
+if (catalog) {
+  catalog.addEventListener("click", (event) => {
+    const link = event.target.closest(".detail-link");
+    if (link) rememberCatalogReturnTarget(link);
+  });
+  new MutationObserver(refresh).observe(catalog, { childList: true, subtree: true });
+}
 const detail = document.querySelector("#product-detail");
 if (detail) new MutationObserver(refresh).observe(detail, { childList: true, subtree: true });
 document.querySelector("#locale-select")?.addEventListener("change", () => queueMicrotask(refresh));
