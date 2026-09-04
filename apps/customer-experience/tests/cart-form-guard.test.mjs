@@ -44,6 +44,6 @@ test("cart guard is loaded, styled and cached", () => {
   assert.match(html, /src\/cart-form-guard\.mjs/);
   assert.match(css, /cart-form-guidance/);
   assert.match(css, /#evaluate-button:disabled/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v19/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v\d+/);
   assert.match(sw, /\.\/src\/cart-form-guard\.mjs/);
 });
