@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v20";
-// 2026-09-05: refresh mobile catalog return-focus and accessibility behavior while retaining the isolated offline shell.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v21";
+// 2026-09-05: add empty-cart recovery to the isolated offline shell without expanding commerce authority.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -30,6 +30,7 @@ const APP_SHELL = [
   "./src/cart-selection-continuity.mjs",
   "./src/cart-mobile-controls.mjs",
   "./src/cart-locale-state.mjs",
+  "./src/empty-cart-recovery.mjs",
   "./src/fulfillment-choice.mjs",
   "./src/cart-form-guard.mjs",
   "./src/cart-dock-status.mjs",
