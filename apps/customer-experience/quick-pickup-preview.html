@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#fff7f5">
+  <meta name="description" content="Phil AI OS isolated Air Mobile Quick Pickup readiness preview">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="stylesheet" href="./styles.css">
+  <title>Phil AI OS — Quick Pickup Readiness Preview</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">Phil AI OS · Sprint 4</p>
+      <a class="brand" href="./">Customer Experience</a>
+    </div>
+    <div class="header-actions">
+      <label class="locale-label" for="locale-select">Language</label>
+      <select id="locale-select" aria-label="Language">
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+      </select>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="hero" aria-labelledby="hero-title">
+      <p class="status-pill">Isolated preview · No external activation</p>
+      <h1 id="hero-title">Air Mobile Order Quick Pickup readiness</h1>
+      <p id="hero-copy">This preview reads fixture-only readiness state. It does not publish or activate an external order link.</p>
+    </section>
+
+    <section class="detail-panel" aria-labelledby="quick-pickup-title">
+      <div class="detail-copy">
+        <p class="eyebrow">External Quick Pickup</p>
+        <h2 id="quick-pickup-title">Readiness status</h2>
+        <div id="quick-pickup-state" class="intent-output" role="status" aria-live="polite" aria-atomic="true"></div>
+      </div>
+    </section>
+
+    <section class="safety-panel" aria-labelledby="safety-title">
+      <p class="eyebrow">Authority boundary</p>
+      <h2 id="safety-title">No external link is activated automatically</h2>
+      <p id="safety-copy">A production URL must be owner-confirmed, validated, and separately authorized before this preview may expose an active link. Automatic publication remains disabled.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Phil AI OS · Sprint 4 Customer Experience · fixture-only Quick Pickup readiness</p>
+  </footer>
+
+  <script type="module" src="./src/quick-pickup-preview.mjs"></script>
+</body>
+</html>
