@@ -21,8 +21,9 @@ test("successful same-origin responses remain cacheable", () => {
   assert.match(sw, /cache\.put\(request, copy\)/);
 });
 
-test("PWA shell includes the mobile UX and Quick Pickup dependencies", () => {
+test("PWA shell includes mobile UX, locale continuity and Quick Pickup dependencies", () => {
   assert.match(sw, /\.\/src\/mobile-ux\.mjs/);
+  assert.match(sw, /\.\/src\/locale-links\.mjs/);
   assert.match(sw, /\.\/src\/checkout-confidence\.mjs/);
   assert.match(sw, /\.\/quick-pickup-preview\.html/);
   assert.match(sw, /\.\/src\/quick-pickup-preview\.mjs/);

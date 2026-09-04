@@ -1,3 +1,5 @@
+import { syncLocaleLinks } from "./locale-links.mjs";
+
 const copy = {
   en: {
     eyebrow: "Before you continue",
@@ -53,8 +55,10 @@ function apply(locale) {
     if (node) node.textContent = copy[lang][key];
   }
   document.querySelector(".mobile-action-dock")?.setAttribute("aria-label", copy[lang].nav);
+  syncLocaleLinks(lang);
 }
 
 const localeSelect = document.querySelector("#locale-select");
 localeSelect?.addEventListener("change", () => queueMicrotask(() => apply(localeSelect.value)));
-apply(document.documentElement.lang);
+const requestedLocale = new URLSearchParams(location.search).get("lang");
+apply(requestedLocale || document.documentElement.lang);
