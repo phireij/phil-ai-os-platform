@@ -111,6 +111,9 @@ jobs:
       - name: Validate actual final confirmation screen evidence contract
         run: python scripts/validate_sprint7_actual_confirmation_screen_evidence_contract.py
 
+      - name: Self-test actual final confirmation screen evidence acceptance harness
+        run: python scripts/validate_sprint7_actual_confirmation_screen_evidence.py --self-test
+
       - name: Validate external channel activation readiness
         run: python scripts/validate_sprint7_channel_activation.py
 
