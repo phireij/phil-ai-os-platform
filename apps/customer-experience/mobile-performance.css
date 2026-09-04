@@ -1,4 +1,5 @@
 @import "./product-media-resilience.css";
+@import "./mobile-narrow-screen.css";
 
 #catalog-grid {
   min-height: 12rem;
