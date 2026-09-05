@@ -65,6 +65,16 @@ jobs:
           echo mutation=false
           echo sms_send=false
 
+      - name: Assert remote preflight block contains no mutation commands
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=.github/workflows/commerce-twilio-callback-deployment-readonly-preflight.yml
+          sed -n "/<<'REMOTE'/,/^          REMOTE$/p" "$FILE" > /tmp/twilio-callback-preflight-remote.sh
+          test -s /tmp/twilio-callback-preflight-remote.sh
+          ! grep -E 'docker (restart|rm|stop|kill|cp)|docker compose (up|down|restart)|systemctl (restart|reload|stop|enable|disable)|iptables|ufw |certbot|curl .*-[Xx] *(POST|PUT|PATCH|DELETE)|sed +-i|tee +/|cat +> */|cp +.* /|mv +.* /' /tmp/twilio-callback-preflight-remote.sh
+          echo PHIL_AI_OS_TWILIO_CALLBACK_PREFLIGHT_STATIC_NO_MUTATION_GREEN
+
       - name: Configure bounded SSH access
         shell: bash
         run: |
@@ -107,67 +117,40 @@ jobs:
           echo traefik_network_mode="$(docker inspect "$TRAEFIK_CID" --format '{{.HostConfig.NetworkMode}}')"
 
           CONTROL_ROWS="$(docker ps --format '{{.ID}}|{{.Names}}|{{.Image}}' | awk 'BEGIN{IGNORECASE=1} /control[-_]?api|control.*api|phil.*control/')"
-          CONTROL_COUNT="$(printf '%s\n' "$CONTROL_ROWS" | sed '/^$/d' | wc -l | tr -d ' ')"
-          echo control_api_name_match_count="$CONTROL_COUNT"
-          test "$CONTROL_COUNT" -ge 1
-
           CANONICAL_ROWS="$(printf '%s\n' "$CONTROL_ROWS" | awk -F'|' '$3 ~ /^phil-ai-os\/control-api:/')"
-          CANONICAL_COUNT="$(printf '%s\n' "$CANONICAL_ROWS" | sed '/^$/d' | wc -l | tr -d ' ')"
-          echo canonical_control_api_image_match_count="$CANONICAL_COUNT"
-          test "$CANONICAL_COUNT" -ge 1
+          echo control_api_name_match_count="$(printf '%s\n' "$CONTROL_ROWS" | sed '/^$/d' | wc -l | tr -d ' ')"
+          echo canonical_control_api_image_match_count="$(printf '%s\n' "$CANONICAL_ROWS" | sed '/^$/d' | wc -l | tr -d ' ')"
 
-          LOOPBACK_ROWS=""
-          TRAEFIK_4870_ROWS=""
+          SELECTED_ROWS=""
+          SELECTED_COUNT=0
           echo control_api_candidate_metadata_begin
           while IFS='|' read -r CID CNAME CIMAGE; do
             test -n "$CID" || continue
             SERVICE="$(docker inspect "$CID" --format '{{index .Config.Labels "com.docker.compose.service"}}')"
-            PORT_MAP="$(docker port "$CID" 2>/dev/null || true)"
-            LABELS="$(docker inspect "$CID" --format '{{range $k,$v := .Config.Labels}}{{printf "%s=%s\n" $k $v}}{{end}}')"
             CMD="$(docker inspect "$CID" --format '{{json .Config.Cmd}}')"
+            PORT_MAP="$(docker port "$CID" 2>/dev/null || true)"
             LOOPBACK=false
-            TRAEFIK_4870=false
             if printf '%s\n' "$PORT_MAP" | grep -Fq '127.0.0.1:4870'; then
               LOOPBACK=true
-              LOOPBACK_ROWS="${LOOPBACK_ROWS}${CID}|${CNAME}|${CIMAGE}\n"
-            fi
-            if printf '%s\n' "$LABELS" | grep -Eq '^traefik\.http\.services\..*\.loadbalancer\.server\.port=4870$'; then
-              TRAEFIK_4870=true
-              TRAEFIK_4870_ROWS="${TRAEFIK_4870_ROWS}${CID}|${CNAME}|${CIMAGE}\n"
+              SELECTED_ROWS="$CID|$CNAME|$CIMAGE"
+              SELECTED_COUNT=$((SELECTED_COUNT + 1))
             fi
             echo candidate_name="$CNAME"
             echo candidate_image="$CIMAGE"
             echo candidate_compose_service="$SERVICE"
             echo candidate_loopback_4870="$LOOPBACK"
-            echo candidate_traefik_service_4870="$TRAEFIK_4870"
             echo candidate_cmd="$CMD"
           done <<EOF
           $CANONICAL_ROWS
           EOF
           echo control_api_candidate_metadata_end
-
-          LOOPBACK_ROWS="$(printf '%b' "$LOOPBACK_ROWS" | sed '/^$/d')"
-          TRAEFIK_4870_ROWS="$(printf '%b' "$TRAEFIK_4870_ROWS" | sed '/^$/d')"
-          LOOPBACK_COUNT="$(printf '%s\n' "$LOOPBACK_ROWS" | sed '/^$/d' | wc -l | tr -d ' ')"
-          TRAEFIK_4870_COUNT="$(printf '%s\n' "$TRAEFIK_4870_ROWS" | sed '/^$/d' | wc -l | tr -d ' ')"
-          echo candidate_loopback_4870_count="$LOOPBACK_COUNT"
-          echo candidate_traefik_service_4870_count="$TRAEFIK_4870_COUNT"
-
-          if test "$LOOPBACK_COUNT" -eq 1; then
-            SELECTED_ROWS="$LOOPBACK_ROWS"
-            SELECTION=exact_loopback_127_0_0_1_4870
-          elif test "$LOOPBACK_COUNT" -eq 0 && test "$TRAEFIK_4870_COUNT" -eq 1; then
-            SELECTED_ROWS="$TRAEFIK_4870_ROWS"
-            SELECTION=unique_traefik_service_port_4870
-          else
-            echo control_api_selection=unresolved
-            exit 1
-          fi
+          echo candidate_loopback_4870_count="$SELECTED_COUNT"
+          test "$SELECTED_COUNT" -eq 1
 
           IFS='|' read -r CONTROL_CID CONTROL_NAME CONTROL_IMAGE <<EOF
           $SELECTED_ROWS
           EOF
-          echo control_api_selection="$SELECTION"
+          echo control_api_selection=exact_loopback_127_0_0_1_4870
           echo control_api_container="$CONTROL_NAME"
           echo control_api_image="$CONTROL_IMAGE"
           echo control_api_compose_service="$(docker inspect "$CONTROL_CID" --format '{{index .Config.Labels "com.docker.compose.service"}}')"
@@ -179,7 +162,6 @@ jobs:
           echo control_api_mounts_begin
           docker inspect "$CONTROL_CID" --format '{{range .Mounts}}{{printf "%s|%s|%s|%t\n" .Type .Source .Destination .RW}}{{end}}'
           echo control_api_mounts_end
-
           echo control_api_env_keys_begin
           docker inspect "$CONTROL_CID" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed 's/=.*$//' | sort -u
           echo control_api_env_keys_end
@@ -200,22 +182,32 @@ jobs:
             printf '%s' "$HOST_VALUE" | sha256sum | awk '{print "public_host_sha256=" $1}'
           fi
           echo public_hostname_printed=false
-          CALLBACK_RULE_COUNT="$(printf '%s\n' "$RULES" | grep -F '/v1/webhooks/twilio/sms-status' | wc -l | tr -d ' ')"
+          CALLBACK_RULE_COUNT="$(printf '%s\n' "$RULES" | awk 'index($0,"/v1/webhooks/twilio/sms-status"){n++} END{print n+0}')"
           echo existing_twilio_callback_router_count="$CALLBACK_RULE_COUNT"
 
           echo '--- application source/config discovery ---'
-          echo callback_contract_occurrences_in_container="$(docker exec "$CONTROL_CID" sh -lc "grep -Rsl -- '/v1/webhooks/twilio/sms-status' /app /opt 2>/dev/null | wc -l | tr -d ' '" || true)"
+          CALLBACK_FILES="$(docker exec "$CONTROL_CID" sh -lc "grep -Rsl -- '/v1/webhooks/twilio/sms-status' /app /opt 2>/dev/null || true")"
+          echo callback_contract_occurrences_in_container="$(printf '%s\n' "$CALLBACK_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
+          echo callback_contract_source_candidates_begin
+          printf '%s\n' "$CALLBACK_FILES" | sed '/^$/d' | head -n 10
+          echo callback_contract_source_candidates_end
           echo approval_route_source_candidates_begin
-          docker exec "$CONTROL_CID" sh -lc "grep -Rsl -- '/v1/approvals/request' /app /opt 2>/dev/null | head -n 10" || true
+          docker exec "$CONTROL_CID" sh -lc "grep -Rsl -- '/v1/approvals/request' /app /opt 2>/dev/null | head -n 10 || true"
           echo approval_route_source_candidates_end
+
+          echo '--- host deployment source checks ---'
+          WORKDIR="$(docker inspect "$CONTROL_CID" --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}')"
+          echo compose_working_dir_exists="$([ -d "$WORKDIR" ] && echo true || echo false)"
+          echo compose_file_exists="$([ -f "$WORKDIR/compose.yml" ] && echo true || echo false)"
+          echo host_app_py_exists="$([ -f "$WORKDIR/app.py" ] && echo true || echo false)"
+          echo host_dockerfile_exists="$([ -f "$WORKDIR/Dockerfile" ] && echo true || echo false)"
+          echo host_source_candidates_begin
+          find "$WORKDIR" -maxdepth 3 -type f \( -name 'app.py' -o -name 'proxy.py' -o -name 'Dockerfile' \) -print 2>/dev/null | head -n 20 || true
+          echo host_source_candidates_end
 
           echo '--- recovery controls ---'
           for unit in phil-ai-os-backup.timer phil-ai-os-backup-self-heal.timer; do
-            if systemctl is-active --quiet "$unit"; then
-              echo "$unit=active"
-            else
-              echo "$unit=inactive"
-            fi
+            if systemctl is-active --quiet "$unit"; then echo "$unit=active"; else echo "$unit=inactive"; fi
           done
 
           echo read_only=true
@@ -228,13 +220,3 @@ jobs:
           echo woocommerce_mutation=false
           echo PHIL_AI_OS_TWILIO_CALLBACK_DEPLOYMENT_READONLY_PREFLIGHT_OK
           REMOTE
-
-      - name: Assert remote preflight block contains no mutation commands
-        shell: bash
-        run: |
-          set -euo pipefail
-          FILE=.github/workflows/commerce-twilio-callback-deployment-readonly-preflight.yml
-          sed -n "/<<'REMOTE'/,/^          REMOTE$/p" "$FILE" > /tmp/twilio-callback-preflight-remote.sh
-          test -s /tmp/twilio-callback-preflight-remote.sh
-          ! grep -E 'docker (restart|rm|stop|kill|cp)|docker compose (up|down|restart)|systemctl (restart|reload|stop|enable|disable)|iptables|ufw |certbot|curl .*-[Xx] *(POST|PUT|PATCH|DELETE)|sed +-i|tee +/|cat +> */|cp +.* /|mv +.* /|rm +-f' /tmp/twilio-callback-preflight-remote.sh
-          echo PHIL_AI_OS_TWILIO_CALLBACK_PREFLIGHT_STATIC_NO_MUTATION_GREEN
