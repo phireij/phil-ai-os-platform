@@ -28,6 +28,32 @@ const copy = Object.freeze({
         description: "Phil AI OS isolated Air Mobile Quick Pickup readiness preview",
       }),
     }),
+    semantics: Object.freeze({
+      cart: Object.freeze({
+        '.hero a.text-link': "← Catalog preview",
+        '.hero a.detail-link': "Open final confirmation compliance preview",
+        'section[aria-labelledby="cart-title"] .eyebrow': "Cart lab",
+        'section[aria-labelledby="result-title"] .eyebrow': "Readiness result",
+        '.safety-panel .eyebrow': "Authority boundary",
+      }),
+      confirmation: Object.freeze({
+        '.hero a.text-link': "← Synthetic cart",
+        'section[aria-labelledby="confirmation-title"] .eyebrow': "Final-step review",
+        'section[aria-labelledby="pricing-title"] .eyebrow': "Transaction total",
+        'section[aria-labelledby="payment-title"] .eyebrow': "Payment timing",
+        'section[aria-labelledby="fulfillment-title"] .eyebrow': "Fulfillment",
+        'section[aria-labelledby="policy-title"] .eyebrow': "Policies",
+        '.checkout-card .eyebrow': "Final action",
+        '#action-title': "Review before submitting",
+        '.checkout-card a.text-link': "← Edit synthetic cart",
+        '.safety-panel .eyebrow': "Authority boundary",
+        '#safety-title': "This is not the actual WooCommerce final screen",
+      }),
+      pickup: Object.freeze({
+        'section[aria-labelledby="quick-pickup-title"] .eyebrow': "External Quick Pickup",
+        '.safety-panel .eyebrow': "Authority boundary",
+      }),
+    }),
   }),
   ja: Object.freeze({
     skip: "メインコンテンツへ移動",
@@ -58,6 +84,32 @@ const copy = Object.freeze({
         description: "Phil AI OS の分離されたAir モバイルオーダー・クイックピックアップ準備状況プレビュー",
       }),
     }),
+    semantics: Object.freeze({
+      cart: Object.freeze({
+        '.hero a.text-link': "← 商品プレビュー",
+        '.hero a.detail-link': "最終確認コンプライアンスプレビューを開く",
+        'section[aria-labelledby="cart-title"] .eyebrow': "カート確認",
+        'section[aria-labelledby="result-title"] .eyebrow': "準備状況結果",
+        '.safety-panel .eyebrow': "権限境界",
+      }),
+      confirmation: Object.freeze({
+        '.hero a.text-link': "← 合成カート",
+        'section[aria-labelledby="confirmation-title"] .eyebrow': "最終ステップ確認",
+        'section[aria-labelledby="pricing-title"] .eyebrow': "取引合計",
+        'section[aria-labelledby="payment-title"] .eyebrow': "支払時期",
+        'section[aria-labelledby="fulfillment-title"] .eyebrow': "受取・配送",
+        'section[aria-labelledby="policy-title"] .eyebrow': "ポリシー",
+        '.checkout-card .eyebrow': "最終操作",
+        '#action-title': "送信前に確認",
+        '.checkout-card a.text-link': "← 合成カートを修正",
+        '.safety-panel .eyebrow': "権限境界",
+        '#safety-title': "これは実際のWooCommerce最終画面ではありません",
+      }),
+      pickup: Object.freeze({
+        'section[aria-labelledby="quick-pickup-title"] .eyebrow': "外部クイックピックアップ",
+        '.safety-panel .eyebrow': "権限境界",
+      }),
+    }),
   }),
 });
 
@@ -71,6 +123,14 @@ export function pageChromeKey(pathname = "/") {
   if (path.endsWith("/confirmation-preview.html")) return "confirmation";
   if (path.endsWith("/quick-pickup-preview.html")) return "pickup";
   return "catalog";
+}
+
+function applySemanticCopy(entries) {
+  if (!entries) return;
+  Object.entries(entries).forEach(([selector, value]) => {
+    const target = document.querySelector(selector);
+    if (target) target.textContent = value;
+  });
 }
 
 export function applyPageChromeLocale(locale = document.documentElement.lang) {
@@ -93,6 +153,7 @@ export function applyPageChromeLocale(locale = document.documentElement.lang) {
     document.title = metadata.title;
     document.querySelector('meta[name="description"]')?.setAttribute("content", metadata.description);
   }
+  applySemanticCopy(localized.semantics?.[page]);
 }
 
 if (typeof document !== "undefined") {
