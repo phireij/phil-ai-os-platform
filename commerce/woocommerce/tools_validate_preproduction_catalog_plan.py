@@ -8,6 +8,45 @@ from typing import Any
 ALLOWED_ACTIONS = {"create_candidate", "update_candidate", "noop"}
 
 
+def _non_empty_string(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _string_list(value: Any) -> bool:
+    return isinstance(value, list) and all(_non_empty_string(item) for item in value)
+
+
+def _validate_category_action(item: dict[str, Any], label: str, blockers: list[str]) -> None:
+    desired = item.get("desired")
+    if not isinstance(desired, dict):
+        blockers.append(f"{label}.desired must be an object")
+        return
+    for field in ("key", "name", "slug"):
+        if not _non_empty_string(desired.get(field)):
+            blockers.append(f"{label}.desired.{field} must be a non-empty string")
+    parent_key = desired.get("parent_key")
+    if parent_key is not None and not _non_empty_string(parent_key):
+        blockers.append(f"{label}.desired.parent_key must be null or a non-empty string")
+
+
+def _validate_product_action(item: dict[str, Any], label: str, blockers: list[str]) -> None:
+    sku = item.get("sku")
+    if not _non_empty_string(sku):
+        blockers.append(f"{label}.sku must be a non-empty string")
+    desired = item.get("desired")
+    if not isinstance(desired, dict):
+        blockers.append(f"{label}.desired must be an object")
+        return
+    for field in ("sku", "name", "slug", "regular_price", "status", "catalog_visibility", "shipping_class"):
+        if not _non_empty_string(desired.get(field)):
+            blockers.append(f"{label}.desired.{field} must be a non-empty string")
+    if _non_empty_string(sku) and desired.get("sku") != sku:
+        blockers.append(f"{label}.desired.sku must match action sku")
+    for field in ("category_slugs", "media_keys"):
+        if not _string_list(desired.get(field)):
+            blockers.append(f"{label}.desired.{field} must contain non-empty strings")
+
+
 def validate_plan(plan: dict[str, Any]) -> dict[str, Any]:
     blockers: list[str] = []
     if plan.get("version") != "ruby-preproduction-catalog-dry-run-plan-v1":
@@ -37,7 +76,7 @@ def validate_plan(plan: dict[str, Any]) -> dict[str, Any]:
 
     source_blockers = plan.get("blockers")
     if isinstance(source_blockers, list):
-        if any(not isinstance(blocker, str) or not blocker.strip() for blocker in source_blockers):
+        if any(not _non_empty_string(blocker) for blocker in source_blockers):
             blockers.append("plan blockers must contain non-empty strings")
         if source_blockers:
             blockers.append("catalog plan carries blockers and is not ready for human review")
@@ -46,20 +85,40 @@ def validate_plan(plan: dict[str, Any]) -> dict[str, Any]:
         values = plan.get(collection)
         if isinstance(values, list):
             for index, item in enumerate(values):
+                label = f"{collection}[{index}]"
                 if not isinstance(item, dict):
-                    blockers.append(f"{collection}[{index}] must be an object")
+                    blockers.append(f"{label} must be an object")
                     continue
                 action = item.get("action")
                 if action not in ALLOWED_ACTIONS:
-                    blockers.append(f"{collection}[{index}] contains forbidden action {action!r}")
+                    blockers.append(f"{label} contains forbidden action {action!r}")
                 changes = item.get("changes")
                 if not isinstance(changes, list):
-                    blockers.append(f"{collection}[{index}].changes must be a list")
+                    blockers.append(f"{label}.changes must be a list")
+                else:
+                    if any(not _non_empty_string(change) for change in changes):
+                        blockers.append(f"{label}.changes must contain non-empty strings")
+                    if len(changes) != len(set(changes)):
+                        blockers.append(f"{label}.changes must not contain duplicates")
+                    if action == "noop" and changes:
+                        blockers.append(f"{label} noop action must not carry changes")
+                    if action in {"create_candidate", "update_candidate"} and not changes:
+                        blockers.append(f"{label} {action} must carry at least one change")
+                    if action == "create_candidate" and "missing_in_snapshot" not in changes:
+                        blockers.append(f"{label} create_candidate must include missing_in_snapshot")
+                    if action == "update_candidate" and "missing_in_snapshot" in changes:
+                        blockers.append(f"{label} update_candidate cannot include missing_in_snapshot")
+                if collection == "category_actions":
+                    _validate_category_action(item, label, blockers)
+                else:
+                    _validate_product_action(item, label, blockers)
 
     unmatched = plan.get("existing_unmatched_skus")
     if isinstance(unmatched, list):
-        if any(not isinstance(sku, str) or not sku for sku in unmatched):
+        if any(not _non_empty_string(sku) for sku in unmatched):
             blockers.append("existing_unmatched_skus must contain non-empty strings")
+        if len(unmatched) != len(set(unmatched)):
+            blockers.append("existing_unmatched_skus must not contain duplicates")
         if unmatched and plan.get("automatic_deletions_planned") is not False:
             blockers.append("unmatched SKUs can never imply automatic deletion")
 
