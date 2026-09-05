@@ -1,5 +1,5 @@
 const CACHE_NAME = "phil-ai-os-cx-sprint4-v22";
-// 2026-09-05: refresh product-card scanability in the isolated offline shell while preserving the v22 cache contract and commerce boundary.
+// 2026-09-05: refresh product-detail scanability assets in the isolated offline shell while preserving the v22 cache contract and commerce boundary.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const APP_SHELL = [
   "./styles.css",
   "./connectivity-status.css",
   "./product-browse-ux.css",
+  "./product-detail-facts.css",
   "./mobile-performance.css",
   "./product-media-resilience.css",
   "./mobile-narrow-screen.css",
@@ -22,6 +23,7 @@ const APP_SHELL = [
   "./src/app.mjs",
   "./src/mobile-ux.mjs",
   "./src/product-browse-ux.mjs",
+  "./src/product-detail-facts.mjs",
   "./src/locale-links.mjs",
   "./src/connectivity-status.mjs",
   "./src/core.mjs",

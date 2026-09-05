@@ -1,0 +1,57 @@
+.product-key-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .65rem;
+  margin: .9rem 0 1rem;
+}
+
+.product-key-fact {
+  min-width: 0;
+  padding: .75rem;
+  border: 1px solid var(--line);
+  border-radius: .9rem;
+  background: #fffaf8;
+}
+
+.product-key-fact dt {
+  margin: 0 0 .2rem;
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.product-key-fact dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: .92rem;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.product-key-fact dd.availability.in_stock { color: var(--good); }
+.product-key-fact dd.availability.out_of_stock { color: var(--bad); }
+.product-key-price { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 679px) {
+  .product-key-facts {
+    grid-template-columns: 1fr;
+    gap: .5rem;
+    margin-top: .75rem;
+  }
+
+  .product-key-fact {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, .8fr) minmax(0, 1.2fr);
+    align-items: center;
+    gap: .65rem;
+    padding: .7rem .75rem;
+  }
+
+  .product-key-fact dt { margin: 0; }
+  .product-key-fact dd { text-align: right; }
+}
+
+@media (forced-colors: active) {
+  .product-key-fact { border: 1px solid CanvasText; }
+}
