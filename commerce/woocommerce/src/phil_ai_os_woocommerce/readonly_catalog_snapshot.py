@@ -40,6 +40,21 @@ class CatalogSnapshot:
         }
 
 
+def _validated_capture_timestamp(value: str | None) -> str:
+    if value is None:
+        return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("captured_at must be a timezone-aware ISO timestamp")
+    normalized = value.strip()
+    try:
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("captured_at must be a timezone-aware ISO timestamp") from exc
+    if parsed.tzinfo is None:
+        raise ValueError("captured_at must be a timezone-aware ISO timestamp")
+    return normalized
+
+
 def _bounded_int(value: Any) -> int | None:
     if isinstance(value, bool):
         return None
@@ -143,7 +158,7 @@ def collect_catalog_snapshot(
 ) -> CatalogSnapshot:
     """Collect bounded WooCommerce catalog metadata using GET requests only."""
 
-    timestamp = captured_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    timestamp = _validated_capture_timestamp(captured_at)
     products_raw = _collect_pages(transport, "/products", per_page=per_page, max_pages=max_pages)
     categories_raw = _collect_pages(
         transport,
