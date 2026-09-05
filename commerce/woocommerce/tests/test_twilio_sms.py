@@ -55,12 +55,20 @@ class TwilioSmsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "account_sid"):
             provider.send_payment_link_sms(request())
 
+    def test_enabled_send_requires_restricted_api_key(self):
+        provider = TwilioSmsProvider(
+            TwilioSmsConfig(account_sid="AC123", enabled=True), RecordingTransport()
+        )
+        with self.assertRaisesRegex(ValueError, "api_key_sid"):
+            provider.send_payment_link_sms(request())
+
     def test_enabled_adapter_builds_expected_twilio_request(self):
         transport = RecordingTransport()
         provider = TwilioSmsProvider(
             TwilioSmsConfig(
                 account_sid="AC123",
-                auth_token="secret",
+                api_key_sid="SK123",
+                api_key_secret="api-secret",
                 from_identity="RubyCakes",
                 status_callback_url="https://control.example/sms/twilio/status",
                 enabled=True,
@@ -76,15 +84,16 @@ class TwilioSmsTests(unittest.TestCase):
         self.assertEqual(call["fields"]["From"], "RubyCakes")
         self.assertEqual(call["fields"]["StatusCallback"], "https://control.example/sms/twilio/status")
         self.assertIn("https://shop.example/checkout/order-pay/51/", call["fields"]["Body"])
-        self.assertEqual(call["username"], "AC123")
-        self.assertEqual(call["password"], "secret")
+        self.assertEqual(call["username"], "SK123")
+        self.assertEqual(call["password"], "api-secret")
 
     def test_messaging_service_sid_replaces_direct_from_identity(self):
         transport = RecordingTransport()
         provider = TwilioSmsProvider(
             TwilioSmsConfig(
                 account_sid="AC123",
-                auth_token="secret",
+                api_key_sid="SK123",
+                api_key_secret="api-secret",
                 from_identity="SHOULD_NOT_BE_SENT",
                 messaging_service_sid="MG123",
                 enabled=True,
@@ -101,7 +110,8 @@ class TwilioSmsTests(unittest.TestCase):
         provider = TwilioSmsProvider(
             TwilioSmsConfig(
                 account_sid="AC123",
-                auth_token="secret",
+                api_key_sid="SK123",
+                api_key_secret="api-secret",
                 messaging_service_sid="XX123",
                 enabled=True,
             ),
@@ -116,7 +126,8 @@ class TwilioSmsTests(unittest.TestCase):
         provider = TwilioSmsProvider(
             TwilioSmsConfig(
                 account_sid="AC123",
-                auth_token="secret",
+                api_key_sid="SK123",
+                api_key_secret="api-secret",
                 from_identity="RubyCakes",
                 enabled=True,
             ),
@@ -161,9 +172,9 @@ class TwilioSmsTests(unittest.TestCase):
             "MessageStatus": "delivered",
             "ErrorCode": "",
         }
-        validator = TwilioRequestValidator("secret")
+        validator = TwilioRequestValidator("account-auth-token")
         signature = validator.expected_signature(url, params)
-        projection = TwilioStatusCallbackHandler("secret").handle(url, params, signature)
+        projection = TwilioStatusCallbackHandler("account-auth-token").handle(url, params, signature)
         self.assertEqual(projection["provider"], "twilio")
         self.assertEqual(projection["message_status"], "delivered")
         self.assertEqual(projection["authority_effect"], "none")
@@ -172,7 +183,7 @@ class TwilioSmsTests(unittest.TestCase):
 
     def test_status_callback_handler_fails_closed_on_bad_signature_or_http(self):
         params = {"MessageSid": "SM123", "MessageStatus": "failed"}
-        handler = TwilioStatusCallbackHandler("secret")
+        handler = TwilioStatusCallbackHandler("account-auth-token")
         with self.assertRaisesRegex(SmsNotificationError, "signature"):
             handler.handle("https://control.example/v1/webhooks/twilio/sms-status", params, "bad")
         with self.assertRaisesRegex(SmsNotificationError, "HTTPS"):
