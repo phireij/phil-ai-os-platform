@@ -1,11 +1,12 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v22";
-// 2026-09-05: refresh bilingual preview status/footer chrome in the isolated offline shell while preserving the v22 cache contract and commerce boundary.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v23";
+// 2026-09-06: add the mobile-first order-intake/custom-cake preview while preserving the isolated, non-authorizing commerce boundary.
 const APP_SHELL = [
   "./",
   "./index.html",
   "./cart-preview.html",
   "./confirmation-preview.html",
   "./quick-pickup-preview.html",
+  "./order-intake-preview.html",
   "./styles.css",
   "./connectivity-status.css",
   "./product-browse-ux.css",
@@ -18,6 +19,7 @@ const APP_SHELL = [
   "./checkout-context-summary.css",
   "./payment-method-guidance.css",
   "./final-review-summary.css",
+  "./order-intake-preview.css",
   "./manifest.webmanifest",
   "./app-icon.svg",
   "./src/app.mjs",
@@ -48,6 +50,7 @@ const APP_SHELL = [
   "./src/payment.mjs",
   "./src/pickup.mjs",
   "./src/quick-pickup-preview.mjs",
+  "./src/order-intake-preview.mjs",
   "./src/readiness-feedback.mjs",
   "./src/seo.mjs",
   "./src/ui-state.mjs",

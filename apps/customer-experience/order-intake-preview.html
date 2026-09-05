@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="description" content="Ruby's Cake Delights mobile-first order intake preview">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./order-intake-preview.css">
+  <title>Order Intake Preview — Ruby's Cake Delights</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <main id="main" class="order-intake-shell" tabindex="-1">
+    <header class="order-intake-header">
+      <p class="eyebrow">Sprint 4 · Mobile-first preview</p>
+      <h1>Order request / ご注文リクエスト</h1>
+      <p class="intake-notice" id="request-notice">
+        Your requested delivery date and time are not guaranteed yet. Ruby will confirm availability, final shipping, and any custom-cake quote before a payment link is issued.<br>
+        ご希望の配達日時はまだ確定ではありません。ご注文内容・送料・オーダーケーキのお見積りを確認後、お支払いリンクをご案内します。
+      </p>
+    </header>
+
+    <div class="intake-grid">
+      <form id="order-intake-form" class="intake-card" novalidate>
+        <section aria-labelledby="fulfillment-title">
+          <h2 id="fulfillment-title">1. Fulfillment / 受取方法</h2>
+          <fieldset class="choice-list intake-field">
+            <legend>Preferred method / ご希望の受取方法</legend>
+            <label class="choice-card">
+              <input type="radio" name="fulfillment" value="yamato" checked>
+              <span><strong>Yamato delivery / ヤマト配送</strong><br>Shipping temperature and parcel size will be confirmed before payment.</span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="fulfillment" value="ruby-car">
+              <span><strong>Ruby car delivery / 自社配達</strong><br>Available only for eligible destinations and products. Final fee depends on route review.</span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="fulfillment" value="pickup">
+              <span><strong>Shop pickup / 店頭受取</strong><br>Pickup date/time remains subject to confirmation.</span>
+            </label>
+          </fieldset>
+        </section>
+
+        <section aria-labelledby="delivery-title">
+          <h2 id="delivery-title">2. Requested delivery / 希望配達</h2>
+          <div class="intake-field">
+            <label for="requested-date">Requested delivery date / 希望配達日</label>
+            <input id="requested-date" name="requested-date" type="date" required aria-describedby="requested-date-help">
+            <p class="field-help" id="requested-date-help">This is a request, not a confirmed date. / ご希望日であり、確定日ではありません。</p>
+          </div>
+          <div class="intake-field" id="yamato-window-field">
+            <label for="yamato-window">Preferred Yamato time window / ヤマト希望時間帯</label>
+            <select id="yamato-window" name="yamato-window" aria-describedby="yamato-window-help">
+              <option value="none">No preference / 指定なし</option>
+              <option value="08-12">08:00–12:00</option>
+              <option value="14-16">14:00–16:00</option>
+              <option value="16-18">16:00–18:00</option>
+              <option value="18-20">18:00–20:00</option>
+              <option value="19-21">19:00–21:00</option>
+            </select>
+            <p class="field-help" id="yamato-window-help">Cake shipments may require a time-window choice. Ambient orders may keep “No preference.”</p>
+          </div>
+        </section>
+
+        <section aria-labelledby="custom-title">
+          <h2 id="custom-title">3. Cake customization / ケーキカスタマイズ</h2>
+          <div class="intake-field">
+            <label for="cake-type">Cake request type / ケーキタイプ</label>
+            <select id="cake-type" name="cake-type">
+              <option value="basic">Basic cake / ベーシックケーキ</option>
+              <option value="custom">Custom cake / オーダーケーキ</option>
+            </select>
+          </div>
+
+          <div id="custom-cake-fields" hidden>
+            <div class="intake-field">
+              <label for="custom-notes">Design instructions / デザインご要望</label>
+              <textarea id="custom-notes" name="custom-notes" rows="5" placeholder="Theme, colors, message, servings, flavor, layers, and other requests"></textarea>
+            </div>
+            <div class="intake-field">
+              <label for="reference-images">Reference images / 参考画像</label>
+              <input id="reference-images" name="reference-images" type="file" accept="image/jpeg,image/png,image/webp" multiple aria-describedby="private-upload-note">
+              <p class="private-upload-note" id="private-upload-note">Up to 8 reference images. These are private order inputs and are not intended for public gallery publication.</p>
+            </div>
+            <fieldset class="choice-list intake-field">
+              <legend>Topper option / トッパー</legend>
+              <label class="choice-card"><input type="checkbox" name="photo-topper" value="yes"><span>Photo topper / フォトトッパー — available only as part of a cake order.</span></label>
+              <label class="choice-card"><input type="checkbox" name="edible-topper" value="yes"><span>Edible topper / エディブルトッパー — available only as part of a cake order.</span></label>
+            </fieldset>
+          </div>
+        </section>
+
+        <section aria-labelledby="addons-title">
+          <h2 id="addons-title">4. Optional add-ons / オプション</h2>
+          <fieldset class="choice-list intake-field">
+            <legend>Cake add-ons / ケーキ追加オプション</legend>
+            <label class="choice-card"><input type="checkbox" name="addon" value="candles"><span>Candles / キャンドル</span></label>
+            <label class="choice-card"><input type="checkbox" name="addon" value="number-candle"><span>Number candle / ナンバーキャンドル</span></label>
+            <label class="choice-card"><input type="checkbox" name="addon" value="message-plaque"><span>Message plaque / メッセージプレート</span></label>
+          </fieldset>
+          <fieldset class="choice-list intake-field">
+            <legend>Icing / アイシング</legend>
+            <label class="choice-card"><input type="checkbox" id="icing-requested" name="icing-requested" value="yes"><span>Add icing / アイシングを追加</span></label>
+            <p class="pending-policy-note">White is the working default. Additional-color pricing is still pending Ruby’s business confirmation and is not activated in this preview.</p>
+          </fieldset>
+        </section>
+
+        <button class="intake-action" type="submit">Preview request / リクエスト内容を確認</button>
+        <p id="intake-status" role="status" aria-live="polite"></p>
+      </form>
+
+      <aside class="intake-summary" aria-labelledby="summary-title">
+        <p class="eyebrow">Local preview only</p>
+        <h2 id="summary-title">Request summary / リクエスト概要</h2>
+        <dl>
+          <dt>Fulfillment</dt><dd id="summary-fulfillment">Yamato</dd>
+          <dt>Requested date</dt><dd id="summary-date">Not selected</dd>
+          <dt>Time window</dt><dd id="summary-window">No preference</dd>
+          <dt>Cake type</dt><dd id="summary-cake">Basic</dd>
+          <dt>Payment</dt><dd>Not requested</dd>
+        </dl>
+        <p class="field-help">This preview never creates an order, uploads a file, calculates a live route, charges a payment, or mutates WooCommerce.</p>
+      </aside>
+    </div>
+  </main>
+  <script type="module" src="./src/order-intake-preview.mjs"></script>
+</body>
+</html>

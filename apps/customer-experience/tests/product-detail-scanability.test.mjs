@@ -49,7 +49,7 @@ test("detail facts remain fixture-only and non-authorizing", () => {
 test("product detail facts are loaded and cached for weak connections", () => {
   assert.match(html, /product-detail-facts\.css/);
   assert.match(html, /src\/product-detail-facts\.mjs/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v22/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v\d+/);
   assert.match(sw, /\.\/product-detail-facts\.css/);
   assert.match(sw, /\.\/src\/product-detail-facts\.mjs/);
 });

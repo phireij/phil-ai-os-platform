@@ -1,0 +1,195 @@
+:root {
+  --intake-gap: 1rem;
+  --intake-radius: 18px;
+}
+
+.order-intake-shell {
+  width: min(100%, 72rem);
+  margin: 0 auto;
+  padding: 1rem max(1rem, env(safe-area-inset-right)) calc(6rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+}
+
+.order-intake-header,
+.intake-card,
+.intake-summary {
+  min-width: 0;
+}
+
+.order-intake-header {
+  margin-bottom: 1rem;
+}
+
+.order-intake-header h1 {
+  margin-bottom: .5rem;
+}
+
+.intake-notice {
+  padding: .9rem 1rem;
+  border: 1px solid currentColor;
+  border-radius: 14px;
+  line-height: 1.5;
+}
+
+.intake-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--intake-gap);
+}
+
+.intake-card,
+.intake-summary {
+  border: 1px solid #ddd;
+  border-radius: var(--intake-radius);
+  padding: 1rem;
+  background: #fff;
+}
+
+.intake-card h2,
+.intake-summary h2 {
+  margin-top: 0;
+}
+
+.intake-field {
+  display: grid;
+  gap: .45rem;
+  margin-block: .9rem;
+}
+
+.intake-field label,
+.intake-field legend {
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.intake-field input,
+.intake-field select,
+.intake-field textarea,
+.intake-action,
+.choice-card {
+  font: inherit;
+  font-size: 16px;
+}
+
+.intake-field input,
+.intake-field select,
+.intake-field textarea {
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: .75rem .85rem;
+  border: 1px solid #999;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.intake-field textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.intake-field input[type="file"] {
+  padding: .65rem;
+}
+
+.choice-list {
+  display: grid;
+  gap: .65rem;
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+
+.choice-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: .7rem;
+  min-height: 48px;
+  padding: .75rem;
+  border: 1px solid #aaa;
+  border-radius: 12px;
+}
+
+.choice-card input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: .15rem;
+}
+
+.choice-card span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.field-help,
+.private-upload-note,
+.pending-policy-note {
+  margin: 0;
+  font-size: .9rem;
+  line-height: 1.5;
+}
+
+.intake-action {
+  width: 100%;
+  min-height: 52px;
+  padding: .8rem 1rem;
+  border: 0;
+  border-radius: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.intake-summary {
+  align-self: start;
+}
+
+.intake-summary dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .6rem 1rem;
+}
+
+.intake-summary dt,
+.intake-summary dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+#intake-status[aria-live] {
+  min-height: 1.5em;
+}
+
+@media (min-width: 900px) {
+  .order-intake-shell {
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+  }
+
+  .intake-grid {
+    grid-template-columns: minmax(0, 1.7fr) minmax(18rem, .8fr);
+    align-items: start;
+  }
+
+  .intake-summary {
+    position: sticky;
+    top: 1rem;
+  }
+
+  .intake-card,
+  .intake-summary {
+    padding: 1.35rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .order-intake-shell {
+    padding-left: .75rem;
+    padding-right: .75rem;
+  }
+
+  .intake-card,
+  .intake-summary {
+    padding: .85rem;
+  }
+}
