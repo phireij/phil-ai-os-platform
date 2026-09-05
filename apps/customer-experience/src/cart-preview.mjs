@@ -6,6 +6,11 @@ import { readinessFeedback } from "./readiness-feedback.mjs";
 
 const copy = {
   en: {
+    skipToContent: "Skip to content",
+    brand: "Customer Experience",
+    languageLabel: "Language",
+    previewStatus: "Isolated preview · KOMOJU not connected",
+    footer: "Phil AI OS · Sprint 4 · synthetic cart/payment-handoff environment",
     heroTitle: "Multi-item checkout and payment handoff",
     heroCopy: "Synthetic data only. This page prepares a non-authorizing KOMOJU handoff intent after local checkout readiness succeeds.",
     cartTitle: "Synthetic cart",
@@ -28,6 +33,11 @@ const copy = {
     error: "Cart preview unavailable",
   },
   ja: {
+    skipToContent: "本文へ移動",
+    brand: "カスタマーエクスペリエンス",
+    languageLabel: "言語",
+    previewStatus: "分離プレビュー · KOMOJU未接続",
+    footer: "Phil AI OS · Sprint 4 · 合成カート・決済引継ぎ環境",
     heroTitle: "複数商品チェックアウトと決済引継ぎ",
     heroCopy: "合成データのみを使用します。ローカルのチェックアウト準備が成功した場合のみ、実行権限を持たないKOMOJU引継ぎインテントを作成します。",
     cartTitle: "合成カート",
@@ -81,15 +91,22 @@ function feedbackList(items) {
 }
 
 function setCopy() {
+  const c = copy[state.locale];
   document.documentElement.lang = state.locale;
   localeSelect.value = state.locale;
-  document.querySelector("#hero-title").textContent = copy[state.locale].heroTitle;
-  document.querySelector("#hero-copy").textContent = copy[state.locale].heroCopy;
-  document.querySelector("#cart-title").textContent = copy[state.locale].cartTitle;
-  document.querySelector("#pickup-label").textContent = copy[state.locale].pickup;
-  document.querySelector("#evaluate-button").textContent = copy[state.locale].evaluate;
-  document.querySelector("#safety-title").textContent = copy[state.locale].safetyTitle;
-  document.querySelector("#safety-copy").textContent = copy[state.locale].safetyCopy;
+  localeSelect.setAttribute("aria-label", c.languageLabel);
+  document.querySelector(".skip-link").textContent = c.skipToContent;
+  document.querySelector(".site-header .brand").textContent = c.brand;
+  document.querySelector(".locale-label").textContent = c.languageLabel;
+  document.querySelector(".hero .status-pill").textContent = c.previewStatus;
+  document.querySelector("footer p").textContent = c.footer;
+  document.querySelector("#hero-title").textContent = c.heroTitle;
+  document.querySelector("#hero-copy").textContent = c.heroCopy;
+  document.querySelector("#cart-title").textContent = c.cartTitle;
+  document.querySelector("#pickup-label").textContent = c.pickup;
+  document.querySelector("#evaluate-button").textContent = c.evaluate;
+  document.querySelector("#safety-title").textContent = c.safetyTitle;
+  document.querySelector("#safety-copy").textContent = c.safetyCopy;
 }
 
 function updateLocaleUrl() {
