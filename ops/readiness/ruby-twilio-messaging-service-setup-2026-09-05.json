@@ -1,0 +1,46 @@
+{
+  "version": "ruby-twilio-messaging-service-setup-v1",
+  "date": "2026-09-05",
+  "provider": "twilio",
+  "owner_console_evidence": {
+    "ruby_owned_paid_account_active": true,
+    "starting_balance_jpy": 2000,
+    "messaging_service_created": true,
+    "messaging_service_name": "Ruby Transactional SMS",
+    "destination_country": "JP",
+    "alphanumeric_sender_enabled": true,
+    "alphanumeric_sender_id": "RUBYSCAKE",
+    "sender_attached_to_service": true,
+    "sms_capability_visible": true
+  },
+  "production_secret_refs": {
+    "account_sid_ref": "RUBY_TWILIO_ACCOUNT_SID",
+    "auth_token_ref": "RUBY_TWILIO_AUTH_TOKEN",
+    "messaging_service_sid_ref": "RUBY_TWILIO_MESSAGING_SERVICE_SID",
+    "raw_secret_values_recorded_in_repository": false
+  },
+  "prepared_platform_capabilities": {
+    "messaging_service_send_contract": true,
+    "signed_delivery_status_callback_handler": true,
+    "read_only_account_and_service_preflight": true,
+    "automatic_retry": false,
+    "live_send_enabled": false
+  },
+  "pending_before_controlled_test": {
+    "credentials_configured_in_secret_boundary": false,
+    "read_only_production_preflight_green": false,
+    "delivery_status_https_endpoint_deployed": false,
+    "delivery_status_callback_configured_in_twilio": false,
+    "final_bilingual_transactional_template_approved": false,
+    "controlled_recipient_test_completed": false,
+    "handset_receipt_and_payment_link_verified": false
+  },
+  "authority": {
+    "live_sms_send_authorized_by_readiness": false,
+    "unrestricted_sms_sending_authorized": false,
+    "automatic_retry_authorized": false,
+    "woocommerce_mutation_authorized": false,
+    "payment_execution_authorized": false
+  },
+  "decision": "TWILIO_ACCOUNT_SERVICE_AND_JAPAN_ALPHA_SENDER_CONFIGURED_PLATFORM_PREFLIGHT_AND_CALLBACK_PREPARED_LIVE_SEND_REMAINS_FAIL_CLOSED"
+}
