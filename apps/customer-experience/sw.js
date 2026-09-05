@@ -1,5 +1,5 @@
 const CACHE_NAME = "phil-ai-os-cx-sprint4-v22";
-// 2026-09-05: refresh Quick Pickup mobile navigation in the isolated offline shell while preserving the v22 cache contract and commerce boundary.
+// 2026-09-05: refresh the Shop mobile current-page state in the isolated offline shell while preserving the v22 cache contract and commerce boundary.
 const APP_SHELL = [
   "./",
   "./index.html",
