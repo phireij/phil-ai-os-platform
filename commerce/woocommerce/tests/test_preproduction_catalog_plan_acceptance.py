@@ -73,6 +73,36 @@ class CatalogPlanAcceptanceTests(unittest.TestCase):
         self.assertFalse(result["accepted_for_human_review"])
         self.assertTrue(any("media reconciliation" in blocker for blocker in result["blockers"]))
 
+    def test_plan_with_source_blockers_is_rejected(self):
+        plan = self.safe_plan()
+        plan["blockers"] = ["existing snapshot contains SKUs absent from owner package; no deletion is planned"]
+        result = validator.validate_plan(plan)
+        self.assertFalse(result["accepted_for_human_review"])
+        self.assertTrue(any("carries blockers" in blocker for blocker in result["blockers"]))
+
+    def test_plan_not_ready_for_controlled_review_is_rejected(self):
+        plan = self.safe_plan()
+        plan["ready_for_controlled_review"] = False
+        result = validator.validate_plan(plan)
+        self.assertFalse(result["accepted_for_human_review"])
+        self.assertTrue(any("ready for controlled review" in blocker for blocker in result["blockers"]))
+
+    def test_unready_owner_package_or_snapshot_is_rejected(self):
+        plan = self.safe_plan()
+        plan["owner_package_ready"] = False
+        plan["snapshot_accepted"] = False
+        result = validator.validate_plan(plan)
+        self.assertFalse(result["accepted_for_human_review"])
+        self.assertTrue(any("owner package" in blocker for blocker in result["blockers"]))
+        self.assertTrue(any("snapshot" in blocker for blocker in result["blockers"]))
+
+    def test_plan_blockers_must_be_non_empty_strings(self):
+        plan = self.safe_plan()
+        plan["blockers"] = [""]
+        result = validator.validate_plan(plan)
+        self.assertFalse(result["accepted_for_human_review"])
+        self.assertTrue(any("non-empty strings" in blocker for blocker in result["blockers"]))
+
 
 if __name__ == "__main__":
     unittest.main()

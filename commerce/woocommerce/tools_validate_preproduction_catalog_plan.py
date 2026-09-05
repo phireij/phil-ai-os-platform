@@ -16,6 +16,12 @@ def validate_plan(plan: dict[str, Any]) -> dict[str, Any]:
         blockers.append("plan_only must remain true")
     if plan.get("network_calls_performed") is not False:
         blockers.append("catalog plan must not perform network calls")
+    if plan.get("owner_package_ready") is not True:
+        blockers.append("owner package must be ready before human review")
+    if plan.get("snapshot_accepted") is not True:
+        blockers.append("read-only catalog snapshot must be accepted before human review")
+    if plan.get("ready_for_controlled_review") is not True:
+        blockers.append("catalog plan must be ready for controlled review")
     if plan.get("automatic_deletions_planned") is not False:
         blockers.append("automatic deletion is forbidden")
     if plan.get("mutation_authorized") is not False:
@@ -28,6 +34,13 @@ def validate_plan(plan: dict[str, Any]) -> dict[str, Any]:
     for field in ("category_actions", "product_actions", "existing_unmatched_skus", "blockers"):
         if not isinstance(plan.get(field), list):
             blockers.append(f"{field} must be a list")
+
+    source_blockers = plan.get("blockers")
+    if isinstance(source_blockers, list):
+        if any(not isinstance(blocker, str) or not blocker.strip() for blocker in source_blockers):
+            blockers.append("plan blockers must contain non-empty strings")
+        if source_blockers:
+            blockers.append("catalog plan carries blockers and is not ready for human review")
 
     for collection in ("category_actions", "product_actions"):
         values = plan.get(collection)
