@@ -4,6 +4,8 @@ Date: 2026-09-06
 Status: CEO-approved foundation decisions, with explicitly noted pending business confirmations
 Scope: Sprint 3 WooCommerce Foundation / pre-production architecture
 
+> **6 Sep 2026 reconciliation:** The Ruby car-delivery distance/pricing items originally marked pending in this foundation decision record were subsequently finalized by the CEO and are superseded by `RUBY_CAR_DELIVERY_POLICY_2026-09-06.md`. The historical foundation direction below is retained for traceability; the dedicated Ruby car policy is canonical for current car-delivery distance, time, service-area, toll and pricing rules.
+
 ## Decision principle
 
 Modify the foundation now, before finalizing the production catalog, but do not rush any of these changes into production. All production writes, live payment execution, live SMS, DNS/public cutover, and final Go/No-Go remain separately governed.
@@ -81,6 +83,8 @@ Business note to retain for later confirmation:
 
 ## 9. Ruby car delivery for sensitive cakes
 
+> **Current policy status: RESOLVED / SUPERSEDED FOR DISTANCE AND PRICING.** See `RUBY_CAR_DELIVERY_POLICY_2026-09-06.md` for the CEO-approved current rules. The bullets below preserve the earlier foundation direction that led to that policy.
+
 - Add a separate fulfillment mode for Ruby-operated car delivery.
 - Structurally sensitive cakes, including some 2- or 3-layer cakes, may be restricted to:
   - shop pickup;
@@ -93,6 +97,8 @@ Business note to retain for later confirmation:
   - incremental charges beyond that distance;
   - possible manual override for tolls, parking, exceptional routes, or operational constraints.
 - Automated route-distance/time calculation may later use an approved mapping/routing API, but exact pricing bands and distance ceiling remain a business decision to be finalized before activation.
+
+The two historical statements above about the included distance/pricing bands being undecided are now superseded by the finalized Ruby car policy; they must not be treated as current pending business decisions.
 
 ## 10. Payment merchant fees
 
@@ -129,8 +135,11 @@ The target order lifecycle is:
 
 - Final icing policy and additional-color surcharge.
 - Final add-on SKU catalog and prices — remind owner after production product catalog submission.
-- Exact Ruby car-delivery included distance, incremental pricing formula/bands, and exception handling.
 - Product-by-product temperature compatibility (`ambient`, `chilled`, `frozen`, `cool_eligible`).
 - Product-by-product eligibility for Yamato versus pickup versus Ruby car delivery.
+
+### Resolved since this foundation record was first written
+
+- Ruby car-delivery included distance, incremental pricing bands, maximum automatic/manual-quote distance, driving-time safeguard, service-area guard and toll/parking handling — **RESOLVED** in `RUBY_CAR_DELIVERY_POLICY_2026-09-06.md`.
 
 No pending item above authorizes production activation by itself.
