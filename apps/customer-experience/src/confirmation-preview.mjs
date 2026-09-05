@@ -170,6 +170,11 @@ function escapeHtml(value) {
 
 const copy = Object.freeze({
   en: Object.freeze({
+    skipToContent: "Skip to content",
+    brand: "Customer Experience",
+    languageLabel: "Language",
+    previewStatus: "Isolated synthetic preview · No order submission",
+    footer: "Phil AI OS · Sprint 4 · synthetic final-confirmation compliance preview",
     title: "Final order confirmation — isolated preview",
     intro: "Synthetic fixture only. Review transaction terms together before the final action. This screen never submits an order or executes payment.",
     items: "Order contents",
@@ -188,6 +193,11 @@ const copy = Object.freeze({
     error: "Final confirmation preview unavailable",
   }),
   ja: Object.freeze({
+    skipToContent: "本文へ移動",
+    brand: "カスタマーエクスペリエンス",
+    languageLabel: "言語",
+    previewStatus: "分離合成プレビュー · 注文送信なし",
+    footer: "Phil AI OS · Sprint 4 · 合成最終確認コンプライアンスプレビュー",
     title: "注文の最終確認 — 隔離プレビュー",
     intro: "合成フィクスチャのみを使用します。最終操作の前に取引条件をまとめて確認します。この画面は注文送信や決済実行を行いません。",
     items: "注文内容",
@@ -219,7 +229,14 @@ function renderFinalConfirmation(payload, locale) {
   const vm = buildFinalConfirmationViewModel(payload, locale);
   const c = copy[vm.locale];
   document.documentElement.lang = vm.locale;
-  document.querySelector("#locale-select").value = vm.locale;
+  const localeSelect = document.querySelector("#locale-select");
+  localeSelect.value = vm.locale;
+  localeSelect.setAttribute("aria-label", c.languageLabel);
+  document.querySelector(".skip-link").textContent = c.skipToContent;
+  document.querySelector(".site-header .brand").textContent = c.brand;
+  document.querySelector(".locale-label").textContent = c.languageLabel;
+  document.querySelector(".hero .status-pill").textContent = c.previewStatus;
+  document.querySelector("footer p").textContent = c.footer;
   document.querySelector("#hero-title").textContent = c.title;
   document.querySelector("#hero-copy").textContent = c.intro;
   document.querySelector("#confirmation-title").textContent = c.items;
