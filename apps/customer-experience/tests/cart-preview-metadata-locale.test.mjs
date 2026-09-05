@@ -10,6 +10,6 @@ test("cart preview localizes browser metadata with locale changes", () => {
   assert.match(source, /metaDescription: "Phil AI OS isolated multi-item checkout and KOMOJU handoff preview"/);
   assert.match(source, /metaDescription: "Phil AI OS の分離された複数商品チェックアウトとKOMOJU引継ぎプレビュー"/);
   assert.match(source, /document\.title = c\.pageTitle/);
-  assert.match(source, /meta\[name=\\"description\\"\]/);
+  assert.ok(source.includes("document.querySelector('meta[name=\"description\"]')"));
   assert.match(source, /setAttribute\("content", c\.metaDescription\)/);
 });
