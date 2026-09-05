@@ -1,0 +1,5 @@
+2026-09-06T08:30:00+09:00
+purpose=trigger-read-only-callback-deployment-preflight-on-main
+mutation=false
+sms_send=false
+dns=false
