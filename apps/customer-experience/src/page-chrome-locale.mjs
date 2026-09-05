@@ -25,14 +25,18 @@ export function applyPageChromeLocale(locale = document.documentElement.lang) {
   if (localeSelect) localeSelect.setAttribute("aria-label", localized.language);
 }
 
-const localeSelect = document.querySelector("#locale-select");
-localeSelect?.addEventListener("change", () => {
-  queueMicrotask(() => applyPageChromeLocale(localeSelect.value));
-});
+if (typeof document !== "undefined") {
+  const localeSelect = document.querySelector("#locale-select");
+  localeSelect?.addEventListener("change", () => {
+    queueMicrotask(() => applyPageChromeLocale(localeSelect.value));
+  });
 
-new MutationObserver(() => applyPageChromeLocale(document.documentElement.lang)).observe(document.documentElement, {
-  attributes: true,
-  attributeFilter: ["lang"],
-});
+  if (typeof MutationObserver !== "undefined") {
+    new MutationObserver(() => applyPageChromeLocale(document.documentElement.lang)).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["lang"],
+    });
+  }
 
-applyPageChromeLocale();
+  applyPageChromeLocale();
+}
