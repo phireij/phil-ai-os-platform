@@ -62,6 +62,22 @@ class TwilioSmsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "api_key_sid"):
             provider.send_payment_link_sms(request())
 
+    def test_enabled_send_requires_support_opt_out_contact_before_network(self):
+        transport = RecordingTransport()
+        provider = TwilioSmsProvider(
+            TwilioSmsConfig(
+                account_sid="AC123",
+                api_key_sid="SK123",
+                api_key_secret="api-secret",
+                from_identity="RUBYSCAKE",
+                enabled=True,
+            ),
+            transport,
+        )
+        with self.assertRaisesRegex(ValueError, "support_contact"):
+            provider.send_payment_link_sms(request())
+        self.assertEqual(transport.calls, [])
+
     def test_enabled_adapter_builds_expected_twilio_request(self):
         transport = RecordingTransport()
         provider = TwilioSmsProvider(
@@ -69,8 +85,9 @@ class TwilioSmsTests(unittest.TestCase):
                 account_sid="AC123",
                 api_key_sid="SK123",
                 api_key_secret="api-secret",
-                from_identity="RubyCakes",
-                status_callback_url="https://control.example/sms/twilio/status",
+                from_identity="RUBYSCAKE",
+                status_callback_url="https://control.example/v1/webhooks/twilio/sms-status",
+                support_contact="https://shop.example/support",
                 enabled=True,
             ),
             transport,
@@ -81,11 +98,35 @@ class TwilioSmsTests(unittest.TestCase):
         self.assertEqual(len(transport.calls), 1)
         call = transport.calls[0]
         self.assertEqual(call["fields"]["To"], "+815017850575")
-        self.assertEqual(call["fields"]["From"], "RubyCakes")
-        self.assertEqual(call["fields"]["StatusCallback"], "https://control.example/sms/twilio/status")
+        self.assertEqual(call["fields"]["From"], "RUBYSCAKE")
+        self.assertEqual(
+            call["fields"]["StatusCallback"],
+            "https://control.example/v1/webhooks/twilio/sms-status",
+        )
         self.assertIn("https://shop.example/checkout/order-pay/51/", call["fields"]["Body"])
+        self.assertIn("ご注文51", call["fields"]["Body"])
+        self.assertIn("Help/opt-out: https://shop.example/support", call["fields"]["Body"])
+        self.assertIn("cannot receive replies", call["fields"]["Body"])
         self.assertEqual(call["username"], "SK123")
         self.assertEqual(call["password"], "api-secret")
+
+    def test_noncanonical_status_callback_fails_before_network(self):
+        transport = RecordingTransport()
+        provider = TwilioSmsProvider(
+            TwilioSmsConfig(
+                account_sid="AC123",
+                api_key_sid="SK123",
+                api_key_secret="api-secret",
+                from_identity="RUBYSCAKE",
+                status_callback_url="https://control.example/sms/twilio/status",
+                support_contact="https://shop.example/support",
+                enabled=True,
+            ),
+            transport,
+        )
+        with self.assertRaisesRegex(ValueError, "canonical callback path"):
+            provider.send_payment_link_sms(request())
+        self.assertEqual(transport.calls, [])
 
     def test_messaging_service_sid_replaces_direct_from_identity(self):
         transport = RecordingTransport()
@@ -96,6 +137,7 @@ class TwilioSmsTests(unittest.TestCase):
                 api_key_secret="api-secret",
                 from_identity="SHOULD_NOT_BE_SENT",
                 messaging_service_sid="MG123",
+                support_contact="https://shop.example/support",
                 enabled=True,
             ),
             transport,
@@ -128,7 +170,8 @@ class TwilioSmsTests(unittest.TestCase):
                 account_sid="AC123",
                 api_key_sid="SK123",
                 api_key_secret="api-secret",
-                from_identity="RubyCakes",
+                from_identity="RUBYSCAKE",
+                support_contact="https://shop.example/support",
                 enabled=True,
             ),
             transport,

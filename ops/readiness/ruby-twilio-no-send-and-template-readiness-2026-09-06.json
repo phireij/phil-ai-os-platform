@@ -1,0 +1,86 @@
+{
+  "schema_version": "ruby-twilio-no-send-and-template-readiness.v1",
+  "recorded_at": "2026-09-06",
+  "scope": "ruby_transactional_sms_no_send_preflight_callback_and_template_readiness",
+  "provider": "twilio",
+  "reconciliation": {
+    "prior_credential_record": "ops/readiness/ruby-twilio-credential-boundary-readiness-2026-09-06.json",
+    "prior_ingress_record": "ops/readiness/ruby-twilio-ingress-discovery-2026-09-06.json",
+    "webhook_code_evidence": "ops/readiness/ruby-twilio-webhook-code-evidence-2026-09-06.json",
+    "ingress_contract": "docs/TWILIO_STATUS_CALLBACK_INGRESS_DEPLOYMENT_CONTRACT_2026-09-06.md",
+    "method": "additive_superseding_record_without_mutating_schema_sensitive_prior_gates",
+    "supersedes_prior_no_send_preflight_false_state": true
+  },
+  "production_read_only_preflight": {
+    "workflow": ".github/workflows/commerce-twilio-production-readonly-preflight.yml",
+    "run_id": 33977816004,
+    "run_number": 1,
+    "event": "workflow_dispatch",
+    "head_sha": "43c21940bd8b82b118645637b3e0c349b7f837e0",
+    "conclusion": "success",
+    "confirm_no_send": true,
+    "required_secret_presence_verified_without_recording_values": true,
+    "messaging_service_verified": true,
+    "expected_alpha_sender": "RUBYSCAKE",
+    "alpha_sender_verified": true,
+    "message_send": false,
+    "mutation": false,
+    "current_main_preflight_script_blob_sha": "6c325067dbf4d2fa274c7bfd0a6460ad733be422",
+    "current_main_preflight_behavior_matches_successful_run": true,
+    "no_send_preflight_green": true
+  },
+  "credential_boundary": {
+    "outbound_rest_auth": [
+      "RUBY_TWILIO_API_KEY_SID",
+      "RUBY_TWILIO_API_KEY_SECRET"
+    ],
+    "webhook_signature_validation": "RUBY_TWILIO_AUTH_TOKEN",
+    "account_identification": "RUBY_TWILIO_ACCOUNT_SID",
+    "messaging_service_identification": "RUBY_TWILIO_MESSAGING_SERVICE_SID",
+    "raw_secret_values_recorded": false
+  },
+  "callback_readiness": {
+    "canonical_path": "/v1/webhooks/twilio/sms-status",
+    "canonical_url_must_be_https": true,
+    "canonical_url_must_not_be_reconstructed_from_untrusted_proxy_headers": true,
+    "account_auth_token_hmac_boundary_implemented": true,
+    "redacted_non_authorizing_projection_implemented": true,
+    "message_sid_persisted_raw": false,
+    "automatic_retry": false,
+    "authority_effect": "none",
+    "public_https_ingress_deployed": false,
+    "canonical_callback_url_runtime_configured": false,
+    "production_callback_verified": false
+  },
+  "template_readiness": {
+    "implementation_pull_request": 177,
+    "supported_locales": [
+      "ja",
+      "en",
+      "bilingual"
+    ],
+    "alphanumeric_sender_one_way_constraint_encoded": true,
+    "reply_stop_or_help_instruction_permitted": false,
+    "alternate_support_opt_out_contact_required_before_enabled_send": true,
+    "canonical_status_callback_path_required_before_enabled_send_when_callback_is_configured": true,
+    "provider_disabled_by_default": true,
+    "production_support_contact_configured": false,
+    "final_template_runtime_verified": false,
+    "controlled_recipient_test_completed": false
+  },
+  "external_reference": {
+    "twilio_alphanumeric_sender_service_doc": "https://www.twilio.com/docs/messaging/services/alphanumeric-sender-ids-in-messaging-services",
+    "twilio_alphanumeric_sender_doc": "https://www.twilio.com/docs/numbers-and-senders/alphanumeric-senders"
+  },
+  "authority": {
+    "sms_send_performed_by_this_record": false,
+    "unrestricted_sms_sending_authorized": false,
+    "automatic_retry_authorized": false,
+    "woocommerce_mutation_authorized": false,
+    "payment_execution_authorized": false,
+    "dns_or_public_cutover_authorized": false,
+    "mission_control_mutation_authorized": false,
+    "final_go_no_go_authorized": false
+  },
+  "decision": "TWILIO_NO_SEND_PRODUCTION_PREFLIGHT_GREEN_TEMPLATE_AND_CALLBACK_READINESS_ADVANCED_PUBLIC_CALLBACK_DEPLOYMENT_AND_LIVE_SMS_REMAIN_FAIL_CLOSED"
+}
