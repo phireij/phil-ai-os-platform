@@ -1,4 +1,5 @@
 import { externalQuickPickupUiState, validateExternalQuickPickupConfig } from "./pickup.mjs";
+import { syncLocaleLinks } from "./locale-links.mjs";
 
 const copy = {
   en: {
@@ -12,6 +13,10 @@ const copy = {
     safetyTitle: "No external link is activated automatically",
     safetyCopy: "A production URL must be owner-confirmed, validated, and separately authorized before this preview may expose an active link. Automatic publication remains disabled.",
     technical: "Technical readiness details",
+    shop: "Shop",
+    cart: "Cart",
+    pickup: "Pickup",
+    navLabel: "Mobile Quick Pickup navigation",
   },
   ja: {
     heroTitle: "Air モバイルオーダー・クイックピックアップ準備状況",
@@ -24,6 +29,10 @@ const copy = {
     safetyTitle: "外部リンクは自動で有効化されません",
     safetyCopy: "本番URLは、オーナー確認・検証・個別の有効化承認が完了した場合のみ表示できます。自動公開は無効のままです。",
     technical: "技術的な準備状況",
+    shop: "商品",
+    cart: "カート",
+    pickup: "受取",
+    navLabel: "モバイル・クイックピックアップ・ナビゲーション",
   },
 };
 
@@ -41,6 +50,14 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function syncMobileNavigation() {
+  document.querySelector("#dock-shop-label")?.replaceChildren(copy[locale].shop);
+  document.querySelector("#dock-cart-label")?.replaceChildren(copy[locale].cart);
+  document.querySelector("#dock-pickup-label")?.replaceChildren(copy[locale].pickup);
+  document.querySelector(".mobile-action-dock")?.setAttribute("aria-label", copy[locale].navLabel);
+  syncLocaleLinks(locale);
+}
+
 function render() {
   document.documentElement.lang = locale;
   localeSelect.value = locale;
@@ -49,6 +66,7 @@ function render() {
   document.querySelector("#quick-pickup-title").textContent = copy[locale].title;
   document.querySelector("#safety-title").textContent = copy[locale].safetyTitle;
   document.querySelector("#safety-copy").textContent = copy[locale].safetyCopy;
+  syncMobileNavigation();
 
   const state = externalQuickPickupUiState(config);
   const message = state.reason === "controlled_activation_ready"
@@ -101,6 +119,7 @@ async function boot() {
 }
 
 boot().catch(() => {
+  syncMobileNavigation();
   output.textContent = locale === "ja"
     ? "準備状況を読み込めませんでした。外部リンクは有効化されていません。"
     : "Readiness state could not be loaded. No external link has been activated.";
