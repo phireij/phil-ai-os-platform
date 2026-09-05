@@ -1,7 +1,7 @@
 const copy = {
   en: {
-    decrease: (name) => `Decrease ${name} quantity`,
-    increase: (name) => `Increase ${name} quantity`,
+    decrease: (name) => `Decrease quantity — ${name}`,
+    increase: (name) => `Increase quantity — ${name}`,
     quantity: (name) => `${name} quantity`,
     lineTotal: "Item total",
   },
