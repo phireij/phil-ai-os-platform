@@ -64,12 +64,13 @@ jobs:
           IMAGE="$(docker inspect "$CID" --format '{{.Config.Image}}')"
           echo control_api_container=phil-ai-os-core-control-api-1
           echo control_api_image="$IMAGE"
-          echo container_app_sha256="$(docker exec "$CID" sha256sum /app/app.py | awk '{print $1}')"
+          CONTAINER_SHA="$(docker exec "$CID" sha256sum /app/app.py | awk '{print $1}')"
+          echo container_app_sha256="$CONTAINER_SHA"
           echo container_app_lines="$(docker exec "$CID" sh -lc 'wc -l < /app/app.py')"
           echo container_app_bytes="$(docker exec "$CID" sh -lc 'wc -c < /app/app.py')"
 
           echo image_metadata_begin
-          docker image inspect "$IMAGE" --format 'image_id={{.Id}}\ncreated={{.Created}}\nworking_dir={{.Config.WorkingDir}}\ncmd={{json .Config.Cmd}}\nentrypoint={{json .Config.Entrypoint}}'
+          docker image inspect "$IMAGE" --format 'image_id={{.Id}}\ncreated={{.Created}}\nworking_dir={{.Config.WorkingDir}}\ncmd={{json .Config.Cmd}}'
           echo image_metadata_end
 
           echo image_history_commands_begin
@@ -83,17 +84,14 @@ jobs:
           docker exec "$CID" python - <<'PY'
           import ast
           from pathlib import Path
-          source = Path('/app/app.py').read_text(encoding='utf-8')
-          tree = ast.parse(source)
+          tree = ast.parse(Path('/app/app.py').read_text(encoding='utf-8'))
           routes = sorted({
-              node.value
-              for node in ast.walk(tree)
+              node.value for node in ast.walk(tree)
               if isinstance(node, ast.Constant)
               and isinstance(node.value, str)
               and (node.value.startswith('/v1/') or node.value in {'/healthz','/readyz'})
           })
-          for route in routes:
-              print(route)
+          for route in routes: print(route)
           PY
           echo runtime_route_inventory_end
 
@@ -114,7 +112,6 @@ jobs:
           find /opt/phil-ai-os-platform -maxdepth 8 -type f \( -name 'app.py' -o -name 'Dockerfile' -o -name 'compose.yml' \) -print 2>/dev/null | sort | head -n 100 || true
           echo host_source_candidates_end
 
-          CONTAINER_SHA="$(docker exec "$CID" sha256sum /app/app.py | awk '{print $1}')"
           MATCH_COUNT=0
           echo host_app_hash_inventory_begin
           while IFS= read -r FILE; do
@@ -137,23 +134,15 @@ jobs:
           echo compose_control_service_shape_begin
           python - "$WORKDIR/compose.yml" <<'PY'
           import re, sys
-          p = sys.argv[1]
-          lines = open(p, encoding='utf-8').read().splitlines()
+          lines = open(sys.argv[1], encoding='utf-8').read().splitlines()
           in_control = False
-          base_indent = None
           for line in lines:
               if re.match(r'^  control-api:\s*$', line):
-                  in_control = True
-                  base_indent = 2
-                  print(line)
-                  continue
-              if in_control and line.strip() and len(line) - len(line.lstrip()) <= base_indent:
-                  break
-              if in_control and re.search(r'^\s+(image|build|command|ports|volumes|environment|labels):', line):
-                  print(line)
+                  in_control = True; print(line); continue
+              if in_control and line.strip() and len(line) - len(line.lstrip()) <= 2: break
+              if in_control and re.search(r'^\s+(image|build|command|ports|volumes|environment|labels):', line): print(line)
               elif in_control and re.search(r'^\s+-\s+(127\.0\.0\.1:4870|/app/|/run/|PHIL_AI_OS_|traefik\.)', line):
-                  safe = re.sub(r'(TOKEN|SECRET|PASSWORD|KEY)=.*', r'\1=[REDACTED]', line, flags=re.I)
-                  print(safe)
+                  print(re.sub(r'(TOKEN|SECRET|PASSWORD|KEY)=.*', r'\1=[REDACTED]', line, flags=re.I))
           PY
           echo compose_control_service_shape_end
 
