@@ -154,6 +154,31 @@ class CatalogTaxReadinessTests(unittest.TestCase):
         self.assertFalse(result.catalog_ready)
         self.assertIn("media cake-primary uses an unapproved source", result.blockers)
 
+    def test_approved_catalog_rejects_placeholder_content(self):
+        payload = self.approved_package()
+        payload["catalog_approval_ref"] = "TBD"
+        payload["categories"][0]["name"]["ja"] = "未定"
+        payload["media"][0]["alt"]["en"] = "pending"
+        payload["products"][0]["description"]["ja"] = "確認中"
+        payload["products"][0]["source"] = "to be determined"
+
+        result = evaluate_catalog_tax_readiness(payload)
+
+        self.assertFalse(result.catalog_ready)
+        self.assertIn("catalog approval reference contains a placeholder", result.blockers)
+        self.assertIn("category cakes Japanese name contains a placeholder", result.blockers)
+        self.assertIn("media cake-primary English alt text contains a placeholder", result.blockers)
+        self.assertIn(
+            "product[1] APPROVED-001 Japanese description contains a placeholder",
+            result.blockers,
+        )
+        self.assertIn(
+            "product[1] APPROVED-001 source provenance contains a placeholder",
+            result.blockers,
+        )
+        self.assertFalse(result.mutation_authorized)
+        self.assertFalse(result.production_publish_authorized)
+
     def test_input_is_not_mutated(self):
         payload = self.approved_package()
         original = copy.deepcopy(payload)
