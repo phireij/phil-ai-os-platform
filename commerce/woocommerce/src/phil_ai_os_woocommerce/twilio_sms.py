@@ -236,3 +236,101 @@ class TwilioStatusCallbackHandler:
             raise SmsNotificationError("Twilio callback signature validation failed")
         status = TwilioDeliveryStatus.from_form(form_params)
         return status.safe_audit_dict()
+
+
+class TwilioStatusEvidenceSink(Protocol):
+    """Receive only the redacted delivery projection after signature validation."""
+
+    def record(self, projection: Mapping[str, object]) -> None:
+        ...
+
+
+@dataclass(frozen=True)
+class TwilioWebhookHttpResponse:
+    status_code: int
+    body: dict[str, object]
+
+
+class TwilioStatusHttpBoundary:
+    """HTTP/form boundary for POST /v1/webhooks/twilio/sms-status.
+
+    Signature material always uses the explicitly configured canonical callback URL;
+    Host/X-Forwarded-* headers are never trusted to reconstruct it. The boundary is
+    intentionally non-authorizing and has no send/retry/payment/WooCommerce hooks.
+    """
+
+    endpoint_path = "/v1/webhooks/twilio/sms-status"
+    max_body_bytes = 8192
+
+    def __init__(
+        self,
+        *,
+        auth_token: str,
+        canonical_callback_url: str,
+        evidence_sink: TwilioStatusEvidenceSink | None = None,
+    ) -> None:
+        canonical_callback_url = str(canonical_callback_url or "").strip()
+        if not auth_token:
+            raise ValueError("RUBY_TWILIO_AUTH_TOKEN is required")
+        if not canonical_callback_url:
+            raise ValueError("RUBY_TWILIO_STATUS_CALLBACK_URL is required")
+        parsed = parse.urlsplit(canonical_callback_url)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("Twilio canonical callback URL must use HTTPS")
+        if parsed.path != self.endpoint_path or parsed.fragment:
+            raise ValueError("Twilio canonical callback URL path is invalid")
+        self.canonical_callback_url = canonical_callback_url
+        self.callback_handler = TwilioStatusCallbackHandler(auth_token)
+        self.evidence_sink = evidence_sink
+
+    @staticmethod
+    def _header(headers: Mapping[str, str], name: str) -> str:
+        expected = name.lower()
+        for key, value in headers.items():
+            if str(key).lower() == expected:
+                return str(value or "").strip()
+        return ""
+
+    def handle_post(
+        self,
+        *,
+        request_path: str,
+        headers: Mapping[str, str],
+        body: bytes,
+    ) -> TwilioWebhookHttpResponse:
+        if request_path != self.endpoint_path:
+            raise SmsNotificationError("Twilio callback path mismatch")
+        if len(body) > self.max_body_bytes:
+            raise SmsNotificationError("Twilio callback body exceeds safe limit")
+        content_type = self._header(headers, "Content-Type").split(";", 1)[0].strip().lower()
+        if content_type != "application/x-www-form-urlencoded":
+            raise SmsNotificationError("Twilio callback content type is invalid")
+        signature = self._header(headers, "X-Twilio-Signature")
+        if not signature:
+            raise SmsNotificationError("Twilio callback signature is missing")
+        try:
+            pairs = parse.parse_qsl(
+                body.decode("utf-8"),
+                keep_blank_values=True,
+                strict_parsing=True,
+                encoding="utf-8",
+                errors="strict",
+            )
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise SmsNotificationError("Twilio callback form body is malformed") from exc
+        form_params: dict[str, str] = {}
+        for key, value in pairs:
+            if key in form_params:
+                raise SmsNotificationError("Twilio callback duplicate form field is not accepted")
+            form_params[key] = value
+        try:
+            projection = self.callback_handler.handle(
+                self.canonical_callback_url,
+                form_params,
+                signature,
+            )
+        except ValueError as exc:
+            raise SmsNotificationError("Twilio callback required fields are invalid") from exc
+        if self.evidence_sink is not None:
+            self.evidence_sink.record(dict(projection))
+        return TwilioWebhookHttpResponse(status_code=204, body={})
