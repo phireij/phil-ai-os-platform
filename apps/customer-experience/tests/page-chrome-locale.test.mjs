@@ -59,3 +59,22 @@ test("shared preview chrome localizes browser metadata without changing catalog 
   assert.match(helper, /meta\[name="description"\]/);
   assert.doesNotMatch(helper, /catalog: Object\.freeze\(\{\s*title:/);
 });
+
+test("remaining cart confirmation and Quick Pickup semantic labels follow EN and JA locale", () => {
+  assert.match(helper, /"← Catalog preview"/);
+  assert.match(helper, /"← 商品プレビュー"/);
+  assert.match(helper, /"Readiness result"/);
+  assert.match(helper, /"準備状況結果"/);
+  assert.match(helper, /"Final-step review"/);
+  assert.match(helper, /"最終ステップ確認"/);
+  assert.match(helper, /"Review before submitting"/);
+  assert.match(helper, /"送信前に確認"/);
+  assert.match(helper, /"This is not the actual WooCommerce final screen"/);
+  assert.match(helper, /"これは実際のWooCommerce最終画面ではありません"/);
+  assert.match(helper, /"External Quick Pickup"/);
+  assert.match(helper, /"外部クイックピックアップ"/);
+  assert.match(helper, /"Authority boundary"/);
+  assert.match(helper, /"権限境界"/);
+  assert.match(helper, /applySemanticCopy\(localized\.semantics\?\.\[page\]\)/);
+  assert.match(helper, /document\.querySelector\(selector\)/);
+});
