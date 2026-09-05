@@ -56,8 +56,50 @@ class PreproductionSnapshotValidationTests(unittest.TestCase):
         snapshot["products"] = [{}]
         snapshot["categories"] = [{}]
         blockers = module._validate_snapshot(snapshot)
-        self.assertIn("snapshot product[1] requires explicit SKU", blockers)
-        self.assertIn("snapshot category[1] requires explicit slug", blockers)
+        self.assertIn("snapshot product[1] requires explicit string SKU", blockers)
+        self.assertIn("snapshot category[1] requires explicit string slug", blockers)
+
+    def test_non_string_identity_fields_fail_closed(self):
+        snapshot = valid_snapshot()
+        snapshot["products"] = [{"sku": {"unexpected": "SKU-001"}}]
+        snapshot["categories"] = [{"slug": ["cakes"]}]
+        blockers = module._validate_snapshot(snapshot)
+        self.assertIn("snapshot product[1] requires explicit string SKU", blockers)
+        self.assertIn("snapshot category[1] requires explicit string slug", blockers)
+
+    def test_non_string_comparison_fields_fail_closed(self):
+        snapshot = valid_snapshot()
+        snapshot["products"] = [
+            {
+                "sku": "SKU-001",
+                "name": {"en": "Cake"},
+                "regular_price": 500,
+                "status": ["draft"],
+            }
+        ]
+        snapshot["categories"] = [{"slug": "cakes", "name": {"en": "Cakes"}}]
+        blockers = module._validate_snapshot(snapshot)
+        self.assertIn("snapshot product[1].name must be a string", blockers)
+        self.assertIn("snapshot product[1].regular_price must be a string", blockers)
+        self.assertIn("snapshot product[1].status must be a string", blockers)
+        self.assertIn("snapshot category[1].name must be a string", blockers)
+
+    def test_malformed_nested_product_categories_fail_closed(self):
+        snapshot = valid_snapshot()
+        snapshot["products"] = [{"sku": "SKU-001", "categories": {"slug": "cakes"}}]
+        blockers = module._validate_snapshot(snapshot)
+        self.assertIn("snapshot product[1].categories must be a list", blockers)
+
+        snapshot["products"] = [{"sku": "SKU-001", "categories": ["cakes"]}]
+        blockers = module._validate_snapshot(snapshot)
+        self.assertIn("snapshot product[1].categories[1] must be an object", blockers)
+
+        snapshot["products"] = [{"sku": "SKU-001", "categories": [{"slug": ["cakes"]}]}]
+        blockers = module._validate_snapshot(snapshot)
+        self.assertIn(
+            "snapshot product[1].categories[1] requires explicit string slug",
+            blockers,
+        )
 
     def test_duplicate_product_sku_fails_closed(self):
         snapshot = valid_snapshot()
