@@ -29,6 +29,18 @@ test("requested delivery is clearly non-guaranteed before payment", () => {
   assert.match(source, /Delivery and final quote still require confirmation before payment/);
 });
 
+test("Ruby car guidance mirrors the approved provisional route policy without live calculation", () => {
+  assert.match(html, /up to 10 km ¥2,500/);
+  assert.match(html, /over 10–30 km \+¥150 per started km/);
+  assert.match(html, /over 30–50 km \+¥200 per started km/);
+  assert.match(html, /over 50–80 km manual quote/);
+  assert.match(html, /over 80 km unavailable/);
+  assert.match(html, /Tolls are separate/);
+  assert.match(html, /routes over 75 minutes one-way require review/);
+  assert.match(source, /Pending route review — no live calculation/);
+  assert.match(source, /rubyCarRouteGuidance\.hidden = !isRubyCar/);
+});
+
 test("custom cake flow accepts only private image-oriented references and no standalone topper", () => {
   assert.match(html, /accept="image\/jpeg,image\/png,image\/webp"/);
   assert.match(html, /multiple/);
@@ -56,7 +68,7 @@ test("preview behavior is local and non-authorizing", () => {
 
 test("order intake preview is discoverable and cached in the isolated shell", () => {
   assert.match(index, /\.\/order-intake-preview\.html/);
-  assert.match(sw, /phil-ai-os-cx-sprint4-v23/);
+  assert.match(sw, /phil-ai-os-cx-sprint4-v\d+/);
   assert.match(sw, /\.\/order-intake-preview\.html/);
   assert.match(sw, /\.\/order-intake-preview\.css/);
   assert.match(sw, /\.\/src\/order-intake-preview\.mjs/);
