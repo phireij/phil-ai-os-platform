@@ -55,13 +55,34 @@ def _validated_capture_timestamp(value: str | None) -> str:
     return normalized
 
 
-def _bounded_int(value: Any) -> int | None:
-    if isinstance(value, bool):
+def _optional_int(value: Any, *, context: str) -> int | None:
+    if value is None:
         return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ProductionConnectivityBlocked(
+            f"WooCommerce read-only snapshot {context} must be an integer or null"
+        )
+    return value
+
+
+def _string_field(value: Mapping[str, Any], field: str, *, context: str) -> str:
+    raw = value.get(field)
+    if raw is None:
+        return ""
+    if not isinstance(raw, str):
+        raise ProductionConnectivityBlocked(
+            f"WooCommerce read-only snapshot {context}.{field} must be a string or null"
+        )
+    return raw
+
+
+def _bool_field(value: Mapping[str, Any], field: str, *, context: str, default: bool = False) -> bool:
+    raw = value.get(field, default)
+    if not isinstance(raw, bool):
+        raise ProductionConnectivityBlocked(
+            f"WooCommerce read-only snapshot {context}.{field} must be a boolean"
+        )
+    return raw
 
 
 def _validated_nested_mappings(value: Mapping[str, Any], field: str) -> list[Mapping[str, Any]]:
@@ -82,9 +103,9 @@ def _product_projection(value: Mapping[str, Any]) -> dict[str, Any]:
     for category in _validated_nested_mappings(value, "categories"):
         categories.append(
             {
-                "id": _bounded_int(category.get("id")),
-                "name": str(category.get("name") or ""),
-                "slug": str(category.get("slug") or ""),
+                "id": _optional_int(category.get("id"), context="product category id"),
+                "name": _string_field(category, "name", context="product category"),
+                "slug": _string_field(category, "slug", context="product category"),
             }
         )
 
@@ -92,26 +113,26 @@ def _product_projection(value: Mapping[str, Any]) -> dict[str, Any]:
     for image in _validated_nested_mappings(value, "images"):
         images.append(
             {
-                "id": _bounded_int(image.get("id")),
-                "name": str(image.get("name") or ""),
-                "alt": str(image.get("alt") or ""),
+                "id": _optional_int(image.get("id"), context="product image id"),
+                "name": _string_field(image, "name", context="product image"),
+                "alt": _string_field(image, "alt", context="product image"),
             }
         )
 
     return {
-        "id": _bounded_int(value.get("id")),
-        "sku": str(value.get("sku") or ""),
-        "name": str(value.get("name") or ""),
-        "slug": str(value.get("slug") or ""),
-        "type": str(value.get("type") or ""),
-        "status": str(value.get("status") or ""),
-        "catalog_visibility": str(value.get("catalog_visibility") or ""),
-        "regular_price": str(value.get("regular_price") or ""),
-        "manage_stock": bool(value.get("manage_stock", False)),
-        "stock_quantity": _bounded_int(value.get("stock_quantity")),
-        "stock_status": str(value.get("stock_status") or ""),
-        "shipping_class": str(value.get("shipping_class") or ""),
-        "date_modified_gmt": str(value.get("date_modified_gmt") or ""),
+        "id": _optional_int(value.get("id"), context="product id"),
+        "sku": _string_field(value, "sku", context="product"),
+        "name": _string_field(value, "name", context="product"),
+        "slug": _string_field(value, "slug", context="product"),
+        "type": _string_field(value, "type", context="product"),
+        "status": _string_field(value, "status", context="product"),
+        "catalog_visibility": _string_field(value, "catalog_visibility", context="product"),
+        "regular_price": _string_field(value, "regular_price", context="product"),
+        "manage_stock": _bool_field(value, "manage_stock", context="product"),
+        "stock_quantity": _optional_int(value.get("stock_quantity"), context="product stock_quantity"),
+        "stock_status": _string_field(value, "stock_status", context="product"),
+        "shipping_class": _string_field(value, "shipping_class", context="product"),
+        "date_modified_gmt": _string_field(value, "date_modified_gmt", context="product"),
         "categories": categories,
         "images": images,
     }
@@ -119,11 +140,11 @@ def _product_projection(value: Mapping[str, Any]) -> dict[str, Any]:
 
 def _category_projection(value: Mapping[str, Any]) -> dict[str, Any]:
     return {
-        "id": _bounded_int(value.get("id")),
-        "name": str(value.get("name") or ""),
-        "slug": str(value.get("slug") or ""),
-        "parent": _bounded_int(value.get("parent")),
-        "count": _bounded_int(value.get("count")),
+        "id": _optional_int(value.get("id"), context="category id"),
+        "name": _string_field(value, "name", context="category"),
+        "slug": _string_field(value, "slug", context="category"),
+        "parent": _optional_int(value.get("parent"), context="category parent"),
+        "count": _optional_int(value.get("count"), context="category count"),
     }
 
 
