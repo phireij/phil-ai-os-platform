@@ -71,6 +71,24 @@ class ReadOnlyCatalogSnapshotTests(unittest.TestCase):
                     collect_catalog_snapshot(transport, captured_at=captured_at)
         self.assertEqual(transport.calls, [])
 
+    def test_snapshot_rejects_malformed_product_nested_collections(self):
+        bad_products = [
+            {"id": 1, "sku": "A", "categories": "cakes"},
+            {"id": 1, "sku": "A", "categories": ["cakes"]},
+            {"id": 1, "sku": "A", "images": {"id": 8}},
+            {"id": 1, "sku": "A", "images": ["image"]},
+        ]
+        for product in bad_products:
+            with self.subTest(product=product):
+                transport = RecordingTransport(
+                    {
+                        ("/products", 1): [product],
+                        ("/products/categories", 1): [],
+                    }
+                )
+                with self.assertRaises(ProductionConnectivityBlocked):
+                    collect_catalog_snapshot(transport)
+
     def test_snapshot_paginates_within_bound(self):
         transport = RecordingTransport(
             {
