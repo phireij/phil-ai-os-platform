@@ -81,7 +81,7 @@ jobs:
           echo image_history_commands_end
 
           echo runtime_route_inventory_begin
-          docker exec "$CID" python - <<'PY'
+          docker exec -i "$CID" python - <<'PY'
           import ast
           from pathlib import Path
           tree = ast.parse(Path('/app/app.py').read_text(encoding='utf-8'))
@@ -91,12 +91,13 @@ jobs:
               and isinstance(node.value, str)
               and (node.value.startswith('/v1/') or node.value in {'/healthz','/readyz'})
           })
-          for route in routes: print(route)
+          for route in routes:
+              print(route)
           PY
           echo runtime_route_inventory_end
 
           echo runtime_handler_symbols_begin
-          docker exec "$CID" python - <<'PY'
+          docker exec -i "$CID" python - <<'PY'
           import ast
           from pathlib import Path
           tree = ast.parse(Path('/app/app.py').read_text(encoding='utf-8'))
@@ -104,7 +105,7 @@ jobs:
               if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
                   name = getattr(node, 'name', '')
                   if name in {'Handler','do_GET','do_POST','_json','approval_create'} or name.startswith('approval_'):
-                      print(f'{node.lineno}:{type(node).__name__}:{name}')
+                      print(f'{node.lineno}:{getattr(node, "end_lineno", node.lineno)}:{type(node).__name__}:{name}')
           PY
           echo runtime_handler_symbols_end
 
@@ -113,6 +114,7 @@ jobs:
           echo host_source_candidates_end
 
           MATCH_COUNT=0
+          MATCH_SOURCE=""
           echo host_app_hash_inventory_begin
           while IFS= read -r FILE; do
             test -n "$FILE" || continue
@@ -120,7 +122,11 @@ jobs:
             HAS_APPROVAL=false
             if grep -Fq '/v1/approvals/request' "$FILE"; then HAS_APPROVAL=true; fi
             MATCH=false
-            if test "$SHA" = "$CONTAINER_SHA"; then MATCH=true; MATCH_COUNT=$((MATCH_COUNT + 1)); fi
+            if test "$SHA" = "$CONTAINER_SHA"; then
+              MATCH=true
+              MATCH_COUNT=$((MATCH_COUNT + 1))
+              MATCH_SOURCE="$FILE"
+            fi
             echo path="$FILE"
             echo sha256="$SHA"
             echo contains_approval_route="$HAS_APPROVAL"
@@ -128,19 +134,65 @@ jobs:
           done < <(find /opt/phil-ai-os-platform -maxdepth 8 -type f -name 'app.py' -print 2>/dev/null | sort)
           echo host_app_hash_inventory_end
           echo exact_runtime_source_match_count="$MATCH_COUNT"
+          test "$MATCH_COUNT" -eq 1
+
+          echo patch_anchor_inventory_begin
+          python3 - "$MATCH_SOURCE" <<'PY'
+          import ast, sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          source = path.read_text(encoding='utf-8')
+          lines = source.splitlines()
+          tree = ast.parse(source)
+          imported = set()
+          for node in tree.body:
+              if isinstance(node, ast.Import):
+                  imported.update(alias.name for alias in node.names)
+              elif isinstance(node, ast.ImportFrom) and node.module:
+                  imported.add(node.module)
+          print('imports=' + ','.join(sorted(imported)))
+          for node in ast.walk(tree):
+              if isinstance(node, ast.ClassDef) and node.name == 'Handler':
+                  print(f'handler_class={node.lineno}:{node.end_lineno}')
+              if isinstance(node, ast.FunctionDef) and node.name in {'do_POST','do_GET','_json'}:
+                  print(f'handler_method={node.name}:{node.lineno}:{node.end_lineno}')
+              if isinstance(node, ast.FunctionDef):
+                  uses_sqlite = any(
+                      isinstance(x, ast.Call)
+                      and isinstance(x.func, ast.Attribute)
+                      and isinstance(x.func.value, ast.Name)
+                      and x.func.value.id == 'sqlite3'
+                      and x.func.attr == 'connect'
+                      for x in ast.walk(node)
+                  )
+                  if uses_sqlite:
+                      print(f'sqlite_function={node.name}:{node.lineno}:{node.end_lineno}')
+          for idx, line in enumerate(lines, start=1):
+              stripped = line.strip()
+              if '/v1/approvals/request' in stripped or stripped.startswith('if path==') or stripped.startswith('if path ==') or stripped.startswith('elif path==') or stripped.startswith('elif path =='):
+                  safe = stripped
+                  if len(safe) > 240:
+                      safe = safe[:240] + '...'
+                  print(f'route_anchor={idx}:{safe}')
+          PY
+          echo patch_anchor_inventory_end
 
           WORKDIR="$(docker inspect "$CID" --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}')"
           echo compose_working_dir="$WORKDIR"
           echo compose_control_service_shape_begin
-          python - "$WORKDIR/compose.yml" <<'PY'
+          python3 - "$WORKDIR/compose.yml" <<'PY'
           import re, sys
           lines = open(sys.argv[1], encoding='utf-8').read().splitlines()
           in_control = False
           for line in lines:
               if re.match(r'^  control-api:\s*$', line):
-                  in_control = True; print(line); continue
-              if in_control and line.strip() and len(line) - len(line.lstrip()) <= 2: break
-              if in_control and re.search(r'^\s+(image|build|command|ports|volumes|environment|labels):', line): print(line)
+                  in_control = True
+                  print(line)
+                  continue
+              if in_control and line.strip() and len(line) - len(line.lstrip()) <= 2:
+                  break
+              if in_control and re.search(r'^\s+(image|build|command|ports|volumes|environment|labels):', line):
+                  print(line)
               elif in_control and re.search(r'^\s+-\s+(127\.0\.0\.1:4870|/app/|/run/|PHIL_AI_OS_|traefik\.)', line):
                   print(re.sub(r'(TOKEN|SECRET|PASSWORD|KEY)=.*', r'\1=[REDACTED]', line, flags=re.I))
           PY
@@ -156,6 +208,7 @@ jobs:
           REMOTE
 
       - name: Assert workflow stays read-only
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
