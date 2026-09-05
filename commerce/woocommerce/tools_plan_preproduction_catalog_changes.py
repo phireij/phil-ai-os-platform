@@ -45,10 +45,40 @@ def _validate_snapshot(snapshot: dict[str, Any]) -> list[str]:
         blockers.append("snapshot must not carry mutation authority")
     if snapshot.get("production_publish_authorized") is not False:
         blockers.append("snapshot must not carry publication authority")
-    if not isinstance(snapshot.get("products"), list):
+
+    products = snapshot.get("products")
+    categories = snapshot.get("categories")
+    if not isinstance(products, list):
         blockers.append("snapshot products must be a list")
-    if not isinstance(snapshot.get("categories"), list):
+    else:
+        seen_skus: set[str] = set()
+        for index, item in enumerate(products, start=1):
+            if not isinstance(item, dict):
+                blockers.append(f"snapshot product[{index}] must be an object")
+                continue
+            sku = str(item.get("sku") or "").strip()
+            if not sku:
+                blockers.append(f"snapshot product[{index}] requires explicit SKU")
+                continue
+            if sku in seen_skus:
+                blockers.append(f"snapshot contains duplicate product SKU: {sku}")
+            seen_skus.add(sku)
+
+    if not isinstance(categories, list):
         blockers.append("snapshot categories must be a list")
+    else:
+        seen_slugs: set[str] = set()
+        for index, item in enumerate(categories, start=1):
+            if not isinstance(item, dict):
+                blockers.append(f"snapshot category[{index}] must be an object")
+                continue
+            slug = str(item.get("slug") or "").strip()
+            if not slug:
+                blockers.append(f"snapshot category[{index}] requires explicit slug")
+                continue
+            if slug in seen_slugs:
+                blockers.append(f"snapshot contains duplicate category slug: {slug}")
+            seen_slugs.add(slug)
     return blockers
 
 
@@ -68,14 +98,12 @@ def build_plan(owner_payload: dict[str, Any], snapshot: dict[str, Any]) -> dict[
     owner_categories = owner_payload["categories"]
     owner_products = owner_payload["products"]
     existing_categories = {
-        str(item.get("slug") or ""): item
+        str(item["slug"]): item
         for item in snapshot["categories"]
-        if isinstance(item, dict) and item.get("slug")
     }
     existing_products = {
-        str(item.get("sku") or ""): item
+        str(item["sku"]): item
         for item in snapshot["products"]
-        if isinstance(item, dict) and item.get("sku")
     }
 
     category_slug_by_key = {
