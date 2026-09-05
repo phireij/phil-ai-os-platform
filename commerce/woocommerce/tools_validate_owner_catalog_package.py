@@ -102,7 +102,7 @@ def validate_package(payload: dict[str, Any]) -> dict[str, Any]:
             "mutation_authorized": False,
             "production_publish_authorized": False,
         }
-    except (ContractValidationError, KeyError, TypeError, ValueError) as exc:
+    except (ContractValidationError, OSError, KeyError, TypeError, ValueError) as exc:
         return {
             "version": "ruby-owner-catalog-package-validation-v2",
             "valid_contract": False,
