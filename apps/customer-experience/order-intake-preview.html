@@ -33,13 +33,20 @@
             </label>
             <label class="choice-card">
               <input type="radio" name="fulfillment" value="ruby-car">
-              <span><strong>Ruby car delivery / 自社配達</strong><br>Available only for eligible destinations and products. Final fee depends on route review.</span>
+              <span><strong>Ruby car delivery / 自社配達</strong><br>Available only for eligible destinations and products. Final fee depends on one-way route review from the Ruby shop.</span>
             </label>
             <label class="choice-card">
               <input type="radio" name="fulfillment" value="pickup">
               <span><strong>Shop pickup / 店頭受取</strong><br>Pickup date/time remains subject to confirmation.</span>
             </label>
           </fieldset>
+          <div class="intake-field" id="ruby-car-route-guidance" hidden>
+            <p class="field-help"><strong>Ruby car route guidance / 自社配達料金の目安</strong><br>
+              Chiba, Tokyo, Kanagawa, and Saitama only. One-way distance from Ruby’s Ichikawa shop: up to 10 km ¥2,500; over 10–30 km +¥150 per started km; over 30–50 km +¥200 per started km; over 50–80 km manual quote; over 80 km unavailable. Tolls are separate, and routes over 75 minutes one-way require review.<br>
+              対象地域は千葉・東京・神奈川・埼玉です。市川店舗からの片道距離を基準に料金を確認し、高速料金等は別途となります。50km超は個別見積り、80km超は対象外、片道75分超は確認が必要です。
+            </p>
+            <p class="pending-policy-note">Preview only: no live route is calculated here and no delivery fee is finalized.</p>
+          </div>
         </section>
 
         <section aria-labelledby="delivery-title">
@@ -117,6 +124,7 @@
           <dt>Fulfillment</dt><dd id="summary-fulfillment">Yamato</dd>
           <dt>Requested date</dt><dd id="summary-date">Not selected</dd>
           <dt>Time window</dt><dd id="summary-window">No preference</dd>
+          <dt>Route / fee</dt><dd id="summary-route">Not applicable</dd>
           <dt>Cake type</dt><dd id="summary-cake">Basic</dd>
           <dt>Payment</dt><dd>Not requested</dd>
         </dl>

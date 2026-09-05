@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v23";
-// 2026-09-06: add the mobile-first order-intake/custom-cake preview while preserving the isolated, non-authorizing commerce boundary.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v24";
+// 2026-09-06: refresh the isolated shell for approved Ruby car route/fee guidance; no live route integration.
 const APP_SHELL = [
   "./",
   "./index.html",

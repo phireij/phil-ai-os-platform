@@ -4,12 +4,14 @@ const customFields = document.querySelector("#custom-cake-fields");
 const requestedDate = document.querySelector("#requested-date");
 const yamatoWindow = document.querySelector("#yamato-window");
 const yamatoWindowField = document.querySelector("#yamato-window-field");
+const rubyCarRouteGuidance = document.querySelector("#ruby-car-route-guidance");
 const referenceImages = document.querySelector("#reference-images");
 const status = document.querySelector("#intake-status");
 
 const summaryFulfillment = document.querySelector("#summary-fulfillment");
 const summaryDate = document.querySelector("#summary-date");
 const summaryWindow = document.querySelector("#summary-window");
+const summaryRoute = document.querySelector("#summary-route");
 const summaryCake = document.querySelector("#summary-cake");
 
 const fulfillmentLabels = {
@@ -32,9 +34,14 @@ function renderFulfillment() {
   const method = selectedFulfillment();
   summaryFulfillment.textContent = fulfillmentLabels[method] || method;
   const isYamato = method === "yamato";
+  const isRubyCar = method === "ruby-car";
   yamatoWindowField.hidden = !isYamato;
+  rubyCarRouteGuidance.hidden = !isRubyCar;
   summaryWindow.textContent = isYamato
     ? yamatoWindow.options[yamatoWindow.selectedIndex]?.textContent || "No preference"
+    : "Not applicable";
+  summaryRoute.textContent = isRubyCar
+    ? "Pending route review — no live calculation / ルート確認待ち（ライブ計算なし）"
     : "Not applicable";
 }
 
