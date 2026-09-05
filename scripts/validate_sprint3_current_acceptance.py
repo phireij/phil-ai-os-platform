@@ -68,7 +68,14 @@ def main() -> int:
     require(authority["production_publish_authorized"] is False, "publish authority must remain false")
     require(authority["automatic_production_execution"] is False, "automatic production execution must remain false")
 
-    require("Sprint 3 — WooCommerce Foundation is the CURRENT PRIMARY SPRINT" in roadmap, "master roadmap Sprint 3 position missing")
+    sprint3_position_markers = (
+        "Sprint 3 — WooCommerce Foundation is the CURRENT PRIMARY SPRINT",
+        "Sprint 3 — WooCommerce Foundation remains the CURRENT PRIMARY SPRINT",
+    )
+    require(
+        any(marker in roadmap for marker in sprint3_position_markers),
+        "master roadmap Sprint 3 position missing",
+    )
     require("PHIL_AI_OS_SPRINT_3_CURRENT_PRIMARY_PENDING_FINAL_CATALOG_ONLY" in checkpoint, "checkpoint marker missing")
 
     print("PHIL_AI_OS_SPRINT_3_CURRENT_ACCEPTANCE_GREEN status=pending_final_catalog_only tax_decision=green mutation_authorized=false")
