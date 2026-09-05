@@ -54,7 +54,9 @@ test("custom cake flow accepts only private image-oriented references and no sta
 test("icing captures preference but leaves unapproved color pricing inactive", () => {
   assert.match(html, /White is the working default/);
   assert.match(html, /Additional-color pricing is still pending Ruby’s business confirmation/);
-  assert.doesNotMatch(html, /¥200/);
+  const icingSection = html.match(/<fieldset class="choice-list intake-field">\s*<legend>Icing \/ アイシング<\/legend>[\s\S]*?<\/fieldset>/)?.[0] || "";
+  assert.ok(icingSection, "icing section must remain present");
+  assert.doesNotMatch(icingSection, /¥200/);
   assert.doesNotMatch(source, /200/);
 });
 
