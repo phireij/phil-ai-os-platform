@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import importlib.util
 import json
 from pathlib import Path
@@ -33,12 +34,24 @@ def _blocked(reason: str, *, validation: dict[str, Any] | None = None) -> dict[s
     }
 
 
+def _has_timezone_iso_timestamp(value: Any) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None
+
+
 def _validate_snapshot(snapshot: dict[str, Any]) -> list[str]:
     blockers: list[str] = []
     if snapshot.get("schema_version") != "1.0":
         blockers.append("snapshot schema_version must be 1.0")
     if snapshot.get("scope") != "woocommerce_catalog_metadata_read_only":
         blockers.append("snapshot scope must be woocommerce_catalog_metadata_read_only")
+    if not _has_timezone_iso_timestamp(snapshot.get("captured_at")):
+        blockers.append("snapshot captured_at must be a timezone-aware ISO timestamp")
     if snapshot.get("network_read_only") is not True:
         blockers.append("snapshot must be network_read_only")
     if snapshot.get("mutation_authorized") is not False:
@@ -97,14 +110,8 @@ def build_plan(owner_payload: dict[str, Any], snapshot: dict[str, Any]) -> dict[
 
     owner_categories = owner_payload["categories"]
     owner_products = owner_payload["products"]
-    existing_categories = {
-        str(item["slug"]): item
-        for item in snapshot["categories"]
-    }
-    existing_products = {
-        str(item["sku"]): item
-        for item in snapshot["products"]
-    }
+    existing_categories = {str(item["slug"]): item for item in snapshot["categories"]}
+    existing_products = {str(item["sku"]): item for item in snapshot["products"]}
 
     category_slug_by_key = {
         category["key"]: category["slug"]["en"]

@@ -16,6 +16,7 @@ spec.loader.exec_module(module)
 def valid_snapshot():
     return {
         "schema_version": "1.0",
+        "captured_at": "2026-09-05T03:30:00Z",
         "scope": "woocommerce_catalog_metadata_read_only",
         "network_read_only": True,
         "mutation_authorized": False,
@@ -28,6 +29,19 @@ def valid_snapshot():
 class PreproductionSnapshotValidationTests(unittest.TestCase):
     def test_valid_snapshot_has_no_blockers(self):
         self.assertEqual(module._validate_snapshot(valid_snapshot()), [])
+
+    def test_missing_or_naive_capture_timestamp_fails_closed(self):
+        snapshot = valid_snapshot()
+        snapshot.pop("captured_at")
+        self.assertIn(
+            "snapshot captured_at must be a timezone-aware ISO timestamp",
+            module._validate_snapshot(snapshot),
+        )
+        snapshot["captured_at"] = "2026-09-05T03:30:00"
+        self.assertIn(
+            "snapshot captured_at must be a timezone-aware ISO timestamp",
+            module._validate_snapshot(snapshot),
+        )
 
     def test_non_object_entries_fail_closed(self):
         snapshot = valid_snapshot()
