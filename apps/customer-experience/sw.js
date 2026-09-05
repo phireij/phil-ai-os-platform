@@ -1,5 +1,5 @@
 const CACHE_NAME = "phil-ai-os-cx-sprint4-v22";
-// 2026-09-05: refresh product-aware mobile cart controls in the isolated offline shell while preserving the v22 cache contract and commerce boundary.
+// 2026-09-05: refresh cart item semantic grouping in the isolated offline shell while preserving the v22 cache contract and commerce boundary.
 const APP_SHELL = [
   "./",
   "./index.html",
