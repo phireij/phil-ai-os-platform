@@ -9,6 +9,10 @@ from typing import Mapping, Protocol
 from urllib import parse, request
 
 from .payment_link_sms import PaymentLinkSmsRequest, SmsNotificationError, SmsSendResult
+from .sms_templates import TransactionalSmsTemplate
+
+
+TWILIO_STATUS_CALLBACK_PATH = "/v1/webhooks/twilio/sms-status"
 
 
 class TwilioTransport(Protocol):
@@ -63,6 +67,8 @@ class TwilioSmsConfig:
     from_identity: str = ""
     messaging_service_sid: str = ""
     status_callback_url: str = ""
+    template_locale: str = "bilingual"
+    support_contact: str = ""
     enabled: bool = False
     timeout_seconds: float = 10.0
     api_base_url: str = "https://api.twilio.com/2010-04-01"
@@ -81,8 +87,16 @@ class TwilioSmsConfig:
                 raise ValueError("Twilio messaging_service_sid must start with MG")
         elif not self.from_identity:
             raise ValueError("Twilio messaging_service_sid or from_identity must be configured")
-        if self.status_callback_url and not self.status_callback_url.startswith("https://"):
-            raise ValueError("Twilio status_callback_url must use HTTPS")
+        if self.status_callback_url:
+            parsed = parse.urlsplit(self.status_callback_url)
+            if parsed.scheme != "https" or not parsed.netloc:
+                raise ValueError("Twilio status_callback_url must use HTTPS")
+            if parsed.path != TWILIO_STATUS_CALLBACK_PATH or parsed.fragment:
+                raise ValueError("Twilio status_callback_url must use the canonical callback path")
+        TransactionalSmsTemplate(
+            locale=self.template_locale,
+            support_contact=self.support_contact,
+        ).validate()
 
 
 class TwilioSmsProvider:
@@ -145,12 +159,11 @@ class TwilioSmsProvider:
             reason=f"provider_status={provider_status}",
         )
 
-    @staticmethod
-    def _message_body(sms_request: PaymentLinkSmsRequest) -> str:
-        return (
-            "Ruby's Cake Delights: Your order is confirmed. "
-            f"Please complete payment here: {sms_request.payment_url}"
-        )
+    def _message_body(self, sms_request: PaymentLinkSmsRequest) -> str:
+        return TransactionalSmsTemplate(
+            locale=self.config.template_locale,
+            support_contact=self.config.support_contact,
+        ).render_payment_link(sms_request)
 
 
 class TwilioRequestValidator:
@@ -259,7 +272,7 @@ class TwilioStatusHttpBoundary:
     intentionally non-authorizing and has no send/retry/payment/WooCommerce hooks.
     """
 
-    endpoint_path = "/v1/webhooks/twilio/sms-status"
+    endpoint_path = TWILIO_STATUS_CALLBACK_PATH
     max_body_bytes = 8192
 
     def __init__(
