@@ -1,3 +1,5 @@
+import "./page-chrome-locale.mjs";
+
 const COPY = Object.freeze({
   en: Object.freeze({
     online: "Connection available · isolated preview only",
