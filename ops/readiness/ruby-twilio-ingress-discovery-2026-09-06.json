@@ -1,0 +1,66 @@
+{
+  "schema_version": "ruby-twilio-ingress-discovery.v1",
+  "recorded_at": "2026-09-06",
+  "scope": "ruby_transactional_sms_public_callback_ingress_discovery",
+  "provider": "twilio",
+  "source_evidence": {
+    "workflow": ".github/workflows/commerce-twilio-ingress-readonly-discovery.yml",
+    "workflow_run_id": 33995788012,
+    "main_commit": "e5c25168dcf1de57a18e9b66c44296d5e042c5c3",
+    "workflow_conclusion": "success",
+    "read_only_marker_green": true,
+    "static_no_mutation_guard_green": true
+  },
+  "runtime_discovery": {
+    "traefik_candidate_count": 1,
+    "traefik_host_network_mode": true,
+    "primary_control_api_candidate_found": true,
+    "primary_control_api_image": "phil-ai-os/control-api:0.21.2-phase23p5",
+    "primary_control_api_loopback_binding": "127.0.0.1:4870",
+    "primary_control_api_local_health_http_code": 200,
+    "operator_proxy_candidate_found": true,
+    "public_https_host_discovered": true,
+    "public_hostname_intentionally_not_duplicated_in_this_record": true
+  },
+  "existing_ingress_contract": {
+    "primary_control_api_traefik_enabled": true,
+    "entrypoint": "websecure",
+    "tls_certresolver_configured": true,
+    "primary_control_api_service_port": 4870,
+    "existing_approval_path_prefix": "/phil-ai-os/approval/",
+    "existing_mission_control_path_prefix": "/phil-ai-os/mission-control",
+    "operator_proxy_path_prefix": "/phil-ai-os/operator/",
+    "twilio_status_callback_endpoint_contract": "/v1/webhooks/twilio/sms-status",
+    "existing_router_for_twilio_status_callback_discovered": false,
+    "approved_file_provider_hint_for_twilio_status_callback_discovered": false,
+    "existing_ingress_may_be_reused_without_new_route": false
+  },
+  "interpretation": {
+    "https_and_certificate_infrastructure_exists": true,
+    "control_api_is_healthy_locally": true,
+    "current_public_routes_are_path_scoped": true,
+    "twilio_callback_path_is_not_currently_exposed_by_discovered_rules": true,
+    "canonical_callback_url_must_not_be_invented_from_existing_routes": true,
+    "public_callback_deployment_still_required": true,
+    "production_callback_ready": false
+  },
+  "next_safe_engineering": {
+    "prepare_non_deployed_control_api_webhook_route_wiring": true,
+    "prepare_non_deployed_traefik_ingress_change_contract": true,
+    "prepare_fail_closed_deployment_and_rollback_runbook": true,
+    "production_ingress_mutation_now": false,
+    "twilio_console_callback_configuration_now": false,
+    "live_sms_test_now": false
+  },
+  "authority": {
+    "proxy_mutation_authorized": false,
+    "dns_mutation_authorized": false,
+    "callback_deployment_authorized_by_this_record": false,
+    "twilio_configuration_mutation_authorized_by_this_record": false,
+    "sms_send_authorized_by_this_record": false,
+    "woocommerce_mutation_authorized": false,
+    "payment_execution_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "decision": "PUBLIC_HTTPS_INGRESS_EXISTS_BUT_TWILIO_CALLBACK_ROUTE_NOT_DISCOVERED_PREPARE_NON_DEPLOYED_WIRING_AND_INGRESS_CONTRACT_PRODUCTION_REMAINS_FAIL_CLOSED"
+}
