@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
-from typing import Any
+from typing import Any, Mapping
 
 
 ROOT = Path(__file__).resolve().parent
@@ -18,6 +18,28 @@ TAX_EVIDENCE = REPO_ROOT / "ops/readiness/ruby-japan-consumption-tax-status-2026
 CHECKOUT_EVIDENCE = REPO_ROOT / "ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-04.json"
 EXPECTED_TAX_REF = "ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json"
 EXPECTED_SCOPE_TYPE = "initial_launch_subset"
+OWNER_CATALOG_OBJECT_FIELDS = {
+    "categories": ("name", "slug"),
+    "media": ("alt",),
+    "products": ("name", "description", "slug", "fulfillment"),
+}
+
+
+def _validate_owner_catalog_object_shapes(payload: dict[str, Any]) -> None:
+    """Reject malformed JSON object shapes before model parsing can raise AttributeError."""
+
+    for collection, nested_fields in OWNER_CATALOG_OBJECT_FIELDS.items():
+        values = payload.get(collection, [])
+        if not isinstance(values, list):
+            continue
+        for index, item in enumerate(values):
+            if not isinstance(item, Mapping):
+                raise ContractValidationError(f"{collection}[{index}] must be an object")
+            for field in nested_fields:
+                if not isinstance(item.get(field), Mapping):
+                    raise ContractValidationError(
+                        f"{collection}[{index}].{field} must be an object"
+                    )
 
 
 def _catalog_scope_blockers(payload: dict[str, Any]) -> list[str]:
@@ -79,6 +101,7 @@ def _current_state_blockers(payload: dict[str, Any]) -> list[str]:
 
 def validate_package(payload: dict[str, Any]) -> dict[str, Any]:
     try:
+        _validate_owner_catalog_object_shapes(payload)
         readiness = evaluate_catalog_tax_readiness(payload)
         current_state_blockers = _current_state_blockers(payload)
         scope_blockers = _catalog_scope_blockers(payload)
