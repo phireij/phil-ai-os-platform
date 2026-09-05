@@ -69,13 +69,34 @@ def _validate_snapshot(snapshot: dict[str, Any]) -> list[str]:
             if not isinstance(item, dict):
                 blockers.append(f"snapshot product[{index}] must be an object")
                 continue
-            sku = str(item.get("sku") or "").strip()
-            if not sku:
-                blockers.append(f"snapshot product[{index}] requires explicit SKU")
+            sku_value = item.get("sku")
+            if not isinstance(sku_value, str) or not sku_value.strip():
+                blockers.append(f"snapshot product[{index}] requires explicit string SKU")
                 continue
+            sku = sku_value.strip()
             if sku in seen_skus:
                 blockers.append(f"snapshot contains duplicate product SKU: {sku}")
             seen_skus.add(sku)
+
+            for field in ("name", "slug", "regular_price", "status", "catalog_visibility", "shipping_class"):
+                if field in item and not isinstance(item[field], str):
+                    blockers.append(f"snapshot product[{index}].{field} must be a string")
+
+            product_categories = item.get("categories", [])
+            if not isinstance(product_categories, list):
+                blockers.append(f"snapshot product[{index}].categories must be a list")
+            else:
+                for category_index, category in enumerate(product_categories, start=1):
+                    if not isinstance(category, dict):
+                        blockers.append(
+                            f"snapshot product[{index}].categories[{category_index}] must be an object"
+                        )
+                        continue
+                    category_slug = category.get("slug")
+                    if not isinstance(category_slug, str) or not category_slug.strip():
+                        blockers.append(
+                            f"snapshot product[{index}].categories[{category_index}] requires explicit string slug"
+                        )
 
     if not isinstance(categories, list):
         blockers.append("snapshot categories must be a list")
@@ -85,13 +106,16 @@ def _validate_snapshot(snapshot: dict[str, Any]) -> list[str]:
             if not isinstance(item, dict):
                 blockers.append(f"snapshot category[{index}] must be an object")
                 continue
-            slug = str(item.get("slug") or "").strip()
-            if not slug:
-                blockers.append(f"snapshot category[{index}] requires explicit slug")
+            slug_value = item.get("slug")
+            if not isinstance(slug_value, str) or not slug_value.strip():
+                blockers.append(f"snapshot category[{index}] requires explicit string slug")
                 continue
+            slug = slug_value.strip()
             if slug in seen_slugs:
                 blockers.append(f"snapshot contains duplicate category slug: {slug}")
             seen_slugs.add(slug)
+            if "name" in item and not isinstance(item["name"], str):
+                blockers.append(f"snapshot category[{index}].name must be a string")
     return blockers
 
 
@@ -110,8 +134,8 @@ def build_plan(owner_payload: dict[str, Any], snapshot: dict[str, Any]) -> dict[
 
     owner_categories = owner_payload["categories"]
     owner_products = owner_payload["products"]
-    existing_categories = {str(item["slug"]): item for item in snapshot["categories"]}
-    existing_products = {str(item["sku"]): item for item in snapshot["products"]}
+    existing_categories = {item["slug"]: item for item in snapshot["categories"]}
+    existing_products = {item["sku"]: item for item in snapshot["products"]}
 
     category_slug_by_key = {
         category["key"]: category["slug"]["en"]
@@ -176,9 +200,8 @@ def build_plan(owner_payload: dict[str, Any], snapshot: dict[str, Any]) -> dict[
                 if actual != desired[field]:
                     changes.append(field)
             existing_category_slugs = sorted(
-                str(category.get("slug") or "")
+                category["slug"]
                 for category in existing.get("categories", [])
-                if isinstance(category, dict) and category.get("slug")
             )
             if existing_category_slugs != desired_category_slugs:
                 changes.append("categories")
