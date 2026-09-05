@@ -1,8 +1,13 @@
 {
-  "version": "ruby-komoju-live-acceptance-gate-v4",
-  "date": "2026-09-04",
+  "version": "ruby-komoju-live-acceptance-gate-v5",
+  "date": "2026-09-05",
   "provider": "komoju",
   "ceo_scope_approval": true,
+  "ceo_controlled_real_payment_test_approval": {
+    "approved": true,
+    "approval_ref": "ops/readiness/ceo-controlled-activation-approvals-2026-09-05.json",
+    "execution_ready_now": false
+  },
   "current_mode": "live_dashboard_selected",
   "test_mode_evidence": {
     "connected": true,
@@ -57,5 +62,5 @@
     "fresh near-cutover recovery validation",
     "final Go/No-Go acceptance"
   ],
-  "decision": "LIVE_DASHBOARD_PAYMENT_SUBSET_CHECKOUT_CONFIGURATION_KONBINI_EXPIRY_AND_PAYMENT_TIMING_GREEN_EXECUTION_PENDING_FAIL_CLOSED"
+  "decision": "CEO_CONTROLLED_TEST_APPROVED_LIVE_DASHBOARD_PAYMENT_SUBSET_CHECKOUT_CONFIGURATION_KONBINI_EXPIRY_GREEN_EXECUTION_PENDING_FAIL_CLOSED"
 }
