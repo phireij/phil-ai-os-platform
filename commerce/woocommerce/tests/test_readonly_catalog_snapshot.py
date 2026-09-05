@@ -89,6 +89,47 @@ class ReadOnlyCatalogSnapshotTests(unittest.TestCase):
                 with self.assertRaises(ProductionConnectivityBlocked):
                     collect_catalog_snapshot(transport)
 
+    def test_snapshot_rejects_malformed_product_scalar_evidence(self):
+        bad_products = [
+            {"id": "1", "sku": "A"},
+            {"id": 1, "sku": {"value": "A"}},
+            {"id": 1, "sku": "A", "name": ["Cake"]},
+            {"id": 1, "sku": "A", "regular_price": 500},
+            {"id": 1, "sku": "A", "manage_stock": "yes"},
+            {"id": 1, "sku": "A", "stock_quantity": 1.5},
+            {"id": 1, "sku": "A", "categories": [{"id": "5", "slug": "cakes"}]},
+            {"id": 1, "sku": "A", "images": [{"id": 8, "alt": {"en": "Cake"}}]},
+        ]
+        for product in bad_products:
+            with self.subTest(product=product):
+                transport = RecordingTransport(
+                    {
+                        ("/products", 1): [product],
+                        ("/products/categories", 1): [],
+                    }
+                )
+                with self.assertRaises(ProductionConnectivityBlocked):
+                    collect_catalog_snapshot(transport)
+
+    def test_snapshot_rejects_malformed_category_scalar_evidence(self):
+        bad_categories = [
+            {"id": "5", "slug": "cakes"},
+            {"id": 5, "slug": ["cakes"]},
+            {"id": 5, "slug": "cakes", "name": {"en": "Cakes"}},
+            {"id": 5, "slug": "cakes", "parent": "0"},
+            {"id": 5, "slug": "cakes", "count": 1.5},
+        ]
+        for category in bad_categories:
+            with self.subTest(category=category):
+                transport = RecordingTransport(
+                    {
+                        ("/products", 1): [],
+                        ("/products/categories", 1): [category],
+                    }
+                )
+                with self.assertRaises(ProductionConnectivityBlocked):
+                    collect_catalog_snapshot(transport)
+
     def test_snapshot_paginates_within_bound(self):
         transport = RecordingTransport(
             {
