@@ -15,6 +15,7 @@ COD_TREATMENTS = {PENDING, "not_offered", "standard_rate", "reduced_rate", "othe
 IMPLEMENTATION_ROUTES = {PENDING, "tax_tables_candidate", "tax_disabled_candidate"}
 PRODUCT_TAX_CLASSES = {PENDING, "reduced_rate_food", "standard_rate", "exempt"}
 UNAPPROVED_SOURCE_MARKERS = ("fixture", "legacy", "historical", "test", "builder")
+APPROVED_CATALOG_PLACEHOLDERS = {"tbd", "pending", "to be determined", "未定", "確認中"}
 
 
 @dataclass(frozen=True)
@@ -57,6 +58,10 @@ def _duplicates(values: list[str]) -> set[str]:
 def _source_is_unapproved(value: str) -> bool:
     normalized = value.strip().lower()
     return not normalized or any(marker in normalized for marker in UNAPPROVED_SOURCE_MARKERS)
+
+
+def _is_placeholder(value: Any) -> bool:
+    return isinstance(value, str) and value.strip().lower() in APPROVED_CATALOG_PLACEHOLDERS
 
 
 def _has_timezone_iso_timestamp(value: Any) -> bool:
@@ -176,10 +181,23 @@ def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxRead
         blockers.append("catalog package_state is not approved")
     if not catalog_approved:
         blockers.append("catalog approval is pending")
-    if not str(payload.get("catalog_approval_ref") or "").strip():
+    catalog_approval_ref = str(payload.get("catalog_approval_ref") or "").strip()
+    if not catalog_approval_ref:
         blockers.append("catalog approval reference is missing")
+    elif _is_placeholder(catalog_approval_ref):
+        blockers.append("catalog approval reference contains a placeholder")
     if not products:
         blockers.append("approved catalog contains no products")
+
+    for category in categories:
+        for field, value in (
+            ("English name", category.name.en),
+            ("Japanese name", category.name.ja),
+            ("English slug", category.slug.en),
+            ("Japanese slug", category.slug.ja),
+        ):
+            if _is_placeholder(value):
+                blockers.append(f"category {category.key} {field} contains a placeholder")
 
     for index, (raw, product) in enumerate(zip(products_raw, products), start=1):
         prefix = f"product[{index}] {product.sku}"
@@ -193,6 +211,18 @@ def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxRead
             blockers.append(f"{prefix} currency must be JPY")
         if raw.get("price_includes_tax") is not True:
             blockers.append(f"{prefix} tax-inclusive price confirmation is pending")
+
+        for field, value in (
+            ("English name", product.name.en),
+            ("Japanese name", product.name.ja),
+            ("English description", product.description.en),
+            ("Japanese description", product.description.ja),
+            ("English slug", product.slug.en),
+            ("Japanese slug", product.slug.ja),
+            ("source provenance", product.source),
+        ):
+            if _is_placeholder(value):
+                blockers.append(f"{prefix} {field} contains a placeholder")
 
         if _source_is_unapproved(product.source):
             blockers.append(f"{prefix} source provenance is not approved")
@@ -227,6 +257,13 @@ def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxRead
                 )
 
     for value in media:
+        for field, content in (
+            ("English alt text", value.alt.en),
+            ("Japanese alt text", value.alt.ja),
+            ("source reference", value.source_ref),
+        ):
+            if _is_placeholder(content):
+                blockers.append(f"media {value.key} {field} contains a placeholder")
         source = value.source_ref.strip().lower()
         if source.startswith("fixture://") or any(
             marker in source for marker in ("legacy://", "historical://", "test://", "builder://")
