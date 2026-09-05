@@ -10,7 +10,7 @@ const sw = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
 test("quantity controls support thumb-friendly decrement and increment", () => {
   assert.match(source, /data-delta="-1"/);
   assert.match(source, /data-delta="1"/);
-  assert.match(source, /Decrease \$\{name\} quantity/);
+  assert.match(source, /Decrease quantity — \$\{name\}/);
   assert.match(source, /\$\{name\}の数量を減らす/);
   assert.match(css, /min-width: 48px/);
   assert.match(css, /min-height: 48px/);
