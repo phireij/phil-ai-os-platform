@@ -117,6 +117,26 @@ class CatalogDryRunTests(unittest.TestCase):
         with self.assertRaises(ContractValidationError):
             plan_catalog_product_reconciliation(payload, [remote, copy.deepcopy(remote)])
 
+    def test_malformed_remote_snapshot_entries_fail_closed_with_contract_error(self):
+        with self.assertRaisesRegex(
+            ContractValidationError, "remote product snapshot entry 1 must be an object"
+        ):
+            plan_catalog_product_reconciliation(intake_package(), ["not-an-object"])
+
+        with self.assertRaisesRegex(
+            ContractValidationError, "remote product snapshot must be a sequence of objects"
+        ):
+            plan_catalog_product_reconciliation(intake_package(), "not-a-snapshot")
+
+    def test_boolean_remote_id_is_not_accepted_as_integer_identity(self):
+        payload = intake_package()
+        remote = desired_remote(payload)
+        remote["id"] = True
+        with self.assertRaisesRegex(
+            ContractValidationError, "remote product APPROVED-001 requires positive integer id"
+        ):
+            plan_catalog_product_reconciliation(payload, [remote])
+
     def test_plan_summary_is_deterministic_and_non_authorizing(self):
         payload = intake_package()
         summary = plan_catalog_product_reconciliation(payload, []).as_dict()
