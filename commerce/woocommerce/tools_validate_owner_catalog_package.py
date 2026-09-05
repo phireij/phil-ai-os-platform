@@ -42,6 +42,56 @@ def _validate_owner_catalog_object_shapes(payload: dict[str, Any]) -> None:
                     )
 
 
+def _owner_catalog_identity_blockers(payload: dict[str, Any]) -> list[str]:
+    """Reject identities that would make the dry-run WooCommerce plan ambiguous."""
+
+    blockers: list[str] = []
+    categories = payload.get("categories", [])
+    products = payload.get("products", [])
+
+    if isinstance(categories, list):
+        seen_slugs: set[str] = set()
+        for index, category in enumerate(categories, start=1):
+            if not isinstance(category, Mapping):
+                continue
+            slug = category.get("slug")
+            if not isinstance(slug, Mapping):
+                continue
+            en_slug = slug.get("en")
+            if not isinstance(en_slug, str) or not en_slug.strip():
+                continue
+            normalized = en_slug.strip()
+            if normalized in seen_slugs:
+                blockers.append(
+                    f"duplicate WooCommerce category English slug: {normalized}"
+                )
+            seen_slugs.add(normalized)
+
+    if isinstance(products, list):
+        for index, product in enumerate(products, start=1):
+            if not isinstance(product, Mapping):
+                continue
+            sku_value = product.get("sku")
+            sku = sku_value.strip() if isinstance(sku_value, str) and sku_value.strip() else f"product[{index}]"
+            for field, label in (
+                ("category_keys", "category key"),
+                ("media_keys", "media key"),
+            ):
+                values = product.get(field, [])
+                if not isinstance(values, list):
+                    continue
+                seen: set[str] = set()
+                for value in values:
+                    if not isinstance(value, str):
+                        continue
+                    normalized = value.strip()
+                    if normalized in seen:
+                        blockers.append(f"{sku} contains duplicate {label}: {normalized}")
+                    seen.add(normalized)
+
+    return blockers
+
+
 def _catalog_scope_blockers(payload: dict[str, Any]) -> list[str]:
     blockers: list[str] = []
     scope = payload.get("catalog_scope")
@@ -105,9 +155,11 @@ def validate_package(payload: dict[str, Any]) -> dict[str, Any]:
         readiness = evaluate_catalog_tax_readiness(payload)
         current_state_blockers = _current_state_blockers(payload)
         scope_blockers = _catalog_scope_blockers(payload)
+        identity_blockers = _owner_catalog_identity_blockers(payload)
         blockers = list(readiness.blockers)
         blockers.extend(current_state_blockers)
         blockers.extend(scope_blockers)
+        blockers.extend(identity_blockers)
         blockers = sorted(set(blockers))
         ready = readiness.catalog_ready and readiness.tax_decision_ready and not blockers
         scope = payload.get("catalog_scope") if isinstance(payload.get("catalog_scope"), dict) else {}
@@ -116,7 +168,7 @@ def validate_package(payload: dict[str, Any]) -> dict[str, Any]:
             "valid_contract": True,
             "catalog_scope_type": scope.get("scope_type"),
             "full_product_range_required_for_sprint3_closure": scope.get("full_product_range_required_for_sprint3_closure"),
-            "catalog_ready": readiness.catalog_ready,
+            "catalog_ready": readiness.catalog_ready and not identity_blockers,
             "tax_decision_ready": readiness.tax_decision_ready,
             "current_state_reconciled": not current_state_blockers,
             "scope_ready": not scope_blockers,
