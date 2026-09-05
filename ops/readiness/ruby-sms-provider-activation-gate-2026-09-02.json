@@ -1,12 +1,7 @@
 {
-  "version": "ruby-sms-provider-activation-gate-v3",
-  "date": "2026-09-05",
+  "version": "ruby-sms-provider-activation-gate-v2",
+  "date": "2026-09-03",
   "ceo_scope_approval_for_production_sms": true,
-  "ceo_activation_and_controlled_test_approval": {
-    "approved": true,
-    "approval_ref": "ops/readiness/ceo-controlled-activation-approvals-2026-09-05.json",
-    "execution_ready_now": false
-  },
   "provider_candidates": {
     "preferred_pilot_candidate": "twilio",
     "secondary_candidate": "aws_end_user_messaging_sms"
@@ -39,5 +34,5 @@
     "live_sms_sent": false,
     "automatic_retry": false
   },
-  "decision": "TWILIO_ACTIVATION_AND_CONTROLLED_TEST_APPROVED_ACCOUNT_SENDER_CREDENTIALS_TEMPLATE_WEBHOOK_AND_TEST_PENDING_FAIL_CLOSED"
+  "decision": "TWILIO_SELECTED_ACCOUNT_SENDER_CREDENTIALS_AND_TEST_PENDING_FAIL_CLOSED"
 }
