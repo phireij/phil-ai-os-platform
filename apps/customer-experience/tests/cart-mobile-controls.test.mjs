@@ -25,6 +25,18 @@ test("quantity controls identify the affected product for assistive technology",
   assert.match(source, /input\.setAttribute\("aria-label"/);
 });
 
+test("each cart item ties product name price quantity and line total together", () => {
+  assert.match(source, /connectCartItemSemantics/);
+  assert.match(source, /accessibleToken/);
+  assert.match(source, /card\.setAttribute\("aria-labelledby", heading\.id\)/);
+  assert.match(source, /card\.setAttribute\("aria-describedby"/);
+  assert.match(source, /input\.setAttribute\("aria-describedby"/);
+  assert.match(source, /minus\.setAttribute\("aria-describedby"/);
+  assert.match(source, /plus\.setAttribute\("aria-describedby"/);
+  assert.match(source, /total\.setAttribute\("aria-live", "polite"\)/);
+  assert.match(source, /total\.setAttribute\("aria-atomic", "true"\)/);
+});
+
 test("line totals update locally with bilingual labels", () => {
   assert.match(source, /Item total/);
   assert.match(source, /商品小計/);
