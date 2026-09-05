@@ -1,0 +1,42 @@
+{
+  "schema_version": "ruby-twilio-webhook-code-evidence.v1",
+  "recorded_at": "2026-09-06",
+  "scope": "ruby_transactional_sms_twilio_delivery_status_webhook",
+  "provider": "twilio",
+  "endpoint_contract": "POST /v1/webhooks/twilio/sms-status",
+  "code_evidence": {
+    "pull_request": 162,
+    "merge_commit": "4ab9d0d83fccd45390a571995f1fda4df5882ba2",
+    "signed_http_boundary_implemented": true,
+    "canonical_https_callback_url_required": true,
+    "account_auth_token_required_for_signature_validation": true,
+    "untrusted_proxy_headers_used_for_signature_url": false,
+    "raw_to_persisted": false,
+    "raw_from_persisted": false,
+    "raw_message_sid_persisted": false,
+    "message_sid_audit_projection_hashed": true,
+    "authority_effect": "none",
+    "automatic_retry": false,
+    "sms_send_capability_added_by_webhook": false,
+    "woocommerce_mutation_capability_added_by_webhook": false,
+    "payment_mutation_capability_added_by_webhook": false
+  },
+  "ci_evidence": {
+    "head_commit_tested": "2c81997445e5b7469b1659c2e33014b0e020d2f7",
+    "woocommerce_contract_tests": "success",
+    "sprint_3_woocommerce_foundation_ci": "success",
+    "sprint_7_integrated_readiness_ci": "success",
+    "integrated_contract_regression": "success",
+    "isolated_runtime_smoke": "success"
+  },
+  "production_state": {
+    "webhook_route_deployed": false,
+    "canonical_callback_url_configured_in_runtime": false,
+    "auth_token_configured_for_runtime_webhook_validation": false,
+    "twilio_delivery_status_callback_verified": false,
+    "controlled_recipient_test_completed": false,
+    "live_sms_sent": false,
+    "production_sending_ready": false
+  },
+  "decision": "CODE_BOUNDARY_GREEN_PRODUCTION_WEBHOOK_DEPLOYMENT_AND_VERIFICATION_PENDING_FAIL_CLOSED"
+}
