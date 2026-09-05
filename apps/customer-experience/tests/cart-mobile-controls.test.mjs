@@ -10,10 +10,19 @@ const sw = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
 test("quantity controls support thumb-friendly decrement and increment", () => {
   assert.match(source, /data-delta="-1"/);
   assert.match(source, /data-delta="1"/);
-  assert.match(source, /Decrease quantity/);
-  assert.match(source, /数量を減らす/);
+  assert.match(source, /Decrease \$\{name\} quantity/);
+  assert.match(source, /\$\{name\}の数量を減らす/);
   assert.match(css, /min-width: 48px/);
   assert.match(css, /min-height: 48px/);
+});
+
+test("quantity controls identify the affected product for assistive technology", () => {
+  assert.match(source, /productNameForCard/);
+  assert.match(source, /querySelector\("h3"\)/);
+  assert.match(source, /copy\[lang\]\.decrease\(productName\)/);
+  assert.match(source, /copy\[lang\]\.increase\(productName\)/);
+  assert.match(source, /copy\[lang\]\.quantity\(productName\)/);
+  assert.match(source, /input\.setAttribute\("aria-label"/);
 });
 
 test("line totals update locally with bilingual labels", () => {
