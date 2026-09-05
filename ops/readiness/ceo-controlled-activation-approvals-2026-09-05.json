@@ -1,0 +1,52 @@
+{
+  "version": "ruby-ceo-controlled-activation-approvals-v1",
+  "date": "2026-09-05",
+  "decision_by_role": "CEO",
+  "decision_by": "CEO",
+  "decision_at": "2026-09-05T21:56:00+09:00",
+  "approvals": {
+    "komoju_controlled_real_payment_test": {
+      "approved": true,
+      "scope": "single controlled real-payment validation only after all independent readiness gates are GREEN",
+      "execution_ready_now": false,
+      "current_blockers": [
+        "final owner-approved production catalog",
+        "Tokushoho publication and final checkout/final-screen closure",
+        "fresh near-cutover recovery validation",
+        "final Go/No-Go acceptance"
+      ]
+    },
+    "tokushoho_publication_execution": {
+      "approved": true,
+      "scope": "publish the already CEO-approved Tokushoho candidate only after the actual WooCommerce final-screen and checkout legal-sync gates are GREEN",
+      "execution_ready_now": false,
+      "current_blockers": [
+        "usable preproduction catalog item for guarded non-transactional final-screen capture",
+        "actual WooCommerce final confirmation screen evidence",
+        "checkout legal sync completion"
+      ]
+    },
+    "twilio_production_sms_activation_and_controlled_test": {
+      "approved": true,
+      "scope": "activate Twilio and perform controlled handset SMS validation only after provider/account/sender/secret readiness is GREEN",
+      "execution_ready_now": false,
+      "current_blockers": [
+        "Ruby-owned Twilio account",
+        "Twilio credentials configured in approved secret boundary",
+        "Japan sender identity verified",
+        "final bilingual SMS template approved",
+        "delivery-status webhook verified",
+        "controlled recipient handset available"
+      ]
+    }
+  },
+  "explicit_non_authority": {
+    "woocommerce_catalog_mutation_or_publication": false,
+    "unrestricted_real_payment_execution": false,
+    "unrestricted_sms_sending": false,
+    "dns_or_public_cutover": false,
+    "final_production_go_no_go": false,
+    "automatic_production_execution": false
+  },
+  "decision": "CEO_APPROVALS_RECORDED_EXECUTION_REMAINS_READINESS_GATED_FAIL_CLOSED"
+}
