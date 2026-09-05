@@ -1,0 +1,85 @@
+name: Control API Twilio Patch Context Read-Only
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/control-api-twilio-patch-context-readonly.yml'
+      - '.github/control-api-twilio-patch-context-readonly-trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true
+      - name: Inspect exact source anchors without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          ROOT=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1
+          APP="$ROOT/services/core/control-api/app.py"
+          COMPOSE="$ROOT/infrastructure/core/compose.yml"
+          DOCKERFILE="$ROOT/services/core/control-api/Dockerfile"
+          test "$(sha256sum "$APP" | awk '{print $1}')" = "55c596c19b959c1541d1bfac5e1a496ce6fdda4d4aa8d473f568917a11d6ca84"
+          echo app_sha_match=true
+          echo app_header_context_begin
+          sed -n '1,135p' "$APP" | sed -E 's/(TOKEN|SECRET|PASSWORD|KEY)\s*=.*/\1=[REDACTED]/Ig'
+          echo app_header_context_end
+          echo do_post_context_begin
+          sed -n '4012,4075p' "$APP" | sed -E 's/(TOKEN|SECRET|PASSWORD|KEY)\s*=.*/\1=[REDACTED]/Ig'
+          echo do_post_context_end
+          echo handler_helpers_context_begin
+          sed -n '3803,3868p' "$APP" | sed -E 's/(TOKEN|SECRET|PASSWORD|KEY)\s*=.*/\1=[REDACTED]/Ig'
+          echo handler_helpers_context_end
+          echo compose_control_context_begin
+          python3 - "$COMPOSE" <<'PY'
+          import re, sys
+          lines=open(sys.argv[1],encoding='utf-8').read().splitlines()
+          inside=False
+          for line in lines:
+              if re.match(r'^  control-api:\s*$',line): inside=True
+              elif inside and line.strip() and len(line)-len(line.lstrip())<=2: break
+              if inside:
+                  safe=re.sub(r'((?:TOKEN|SECRET|PASSWORD|KEY)[^:=]*[:=]\s*).+',r'\1[REDACTED]',line,flags=re.I)
+                  print(safe)
+          PY
+          echo compose_control_context_end
+          echo dockerfile_context_begin
+          cat "$DOCKERFILE"
+          echo dockerfile_context_end
+          echo mutation=false
+          echo sms_send=false
+          echo PHIL_AI_OS_TWILIO_PATCH_CONTEXT_READONLY_OK
+          REMOTE
+      - name: Assert no mutation commands
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=.github/workflows/control-api-twilio-patch-context-readonly.yml
+          sed -n "/<<'REMOTE'/,/^          REMOTE$/p" "$FILE" > /tmp/remote.sh
+          ! grep -E 'docker (restart|rm|stop|kill|cp|build)|docker compose (up|down|restart|build)|systemctl (restart|reload|stop)|sed +-i|tee +/|cat +> */|cp +.* /|mv +.* /' /tmp/remote.sh
+          echo PHIL_AI_OS_TWILIO_PATCH_CONTEXT_STATIC_GREEN
