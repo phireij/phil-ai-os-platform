@@ -1,0 +1,176 @@
+name: Control API Source Provenance Read-Only Discovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/control-api-source-provenance-readonly.yml'
+      - '.github/control-api-source-provenance-readonly-trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: control-api-source-provenance-readonly
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure bounded SSH access
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then
+                rm -f "$TMP"
+                exit 0
+              fi
+            fi
+            rm -f "$TMP"
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Discover source and image provenance without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=25 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CID="$(docker ps --filter name=phil-ai-os-core-control-api-1 --format '{{.ID}}')"
+          test -n "$CID"
+          IMAGE="$(docker inspect "$CID" --format '{{.Config.Image}}')"
+          echo control_api_container=phil-ai-os-core-control-api-1
+          echo control_api_image="$IMAGE"
+          echo container_app_sha256="$(docker exec "$CID" sha256sum /app/app.py | awk '{print $1}')"
+          echo container_app_lines="$(docker exec "$CID" sh -lc 'wc -l < /app/app.py')"
+          echo container_app_bytes="$(docker exec "$CID" sh -lc 'wc -c < /app/app.py')"
+
+          echo image_metadata_begin
+          docker image inspect "$IMAGE" --format 'image_id={{.Id}}\ncreated={{.Created}}\nworking_dir={{.Config.WorkingDir}}\ncmd={{json .Config.Cmd}}\nentrypoint={{json .Config.Entrypoint}}'
+          echo image_metadata_end
+
+          echo image_history_commands_begin
+          docker history --no-trunc --format '{{.CreatedBy}}' "$IMAGE" \
+            | grep -E '(^|[[:space:]])(COPY|ADD|WORKDIR|CMD|ENTRYPOINT)|app\.py|proxy\.py' \
+            | sed -E 's/(token|secret|password|api[_-]?key)=[^[:space:]]+/\1=[REDACTED]/Ig' \
+            | head -n 30 || true
+          echo image_history_commands_end
+
+          echo runtime_route_inventory_begin
+          docker exec "$CID" python - <<'PY'
+          import ast
+          from pathlib import Path
+          source = Path('/app/app.py').read_text(encoding='utf-8')
+          tree = ast.parse(source)
+          routes = sorted({
+              node.value
+              for node in ast.walk(tree)
+              if isinstance(node, ast.Constant)
+              and isinstance(node.value, str)
+              and (node.value.startswith('/v1/') or node.value in {'/healthz','/readyz'})
+          })
+          for route in routes:
+              print(route)
+          PY
+          echo runtime_route_inventory_end
+
+          echo runtime_handler_symbols_begin
+          docker exec "$CID" python - <<'PY'
+          import ast
+          from pathlib import Path
+          tree = ast.parse(Path('/app/app.py').read_text(encoding='utf-8'))
+          for node in ast.walk(tree):
+              if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                  name = getattr(node, 'name', '')
+                  if name in {'Handler','do_GET','do_POST','_json','approval_create'} or name.startswith('approval_'):
+                      print(f'{node.lineno}:{type(node).__name__}:{name}')
+          PY
+          echo runtime_handler_symbols_end
+
+          echo host_source_candidates_begin
+          find /opt/phil-ai-os-platform -maxdepth 8 -type f \( -name 'app.py' -o -name 'Dockerfile' -o -name 'compose.yml' \) -print 2>/dev/null | sort | head -n 100 || true
+          echo host_source_candidates_end
+
+          CONTAINER_SHA="$(docker exec "$CID" sha256sum /app/app.py | awk '{print $1}')"
+          MATCH_COUNT=0
+          echo host_app_hash_inventory_begin
+          while IFS= read -r FILE; do
+            test -n "$FILE" || continue
+            SHA="$(sha256sum "$FILE" | awk '{print $1}')"
+            HAS_APPROVAL=false
+            if grep -Fq '/v1/approvals/request' "$FILE"; then HAS_APPROVAL=true; fi
+            MATCH=false
+            if test "$SHA" = "$CONTAINER_SHA"; then MATCH=true; MATCH_COUNT=$((MATCH_COUNT + 1)); fi
+            echo path="$FILE"
+            echo sha256="$SHA"
+            echo contains_approval_route="$HAS_APPROVAL"
+            echo exact_runtime_match="$MATCH"
+          done < <(find /opt/phil-ai-os-platform -maxdepth 8 -type f -name 'app.py' -print 2>/dev/null | sort)
+          echo host_app_hash_inventory_end
+          echo exact_runtime_source_match_count="$MATCH_COUNT"
+
+          WORKDIR="$(docker inspect "$CID" --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}')"
+          echo compose_working_dir="$WORKDIR"
+          echo compose_control_service_shape_begin
+          python - "$WORKDIR/compose.yml" <<'PY'
+          import re, sys
+          p = sys.argv[1]
+          lines = open(p, encoding='utf-8').read().splitlines()
+          in_control = False
+          base_indent = None
+          for line in lines:
+              if re.match(r'^  control-api:\s*$', line):
+                  in_control = True
+                  base_indent = 2
+                  print(line)
+                  continue
+              if in_control and line.strip() and len(line) - len(line.lstrip()) <= base_indent:
+                  break
+              if in_control and re.search(r'^\s+(image|build|command|ports|volumes|environment|labels):', line):
+                  print(line)
+              elif in_control and re.search(r'^\s+-\s+(127\.0\.0\.1:4870|/app/|/run/|PHIL_AI_OS_|traefik\.)', line):
+                  safe = re.sub(r'(TOKEN|SECRET|PASSWORD|KEY)=.*', r'\1=[REDACTED]', line, flags=re.I)
+                  print(safe)
+          PY
+          echo compose_control_service_shape_end
+
+          echo mutation=false
+          echo container_copy=false
+          echo container_restart=false
+          echo image_build=false
+          echo dns=false
+          echo sms_send=false
+          echo PHIL_AI_OS_CONTROL_API_SOURCE_PROVENANCE_READONLY_OK
+          REMOTE
+
+      - name: Assert workflow stays read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=.github/workflows/control-api-source-provenance-readonly.yml
+          sed -n "/<<'REMOTE'/,/^          REMOTE$/p" "$FILE" > /tmp/source-provenance-remote.sh
+          ! grep -E 'docker (restart|rm|stop|kill|cp|build)|docker compose (up|down|restart|build)|systemctl (restart|reload|stop|enable|disable)|sed +-i|tee +/|cat +> */|cp +.* /|mv +.* /|curl .*-[Xx] *(POST|PUT|PATCH|DELETE)' /tmp/source-provenance-remote.sh
+          echo PHIL_AI_OS_CONTROL_API_SOURCE_PROVENANCE_STATIC_NO_MUTATION_GREEN
