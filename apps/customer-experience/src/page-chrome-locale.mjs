@@ -14,6 +14,20 @@ const copy = Object.freeze({
       confirmation: "Phil AI OS · Sprint 4 · synthetic final-confirmation compliance preview",
       pickup: "Phil AI OS · Sprint 4 Customer Experience · fixture-only Quick Pickup readiness",
     }),
+    metadata: Object.freeze({
+      cart: Object.freeze({
+        title: "Phil AI OS — Cart & KOMOJU Handoff Preview",
+        description: "Phil AI OS isolated multi-item checkout and KOMOJU handoff preview",
+      }),
+      confirmation: Object.freeze({
+        title: "Phil AI OS — Final Confirmation Preview",
+        description: "Phil AI OS isolated final order confirmation compliance preview",
+      }),
+      pickup: Object.freeze({
+        title: "Phil AI OS — Quick Pickup Readiness Preview",
+        description: "Phil AI OS isolated Air Mobile Quick Pickup readiness preview",
+      }),
+    }),
   }),
   ja: Object.freeze({
     skip: "メインコンテンツへ移動",
@@ -29,6 +43,20 @@ const copy = Object.freeze({
       cart: "Phil AI OS · Sprint 4 · 合成カート・決済引継ぎ環境",
       confirmation: "Phil AI OS · Sprint 4 · 合成最終確認コンプライアンスプレビュー",
       pickup: "Phil AI OS · Sprint 4 カスタマー体験 · フィクスチャ専用クイックピックアップ準備状況",
+    }),
+    metadata: Object.freeze({
+      cart: Object.freeze({
+        title: "Phil AI OS — カート・KOMOJU引継ぎプレビュー",
+        description: "Phil AI OS の分離された複数商品チェックアウトとKOMOJU引継ぎプレビュー",
+      }),
+      confirmation: Object.freeze({
+        title: "Phil AI OS — 注文最終確認プレビュー",
+        description: "Phil AI OS の分離された注文最終確認コンプライアンスプレビュー",
+      }),
+      pickup: Object.freeze({
+        title: "Phil AI OS — クイックピックアップ準備状況プレビュー",
+        description: "Phil AI OS の分離されたAir モバイルオーダー・クイックピックアップ準備状況プレビュー",
+      }),
     }),
   }),
 });
@@ -54,12 +82,17 @@ export function applyPageChromeLocale(locale = document.documentElement.lang) {
   const localeSelect = document.querySelector("#locale-select");
   const statusPill = document.querySelector(".status-pill");
   const footerCopy = document.querySelector("footer p");
+  const metadata = localized.metadata?.[page];
 
   if (skipLink) skipLink.textContent = localized.skip;
   if (languageLabel) languageLabel.textContent = localized.language;
   if (localeSelect) localeSelect.setAttribute("aria-label", localized.language);
   if (statusPill) statusPill.textContent = localized.status[page];
   if (footerCopy) footerCopy.textContent = localized.footer[page];
+  if (metadata) {
+    document.title = metadata.title;
+    document.querySelector('meta[name="description"]')?.setAttribute("content", metadata.description);
+  }
 }
 
 if (typeof document !== "undefined") {

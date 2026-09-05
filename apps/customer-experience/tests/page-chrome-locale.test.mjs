@@ -44,3 +44,18 @@ test("page chrome helper localizes visible preview boundary copy for each mobile
   assert.match(helper, /footer p/);
   assert.match(helper, /pageChromeKey/);
 });
+
+test("shared preview chrome localizes browser metadata without changing catalog SEO", () => {
+  assert.match(helper, /Phil AI OS — Final Confirmation Preview/);
+  assert.match(helper, /Phil AI OS — 注文最終確認プレビュー/);
+  assert.match(helper, /Phil AI OS — Quick Pickup Readiness Preview/);
+  assert.match(helper, /Phil AI OS — クイックピックアップ準備状況プレビュー/);
+  assert.match(helper, /isolated final order confirmation compliance preview/);
+  assert.match(helper, /分離された注文最終確認コンプライアンスプレビュー/);
+  assert.match(helper, /isolated Air Mobile Quick Pickup readiness preview/);
+  assert.match(helper, /Air モバイルオーダー・クイックピックアップ準備状況プレビュー/);
+  assert.match(helper, /const metadata = localized\.metadata\?\.\[page\]/);
+  assert.match(helper, /document\.title = metadata\.title/);
+  assert.match(helper, /meta\[name="description"\]/);
+  assert.doesNotMatch(helper, /catalog: Object\.freeze\(\{\s*title:/);
+});
