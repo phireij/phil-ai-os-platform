@@ -6,6 +6,8 @@ import { readinessFeedback } from "./readiness-feedback.mjs";
 
 const copy = {
   en: {
+    pageTitle: "Phil AI OS — Cart & KOMOJU Handoff Preview",
+    metaDescription: "Phil AI OS isolated multi-item checkout and KOMOJU handoff preview",
     skipToContent: "Skip to content",
     brand: "Customer Experience",
     languageLabel: "Language",
@@ -33,6 +35,8 @@ const copy = {
     error: "Cart preview unavailable",
   },
   ja: {
+    pageTitle: "Phil AI OS — カート・KOMOJU引継ぎプレビュー",
+    metaDescription: "Phil AI OS の分離された複数商品チェックアウトとKOMOJU引継ぎプレビュー",
     skipToContent: "本文へ移動",
     brand: "カスタマーエクスペリエンス",
     languageLabel: "言語",
@@ -93,6 +97,8 @@ function feedbackList(items) {
 function setCopy() {
   const c = copy[state.locale];
   document.documentElement.lang = state.locale;
+  document.title = c.pageTitle;
+  document.querySelector('meta[name="description"]')?.setAttribute("content", c.metaDescription);
   localeSelect.value = state.locale;
   localeSelect.setAttribute("aria-label", c.languageLabel);
   document.querySelector(".skip-link").textContent = c.skipToContent;
