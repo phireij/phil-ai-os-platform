@@ -41,6 +41,23 @@ function productNameForCard(card) {
   return card?.querySelector("h3")?.textContent?.trim() || "Product";
 }
 
+function accessibleToken(input) {
+  const raw = input?.dataset?.cartSku || "item";
+  return String(raw).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "item";
+}
+
+function connectCartItemSemantics(card, input, unitPrice, total) {
+  const heading = card.querySelector("h3");
+  if (!heading) return;
+  const token = accessibleToken(input);
+  heading.id ||= `cart-item-${token}-name`;
+  unitPrice.id ||= `cart-item-${token}-unit-price`;
+  total.id ||= `cart-item-${token}-line-total`;
+  card.setAttribute("aria-labelledby", heading.id);
+  card.setAttribute("aria-describedby", `${unitPrice.id} ${total.id}`);
+  input.setAttribute("aria-describedby", `${unitPrice.id} ${total.id}`);
+}
+
 export function enhanceCartCard(card) {
   const input = card?.querySelector("[data-cart-sku]");
   const unitPrice = card?.querySelector(".price");
@@ -55,7 +72,10 @@ export function enhanceCartCard(card) {
 
   const total = document.createElement("p");
   total.className = "line-total";
+  total.setAttribute("aria-live", "polite");
+  total.setAttribute("aria-atomic", "true");
   card.querySelector(".product-card-body")?.append(total);
+  connectCartItemSemantics(card, input, unitPrice, total);
 
   const update = () => {
     const lang = locale();
@@ -69,6 +89,8 @@ export function enhanceCartCard(card) {
     plus.textContent = "+";
     minus.setAttribute("aria-label", copy[lang].decrease(productName));
     plus.setAttribute("aria-label", copy[lang].increase(productName));
+    minus.setAttribute("aria-describedby", `${unitPrice.id} ${total.id}`);
+    plus.setAttribute("aria-describedby", `${unitPrice.id} ${total.id}`);
     minus.disabled = quantity <= Number(input.min || 0);
     plus.disabled = quantity >= Number(input.max || 99);
   };
