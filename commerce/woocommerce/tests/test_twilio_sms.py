@@ -6,6 +6,7 @@ from phil_ai_os_woocommerce.twilio_sms import (
     TwilioRequestValidator,
     TwilioSmsConfig,
     TwilioSmsProvider,
+    TwilioStatusCallbackHandler,
 )
 
 
@@ -47,7 +48,7 @@ class TwilioSmsTests(unittest.TestCase):
         result = provider.send_payment_link_sms(request())
         self.assertEqual(result.status, "not_sent")
         self.assertEqual(transport.calls, [])
-        self.assertIn("CEO activation", result.reason or "")
+        self.assertIn("activation gate", result.reason or "")
 
     def test_enabled_send_requires_configuration(self):
         provider = TwilioSmsProvider(TwilioSmsConfig(enabled=True), RecordingTransport())
@@ -77,6 +78,38 @@ class TwilioSmsTests(unittest.TestCase):
         self.assertIn("https://shop.example/checkout/order-pay/51/", call["fields"]["Body"])
         self.assertEqual(call["username"], "AC123")
         self.assertEqual(call["password"], "secret")
+
+    def test_messaging_service_sid_replaces_direct_from_identity(self):
+        transport = RecordingTransport()
+        provider = TwilioSmsProvider(
+            TwilioSmsConfig(
+                account_sid="AC123",
+                auth_token="secret",
+                from_identity="SHOULD_NOT_BE_SENT",
+                messaging_service_sid="MG123",
+                enabled=True,
+            ),
+            transport,
+        )
+        provider.send_payment_link_sms(request())
+        fields = transport.calls[0]["fields"]
+        self.assertEqual(fields["MessagingServiceSid"], "MG123")
+        self.assertNotIn("From", fields)
+
+    def test_invalid_messaging_service_sid_fails_before_network(self):
+        transport = RecordingTransport()
+        provider = TwilioSmsProvider(
+            TwilioSmsConfig(
+                account_sid="AC123",
+                auth_token="secret",
+                messaging_service_sid="XX123",
+                enabled=True,
+            ),
+            transport,
+        )
+        with self.assertRaisesRegex(ValueError, "messaging_service_sid"):
+            provider.send_payment_link_sms(request())
+        self.assertEqual(transport.calls, [])
 
     def test_provider_http_failure_fails_closed(self):
         transport = RecordingTransport(status=400, body={"message": "bad request"})
@@ -116,6 +149,34 @@ class TwilioSmsTests(unittest.TestCase):
         self.assertIsNone(status.error_code)
         with self.assertRaises(ValueError):
             TwilioDeliveryStatus.from_form({"MessageSid": "SM123"})
+        with self.assertRaisesRegex(ValueError, "must start with SM"):
+            TwilioDeliveryStatus.from_form(
+                {"MessageSid": "XX123", "MessageStatus": "delivered"}
+            )
+
+    def test_status_callback_handler_validates_signature_and_redacts_sid(self):
+        url = "https://control.example/v1/webhooks/twilio/sms-status"
+        params = {
+            "MessageSid": "SM123456",
+            "MessageStatus": "delivered",
+            "ErrorCode": "",
+        }
+        validator = TwilioRequestValidator("secret")
+        signature = validator.expected_signature(url, params)
+        projection = TwilioStatusCallbackHandler("secret").handle(url, params, signature)
+        self.assertEqual(projection["provider"], "twilio")
+        self.assertEqual(projection["message_status"], "delivered")
+        self.assertEqual(projection["authority_effect"], "none")
+        self.assertFalse(projection["retry_requested"])
+        self.assertNotIn("SM123456", str(projection))
+
+    def test_status_callback_handler_fails_closed_on_bad_signature_or_http(self):
+        params = {"MessageSid": "SM123", "MessageStatus": "failed"}
+        handler = TwilioStatusCallbackHandler("secret")
+        with self.assertRaisesRegex(SmsNotificationError, "signature"):
+            handler.handle("https://control.example/v1/webhooks/twilio/sms-status", params, "bad")
+        with self.assertRaisesRegex(SmsNotificationError, "HTTPS"):
+            handler.handle("http://control.example/v1/webhooks/twilio/sms-status", params, "bad")
 
 
 if __name__ == "__main__":

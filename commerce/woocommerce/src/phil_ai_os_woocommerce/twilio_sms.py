@@ -60,6 +60,7 @@ class TwilioSmsConfig:
     account_sid: str = ""
     auth_token: str = ""
     from_identity: str = ""
+    messaging_service_sid: str = ""
     status_callback_url: str = ""
     enabled: bool = False
     timeout_seconds: float = 10.0
@@ -72,8 +73,11 @@ class TwilioSmsConfig:
             raise ValueError("Twilio account_sid must be configured")
         if not self.auth_token:
             raise ValueError("Twilio auth_token must be configured")
-        if not self.from_identity:
-            raise ValueError("Twilio from_identity must be configured")
+        if self.messaging_service_sid:
+            if not self.messaging_service_sid.startswith("MG"):
+                raise ValueError("Twilio messaging_service_sid must start with MG")
+        elif not self.from_identity:
+            raise ValueError("Twilio messaging_service_sid or from_identity must be configured")
         if self.status_callback_url and not self.status_callback_url.startswith("https://"):
             raise ValueError("Twilio status_callback_url must use HTTPS")
 
@@ -98,14 +102,17 @@ class TwilioSmsProvider:
                 status="not_sent",
                 provider=self.name,
                 idempotency_key=sms_request.idempotency_key,
-                reason="Twilio adapter is disabled pending CEO activation gate",
+                reason="Twilio adapter is disabled pending readiness activation gate",
             )
 
         fields = {
             "To": sms_request.normalized_phone,
-            "From": self.config.from_identity,
             "Body": self._message_body(sms_request),
         }
+        if self.config.messaging_service_sid:
+            fields["MessagingServiceSid"] = self.config.messaging_service_sid
+        else:
+            fields["From"] = self.config.from_identity
         if self.config.status_callback_url:
             fields["StatusCallback"] = self.config.status_callback_url
 
@@ -184,5 +191,43 @@ class TwilioDeliveryStatus:
         status = str(form_params.get("MessageStatus") or "").strip().lower()
         if not sid or not status:
             raise ValueError("Twilio delivery callback requires MessageSid and MessageStatus")
+        if not sid.startswith("SM"):
+            raise ValueError("Twilio delivery callback MessageSid must start with SM")
         error_code = str(form_params.get("ErrorCode") or "").strip() or None
         return cls(message_sid=sid, message_status=status, error_code=error_code)
+
+    def safe_audit_dict(self) -> dict[str, object]:
+        return {
+            "provider": "twilio",
+            "event": "sms_delivery_status",
+            "message_sid_hash": hashlib.sha256(self.message_sid.encode("utf-8")).hexdigest()[:16],
+            "message_status": self.message_status,
+            "error_code": self.error_code,
+            "authority_effect": "none",
+            "retry_requested": False,
+        }
+
+
+class TwilioStatusCallbackHandler:
+    """Signature-validating, non-authorizing delivery callback boundary.
+
+    The handler parses Twilio's form callback into a redacted audit projection.
+    It does not mutate WooCommerce, retry a message, send another SMS, or change
+    payment state. HTTP routing/persistence are intentionally separate concerns.
+    """
+
+    def __init__(self, auth_token: str) -> None:
+        self.validator = TwilioRequestValidator(auth_token)
+
+    def handle(
+        self,
+        request_url: str,
+        form_params: Mapping[str, str],
+        signature: str,
+    ) -> dict[str, object]:
+        if not request_url.startswith("https://"):
+            raise SmsNotificationError("Twilio callback URL must use HTTPS")
+        if not self.validator.validate(request_url, form_params, signature):
+            raise SmsNotificationError("Twilio callback signature validation failed")
+        status = TwilioDeliveryStatus.from_form(form_params)
+        return status.safe_audit_dict()

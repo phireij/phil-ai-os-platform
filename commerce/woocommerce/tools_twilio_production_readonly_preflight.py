@@ -6,16 +6,7 @@ import os
 from urllib import request
 
 
-def main() -> int:
-    account_sid = os.environ.get("RUBY_TWILIO_ACCOUNT_SID", "").strip()
-    auth_token = os.environ.get("RUBY_TWILIO_AUTH_TOKEN", "").strip()
-    if not account_sid.startswith("AC") or len(account_sid) != 34:
-        raise SystemExit("PHIL_AI_OS_TWILIO_PREFLIGHT_BLOCKED: account_sid_missing_or_invalid")
-    if not auth_token:
-        raise SystemExit("PHIL_AI_OS_TWILIO_PREFLIGHT_BLOCKED: auth_token_missing")
-
-    endpoint = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}.json"
-    basic = base64.b64encode(f"{account_sid}:{auth_token}".encode("utf-8")).decode("ascii")
+def _get_json(endpoint: str, basic: str, failure_label: str) -> tuple[int, dict[str, object]]:
     req = request.Request(
         endpoint,
         headers={
@@ -29,21 +20,46 @@ def main() -> int:
         with request.urlopen(req, timeout=10.0) as response:
             raw = response.read().decode("utf-8")
             payload = json.loads(raw) if raw else {}
-            status_code = int(response.status)
+            return int(response.status), payload
     except Exception as exc:
-        raise SystemExit("PHIL_AI_OS_TWILIO_PREFLIGHT_FAILED: account_fetch_failed") from exc
+        raise SystemExit(f"PHIL_AI_OS_TWILIO_PREFLIGHT_FAILED: {failure_label}_fetch_failed") from exc
 
+
+def main() -> int:
+    account_sid = os.environ.get("RUBY_TWILIO_ACCOUNT_SID", "").strip()
+    auth_token = os.environ.get("RUBY_TWILIO_AUTH_TOKEN", "").strip()
+    messaging_service_sid = os.environ.get("RUBY_TWILIO_MESSAGING_SERVICE_SID", "").strip()
+    if not account_sid.startswith("AC") or len(account_sid) != 34:
+        raise SystemExit("PHIL_AI_OS_TWILIO_PREFLIGHT_BLOCKED: account_sid_missing_or_invalid")
+    if not auth_token:
+        raise SystemExit("PHIL_AI_OS_TWILIO_PREFLIGHT_BLOCKED: auth_token_missing")
+    if not messaging_service_sid.startswith("MG") or len(messaging_service_sid) != 34:
+        raise SystemExit("PHIL_AI_OS_TWILIO_PREFLIGHT_BLOCKED: messaging_service_sid_missing_or_invalid")
+
+    basic = base64.b64encode(f"{account_sid}:{auth_token}".encode("utf-8")).decode("ascii")
+
+    account_endpoint = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}.json"
+    status_code, account_payload = _get_json(account_endpoint, basic, "account")
     if status_code != 200:
-        raise SystemExit(f"PHIL_AI_OS_TWILIO_PREFLIGHT_FAILED: http_{status_code}")
-    if str(payload.get("sid") or "") != account_sid:
+        raise SystemExit(f"PHIL_AI_OS_TWILIO_PREFLIGHT_FAILED: account_http_{status_code}")
+    if str(account_payload.get("sid") or "") != account_sid:
         raise SystemExit("PHIL_AI_OS_TWILIO_PREFLIGHT_FAILED: account_identity_mismatch")
-    account_status = str(payload.get("status") or "").lower()
+    account_status = str(account_payload.get("status") or "").lower()
     if account_status != "active":
         raise SystemExit(f"PHIL_AI_OS_TWILIO_PREFLIGHT_BLOCKED: account_status_{account_status or 'unknown'}")
 
+    service_endpoint = f"https://messaging.twilio.com/v1/Services/{messaging_service_sid}"
+    service_status_code, service_payload = _get_json(service_endpoint, basic, "messaging_service")
+    if service_status_code != 200:
+        raise SystemExit(
+            f"PHIL_AI_OS_TWILIO_PREFLIGHT_FAILED: messaging_service_http_{service_status_code}"
+        )
+    if str(service_payload.get("sid") or "") != messaging_service_sid:
+        raise SystemExit("PHIL_AI_OS_TWILIO_PREFLIGHT_FAILED: messaging_service_identity_mismatch")
+
     print(
         "PHIL_AI_OS_TWILIO_PRODUCTION_READONLY_PREFLIGHT_GREEN "
-        "account=true active=true message_send=false mutation=false"
+        "account=true active=true messaging_service=true message_send=false mutation=false"
     )
     return 0
 
