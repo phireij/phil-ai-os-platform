@@ -1,6 +1,16 @@
 const copy = {
-  en: { decrease: "Decrease quantity", increase: "Increase quantity", lineTotal: "Item total" },
-  ja: { decrease: "数量を減らす", increase: "数量を増やす", lineTotal: "商品小計" },
+  en: {
+    decrease: (name) => `Decrease quantity — ${name}`,
+    increase: (name) => `Increase quantity — ${name}`,
+    quantity: (name) => `${name} quantity`,
+    lineTotal: "Item total",
+  },
+  ja: {
+    decrease: (name) => `${name}の数量を減らす`,
+    increase: (name) => `${name}の数量を増やす`,
+    quantity: (name) => `${name}の数量`,
+    lineTotal: "商品小計",
+  },
 };
 
 function locale() {
@@ -27,6 +37,10 @@ export function clampQuantity(value, min = 0, max = 99) {
   return Math.min(max, Math.max(min, parsed));
 }
 
+function productNameForCard(card) {
+  return card?.querySelector("h3")?.textContent?.trim() || "Product";
+}
+
 export function enhanceCartCard(card) {
   const input = card?.querySelector("[data-cart-sku]");
   const unitPrice = card?.querySelector(".price");
@@ -45,14 +59,16 @@ export function enhanceCartCard(card) {
 
   const update = () => {
     const lang = locale();
+    const productName = productNameForCard(card);
     const quantity = clampQuantity(input.value, Number(input.min || 0), Number(input.max || 99));
     input.value = String(quantity);
+    input.setAttribute("aria-label", copy[lang].quantity(productName));
     total.textContent = `${copy[lang].lineTotal}: ${formatYen(numericUnitPrice(unitPrice.textContent) * quantity, lang)}`;
     const [minus, plus] = wrapper.querySelectorAll(".quantity-step");
     minus.textContent = "−";
     plus.textContent = "+";
-    minus.setAttribute("aria-label", copy[lang].decrease);
-    plus.setAttribute("aria-label", copy[lang].increase);
+    minus.setAttribute("aria-label", copy[lang].decrease(productName));
+    plus.setAttribute("aria-label", copy[lang].increase(productName));
     minus.disabled = quantity <= Number(input.min || 0);
     plus.disabled = quantity >= Number(input.max || 99);
   };
