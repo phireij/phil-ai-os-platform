@@ -2,6 +2,12 @@ import { syncLocaleLinks } from "./locale-links.mjs";
 
 const localized = {
   en: {
+    skipToContent: "Skip to content",
+    brand: "Customer Experience",
+    languageLabel: "Language",
+    previewStatus: "Isolated preview · No live checkout",
+    previewActionsLabel: "Preview actions",
+    footer: "Phil AI OS · Sprint 4 Customer Experience · synthetic fixture environment",
     browseProducts: "Browse products",
     reviewCart: "Review cart flow",
     journeyEyebrow: "Simple ordering",
@@ -26,6 +32,12 @@ const localized = {
     navLabel: "Mobile preview navigation",
   },
   ja: {
+    skipToContent: "本文へ移動",
+    brand: "カスタマーエクスペリエンス",
+    languageLabel: "言語",
+    previewStatus: "分離プレビュー · ライブチェックアウトなし",
+    previewActionsLabel: "プレビュー操作",
+    footer: "Phil AI OS · Sprint 4 カスタマーエクスペリエンス · 合成フィクスチャ環境",
     browseProducts: "商品を見る",
     reviewCart: "カートの流れを確認",
     journeyEyebrow: "かんたん注文",
@@ -52,6 +64,11 @@ const localized = {
 };
 
 const selectors = {
+  ".skip-link": "skipToContent",
+  ".site-header .brand": "brand",
+  ".locale-label": "languageLabel",
+  ".hero .status-pill": "previewStatus",
+  "footer p": "footer",
   ".hero-actions .detail-link": "browseProducts",
   ".hero-actions .secondary-link": "reviewCart",
   ".journey-panel .eyebrow": "journeyEyebrow",
@@ -86,6 +103,8 @@ export function applyMobileUxLocale(locale = currentLocale()) {
     const node = document.querySelector(selector);
     if (node) node.textContent = copy[key];
   }
+  const heroActions = document.querySelector(".hero-actions");
+  if (heroActions) heroActions.setAttribute("aria-label", copy.previewActionsLabel);
   const nav = document.querySelector(".mobile-action-dock");
   if (nav) nav.setAttribute("aria-label", copy.navLabel);
   document.querySelectorAll(".pickup-chip").forEach((node) => {
