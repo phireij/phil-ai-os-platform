@@ -1,6 +1,6 @@
 {
-  "version": "ruby-tokushoho-publication-candidate-v1",
-  "date": "2026-09-04",
+  "version": "ruby-tokushoho-publication-candidate-v2",
+  "date": "2026-09-05",
   "executive_roadmap": {
     "current_primary_sprint": 3,
     "current_primary_sprint_name": "WooCommerce Foundation",
@@ -47,8 +47,10 @@
     "candidate_text_approval_recorded": true,
     "candidate_text_approved": true,
     "candidate_text_approval_ref": "ops/readiness/ruby-tokushoho-owner-approval-2026-09-04.json",
-    "owner_publication_approval_recorded": false,
-    "tokushoho_publication_approved": false,
+    "owner_publication_approval_recorded": true,
+    "tokushoho_publication_approved": true,
+    "publication_execution_approval_ref": "ops/readiness/ceo-controlled-activation-approvals-2026-09-05.json",
+    "publication_execution_ready": false,
     "published": false,
     "checkout_legal_sync_complete": false
   },
@@ -65,10 +67,10 @@
     "automatic_production_execution_authorized": false
   },
   "next_evidence_needed": [
-    "separate publication-execution approval at the appropriate later gate",
     "final owner-approved production catalog for Sprint 3 closure and a usable preproduction catalog item for the disposable QA cart",
     "repeat the guarded non-transactional actual WooCommerce final-screen capture after preproduction catalog availability is revalidated",
+    "checkout legal sync completion",
     "fresh near-cutover recovery validation and final Go/No-Go at the appropriate later gate"
   ],
-  "decision": "TOKUSHOHO_CANDIDATE_TEXT_APPROVED_ACTUAL_SCREEN_CAPTURE_BLOCKED_PUBLICATION_EXECUTION_FAIL_CLOSED"
+  "decision": "TOKUSHOHO_PUBLICATION_APPROVED_ACTUAL_SCREEN_CAPTURE_AND_CHECKOUT_SYNC_BLOCKED_EXECUTION_FAIL_CLOSED"
 }
