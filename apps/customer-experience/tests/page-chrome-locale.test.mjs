@@ -30,3 +30,17 @@ test("page chrome helper localizes keyboard and language-control labels", () => 
   assert.match(helper, /attributeFilter: \["lang"\]/);
   assert.match(helper, /typeof document !== "undefined"/);
 });
+
+test("page chrome helper localizes visible preview boundary copy for each mobile destination", () => {
+  assert.match(helper, /Isolated preview · No live checkout/);
+  assert.match(helper, /隔離プレビュー · ライブチェックアウトなし/);
+  assert.match(helper, /Isolated preview · KOMOJU not connected/);
+  assert.match(helper, /隔離プレビュー · KOMOJU未接続/);
+  assert.match(helper, /Isolated synthetic preview · No order submission/);
+  assert.match(helper, /隔離された合成プレビュー · 注文送信なし/);
+  assert.match(helper, /Isolated preview · No external activation/);
+  assert.match(helper, /隔離プレビュー · 外部有効化なし/);
+  assert.match(helper, /\.status-pill/);
+  assert.match(helper, /footer p/);
+  assert.match(helper, /pageChromeKey/);
+});
