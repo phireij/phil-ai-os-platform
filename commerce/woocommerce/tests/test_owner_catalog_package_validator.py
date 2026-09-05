@@ -148,6 +148,22 @@ class OwnerCatalogPackageValidatorTests(unittest.TestCase):
         self.assertTrue(any("unapproved source" in blocker for blocker in result["blockers"]))
         self.assertTrue(any("timezone-aware ISO timestamp" in blocker for blocker in result["blockers"]))
 
+    def test_missing_internal_readiness_evidence_fails_closed(self):
+        payload = self.ready_package()
+        original_tax_evidence = validator.TAX_EVIDENCE
+        try:
+            validator.TAX_EVIDENCE = ROOT / "fixtures" / "missing-tax-readiness-evidence.json"
+            result = validator.validate_package(payload)
+        finally:
+            validator.TAX_EVIDENCE = original_tax_evidence
+
+        self.assertFalse(result["valid_contract"])
+        self.assertFalse(result["current_state_reconciled"])
+        self.assertFalse(result["ready_for_preproduction_configuration"])
+        self.assertTrue(any("contract validation failed" in blocker for blocker in result["blockers"]))
+        self.assertFalse(result["mutation_authorized"])
+        self.assertFalse(result["production_publish_authorized"])
+
     def test_input_is_not_mutated(self):
         payload = self.ready_package()
         original = copy.deepcopy(payload)
