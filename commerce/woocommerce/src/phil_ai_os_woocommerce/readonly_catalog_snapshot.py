@@ -64,11 +64,22 @@ def _bounded_int(value: Any) -> int | None:
         return None
 
 
+def _validated_nested_mappings(value: Mapping[str, Any], field: str) -> list[Mapping[str, Any]]:
+    nested = value.get(field, [])
+    if not isinstance(nested, list):
+        raise ProductionConnectivityBlocked(
+            f"WooCommerce read-only snapshot product {field} must be a list"
+        )
+    if not all(isinstance(item, Mapping) for item in nested):
+        raise ProductionConnectivityBlocked(
+            f"WooCommerce read-only snapshot product {field} contains invalid item"
+        )
+    return nested
+
+
 def _product_projection(value: Mapping[str, Any]) -> dict[str, Any]:
     categories = []
-    for category in value.get("categories", []):
-        if not isinstance(category, Mapping):
-            continue
+    for category in _validated_nested_mappings(value, "categories"):
         categories.append(
             {
                 "id": _bounded_int(category.get("id")),
@@ -78,9 +89,7 @@ def _product_projection(value: Mapping[str, Any]) -> dict[str, Any]:
         )
 
     images = []
-    for image in value.get("images", []):
-        if not isinstance(image, Mapping):
-            continue
+    for image in _validated_nested_mappings(value, "images"):
         images.append(
             {
                 "id": _bounded_int(image.get("id")),
