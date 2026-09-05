@@ -54,6 +54,7 @@ class ReadOnlyCatalogSnapshotTests(unittest.TestCase):
         self.assertTrue(snapshot["network_read_only"])
         self.assertFalse(snapshot["mutation_authorized"])
         self.assertFalse(snapshot["production_publish_authorized"])
+        self.assertEqual(snapshot["captured_at"], "2026-09-03T00:00:00Z")
         self.assertEqual(snapshot["products"][0]["sku"], "SKU-002")
         self.assertNotIn("description", snapshot["products"][0])
         self.assertNotIn("src", snapshot["products"][0]["images"][0])
@@ -61,6 +62,14 @@ class ReadOnlyCatalogSnapshotTests(unittest.TestCase):
         self.assertTrue(transport.calls)
         self.assertTrue(all(call["method"] == "GET" for call in transport.calls))
         self.assertTrue(all(call["json_body"] is None for call in transport.calls))
+
+    def test_invalid_explicit_capture_timestamp_fails_before_network_read(self):
+        transport = RecordingTransport({})
+        for captured_at in ("", "2026-09-05T03:30:00", "not-a-timestamp"):
+            with self.subTest(captured_at=captured_at):
+                with self.assertRaises(ValueError):
+                    collect_catalog_snapshot(transport, captured_at=captured_at)
+        self.assertEqual(transport.calls, [])
 
     def test_snapshot_paginates_within_bound(self):
         transport = RecordingTransport(
