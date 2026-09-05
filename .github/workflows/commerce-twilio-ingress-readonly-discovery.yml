@@ -132,10 +132,12 @@ jobs:
           echo PHIL_AI_OS_TWILIO_INGRESS_READONLY_DISCOVERY_OK
           REMOTE
 
-      - name: Assert workflow contains no mutation commands
+      - name: Assert remote discovery block contains no mutation commands
         shell: bash
         run: |
           set -euo pipefail
           FILE=.github/workflows/commerce-twilio-ingress-readonly-discovery.yml
-          ! grep -E 'docker (restart|rm|stop|kill)|docker compose (up|down|restart)|systemctl (restart|reload|stop)|iptables|ufw |certbot|curl .*-[Xx] *(POST|PUT|PATCH|DELETE)' "$FILE"
+          sed -n "/<<'REMOTE'/,/^          REMOTE$/p" "$FILE" > /tmp/twilio-ingress-remote.sh
+          test -s /tmp/twilio-ingress-remote.sh
+          ! grep -E 'docker (restart|rm|stop|kill)|docker compose (up|down|restart)|systemctl (restart|reload|stop)|iptables|ufw |certbot|curl .*-[Xx] *(POST|PUT|PATCH|DELETE)' /tmp/twilio-ingress-remote.sh
           echo PHIL_AI_OS_TWILIO_INGRESS_DISCOVERY_STATIC_NO_MUTATION_GREEN
