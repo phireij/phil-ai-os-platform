@@ -53,7 +53,7 @@ jobs:
               and parsed.path == '/v1/webhooks/twilio/sms-status'
               and not parsed.fragment
           )
-          print(f'twilio_status_callback_url_secret_present=true')
+          print('twilio_status_callback_url_secret_present=true')
           print(f'twilio_status_callback_url_shape_valid={str(valid).lower()}')
           if not valid:
               raise SystemExit('configured callback URL does not match the canonical HTTPS contract')
@@ -109,11 +109,17 @@ jobs:
 
           CONTROL_ROWS="$(docker ps --format '{{.ID}}|{{.Names}}|{{.Image}}' | awk 'BEGIN{IGNORECASE=1} /control[-_]?api|control.*api|phil.*control/')"
           CONTROL_COUNT="$(printf '%s\n' "$CONTROL_ROWS" | sed '/^$/d' | wc -l | tr -d ' ')"
-          echo control_api_candidate_count="$CONTROL_COUNT"
-          test "$CONTROL_COUNT" -eq 1
+          echo control_api_name_match_count="$CONTROL_COUNT"
+          test "$CONTROL_COUNT" -ge 1
+
+          PRIMARY_ROWS="$(printf '%s\n' "$CONTROL_ROWS" | awk -F'|' '$3 ~ /^phil-ai-os\/control-api:/')"
+          PRIMARY_COUNT="$(printf '%s\n' "$PRIMARY_ROWS" | sed '/^$/d' | wc -l | tr -d ' ')"
+          echo primary_control_api_image_match_count="$PRIMARY_COUNT"
+          test "$PRIMARY_COUNT" -eq 1
           IFS='|' read -r CONTROL_CID CONTROL_NAME CONTROL_IMAGE <<EOF
-          $(printf '%s\n' "$CONTROL_ROWS" | sed '/^$/d')
+          $(printf '%s\n' "$PRIMARY_ROWS" | sed '/^$/d')
           EOF
+          echo control_api_selection=exact_phil_ai_os_control_api_image
           echo control_api_container="$CONTROL_NAME"
           echo control_api_image="$CONTROL_IMAGE"
           echo control_api_compose_service="$(docker inspect "$CONTROL_CID" --format '{{index .Config.Labels "com.docker.compose.service"}}')"
