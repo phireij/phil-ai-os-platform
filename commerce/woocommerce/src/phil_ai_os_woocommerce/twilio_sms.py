@@ -58,7 +58,8 @@ class UrllibTwilioTransport:
 @dataclass(frozen=True)
 class TwilioSmsConfig:
     account_sid: str = ""
-    auth_token: str = ""
+    api_key_sid: str = ""
+    api_key_secret: str = ""
     from_identity: str = ""
     messaging_service_sid: str = ""
     status_callback_url: str = ""
@@ -71,8 +72,10 @@ class TwilioSmsConfig:
             return
         if not self.account_sid.startswith("AC"):
             raise ValueError("Twilio account_sid must be configured")
-        if not self.auth_token:
-            raise ValueError("Twilio auth_token must be configured")
+        if not self.api_key_sid.startswith("SK"):
+            raise ValueError("Twilio api_key_sid must be configured")
+        if not self.api_key_secret:
+            raise ValueError("Twilio api_key_secret must be configured")
         if self.messaging_service_sid:
             if not self.messaging_service_sid.startswith("MG"):
                 raise ValueError("Twilio messaging_service_sid must start with MG")
@@ -83,10 +86,12 @@ class TwilioSmsConfig:
 
 
 class TwilioSmsProvider:
-    """Bounded Twilio adapter.
+    """Bounded Twilio adapter using a restricted API key for outbound calls.
 
     External delivery is impossible unless `config.enabled` is explicitly true.
-    No retry loop exists here. Provider failures fail closed to the caller.
+    No retry loop exists here. Provider failures fail closed to the caller. The
+    account Auth Token is intentionally not used for outbound REST API access;
+    it is reserved for validating signed Twilio webhooks at the callback boundary.
     """
 
     name = "twilio"
@@ -123,8 +128,8 @@ class TwilioSmsProvider:
         status_code, payload = self.transport.post_form(
             endpoint,
             fields,
-            username=self.config.account_sid,
-            password=self.config.auth_token,
+            username=self.config.api_key_sid,
+            password=self.config.api_key_secret,
             timeout_seconds=self.config.timeout_seconds,
         )
         if status_code < 200 or status_code >= 300:
@@ -149,11 +154,11 @@ class TwilioSmsProvider:
 
 
 class TwilioRequestValidator:
-    """Validate Twilio form-encoded webhook signatures.
+    """Validate Twilio form-encoded webhook signatures using the Account Auth Token.
 
-    This follows Twilio's documented HMAC-SHA1 algorithm. Production dependency
-    review may replace it with Twilio's official SDK validator later; this bounded
-    implementation keeps the contract testable without adding a live dependency.
+    Twilio signs webhook requests with the account Auth Token, not an API key
+    secret. Production dependency review may replace this bounded implementation
+    with Twilio's official SDK validator later.
     """
 
     def __init__(self, auth_token: str) -> None:
