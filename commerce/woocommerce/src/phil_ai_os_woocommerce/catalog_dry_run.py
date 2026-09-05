@@ -59,15 +59,22 @@ class CatalogDryRunPlan:
 
 
 def _remote_products_by_sku(remote_products: Sequence[Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
+    if isinstance(remote_products, (str, bytes, bytearray)):
+        raise ContractValidationError("remote product snapshot must be a sequence of objects")
+
     by_sku: dict[str, Mapping[str, Any]] = {}
-    for remote in remote_products:
+    for index, remote in enumerate(remote_products, start=1):
+        if not isinstance(remote, Mapping):
+            raise ContractValidationError(
+                f"remote product snapshot entry {index} must be an object"
+            )
         sku = str(remote.get("sku") or "").strip()
         if not sku:
             raise ContractValidationError("remote product snapshot requires explicit SKU")
         if sku in by_sku:
             raise ContractValidationError(f"remote product snapshot contains duplicate SKU: {sku}")
         remote_id = remote.get("id")
-        if not isinstance(remote_id, int) or remote_id < 1:
+        if not isinstance(remote_id, int) or isinstance(remote_id, bool) or remote_id < 1:
             raise ContractValidationError(f"remote product {sku} requires positive integer id")
         by_sku[sku] = remote
     return by_sku
