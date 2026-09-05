@@ -3,6 +3,11 @@ import { syncLocaleLinks } from "./locale-links.mjs";
 
 const copy = {
   en: {
+    skipToContent: "Skip to content",
+    brand: "Customer Experience",
+    languageLabel: "Language",
+    previewStatus: "Isolated preview · No external activation",
+    footer: "Phil AI OS · Sprint 4 Customer Experience · fixture-only Quick Pickup readiness",
     heroTitle: "Air Mobile Order Quick Pickup readiness",
     heroCopy: "This preview reads fixture-only readiness state. It does not publish or activate an external order link.",
     title: "Readiness status",
@@ -19,6 +24,11 @@ const copy = {
     navLabel: "Mobile Quick Pickup navigation",
   },
   ja: {
+    skipToContent: "本文へ移動",
+    brand: "カスタマーエクスペリエンス",
+    languageLabel: "言語",
+    previewStatus: "分離プレビュー · 外部有効化なし",
+    footer: "Phil AI OS · Sprint 4 カスタマーエクスペリエンス · フィクスチャ専用クイックピックアップ準備状況",
     heroTitle: "Air モバイルオーダー・クイックピックアップ準備状況",
     heroCopy: "このプレビューはフィクスチャ専用の準備状況のみを読み取ります。外部注文リンクを公開・有効化しません。",
     title: "準備状況",
@@ -58,9 +68,20 @@ function syncMobileNavigation() {
   syncLocaleLinks(locale);
 }
 
+function syncSharedChrome() {
+  const c = copy[locale];
+  localeSelect.setAttribute("aria-label", c.languageLabel);
+  document.querySelector(".skip-link").textContent = c.skipToContent;
+  document.querySelector(".site-header .brand").textContent = c.brand;
+  document.querySelector(".locale-label").textContent = c.languageLabel;
+  document.querySelector(".hero .status-pill").textContent = c.previewStatus;
+  document.querySelector("footer p").textContent = c.footer;
+}
+
 function render() {
   document.documentElement.lang = locale;
   localeSelect.value = locale;
+  syncSharedChrome();
   document.querySelector("#hero-title").textContent = copy[locale].heroTitle;
   document.querySelector("#hero-copy").textContent = copy[locale].heroCopy;
   document.querySelector("#quick-pickup-title").textContent = copy[locale].title;
@@ -119,6 +140,9 @@ async function boot() {
 }
 
 boot().catch(() => {
+  document.documentElement.lang = locale;
+  localeSelect.value = locale;
+  syncSharedChrome();
   syncMobileNavigation();
   output.textContent = locale === "ja"
     ? "準備状況を読み込めませんでした。外部リンクは有効化されていません。"
