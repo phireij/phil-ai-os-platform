@@ -28,21 +28,25 @@ jobs:
         shell: bash
         env:
           RUBY_TWILIO_ACCOUNT_SID: ${{ secrets.RUBY_TWILIO_ACCOUNT_SID }}
-          RUBY_TWILIO_AUTH_TOKEN: ${{ secrets.RUBY_TWILIO_AUTH_TOKEN }}
+          RUBY_TWILIO_API_KEY_SID: ${{ secrets.RUBY_TWILIO_API_KEY_SID }}
+          RUBY_TWILIO_API_KEY_SECRET: ${{ secrets.RUBY_TWILIO_API_KEY_SECRET }}
           RUBY_TWILIO_MESSAGING_SERVICE_SID: ${{ secrets.RUBY_TWILIO_MESSAGING_SERVICE_SID }}
         run: |
           set -euo pipefail
           test -n "$RUBY_TWILIO_ACCOUNT_SID"
-          test -n "$RUBY_TWILIO_AUTH_TOKEN"
+          test -n "$RUBY_TWILIO_API_KEY_SID"
+          test -n "$RUBY_TWILIO_API_KEY_SECRET"
           test -n "$RUBY_TWILIO_MESSAGING_SERVICE_SID"
-          echo "PHIL_AI_OS_TWILIO_PRODUCTION_SECRET_REFS_PRESENT"
+          echo "PHIL_AI_OS_TWILIO_PRODUCTION_RESTRICTED_KEY_REFS_PRESENT"
 
-      - name: Verify active Twilio account and Messaging Service without sending SMS
+      - name: Verify Messaging Service and Alpha Sender without sending SMS
         shell: bash
         env:
           RUBY_TWILIO_ACCOUNT_SID: ${{ secrets.RUBY_TWILIO_ACCOUNT_SID }}
-          RUBY_TWILIO_AUTH_TOKEN: ${{ secrets.RUBY_TWILIO_AUTH_TOKEN }}
+          RUBY_TWILIO_API_KEY_SID: ${{ secrets.RUBY_TWILIO_API_KEY_SID }}
+          RUBY_TWILIO_API_KEY_SECRET: ${{ secrets.RUBY_TWILIO_API_KEY_SECRET }}
           RUBY_TWILIO_MESSAGING_SERVICE_SID: ${{ secrets.RUBY_TWILIO_MESSAGING_SERVICE_SID }}
+          RUBY_TWILIO_ALPHA_SENDER: RUBYSCAKE
         run: |
           set -euo pipefail
           python commerce/woocommerce/tools_twilio_production_readonly_preflight.py
