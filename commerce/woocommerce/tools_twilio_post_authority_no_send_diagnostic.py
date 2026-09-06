@@ -18,6 +18,7 @@ def _auth(user: str, password: str) -> str:
 
 def _probe(
     account_sid: str,
+    messaging_service_sid: str,
     username: str,
     password: str,
     credential_label: str,
@@ -25,8 +26,9 @@ def _probe(
     api_base: str,
 ) -> dict[str, object]:
     endpoint = f"{api_base}/Accounts/{account_sid}/Messages.json"
-    # Deliberately omit To and Body so Twilio cannot create a message.
-    form = parse.urlencode({"MessagingServiceSid": "MG00000000000000000000000000000000"}).encode("utf-8")
+    # Use the account-owned Messaging Service, but deliberately omit To and Body.
+    # Without a destination Twilio cannot create or deliver a message.
+    form = parse.urlencode({"MessagingServiceSid": messaging_service_sid}).encode("utf-8")
     req = request.Request(
         endpoint,
         data=form,
@@ -67,12 +69,16 @@ def _probe(
 
 def main() -> int:
     account_sid = os.getenv("RUBY_TWILIO_ACCOUNT_SID", "").strip()
+    messaging_service_sid = os.getenv("RUBY_TWILIO_MESSAGING_SERVICE_SID", "").strip()
     key_sid = os.getenv("RUBY_TWILIO_API_KEY_SID", "").strip()
     key_secret = os.getenv("RUBY_TWILIO_API_KEY_SECRET", "").strip()
     auth_token = os.getenv("RUBY_TWILIO_AUTH_TOKEN", "").strip()
-    required = [account_sid, key_sid, key_secret, auth_token]
+    required = [account_sid, messaging_service_sid, key_sid, key_secret, auth_token]
     if not all(required):
         print(json.dumps({"status": "blocked", "reason": "required credential missing"}, sort_keys=True))
+        return 2
+    if not (messaging_service_sid.startswith("MG") and len(messaging_service_sid) == 34):
+        print(json.dumps({"status": "blocked", "reason": "messaging service identity invalid"}, sort_keys=True))
         return 2
 
     credential_paths = (
@@ -80,7 +86,15 @@ def main() -> int:
         ("account_sid_auth_token", account_sid, auth_token),
     )
     results = [
-        _probe(account_sid, username, password, credential_label, endpoint_label, api_base)
+        _probe(
+            account_sid,
+            messaging_service_sid,
+            username,
+            password,
+            credential_label,
+            endpoint_label,
+            api_base,
+        )
         for endpoint_label, api_base in API_BASES
         for credential_label, username, password in credential_paths
     ]

@@ -15,6 +15,7 @@ jobs:
       RUBY_TWILIO_API_KEY_SID: ${{ secrets.RUBY_TWILIO_API_KEY_SID }}
       RUBY_TWILIO_API_KEY_SECRET: ${{ secrets.RUBY_TWILIO_API_KEY_SECRET }}
       RUBY_TWILIO_AUTH_TOKEN: ${{ secrets.RUBY_TWILIO_AUTH_TOKEN }}
+      RUBY_TWILIO_MESSAGING_SERVICE_SID: ${{ secrets.RUBY_TWILIO_MESSAGING_SERVICE_SID }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
@@ -32,4 +33,5 @@ jobs:
           ! grep -q 'RUBY_TWILIO_TEST_TO' commerce/woocommerce/tools_twilio_post_authority_no_send_diagnostic.py
           ! grep -q '"To"' commerce/woocommerce/tools_twilio_post_authority_no_send_diagnostic.py
           ! grep -q '"Body"' commerce/woocommerce/tools_twilio_post_authority_no_send_diagnostic.py
+          ! grep -q 'MG00000000000000000000000000000000' commerce/woocommerce/tools_twilio_post_authority_no_send_diagnostic.py
           echo PHIL_AI_OS_TWILIO_POST_AUTHORITY_DIAGNOSTIC_BOUNDARY_GREEN

@@ -15,6 +15,13 @@ class TwilioPostAuthorityNoSendDiagnosticTests(unittest.TestCase):
         self.assertNotIn("RUBY_TWILIO_TEST_TO", source)
         self.assertIn('"message_requested": False', source)
 
+    def test_real_stored_messaging_service_is_used_without_logging_it(self):
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('RUBY_TWILIO_MESSAGING_SERVICE_SID', source)
+        self.assertIn('parse.urlencode({"MessagingServiceSid": messaging_service_sid})', source)
+        self.assertNotIn('MG00000000000000000000000000000000', source)
+        self.assertNotIn('"messaging_service_sid": messaging_service_sid', source)
+
     def test_both_credential_paths_are_compared(self):
         source = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('"standard_api_key"', source)
