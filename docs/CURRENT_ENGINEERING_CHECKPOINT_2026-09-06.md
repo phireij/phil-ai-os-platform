@@ -1,9 +1,9 @@
 # Phil AI OS Platform — Current Engineering Checkpoint
 
-**Date:** 2026-09-06  
+**Date:** 2026-09-07  
 **Repository:** `phireij/phil-ai-os-platform`  
 **Baseline main at checkpoint creation:** `3fd367ec9b331b7b6e188a697b7b8cd3a9ed097c`  
-**Current merged main at this reconciliation:** `5336519f9a087335fbe904846a7dd2a5c19e3b40`
+**Current merged main at this reconciliation:** `6f172afcf8af2431b9382f5a9beb1b965bbb9d6f`
 
 This is an additive current-state supplement to the canonical Master Executive Roadmap. It records gates that changed after the latest roadmap wording without changing sprint positioning or production authority.
 
@@ -90,6 +90,7 @@ The owner-independent catalog path has been hardened before the Initial Launch C
 - PR #210 — controlled-review plans reject duplicate category action keys/slugs and duplicate product action SKUs/slugs.
 - PR #211 — controlled-review plans reject negative, non-numeric, NaN, and infinite product prices; desired prices must remain finite non-negative decimal strings.
 - PR #212 — controlled-review product actions reject duplicate `category_slugs` and `media_keys`, including whitespace-normalized duplicates.
+- PR #226 — read-only WooCommerce catalog snapshots reject duplicate category references within a product and reject product category slugs that are absent from the snapshot category inventory.
 
 These gates are validation/planning only. They do not perform WooCommerce network writes, create or publish products, delete existing products, execute payments, send SMS, change DNS, or grant mutation/execution/publication authority. WooCommerce Contract Tests, Sprint 3 Foundation CI including isolated WooCommerce runtime smoke, and Sprint 7 integrated readiness/runtime smoke were GREEN before each merge.
 
@@ -98,4 +99,4 @@ These gates are validation/planning only. They do not perform WooCommerce networ
 1. **Primary Sprint 3 closure:** final owner-approved production catalog/category/media source (Initial Launch Catalog V1).
 2. **Controlled Twilio handset validation:** external dependency on Twilio Support to resolve account-level Messages API POST authorization (`HTTP 401 / Twilio 20003`). No further send attempts should be made until Twilio responds or provides an actionable remediation.
 
-At this reconciliation point, owner-independent work should continue where it does not require the catalog source, Twilio Support resolution, or broader production authority.
+At this reconciliation point there are no known additional owner-independent Sprint 3 gaps that justify further micro-hardening. Work should remain focused on the two blockers above unless a new concrete issue is discovered.
