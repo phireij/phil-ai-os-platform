@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -7,6 +8,7 @@ MODULE_PATH = ROOT / "tools_twilio_controlled_test_send_once.py"
 spec = importlib.util.spec_from_file_location("twilio_controlled_test_send_once", MODULE_PATH)
 module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
+sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 
 
