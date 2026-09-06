@@ -62,8 +62,11 @@ def _validate_product_action(item: dict[str, Any], label: str, blockers: list[st
             f"{label}.desired.catalog_visibility must remain hidden for controlled review"
         )
     for field in ("category_slugs", "media_keys"):
-        if not _string_list(desired.get(field)):
+        values = desired.get(field)
+        if not _string_list(values):
             blockers.append(f"{label}.desired.{field} must contain non-empty strings")
+        elif len([value.strip() for value in values]) != len(set(value.strip() for value in values)):
+            blockers.append(f"{label}.desired.{field} must not contain duplicates")
 
 
 def validate_plan(plan: dict[str, Any]) -> dict[str, Any]:
