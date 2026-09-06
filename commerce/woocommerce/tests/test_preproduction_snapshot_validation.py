@@ -107,6 +107,15 @@ class PreproductionSnapshotValidationTests(unittest.TestCase):
         blockers = module._validate_snapshot(snapshot)
         self.assertIn("snapshot contains duplicate product SKU: SKU-001", blockers)
 
+    def test_duplicate_product_slug_fails_closed(self):
+        snapshot = valid_snapshot()
+        snapshot["products"] = [
+            {"sku": "SKU-001", "slug": "owner-cake"},
+            {"sku": "SKU-002", "slug": "owner-cake"},
+        ]
+        blockers = module._validate_snapshot(snapshot)
+        self.assertIn("snapshot contains duplicate product slug: owner-cake", blockers)
+
     def test_duplicate_category_slug_fails_closed(self):
         snapshot = valid_snapshot()
         snapshot["categories"] = [{"slug": "cakes"}, {"slug": "cakes"}]
