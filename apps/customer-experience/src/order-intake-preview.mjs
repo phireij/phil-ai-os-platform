@@ -59,19 +59,44 @@ function fulfillmentDateCopy() {
   return selectedFulfillment() === "pickup" ? requestedDateCopy.pickup : requestedDateCopy.delivery;
 }
 
-function japanTodayIsoDate(now = new Date()) {
+function japanCalendarParts(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Tokyo",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
   }).formatToParts(now);
-  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+}
+
+function japanTodayIsoDate(now = new Date()) {
+  const values = japanCalendarParts(now);
   return `${values.year}-${values.month}-${values.day}`;
+}
+
+function japanCurrentIsoMinute(now = new Date()) {
+  const values = japanCalendarParts(now);
+  return `${values.hour}:${values.minute}`;
 }
 
 function enforceRequestedDateFloor() {
   requestedDate.min = japanTodayIsoDate();
+}
+
+function validatePickupTimeNotPast(now = new Date()) {
+  pickupTime.setCustomValidity("");
+  if (selectedFulfillment() !== "pickup" || !requestedDate.value || !pickupTime.value) {
+    return true;
+  }
+  const today = japanTodayIsoDate(now);
+  if (requestedDate.value === today && pickupTime.value < japanCurrentIsoMinute(now)) {
+    pickupTime.setCustomValidity("Please select a pickup time that has not already passed.");
+    return false;
+  }
+  return true;
 }
 
 function validateReferenceImages() {
@@ -120,6 +145,7 @@ function renderFulfillment() {
   pickupTimeField.hidden = !isPickup;
   pickupTime.disabled = !isPickup;
   pickupTime.required = isPickup;
+  if (!isPickup) pickupTime.setCustomValidity("");
   yamatoWindowField.hidden = !isYamato;
   yamatoWindow.disabled = !isYamato;
   rubyCarRouteGuidance.hidden = !isRubyCar;
@@ -153,12 +179,16 @@ form.addEventListener("change", (event) => {
   if (event.target.matches('input[name="fulfillment"]')) renderFulfillment();
   if (event.target === requestedDate) renderDate();
   if (event.target === yamatoWindow || event.target === pickupTime) renderWindow();
+  if (event.target.matches('input[name="fulfillment"]') || event.target === requestedDate || event.target === pickupTime) {
+    validatePickupTimeNotPast();
+  }
   if (event.target === referenceImages) validateReferenceImages();
 });
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   enforceRequestedDateFloor();
+  validatePickupTimeNotPast();
   validateReferenceImages();
   renderFulfillment();
   renderDate();
