@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
-from urllib import request
+from urllib import error, request
 
 
 def _get_json(endpoint: str, basic: str, failure_label: str) -> tuple[int, dict[str, object]]:
@@ -21,6 +21,19 @@ def _get_json(endpoint: str, basic: str, failure_label: str) -> tuple[int, dict[
             raw = response.read().decode("utf-8")
             payload = json.loads(raw) if raw else {}
             return int(response.status), payload
+    except error.HTTPError as exc:
+        provider_code = None
+        try:
+            raw = exc.read().decode("utf-8")
+            payload = json.loads(raw) if raw else {}
+            candidate = payload.get("code") if isinstance(payload, dict) else None
+            provider_code = int(candidate) if candidate is not None else None
+        except Exception:
+            provider_code = None
+        suffix = f" twilio_code={provider_code}" if provider_code is not None else ""
+        raise SystemExit(
+            f"PHIL_AI_OS_TWILIO_PREFLIGHT_FAILED: {failure_label}_http_{exc.code}{suffix}"
+        ) from exc
     except Exception as exc:
         raise SystemExit(f"PHIL_AI_OS_TWILIO_PREFLIGHT_FAILED: {failure_label}_fetch_failed") from exc
 
@@ -45,9 +58,6 @@ def main() -> int:
 
     basic = base64.b64encode(f"{api_key_sid}:{api_key_secret}".encode("utf-8")).decode("ascii")
 
-    # Restricted and Standard API keys cannot read Twilio's /Accounts resource.
-    # Validate the scoped production surface directly instead: the expected
-    # Messaging Service and its configured Alphanumeric Sender.
     service_endpoint = f"https://messaging.twilio.com/v1/Services/{messaging_service_sid}"
     service_status_code, service_payload = _get_json(service_endpoint, basic, "messaging_service")
     if service_status_code != 200:
