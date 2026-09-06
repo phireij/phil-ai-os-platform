@@ -5,7 +5,7 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Mapping
-from urllib import parse, request
+from urllib import error, parse, request
 
 TWILIO_API_BASE = "https://api.twilio.com/2010-04-01"
 CANONICAL_STATUS_CALLBACK = "https://hermes-agent-whow.srv1833510.hstgr.cloud/v1/webhooks/twilio/sms-status"
@@ -63,9 +63,7 @@ class ControlledTestConfig:
 
 class OneShotTwilioTransport:
     def post(self, *, config: ControlledTestConfig) -> tuple[int, dict[str, object]]:
-        endpoint = (
-            f"{TWILIO_API_BASE}/Accounts/{config.account_sid}/Messages.json"
-        )
+        endpoint = f"{TWILIO_API_BASE}/Accounts/{config.account_sid}/Messages.json"
         form = parse.urlencode(
             {
                 "To": config.test_to,
@@ -91,8 +89,21 @@ class OneShotTwilioTransport:
             with request.urlopen(req, timeout=config.timeout_seconds) as response:
                 raw = response.read().decode("utf-8")
                 return int(response.status), json.loads(raw) if raw else {}
+        except error.HTTPError as exc:
+            provider_code = None
+            try:
+                raw = exc.read().decode("utf-8")
+                payload = json.loads(raw) if raw else {}
+                candidate = payload.get("code")
+                provider_code = str(candidate).strip() if candidate is not None else None
+            except Exception:
+                provider_code = None
+            suffix = f" twilio_code={provider_code}" if provider_code else ""
+            raise ControlledTestError(
+                f"Twilio controlled test rejected HTTP {int(exc.code)}{suffix}; no retry performed"
+            ) from exc
         except Exception as exc:
-            raise ControlledTestError("Twilio controlled test send failed safely; no retry performed") from exc
+            raise ControlledTestError("Twilio controlled test transport failed safely; no retry performed") from exc
 
 
 def execute_once(
@@ -104,7 +115,9 @@ def execute_once(
     sender = transport or OneShotTwilioTransport()
     status_code, payload = sender.post(config=config)
     if status_code < 200 or status_code >= 300:
-        raise ControlledTestError(f"Twilio rejected controlled test with HTTP {status_code}")
+        provider_code = str(payload.get("code") or "").strip()
+        suffix = f" twilio_code={provider_code}" if provider_code else ""
+        raise ControlledTestError(f"Twilio rejected controlled test with HTTP {status_code}{suffix}")
     sid = str(payload.get("sid") or "").strip()
     provider_status = str(payload.get("status") or "accepted").strip().lower()
     return {
