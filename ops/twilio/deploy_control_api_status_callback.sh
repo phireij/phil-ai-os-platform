@@ -203,9 +203,16 @@ route='''        if path==TWILIO_STATUS_CALLBACK_PATH:
         if path.startswith("/v1/") and not authorized(self.headers):
             self._json(401,{"status":"unauthorized","timestamp":now_iso()}); return
 '''
-if s.count(anchor)!=1:
-    raise SystemExit('route anchor mismatch')
-s=s.replace(anchor,route,1)
+post_anchor='    def do_POST(self):\n'
+if s.count(post_anchor)!=1:
+    raise SystemExit('do_POST anchor mismatch')
+post_pos=s.index(post_anchor)
+prefix=s[:post_pos]
+post=s[post_pos:]
+if post.count(anchor)!=1:
+    raise SystemExit('do_POST route anchor mismatch')
+post=post.replace(anchor,route,1)
+s=prefix+post
 p.write_text(s,encoding='utf-8')
 PY
 
