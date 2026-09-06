@@ -65,6 +65,7 @@ def _validate_snapshot(snapshot: dict[str, Any]) -> list[str]:
         blockers.append("snapshot products must be a list")
     else:
         seen_skus: set[str] = set()
+        seen_product_slugs: set[str] = set()
         for index, item in enumerate(products, start=1):
             if not isinstance(item, dict):
                 blockers.append(f"snapshot product[{index}] must be an object")
@@ -81,6 +82,13 @@ def _validate_snapshot(snapshot: dict[str, Any]) -> list[str]:
             for field in ("name", "slug", "regular_price", "status", "catalog_visibility", "shipping_class"):
                 if field in item and not isinstance(item[field], str):
                     blockers.append(f"snapshot product[{index}].{field} must be a string")
+
+            slug_value = item.get("slug")
+            if isinstance(slug_value, str) and slug_value.strip():
+                slug = slug_value.strip()
+                if slug in seen_product_slugs:
+                    blockers.append(f"snapshot contains duplicate product slug: {slug}")
+                seen_product_slugs.add(slug)
 
             product_categories = item.get("categories", [])
             if not isinstance(product_categories, list):
@@ -119,6 +127,30 @@ def _validate_snapshot(snapshot: dict[str, Any]) -> list[str]:
     return blockers
 
 
+def _owner_snapshot_slug_collision_blockers(
+    owner_payload: dict[str, Any], snapshot: dict[str, Any]
+) -> list[str]:
+    """Block owner slugs already occupied by a different WooCommerce identity."""
+
+    blockers: list[str] = []
+    snapshot_products_by_slug = {
+        item["slug"].strip(): item
+        for item in snapshot["products"]
+        if isinstance(item.get("slug"), str) and item["slug"].strip()
+    }
+    for product in owner_payload["products"]:
+        desired_slug = product["slug"]["en"].strip()
+        occupant = snapshot_products_by_slug.get(desired_slug)
+        if occupant is None:
+            continue
+        occupant_sku = occupant["sku"].strip()
+        if occupant_sku != product["sku"]:
+            blockers.append(
+                f"owner product {product['sku']} slug {desired_slug} is already occupied by snapshot SKU {occupant_sku}"
+            )
+    return blockers
+
+
 def build_plan(owner_payload: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
     validation = owner_catalog_validator.validate_package(owner_payload)
     if not validation.get("ready_for_preproduction_configuration"):
@@ -130,6 +162,13 @@ def build_plan(owner_payload: dict[str, Any], snapshot: dict[str, Any]) -> dict[
     if snapshot_blockers:
         result = _blocked("read-only catalog snapshot is invalid", validation=validation)
         result["blockers"].extend(snapshot_blockers)
+        return result
+
+    slug_collision_blockers = _owner_snapshot_slug_collision_blockers(owner_payload, snapshot)
+    if slug_collision_blockers:
+        result = _blocked("owner catalog conflicts with existing snapshot product slugs", validation=validation)
+        result["snapshot_accepted"] = True
+        result["blockers"].extend(slug_collision_blockers)
         return result
 
     owner_categories = owner_payload["categories"]
