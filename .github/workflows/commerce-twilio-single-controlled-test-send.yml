@@ -1,0 +1,68 @@
+name: Twilio Single Controlled Handset Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type SEND_ONE_CONTROLLED_TEST to request exactly one controlled SMS'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  controlled-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      PYTHONPATH: commerce/woocommerce/src
+      RUBY_TWILIO_ACCOUNT_SID: ${{ secrets.RUBY_TWILIO_ACCOUNT_SID }}
+      RUBY_TWILIO_API_KEY_SID: ${{ secrets.RUBY_TWILIO_API_KEY_SID }}
+      RUBY_TWILIO_API_KEY_SECRET: ${{ secrets.RUBY_TWILIO_API_KEY_SECRET }}
+      RUBY_TWILIO_MESSAGING_SERVICE_SID: ${{ secrets.RUBY_TWILIO_MESSAGING_SERVICE_SID }}
+      RUBY_TWILIO_TEST_TO: ${{ secrets.RUBY_TWILIO_TEST_TO }}
+      RUBY_TWILIO_CONTROLLED_TEST_EXECUTE: ${{ inputs.confirmation }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Validate one-shot executor contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest commerce/woocommerce/tests/test_twilio_controlled_test_send_once.py -v
+
+      - name: Re-run no-send readiness contract locally before arming
+        shell: bash
+        env:
+          RUBY_TWILIO_AUTH_TOKEN: ${{ secrets.RUBY_TWILIO_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          RUBY_TWILIO_CONTROLLED_TEST_EXECUTE='' \
+            python commerce/woocommerce/tools_twilio_controlled_test_no_send_preflight.py
+
+      - name: Require exact manual confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUBY_TWILIO_CONTROLLED_TEST_EXECUTE}" = 'SEND_ONE_CONTROLLED_TEST'
+
+      - name: Request exactly one controlled handset SMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          python commerce/woocommerce/tools_twilio_controlled_test_send_once.py
+
+      - name: Assert executor contains no retry loop or generalized destination input
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '\b(for|while)\b.*(retry|send)|sleep\(' \
+            commerce/woocommerce/tools_twilio_controlled_test_send_once.py
+          grep -q 'RUBY_TWILIO_TEST_TO' commerce/woocommerce/tools_twilio_controlled_test_send_once.py
+          echo PHIL_AI_OS_TWILIO_SINGLE_CONTROLLED_TEST_BOUNDARY_CHECKED
