@@ -61,6 +61,15 @@ def _validate_snapshot(snapshot: dict[str, Any]) -> list[str]:
 
     products = snapshot.get("products")
     categories = snapshot.get("categories")
+
+    snapshot_category_slugs: set[str] = set()
+    if isinstance(categories, list):
+        for item in categories:
+            if isinstance(item, dict):
+                slug_value = item.get("slug")
+                if isinstance(slug_value, str) and slug_value.strip():
+                    snapshot_category_slugs.add(slug_value.strip())
+
     if not isinstance(products, list):
         blockers.append("snapshot products must be a list")
     else:
@@ -94,6 +103,7 @@ def _validate_snapshot(snapshot: dict[str, Any]) -> list[str]:
             if not isinstance(product_categories, list):
                 blockers.append(f"snapshot product[{index}].categories must be a list")
             else:
+                seen_product_category_slugs: set[str] = set()
                 for category_index, category in enumerate(product_categories, start=1):
                     if not isinstance(category, dict):
                         blockers.append(
@@ -104,6 +114,17 @@ def _validate_snapshot(snapshot: dict[str, Any]) -> list[str]:
                     if not isinstance(category_slug, str) or not category_slug.strip():
                         blockers.append(
                             f"snapshot product[{index}].categories[{category_index}] requires explicit string slug"
+                        )
+                        continue
+                    normalized_category_slug = category_slug.strip()
+                    if normalized_category_slug in seen_product_category_slugs:
+                        blockers.append(
+                            f"snapshot product[{index}] contains duplicate category slug: {normalized_category_slug}"
+                        )
+                    seen_product_category_slugs.add(normalized_category_slug)
+                    if normalized_category_slug not in snapshot_category_slugs:
+                        blockers.append(
+                            f"snapshot product[{index}] references unknown category slug: {normalized_category_slug}"
                         )
 
     if not isinstance(categories, list):
