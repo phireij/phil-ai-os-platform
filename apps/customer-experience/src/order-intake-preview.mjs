@@ -5,6 +5,7 @@ const requestedDate = document.querySelector("#requested-date");
 const requestedDateLabel = document.querySelector("#requested-date-label");
 const requestedDateHelp = document.querySelector("#requested-date-help");
 const deliveryTitle = document.querySelector("#delivery-title");
+const requestNotice = document.querySelector("#request-notice");
 const summaryDateLabel = document.querySelector("#summary-date-label");
 const yamatoWindow = document.querySelector("#yamato-window");
 const yamatoWindowField = document.querySelector("#yamato-window-field");
@@ -30,17 +31,29 @@ const requestedDateCopy = {
     label: "Requested delivery date / 希望配達日",
     help: "This is a request, not a confirmed delivery date. / ご希望の配達日であり、確定日ではありません。",
     summary: "Requested delivery date",
+    notice:
+      "Your requested delivery date and time are not guaranteed yet. Ruby will confirm availability, final shipping, and any custom-cake quote before a payment link is issued. / ご希望の配達日時はまだ確定ではありません。ご注文内容・送料・オーダーケーキのお見積りを確認後、お支払いリンクをご案内します。",
+    success:
+      "Preview only: request captured locally. Delivery and final quote still require confirmation before payment. / プレビューのみ：配達と最終金額の確定後にお支払いをご案内します。",
   },
   pickup: {
     title: "2. Requested pickup / 希望受取",
     label: "Requested pickup date / 希望受取日",
     help: "This is a request, not a confirmed pickup date. / ご希望の受取日であり、確定日ではありません。",
     summary: "Requested pickup date",
+    notice:
+      "Your requested pickup date and time are not guaranteed yet. Ruby will confirm availability and any custom-cake quote before a payment link is issued. / ご希望の受取日時はまだ確定ではありません。ご注文内容・オーダーケーキのお見積りを確認後、お支払いリンクをご案内します。",
+    success:
+      "Preview only: request captured locally. Pickup availability and final quote still require confirmation before payment. / プレビューのみ：受取日時と最終金額の確定後にお支払いをご案内します。",
   },
 };
 
 function selectedFulfillment() {
   return form.querySelector('input[name="fulfillment"]:checked')?.value || "yamato";
+}
+
+function fulfillmentDateCopy() {
+  return selectedFulfillment() === "pickup" ? requestedDateCopy.pickup : requestedDateCopy.delivery;
 }
 
 function validateReferenceImages() {
@@ -79,11 +92,12 @@ function renderFulfillment() {
   summaryFulfillment.textContent = fulfillmentLabels[method] || method;
   const isYamato = method === "yamato";
   const isRubyCar = method === "ruby-car";
-  const dateCopy = method === "pickup" ? requestedDateCopy.pickup : requestedDateCopy.delivery;
+  const dateCopy = fulfillmentDateCopy();
   deliveryTitle.textContent = dateCopy.title;
   requestedDateLabel.textContent = dateCopy.label;
   requestedDateHelp.textContent = dateCopy.help;
   summaryDateLabel.textContent = dateCopy.summary;
+  requestNotice.textContent = dateCopy.notice;
   yamatoWindowField.hidden = !isYamato;
   yamatoWindow.disabled = !isYamato;
   rubyCarRouteGuidance.hidden = !isRubyCar;
@@ -127,8 +141,7 @@ form.addEventListener("submit", (event) => {
     return;
   }
 
-  status.textContent =
-    "Preview only: request captured locally. Delivery and final quote still require confirmation before payment. / プレビューのみ：配達と最終金額の確定後にお支払いをご案内します。";
+  status.textContent = fulfillmentDateCopy().success;
 });
 
 renderCustomFields();
