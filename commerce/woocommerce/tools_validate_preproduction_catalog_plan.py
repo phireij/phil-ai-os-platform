@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from decimal import Decimal, InvalidOperation
 import json
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,16 @@ def _non_empty_string(value: Any) -> bool:
 
 def _string_list(value: Any) -> bool:
     return isinstance(value, list) and all(_non_empty_string(item) for item in value)
+
+
+def _non_negative_decimal_string(value: Any) -> bool:
+    if not _non_empty_string(value):
+        return False
+    try:
+        parsed = Decimal(value)
+    except (InvalidOperation, ValueError):
+        return False
+    return parsed.is_finite() and parsed >= 0
 
 
 def _validate_category_action(item: dict[str, Any], label: str, blockers: list[str]) -> None:
@@ -40,6 +51,8 @@ def _validate_product_action(item: dict[str, Any], label: str, blockers: list[st
     for field in ("sku", "name", "slug", "regular_price", "status", "catalog_visibility", "shipping_class"):
         if not _non_empty_string(desired.get(field)):
             blockers.append(f"{label}.desired.{field} must be a non-empty string")
+    if not _non_negative_decimal_string(desired.get("regular_price")):
+        blockers.append(f"{label}.desired.regular_price must be a non-negative decimal string")
     if _non_empty_string(sku) and desired.get("sku") != sku:
         blockers.append(f"{label}.desired.sku must match action sku")
     if desired.get("status") != "draft":
