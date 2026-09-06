@@ -87,6 +87,7 @@ jobs:
         run: |
           set -euo pipefail
           unsigned_code="$(curl -sS -o /tmp/unsigned.out -w '%{http_code}' -X POST "$CALLBACK_URL" -H 'Content-Type: application/x-www-form-urlencoded' --data 'MessageSid=SM00000000000000000000000000000000&MessageStatus=delivered')"
+          echo unsigned_http_code="$unsigned_code"
           test "$unsigned_code" = 403
           signature="$(python3 - <<'PY'
           import base64, hashlib, hmac, os
@@ -98,6 +99,7 @@ jobs:
           PY
           )"
           signed_code="$(curl -sS -o /tmp/signed.out -w '%{http_code}' -X POST "$CALLBACK_URL" -H 'Content-Type: application/x-www-form-urlencoded' -H "X-Twilio-Signature: $signature" --data 'MessageStatus=delivered')"
+          echo signed_incomplete_http_code="$signed_code"
           test "$signed_code" = 400
           echo public_https_router=true
           echo unsigned_rejected=true
