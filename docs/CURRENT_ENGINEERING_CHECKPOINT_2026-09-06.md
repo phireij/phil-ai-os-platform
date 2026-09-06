@@ -3,7 +3,7 @@
 **Date:** 2026-09-06  
 **Repository:** `phireij/phil-ai-os-platform`  
 **Baseline main at checkpoint creation:** `3fd367ec9b331b7b6e188a697b7b8cd3a9ed097c`  
-**Current merged main at this reconciliation:** `dbae4747bc6549ddaa74218e376d289a7cb00c09`
+**Current merged main at this reconciliation:** `5336519f9a087335fbe904846a7dd2a5c19e3b40`
 
 This is an additive current-state supplement to the canonical Master Executive Roadmap. It records gates that changed after the latest roadmap wording without changing sprint positioning or production authority.
 
@@ -41,18 +41,29 @@ The production SMS readiness candidate remains **disabled by default** and prese
 - provider: Twilio
 - production sender identity: `RUBYSCAKE`
 - production Messaging Service identity verified read-only
-- restricted API key boundary reserved for outbound REST
-- Account Auth Token reserved for webhook HMAC validation
+- Standard API key and Account SID/Auth Token credential paths verified for their intended read/authentication checks
+- Account Auth Token remains the credential used for webhook HMAC validation
 - bilingual transactional copy includes alternate help/opt-out contact
 - support/opt-out contact: `order@rubyscakedelights.com`
 - canonical production status callback configured
 - automatic retry: false
 - unrestricted send authority: false
-- controlled handset test executed: false
+- controlled handset test executed successfully: false
 
-The combined no-send activation preflight is implemented and fail-closed. All existing production Twilio credentials and provider identity checks passed. The **single current handset-test blocker** is the absent GitHub Actions secret `RUBY_TWILIO_TEST_TO`.
+The combined no-send activation preflight is implemented and fail-closed. The approved test handset destination is already stored in GitHub Actions, provider identity and account binding checks are GREEN, and the Twilio account itself is verified `active` via a read-only Account resource diagnostic.
 
-Because the connected GitHub interface cannot create or inspect secret values, this blocker requires external/user setup before the previously approved single controlled handset test can become eligible. Until then, the provider remains disabled and **no SMS send is authorized**.
+Multiple bounded diagnostics have now isolated the remaining blocker to Twilio-side authorization of the Messages create operation:
+
+- Standard API key and Account SID/Auth Token both authenticate successfully for non-create checks.
+- The exact Messaging Service account binding is verified.
+- Japan (+81) Messaging Geographic Permission is enabled in Twilio Console.
+- `RUBYSCAKE` is attached to the `Ruby Transactional SMS` Messaging Service as an Alphanumeric Sender with SMS capability.
+- Account-level Alphanumeric Sender ID is enabled.
+- Both `api.twilio.com` and `api.us1.twilio.com` return HTTP 401 / Twilio `20003` for no-send POST authorization probes.
+- The no-send POST probe uses the real stored Messaging Service SID but deliberately omits both `To` and `Body`, so it cannot create or deliver a message.
+- Prior controlled handset attempts that reached the Messages endpoint were rejected by Twilio; no successful SMS has been accepted or delivered.
+
+The CEO has submitted a Twilio Support case for the account-level Messages POST authorization issue. Until Twilio responds and the root cause is resolved, **no further controlled handset send attempts should be made**. The provider remains generally disabled, `automatic_retry=false`, and no broader SMS authority is granted.
 
 ## Sprint 4 CX hardening merged
 
@@ -85,6 +96,6 @@ These gates are validation/planning only. They do not perform WooCommerce networ
 ## Current operational blockers / owner dependencies
 
 1. **Primary Sprint 3 closure:** final owner-approved production catalog/category/media source (Initial Launch Catalog V1).
-2. **Controlled Twilio handset test:** securely store the approved test handset destination as GitHub Actions secret `RUBY_TWILIO_TEST_TO`; this does not itself authorize sending until the no-send preflight is GREEN.
+2. **Controlled Twilio handset validation:** external dependency on Twilio Support to resolve account-level Messages API POST authorization (`HTTP 401 / Twilio 20003`). No further send attempts should be made until Twilio responds or provides an actionable remediation.
 
-At this reconciliation point there are no open pull requests. All other work should continue independently where it does not require these owner inputs or broaden production authority.
+At this reconciliation point, owner-independent work should continue where it does not require the catalog source, Twilio Support resolution, or broader production authority.
