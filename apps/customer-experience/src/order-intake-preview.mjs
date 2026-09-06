@@ -2,6 +2,10 @@ const form = document.querySelector("#order-intake-form");
 const cakeType = document.querySelector("#cake-type");
 const customFields = document.querySelector("#custom-cake-fields");
 const requestedDate = document.querySelector("#requested-date");
+const requestedDateLabel = document.querySelector("#requested-date-label");
+const requestedDateHelp = document.querySelector("#requested-date-help");
+const deliveryTitle = document.querySelector("#delivery-title");
+const summaryDateLabel = document.querySelector("#summary-date-label");
 const yamatoWindow = document.querySelector("#yamato-window");
 const yamatoWindowField = document.querySelector("#yamato-window-field");
 const rubyCarRouteGuidance = document.querySelector("#ruby-car-route-guidance");
@@ -18,6 +22,21 @@ const fulfillmentLabels = {
   yamato: "Yamato",
   "ruby-car": "Ruby car",
   pickup: "Shop pickup",
+};
+
+const requestedDateCopy = {
+  delivery: {
+    title: "2. Requested delivery / 希望配達",
+    label: "Requested delivery date / 希望配達日",
+    help: "This is a request, not a confirmed delivery date. / ご希望の配達日であり、確定日ではありません。",
+    summary: "Requested delivery date",
+  },
+  pickup: {
+    title: "2. Requested pickup / 希望受取",
+    label: "Requested pickup date / 希望受取日",
+    help: "This is a request, not a confirmed pickup date. / ご希望の受取日であり、確定日ではありません。",
+    summary: "Requested pickup date",
+  },
 };
 
 function selectedFulfillment() {
@@ -60,6 +79,11 @@ function renderFulfillment() {
   summaryFulfillment.textContent = fulfillmentLabels[method] || method;
   const isYamato = method === "yamato";
   const isRubyCar = method === "ruby-car";
+  const dateCopy = method === "pickup" ? requestedDateCopy.pickup : requestedDateCopy.delivery;
+  deliveryTitle.textContent = dateCopy.title;
+  requestedDateLabel.textContent = dateCopy.label;
+  requestedDateHelp.textContent = dateCopy.help;
+  summaryDateLabel.textContent = dateCopy.summary;
   yamatoWindowField.hidden = !isYamato;
   yamatoWindow.disabled = !isYamato;
   rubyCarRouteGuidance.hidden = !isRubyCar;

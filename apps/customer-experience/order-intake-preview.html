@@ -52,7 +52,7 @@
         <section aria-labelledby="delivery-title">
           <h2 id="delivery-title">2. Requested delivery / 希望配達</h2>
           <div class="intake-field">
-            <label for="requested-date">Requested delivery date / 希望配達日</label>
+            <label id="requested-date-label" for="requested-date">Requested delivery date / 希望配達日</label>
             <input id="requested-date" name="requested-date" type="date" required aria-describedby="requested-date-help">
             <p class="field-help" id="requested-date-help">This is a request, not a confirmed date. / ご希望日であり、確定日ではありません。</p>
           </div>
@@ -122,7 +122,7 @@
         <h2 id="summary-title">Request summary / リクエスト概要</h2>
         <dl>
           <dt>Fulfillment</dt><dd id="summary-fulfillment">Yamato</dd>
-          <dt>Requested date</dt><dd id="summary-date">Not selected</dd>
+          <dt id="summary-date-label">Requested delivery date</dt><dd id="summary-date">Not selected</dd>
           <dt>Time window</dt><dd id="summary-window">No preference</dd>
           <dt>Route / fee</dt><dd id="summary-route">Not applicable</dd>
           <dt>Cake type</dt><dd id="summary-cake">Basic</dd>

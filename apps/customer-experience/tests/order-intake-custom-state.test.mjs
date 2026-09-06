@@ -26,6 +26,17 @@ test("hidden Yamato time-window state is disabled outside Yamato fulfillment", a
   assert.match(source, /yamatoWindow\.disabled = !isYamato/);
 });
 
+test("requested-date language distinguishes pickup from delivery without changing the field contract", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  const html = await readFile(htmlUrl, "utf8");
+  assert.match(source, /Requested delivery date \/ 希望配達日/);
+  assert.match(source, /Requested pickup date \/ 希望受取日/);
+  assert.match(source, /method === "pickup" \? requestedDateCopy\.pickup : requestedDateCopy\.delivery/);
+  assert.match(html, /id="requested-date-label"/);
+  assert.match(html, /id="summary-date-label"/);
+  assert.match(html, /id="requested-date" name="requested-date" type="date" required/);
+});
+
 test("order intake preview remains non-authorizing and network-inert", async () => {
   const source = await readFile(sourceUrl, "utf8");
   assert.doesNotMatch(source, /fetch\s*\(/);
