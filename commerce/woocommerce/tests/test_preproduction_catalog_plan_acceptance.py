@@ -37,7 +37,7 @@ class CatalogPlanAcceptanceTests(unittest.TestCase):
                         "slug": "owner-product",
                         "regular_price": "1200",
                         "status": "draft",
-                        "catalog_visibility": "visible",
+                        "catalog_visibility": "hidden",
                         "shipping_class": "yamato-cool",
                         "category_slugs": ["cakes"],
                         "media_keys": ["owner-001-main"],
@@ -59,6 +59,22 @@ class CatalogPlanAcceptanceTests(unittest.TestCase):
         self.assertFalse(result["mutation_authorized"])
         self.assertFalse(result["production_publish_authorized"])
         self.assertFalse(result["execution_authorized"])
+
+    def test_publish_status_or_visible_catalog_state_is_rejected(self):
+        cases = [
+            ("status", "publish", "desired.status must remain draft"),
+            ("catalog_visibility", "visible", "desired.catalog_visibility must remain hidden"),
+        ]
+        for field, value, expected in cases:
+            with self.subTest(field=field, value=value):
+                plan = self.safe_plan()
+                plan["product_actions"][0]["desired"][field] = value
+                result = validator.validate_plan(plan)
+                self.assertFalse(result["accepted_for_human_review"])
+                self.assertTrue(any(expected in blocker for blocker in result["blockers"]))
+                self.assertFalse(result["mutation_authorized"])
+                self.assertFalse(result["production_publish_authorized"])
+                self.assertFalse(result["execution_authorized"])
 
     def test_delete_action_is_rejected(self):
         plan = self.safe_plan()
