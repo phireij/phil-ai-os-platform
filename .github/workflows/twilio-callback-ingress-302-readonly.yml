@@ -1,0 +1,104 @@
+name: Twilio Callback 302 Ingress Read-Only Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/twilio-callback-ingress-302-readonly.yml'
+      - '.github/twilio-callback-ingress-302-readonly-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      HOSTNAME: hermes-agent-whow.srv1833510.hstgr.cloud
+      CALLBACK_PATH: /v1/webhooks/twilio/sms-status
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Inspect public redirect headers only
+        shell: bash
+        run: |
+          set -euo pipefail
+          inspect() {
+            label="$1"; method="$2"; url="$3"
+            headers="$(mktemp)"
+            code="$(curl -sS --max-time 12 -D "$headers" -o /dev/null -w '%{http_code}' -X "$method" "$url" -H 'Content-Type: application/x-www-form-urlencoded' --data 'MessageSid=SM00000000000000000000000000000000&MessageStatus=delivered' || true)"
+            echo "probe=$label method=$method code=$code"
+            awk 'BEGIN{IGNORECASE=1} /^(HTTP\/|location:|server:|via:|x-forwarded|x-served|x-cache|strict-transport-security:|content-type:|content-length:)/ {gsub(/\r/,""); print}' "$headers" | head -n 30
+            rm -f "$headers"
+          }
+          inspect https_callback POST "https://$HOSTNAME$CALLBACK_PATH"
+          inspect http_callback POST "http://$HOSTNAME$CALLBACK_PATH"
+          inspect https_root GET "https://$HOSTNAME/"
+          inspect https_approval GET "https://$HOSTNAME/phil-ai-os/approval/nonexistent"
+          echo request_body_nonsecret=true
+          echo sms_send=false
+          echo mutation=false
+
+      - name: Configure bounded SSH access
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true
+
+      - name: Inspect Traefik and Docker routing ownership read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          HOST=hermes-agent-whow.srv1833510.hstgr.cloud
+          echo matching_router_labels_begin
+          for CID in $(docker ps -q); do
+            NAME="$(docker inspect "$CID" --format '{{.Name}}' | sed 's#^/##')"
+            LABELS="$(docker inspect "$CID" --format '{{range $k,$v := .Config.Labels}}{{printf "%s=%s\n" $k $v}}{{end}}')"
+            if printf '%s\n' "$LABELS" | grep -Fq "$HOST"; then
+              echo container="$NAME"
+              printf '%s\n' "$LABELS" | grep -E '^traefik\.http\.(routers|middlewares|services)\.' | sed -E 's/(token|secret|password|api[_-]?key)=[^[:space:]]+/\1=[REDACTED]/Ig' | sort
+            fi
+          done
+          echo matching_router_labels_end
+
+          echo traefik_container_begin
+          docker ps --format 'name={{.Names}} image={{.Image}} ports={{.Ports}}' | grep -i traefik || true
+          echo traefik_container_end
+
+          TID="$(docker ps --filter name=traefik --format '{{.ID}}' | head -n 1)"
+          if test -n "$TID"; then
+            echo traefik_args_begin
+            docker inspect "$TID" --format '{{json .Config.Cmd}}'
+            echo traefik_args_end
+            echo traefik_networks_begin
+            docker inspect "$TID" --format '{{range $k,$v := .NetworkSettings.Networks}}{{printf "%s\n" $k}}{{end}}' | sort
+            echo traefik_networks_end
+          fi
+
+          ROOT=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1
+          echo control_compose_router_lines_begin
+          grep -nE 'traefik\.http\.(routers|middlewares|services)|hermes-agent-whow|redirect' "$ROOT/infrastructure/core/compose.yml" | sed -E 's/(TOKEN|SECRET|PASSWORD|KEY)=.*/\1=[REDACTED]/Ig' || true
+          echo control_compose_router_lines_end
+
+          echo current_control_image="$(docker ps --filter name=phil-ai-os-core-control-api-1 --format '{{.Image}}')"
+          curl -fsS --max-time 3 http://127.0.0.1:4870/healthz >/dev/null
+          echo control_api_health=true
+          echo mutation=false
+          echo container_restart=false
+          echo sms_send=false
+          echo PHIL_AI_OS_TWILIO_302_INGRESS_DISCOVERY_OK
+          REMOTE
