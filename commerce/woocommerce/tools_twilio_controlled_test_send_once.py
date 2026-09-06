@@ -8,10 +8,8 @@ from dataclasses import dataclass
 from typing import Mapping
 from urllib import error, parse, request
 
-TWILIO_API_REGIONS = (
-    ("us1", "https://api.twilio.com/2010-04-01"),
-    ("jp1", "https://api.tokyo.jp1.twilio.com/2010-04-01"),
-)
+TWILIO_API_REGION = "us1"
+TWILIO_API_BASE = "https://api.us1.twilio.com/2010-04-01"
 NONEXISTENT_MESSAGE_SID = "SM" + ("0" * 32)
 CANONICAL_STATUS_CALLBACK = "https://hermes-agent-whow.srv1833510.hstgr.cloud/v1/webhooks/twilio/sms-status"
 CONTROLLED_TEST_BODY = (
@@ -83,63 +81,43 @@ class OneShotTwilioTransport:
         credentials = f"{config.api_key_sid}:{config.api_key_secret}".encode("utf-8")
         return base64.b64encode(credentials).decode("ascii")
 
-    def _region_authenticates(self, *, config: ControlledTestConfig, region: str, api_base: str) -> bool:
+    def _us1_authenticates(self, *, config: ControlledTestConfig) -> None:
         probe_endpoint = (
-            f"{api_base}/Accounts/{config.account_sid}/Messages/{NONEXISTENT_MESSAGE_SID}.json"
+            f"{TWILIO_API_BASE}/Accounts/{config.account_sid}/Messages/{NONEXISTENT_MESSAGE_SID}.json"
         )
         req = request.Request(
             probe_endpoint,
             headers={
                 "Authorization": "Basic " + self._basic(config),
                 "Accept": "application/json",
-                "User-Agent": "phil-ai-os-platform/twilio-controlled-test-region-probe",
+                "User-Agent": "phil-ai-os-platform/twilio-controlled-test-us1-probe",
             },
             method="GET",
         )
         try:
             with request.urlopen(req, timeout=config.timeout_seconds) as response:
                 raise ControlledTestError(
-                    f"Twilio region auth probe returned unexpected HTTP {int(response.status)} "
-                    f"for region={region}; no message requested"
+                    f"Twilio US1 auth probe returned unexpected HTTP {int(response.status)}; "
+                    "no message requested"
                 )
         except error.HTTPError as exc:
             status_code, provider_code = _provider_error_details(exc)
             if status_code == 404 and provider_code == "20404":
-                return True
-            if status_code == 401 and provider_code == "20003":
-                return False
+                return
             suffix = f" twilio_code={provider_code}" if provider_code else ""
             raise ControlledTestError(
-                f"Twilio region auth probe failed region={region} HTTP {status_code}{suffix}; "
-                "no message requested"
+                f"Twilio US1 auth probe failed HTTP {status_code}{suffix}; no message requested"
             ) from exc
         except ControlledTestError:
             raise
         except Exception as exc:
             raise ControlledTestError(
-                f"Twilio region auth probe transport failed region={region}; no message requested"
+                "Twilio US1 auth probe transport failed; no message requested"
             ) from exc
 
-    def _resolve_api_base(self, *, config: ControlledTestConfig) -> tuple[str, str]:
-        authenticated: list[tuple[str, str]] = []
-        for region, api_base in TWILIO_API_REGIONS:
-            if self._region_authenticates(config=config, region=region, api_base=api_base):
-                authenticated.append((region, api_base))
-        if not authenticated:
-            raise ControlledTestError(
-                "Twilio API key did not authenticate to the supported Messages API regions; "
-                "no message requested"
-            )
-        if len(authenticated) != 1:
-            raise ControlledTestError(
-                "Twilio API key region was ambiguous across supported Messages API regions; "
-                "no message requested"
-            )
-        return authenticated[0]
-
     def post(self, *, config: ControlledTestConfig) -> tuple[int, dict[str, object]]:
-        region, api_base = self._resolve_api_base(config=config)
-        endpoint = f"{api_base}/Accounts/{config.account_sid}/Messages.json"
+        self._us1_authenticates(config=config)
+        endpoint = f"{TWILIO_API_BASE}/Accounts/{config.account_sid}/Messages.json"
         form = parse.urlencode(
             {
                 "To": config.test_to,
@@ -164,13 +142,13 @@ class OneShotTwilioTransport:
                 raw = response.read().decode("utf-8")
                 payload = json.loads(raw) if raw else {}
                 if isinstance(payload, dict):
-                    payload["_phil_ai_os_region"] = region
+                    payload["_phil_ai_os_region"] = TWILIO_API_REGION
                 return int(response.status), payload
         except error.HTTPError as exc:
             status_code, provider_code = _provider_error_details(exc)
             suffix = f" twilio_code={provider_code}" if provider_code else ""
             raise ControlledTestError(
-                f"Twilio controlled test rejected region={region} HTTP {status_code}{suffix}; "
+                f"Twilio controlled test rejected region={TWILIO_API_REGION} HTTP {status_code}{suffix}; "
                 "no retry performed"
             ) from exc
         except Exception as exc:
