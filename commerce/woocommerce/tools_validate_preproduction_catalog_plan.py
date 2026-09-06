@@ -42,6 +42,12 @@ def _validate_product_action(item: dict[str, Any], label: str, blockers: list[st
             blockers.append(f"{label}.desired.{field} must be a non-empty string")
     if _non_empty_string(sku) and desired.get("sku") != sku:
         blockers.append(f"{label}.desired.sku must match action sku")
+    if desired.get("status") != "draft":
+        blockers.append(f"{label}.desired.status must remain draft for controlled review")
+    if desired.get("catalog_visibility") != "hidden":
+        blockers.append(
+            f"{label}.desired.catalog_visibility must remain hidden for controlled review"
+        )
     for field in ("category_slugs", "media_keys"):
         if not _string_list(desired.get(field)):
             blockers.append(f"{label}.desired.{field} must contain non-empty strings")
