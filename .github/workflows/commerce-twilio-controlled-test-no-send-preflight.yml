@@ -1,0 +1,61 @@
+name: Twilio Controlled Test No-Send Preflight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/commerce-twilio-controlled-test-no-send-preflight.yml'
+      - 'commerce/woocommerce/tools_twilio_controlled_test_no_send_preflight.py'
+      - 'commerce/woocommerce/fixtures/twilio-production-message-readiness-candidate.json'
+      - 'commerce/woocommerce/src/phil_ai_os_woocommerce/sms_templates.py'
+      - 'commerce/woocommerce/src/phil_ai_os_woocommerce/twilio_sms.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      PYTHONPATH: commerce/woocommerce/src
+      RUBY_TWILIO_ACCOUNT_SID: ${{ secrets.RUBY_TWILIO_ACCOUNT_SID }}
+      RUBY_TWILIO_API_KEY_SID: ${{ secrets.RUBY_TWILIO_API_KEY_SID }}
+      RUBY_TWILIO_API_KEY_SECRET: ${{ secrets.RUBY_TWILIO_API_KEY_SECRET }}
+      RUBY_TWILIO_MESSAGING_SERVICE_SID: ${{ secrets.RUBY_TWILIO_MESSAGING_SERVICE_SID }}
+      RUBY_TWILIO_AUTH_TOKEN: ${{ secrets.RUBY_TWILIO_AUTH_TOKEN }}
+      RUBY_TWILIO_TEST_TO: ${{ secrets.RUBY_TWILIO_TEST_TO }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Validate no-send preflight contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest commerce/woocommerce/tests/test_twilio_controlled_test_no_send_preflight.py -v
+
+      - name: Verify Twilio provider identity read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUBY_TWILIO_ALPHA_SENDER=RUBYSCAKE \
+            python commerce/woocommerce/tools_twilio_production_readonly_preflight.py
+
+      - name: Run combined controlled-test no-send activation preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          python commerce/woocommerce/tools_twilio_controlled_test_no_send_preflight.py
+
+      - name: Assert no outbound message execution exists in preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E 'Messages\.json|api\.twilio\.com/2010-04-01' \
+            commerce/woocommerce/tools_twilio_controlled_test_no_send_preflight.py
+          echo PHIL_AI_OS_TWILIO_CONTROLLED_TEST_PREFLIGHT_NO_SEND_BOUNDARY_GREEN
