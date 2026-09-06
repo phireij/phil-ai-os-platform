@@ -1,0 +1,138 @@
+name: Control API Twilio Status Callback Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/control-api-twilio-status-callback-deploy.yml'
+      - '.github/control-api-twilio-status-callback-deploy-trigger'
+      - 'ops/twilio/deploy_control_api_status_callback.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: control-api-twilio-status-callback-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      RUBY_TWILIO_AUTH_TOKEN: ${{ secrets.RUBY_TWILIO_AUTH_TOKEN }}
+      CALLBACK_URL: https://hermes-agent-whow.srv1833510.hstgr.cloud/v1/webhooks/twilio/sms-status
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          test -n "$RUBY_TWILIO_AUTH_TOKEN"
+          bash -n ops/twilio/deploy_control_api_status_callback.sh
+
+      - name: Configure bounded SSH access
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          : > ~/.ssh/known_hosts
+          for attempt in 1 2 3 4 5 6; do
+            TMP="$(mktemp)"
+            if ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > "$TMP" 2>/dev/null && test -s "$TMP"; then
+              cat "$TMP" >> ~/.ssh/known_hosts
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              if ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true; then
+                rm -f "$TMP"
+                exit 0
+              fi
+            fi
+            rm -f "$TMP"
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Stage governed deployment inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          printf '%s' "$RUBY_TWILIO_AUTH_TOKEN" > /tmp/ruby_twilio_auth_token
+          chmod 600 /tmp/ruby_twilio_auth_token
+          scp -P "$PORT" -q ops/twilio/deploy_control_api_status_callback.sh "$VPS_USER@$VPS_HOST:/tmp/deploy_control_api_status_callback.sh"
+          scp -P "$PORT" -q /tmp/ruby_twilio_auth_token "$VPS_USER@$VPS_HOST:/tmp/ruby_twilio_auth_token.philaios"
+          rm -f /tmp/ruby_twilio_auth_token
+
+      - name: Deploy versioned callback boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'chmod 700 /tmp/deploy_control_api_status_callback.sh && /tmp/deploy_control_api_status_callback.sh deploy'
+
+      - name: Verify public HTTPS and HMAC boundary without persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          unsigned_code="$(curl -sS -o /tmp/unsigned.out -w '%{http_code}' -X POST "$CALLBACK_URL" -H 'Content-Type: application/x-www-form-urlencoded' --data 'MessageSid=SM00000000000000000000000000000000&MessageStatus=delivered')"
+          test "$unsigned_code" = 403
+          signature="$(python3 - <<'PY'
+          import base64, hashlib, hmac, os
+          url=os.environ['CALLBACK_URL']
+          token=os.environ['RUBY_TWILIO_AUTH_TOKEN']
+          params={'MessageStatus':'delivered'}
+          material=url+''.join(f'{k}{v}' for k,v in sorted(params.items()))
+          print(base64.b64encode(hmac.new(token.encode(),material.encode(),hashlib.sha1).digest()).decode())
+          PY
+          )"
+          signed_code="$(curl -sS -o /tmp/signed.out -w '%{http_code}' -X POST "$CALLBACK_URL" -H 'Content-Type: application/x-www-form-urlencoded' -H "X-Twilio-Signature: $signature" --data 'MessageStatus=delivered')"
+          test "$signed_code" = 400
+          echo public_https_router=true
+          echo unsigned_rejected=true
+          echo valid_hmac_reaches_field_validation=true
+          echo synthetic_persistence=false
+          echo sms_send=false
+
+      - name: Roll back deployment if verification failed
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" '/tmp/deploy_control_api_status_callback.sh rollback'
+
+      - name: Verify final deployment state
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          ROOT=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1
+          CID="$(docker ps --filter name=phil-ai-os-core-control-api-1 --format '{{.ID}}')"
+          test -n "$CID"
+          curl -fsS --max-time 3 http://127.0.0.1:4870/healthz >/dev/null
+          test "$(docker inspect "$CID" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.21.3-twilio-status-callback'
+          grep -Fq 'philaios-twilio-status' "$ROOT/infrastructure/core/compose.yml"
+          grep -Fq 'PHIL_AI_OS_TWILIO_STATUS_CALLBACK_V1' "$ROOT/services/core/control-api/app.py"
+          docker exec "$CID" test -r /run/philaios-secrets/ruby_twilio_auth_token
+          echo PHIL_AI_OS_TWILIO_STATUS_CALLBACK_DEPLOY_GREEN
+          echo sms_send=false
+          echo automatic_retry=false
+          echo woo_mutation=false
+          echo payment_mutation=false
+          echo dns_mutation=false
+          echo mission_control_mutation=false
+          REMOTE
