@@ -46,6 +46,15 @@ test("page notice and preview success follow pickup versus delivery semantics", 
   assert.match(source, /Your requested delivery date and time are not guaranteed yet/);
 });
 
+test("requested dates cannot be earlier than the current Japan calendar date", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  assert.match(source, /timeZone: "Asia\/Tokyo"/);
+  assert.match(source, /\.formatToParts\(now\)/);
+  assert.match(source, /requestedDate\.min = japanTodayIsoDate\(\)/);
+  assert.match(source, /enforceRequestedDateFloor\(\);/);
+  assert.doesNotMatch(source, /requestedDate\.min\s*=\s*"2026-/);
+});
+
 test("order intake preview remains non-authorizing and network-inert", async () => {
   const source = await readFile(sourceUrl, "utf8");
   assert.doesNotMatch(source, /fetch\s*\(/);
