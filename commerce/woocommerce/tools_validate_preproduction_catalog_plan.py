@@ -87,6 +87,11 @@ def validate_plan(plan: dict[str, Any]) -> dict[str, Any]:
         if source_blockers:
             blockers.append("catalog plan carries blockers and is not ready for human review")
 
+    seen_category_keys: set[str] = set()
+    seen_category_slugs: set[str] = set()
+    seen_product_skus: set[str] = set()
+    seen_product_slugs: set[str] = set()
+
     for collection in ("category_actions", "product_actions"):
         values = plan.get(collection)
         if isinstance(values, list):
@@ -95,6 +100,38 @@ def validate_plan(plan: dict[str, Any]) -> dict[str, Any]:
                 if not isinstance(item, dict):
                     blockers.append(f"{label} must be an object")
                     continue
+
+                if collection == "category_actions":
+                    desired = item.get("desired")
+                    if isinstance(desired, dict):
+                        key = desired.get("key")
+                        slug = desired.get("slug")
+                        if _non_empty_string(key):
+                            normalized_key = key.strip()
+                            if normalized_key in seen_category_keys:
+                                blockers.append(f"duplicate category action key: {normalized_key}")
+                            seen_category_keys.add(normalized_key)
+                        if _non_empty_string(slug):
+                            normalized_slug = slug.strip()
+                            if normalized_slug in seen_category_slugs:
+                                blockers.append(f"duplicate category action slug: {normalized_slug}")
+                            seen_category_slugs.add(normalized_slug)
+                else:
+                    sku = item.get("sku")
+                    desired = item.get("desired")
+                    if _non_empty_string(sku):
+                        normalized_sku = sku.strip()
+                        if normalized_sku in seen_product_skus:
+                            blockers.append(f"duplicate product action SKU: {normalized_sku}")
+                        seen_product_skus.add(normalized_sku)
+                    if isinstance(desired, dict):
+                        slug = desired.get("slug")
+                        if _non_empty_string(slug):
+                            normalized_slug = slug.strip()
+                            if normalized_slug in seen_product_slugs:
+                                blockers.append(f"duplicate product action slug: {normalized_slug}")
+                            seen_product_slugs.add(normalized_slug)
+
                 action = item.get("action")
                 if action not in ALLOWED_ACTIONS:
                     blockers.append(f"{label} contains forbidden action {action!r}")
