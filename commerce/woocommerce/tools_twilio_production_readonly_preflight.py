@@ -67,6 +67,12 @@ def main() -> int:
     if str(service_payload.get("sid") or "") != messaging_service_sid:
         raise SystemExit("PHIL_AI_OS_TWILIO_PREFLIGHT_FAILED: messaging_service_identity_mismatch")
 
+    service_account_sid = str(service_payload.get("account_sid") or "").strip()
+    if not service_account_sid.startswith("AC") or len(service_account_sid) != 34:
+        raise SystemExit("PHIL_AI_OS_TWILIO_PREFLIGHT_FAILED: messaging_service_account_binding_missing")
+    if service_account_sid != account_sid:
+        raise SystemExit("PHIL_AI_OS_TWILIO_PREFLIGHT_BLOCKED: messaging_service_account_binding_mismatch")
+
     alpha_endpoint = f"https://messaging.twilio.com/v1/Services/{messaging_service_sid}/AlphaSenders"
     alpha_status_code, alpha_payload = _get_json(alpha_endpoint, basic, "alpha_sender")
     if alpha_status_code != 200:
@@ -84,7 +90,7 @@ def main() -> int:
 
     print(
         "PHIL_AI_OS_TWILIO_PRODUCTION_READONLY_PREFLIGHT_GREEN "
-        "account_sid_shape=true restricted_api_key=true messaging_service=true "
+        "account_sid_shape=true account_binding=true restricted_api_key=true messaging_service=true "
         "alpha_sender=true message_send=false mutation=false"
     )
     return 0
