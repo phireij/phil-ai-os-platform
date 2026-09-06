@@ -20,6 +20,12 @@ test("custom-cake fields remain grouped under the hidden conditional container",
   assert.match(html, /name="edible-topper"/);
 });
 
+test("hidden Yamato time-window state is disabled outside Yamato fulfillment", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  assert.match(source, /yamatoWindowField\.hidden = !isYamato/);
+  assert.match(source, /yamatoWindow\.disabled = !isYamato/);
+});
+
 test("order intake preview remains non-authorizing and network-inert", async () => {
   const source = await readFile(sourceUrl, "utf8");
   assert.doesNotMatch(source, /fetch\s*\(/);
