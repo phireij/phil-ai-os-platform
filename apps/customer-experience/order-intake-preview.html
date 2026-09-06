@@ -56,6 +56,11 @@
             <input id="requested-date" name="requested-date" type="date" required aria-describedby="requested-date-help">
             <p class="field-help" id="requested-date-help">This is a request, not a confirmed date. / ご希望日であり、確定日ではありません。</p>
           </div>
+          <div class="intake-field" id="pickup-time-field" hidden>
+            <label for="pickup-time">Preferred pickup time / 希望受取時間</label>
+            <input id="pickup-time" name="pickup-time" type="time" disabled aria-describedby="pickup-time-help">
+            <p class="field-help" id="pickup-time-help">Requested time only. Ruby will confirm availability; current pickup hours remain pending recheck. / ご希望時間のみです。受取可能時間はRuby確認後に確定します。</p>
+          </div>
           <div class="intake-field" id="yamato-window-field">
             <label for="yamato-window">Preferred Yamato time window / ヤマト希望時間帯</label>
             <select id="yamato-window" name="yamato-window" aria-describedby="yamato-window-help">
@@ -123,7 +128,7 @@
         <dl>
           <dt>Fulfillment</dt><dd id="summary-fulfillment">Yamato</dd>
           <dt id="summary-date-label">Requested delivery date</dt><dd id="summary-date">Not selected</dd>
-          <dt>Time window</dt><dd id="summary-window">No preference</dd>
+          <dt id="summary-time-label">Time window</dt><dd id="summary-window">No preference</dd>
           <dt>Route / fee</dt><dd id="summary-route">Not applicable</dd>
           <dt>Cake type</dt><dd id="summary-cake">Basic</dd>
           <dt>Payment</dt><dd>Not requested</dd>
