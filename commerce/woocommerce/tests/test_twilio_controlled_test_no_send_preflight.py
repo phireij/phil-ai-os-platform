@@ -40,6 +40,15 @@ class TwilioControlledTestNoSendPreflightTests(unittest.TestCase):
         self.assertIn('signed_fields = {"MessageStatus": "delivered"}', source)
         self.assertNotIn('signed_fields = {"MessageSid"', source)
 
+    def test_callback_retry_is_bounded_and_never_expands_sms_authority(self):
+        source = TOOL.read_text(encoding="utf-8")
+        self.assertIn("CALLBACK_PROBE_ATTEMPTS = 3", source)
+        self.assertIn("TRANSIENT_HTTP_CODES", source)
+        self.assertIn("callback_probe_bounded_retry=true", source)
+        self.assertIn("automatic_retry=false", source)
+        self.assertNotIn("Messages.json", source)
+        self.assertNotIn("send_payment_link_sms", source)
+
 
 if __name__ == "__main__":
     unittest.main()
