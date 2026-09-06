@@ -7,6 +7,9 @@ const requestedDateHelp = document.querySelector("#requested-date-help");
 const deliveryTitle = document.querySelector("#delivery-title");
 const requestNotice = document.querySelector("#request-notice");
 const summaryDateLabel = document.querySelector("#summary-date-label");
+const summaryTimeLabel = document.querySelector("#summary-time-label");
+const pickupTime = document.querySelector("#pickup-time");
+const pickupTimeField = document.querySelector("#pickup-time-field");
 const yamatoWindow = document.querySelector("#yamato-window");
 const yamatoWindowField = document.querySelector("#yamato-window-field");
 const rubyCarRouteGuidance = document.querySelector("#ruby-car-route-guidance");
@@ -107,18 +110,25 @@ function renderFulfillment() {
   summaryFulfillment.textContent = fulfillmentLabels[method] || method;
   const isYamato = method === "yamato";
   const isRubyCar = method === "ruby-car";
+  const isPickup = method === "pickup";
   const dateCopy = fulfillmentDateCopy();
   deliveryTitle.textContent = dateCopy.title;
   requestedDateLabel.textContent = dateCopy.label;
   requestedDateHelp.textContent = dateCopy.help;
   summaryDateLabel.textContent = dateCopy.summary;
   requestNotice.textContent = dateCopy.notice;
+  pickupTimeField.hidden = !isPickup;
+  pickupTime.disabled = !isPickup;
+  pickupTime.required = isPickup;
   yamatoWindowField.hidden = !isYamato;
   yamatoWindow.disabled = !isYamato;
   rubyCarRouteGuidance.hidden = !isRubyCar;
+  summaryTimeLabel.textContent = isPickup ? "Preferred pickup time" : "Time window";
   summaryWindow.textContent = isYamato
     ? yamatoWindow.options[yamatoWindow.selectedIndex]?.textContent || "No preference"
-    : "Not applicable";
+    : isPickup
+      ? pickupTime.value || "Not selected"
+      : "Not applicable";
   summaryRoute.textContent = isRubyCar
     ? "Pending route review — no live calculation / ルート確認待ち（ライブ計算なし）"
     : "Not applicable";
@@ -129,16 +139,20 @@ function renderDate() {
 }
 
 function renderWindow() {
-  if (selectedFulfillment() !== "yamato") return;
-  summaryWindow.textContent =
-    yamatoWindow.options[yamatoWindow.selectedIndex]?.textContent || "No preference";
+  const method = selectedFulfillment();
+  if (method === "yamato") {
+    summaryWindow.textContent =
+      yamatoWindow.options[yamatoWindow.selectedIndex]?.textContent || "No preference";
+  } else if (method === "pickup") {
+    summaryWindow.textContent = pickupTime.value || "Not selected";
+  }
 }
 
 form.addEventListener("change", (event) => {
   if (event.target === cakeType) renderCustomFields();
   if (event.target.matches('input[name="fulfillment"]')) renderFulfillment();
   if (event.target === requestedDate) renderDate();
-  if (event.target === yamatoWindow) renderWindow();
+  if (event.target === yamatoWindow || event.target === pickupTime) renderWindow();
   if (event.target === referenceImages) validateReferenceImages();
 });
 

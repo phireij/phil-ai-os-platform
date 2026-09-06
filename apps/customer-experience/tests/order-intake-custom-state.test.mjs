@@ -26,6 +26,19 @@ test("hidden Yamato time-window state is disabled outside Yamato fulfillment", a
   assert.match(source, /yamatoWindow\.disabled = !isYamato/);
 });
 
+test("pickup captures a preferred time without importing unrevalidated shop hours", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  const html = await readFile(htmlUrl, "utf8");
+  assert.match(html, /id="pickup-time-field" hidden/);
+  assert.match(html, /id="pickup-time" name="pickup-time" type="time" disabled/);
+  assert.match(html, /current pickup hours remain pending recheck/);
+  assert.match(source, /pickupTimeField\.hidden = !isPickup/);
+  assert.match(source, /pickupTime\.disabled = !isPickup/);
+  assert.match(source, /pickupTime\.required = isPickup/);
+  assert.match(source, /summaryTimeLabel\.textContent = isPickup \? "Preferred pickup time" : "Time window"/);
+  assert.doesNotMatch(html, /pickup-time[^>]*(?:min|max)="/);
+});
+
 test("requested-date language distinguishes pickup from delivery without changing the field contract", async () => {
   const source = await readFile(sourceUrl, "utf8");
   const html = await readFile(htmlUrl, "utf8");
