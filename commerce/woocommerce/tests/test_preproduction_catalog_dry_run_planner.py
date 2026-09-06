@@ -121,6 +121,49 @@ class PreproductionCatalogDryRunPlannerTests(unittest.TestCase):
         self.assertIn("regular_price", action["changes"])
         self.assertIn("media_requires_source_ref_reconciliation", action["changes"])
 
+    def test_owner_slug_already_occupied_by_different_snapshot_sku_blocks_plan(self):
+        snapshot = self.snapshot()
+        snapshot["products"] = [
+            {
+                "id": 99,
+                "sku": "LEGACY-001",
+                "slug": "owner-cake",
+            }
+        ]
+        result = planner.build_plan(self.ready_package(), snapshot)
+        self.assertFalse(result["ready_for_controlled_review"])
+        self.assertTrue(result["snapshot_accepted"])
+        self.assertIn(
+            "owner product OWNER-001 slug owner-cake is already occupied by snapshot SKU LEGACY-001",
+            result["blockers"],
+        )
+        self.assertEqual(result["product_actions"], [])
+        self.assertFalse(result["mutation_authorized"])
+        self.assertFalse(result["production_publish_authorized"])
+
+    def test_same_sku_may_retain_its_existing_slug(self):
+        snapshot = self.snapshot()
+        snapshot["products"] = [
+            {
+                "id": 11,
+                "sku": "OWNER-001",
+                "slug": "owner-cake",
+                "name": "Owner Cake",
+                "regular_price": "500",
+                "status": "draft",
+                "catalog_visibility": "hidden",
+                "shipping_class": "cool-60",
+                "categories": [{"slug": "cakes"}],
+            }
+        ]
+        snapshot["categories"] = [{"slug": "cakes", "name": "Cakes"}]
+        result = planner.build_plan(self.ready_package(), snapshot)
+        self.assertTrue(result["ready_for_controlled_review"])
+        self.assertNotIn(
+            "owner catalog conflicts with existing snapshot product slugs",
+            result["blockers"],
+        )
+
     def test_pending_owner_package_blocks_plan(self):
         pending = json.loads((ROOT / "fixtures/production-catalog-intake.template.json").read_text(encoding="utf-8"))
         result = planner.build_plan(pending, self.snapshot())
