@@ -1,0 +1,1 @@
+Inspect the already-built callback candidate and rollback/secret metadata only. No container restart/build, SMS, DNS, payment, WooCommerce or Mission Control mutation.
