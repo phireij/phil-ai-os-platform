@@ -82,13 +82,30 @@ jobs:
           PORT="${VPS_PORT:-22}"
           ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'chmod 700 /tmp/deploy_control_api_status_callback.sh && /tmp/deploy_control_api_status_callback.sh deploy'
 
-      - name: Verify public HTTPS and HMAC boundary without persistence
+      - name: Wait for exact public callback router convergence
         shell: bash
         run: |
           set -euo pipefail
-          unsigned_code="$(curl -sS -o /tmp/unsigned.out -w '%{http_code}' -X POST "$CALLBACK_URL" -H 'Content-Type: application/x-www-form-urlencoded' --data 'MessageSid=SM00000000000000000000000000000000&MessageStatus=delivered')"
-          echo unsigned_http_code="$unsigned_code"
-          test "$unsigned_code" = 403
+          converged=false
+          for attempt in $(seq 1 20); do
+            code="$(curl -sS --max-time 8 -o /tmp/unsigned.out -w '%{http_code}' -X POST "$CALLBACK_URL" -H 'Content-Type: application/x-www-form-urlencoded' --data 'MessageSid=SM00000000000000000000000000000000&MessageStatus=delivered' || true)"
+            echo "router_probe_attempt=$attempt unsigned_http_code=$code"
+            if test "$code" = 403; then
+              converged=true
+              break
+            fi
+            case "$code" in
+              302|404|502|503|000) sleep 2 ;;
+              *) echo "unexpected_public_callback_code=$code" >&2; exit 1 ;;
+            esac
+          done
+          test "$converged" = true
+          echo exact_callback_router_converged=true
+
+      - name: Verify public HTTPS HMAC boundary without persistence
+        shell: bash
+        run: |
+          set -euo pipefail
           signature="$(python3 - <<'PY'
           import base64, hashlib, hmac, os
           url=os.environ['CALLBACK_URL']
@@ -98,7 +115,7 @@ jobs:
           print(base64.b64encode(hmac.new(token.encode(),material.encode(),hashlib.sha1).digest()).decode())
           PY
           )"
-          signed_code="$(curl -sS -o /tmp/signed.out -w '%{http_code}' -X POST "$CALLBACK_URL" -H 'Content-Type: application/x-www-form-urlencoded' -H "X-Twilio-Signature: $signature" --data 'MessageStatus=delivered')"
+          signed_code="$(curl -sS --max-time 8 -o /tmp/signed.out -w '%{http_code}' -X POST "$CALLBACK_URL" -H 'Content-Type: application/x-www-form-urlencoded' -H "X-Twilio-Signature: $signature" --data 'MessageStatus=delivered')"
           echo signed_incomplete_http_code="$signed_code"
           test "$signed_code" = 400
           echo public_https_router=true
