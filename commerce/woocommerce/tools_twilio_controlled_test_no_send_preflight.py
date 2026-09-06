@@ -5,8 +5,9 @@ import hashlib
 import hmac
 import json
 import os
+import time
 from pathlib import Path
-from urllib import parse, request
+from urllib import error, parse, request
 
 from phil_ai_os_woocommerce.payment_link_sms import PaymentLinkSmsRequest
 from phil_ai_os_woocommerce.sms_templates import TransactionalSmsTemplate
@@ -14,6 +15,9 @@ from phil_ai_os_woocommerce.twilio_sms import TWILIO_STATUS_CALLBACK_PATH
 
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "twilio-production-message-readiness-candidate.json"
+CALLBACK_PROBE_ATTEMPTS = 3
+CALLBACK_PROBE_BACKOFF_SECONDS = (1.0, 2.0)
+TRANSIENT_HTTP_CODES = frozenset({500, 502, 503, 504})
 
 
 def _required(name: str) -> str:
@@ -21,6 +25,44 @@ def _required(name: str) -> str:
     if not value:
         raise SystemExit(f"PHIL_AI_OS_TWILIO_CONTROLLED_TEST_PREFLIGHT_BLOCKED: {name.lower()}_missing")
     return value
+
+
+def _expect_callback_http_error(
+    probe_request: request.Request,
+    *,
+    expected_code: int,
+    blocker_prefix: str,
+) -> None:
+    """Require the callback's exact security response with bounded network retries.
+
+    Retries apply only to callback reachability/transient 5xx responses. They do
+    not retry SMS sending and do not accept any security-semantic status other
+    than the exact expected HTTP code.
+    """
+
+    for attempt in range(1, CALLBACK_PROBE_ATTEMPTS + 1):
+        try:
+            request.urlopen(probe_request, timeout=10.0)
+        except error.HTTPError as exc:
+            if exc.code == expected_code:
+                return
+            if exc.code in TRANSIENT_HTTP_CODES and attempt < CALLBACK_PROBE_ATTEMPTS:
+                time.sleep(CALLBACK_PROBE_BACKOFF_SECONDS[attempt - 1])
+                continue
+            raise SystemExit(
+                f"PHIL_AI_OS_TWILIO_CONTROLLED_TEST_PREFLIGHT_BLOCKED: {blocker_prefix}_http_{exc.code}"
+            ) from exc
+        except (error.URLError, TimeoutError, OSError) as exc:
+            if attempt < CALLBACK_PROBE_ATTEMPTS:
+                time.sleep(CALLBACK_PROBE_BACKOFF_SECONDS[attempt - 1])
+                continue
+            raise SystemExit(
+                f"PHIL_AI_OS_TWILIO_CONTROLLED_TEST_PREFLIGHT_BLOCKED: {blocker_prefix}_http_error"
+            ) from exc
+        else:
+            raise SystemExit(
+                f"PHIL_AI_OS_TWILIO_CONTROLLED_TEST_PREFLIGHT_BLOCKED: {blocker_prefix}_not_rejected"
+            )
 
 
 def _callback_probe(callback_url: str, auth_token: str) -> None:
@@ -35,16 +77,11 @@ def _callback_probe(callback_url: str, auth_token: str) -> None:
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         method="POST",
     )
-    try:
-        request.urlopen(unsigned_request, timeout=10.0)
-    except Exception as exc:
-        code = getattr(exc, "code", None)
-        if code != 403:
-            raise SystemExit(
-                f"PHIL_AI_OS_TWILIO_CONTROLLED_TEST_PREFLIGHT_BLOCKED: callback_unsigned_http_{code or 'error'}"
-            ) from exc
-    else:
-        raise SystemExit("PHIL_AI_OS_TWILIO_CONTROLLED_TEST_PREFLIGHT_BLOCKED: callback_unsigned_not_rejected")
+    _expect_callback_http_error(
+        unsigned_request,
+        expected_code=403,
+        blocker_prefix="callback_unsigned",
+    )
 
     signed_fields = {"MessageStatus": "delivered"}
     material = callback_url + "".join(
@@ -63,16 +100,11 @@ def _callback_probe(callback_url: str, auth_token: str) -> None:
         },
         method="POST",
     )
-    try:
-        request.urlopen(signed_request, timeout=10.0)
-    except Exception as exc:
-        code = getattr(exc, "code", None)
-        if code != 400:
-            raise SystemExit(
-                f"PHIL_AI_OS_TWILIO_CONTROLLED_TEST_PREFLIGHT_BLOCKED: callback_signed_incomplete_http_{code or 'error'}"
-            ) from exc
-    else:
-        raise SystemExit("PHIL_AI_OS_TWILIO_CONTROLLED_TEST_PREFLIGHT_BLOCKED: callback_signed_incomplete_not_rejected")
+    _expect_callback_http_error(
+        signed_request,
+        expected_code=400,
+        blocker_prefix="callback_signed_incomplete",
+    )
 
 
 def main() -> int:
@@ -128,9 +160,9 @@ def main() -> int:
 
     print(
         "PHIL_AI_OS_TWILIO_CONTROLLED_TEST_NO_SEND_PREFLIGHT_GREEN "
-        "restricted_credentials_present=true callback_live=true bilingual_template=true "
-        "support_opt_out=true controlled_destination_present=true provider_enabled=false "
-        "message_send=false automatic_retry=false test_authority=false"
+        "restricted_credentials_present=true callback_live=true callback_probe_bounded_retry=true "
+        "bilingual_template=true support_opt_out=true controlled_destination_present=true "
+        "provider_enabled=false message_send=false automatic_retry=false test_authority=false"
     )
     return 0
 
