@@ -7,7 +7,7 @@ const htmlUrl = new URL("../order-intake-preview.html", import.meta.url);
 
 test("hidden custom-cake controls are disabled rather than remaining successful form controls", async () => {
   const source = await readFile(sourceUrl, "utf8");
-  assert.match(source, /customFields\.querySelectorAll\("input, select, textarea, button"\)/);
+  assert.match(source, /customFields\s*\.querySelectorAll\("input, select, textarea, button"\)/);
   assert.match(source, /control\.disabled = !custom/);
   assert.match(source, /referenceImages\.setCustomValidity\(""\)/);
 });
