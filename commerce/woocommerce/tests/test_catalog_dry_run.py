@@ -12,6 +12,23 @@ def intake_package():
         "package_state": "approved",
         "catalog_approved": True,
         "catalog_approval_ref": "decision://catalog/owner-approved",
+        "catalog_scope": {
+            "scope_type": "initial_launch_subset",
+            "full_product_range_required_for_sprint3_closure": False,
+            "additional_products_may_be_added_after_sprint3": True,
+            "scope_complete_for_intended_initial_launch": True,
+        },
+        "source_contract": {
+            "owner_source_required": True,
+            "owner_approval_required": True,
+            "source_updated_at_required": True,
+            "bilingual_en_ja_required": True,
+            "verified_media_source_required": True,
+            "currency": "JPY",
+            "intake_product_status": "draft",
+            "intake_product_visibility": "hidden",
+            "production_write_authority_granted_by_handoff": False,
+        },
         "categories": [
             {
                 "key": "cakes",

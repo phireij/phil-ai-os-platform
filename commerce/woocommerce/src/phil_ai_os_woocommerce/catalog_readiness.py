@@ -97,6 +97,58 @@ def _category_integrity_blockers(categories: list[CategoryRecord]) -> list[str]:
     return blockers
 
 
+def _catalog_handoff_contract_blockers(payload: Mapping[str, Any]) -> list[str]:
+    """Fail closed when the owner handoff weakens launch scope or source boundaries."""
+
+    blockers: list[str] = []
+    scope = payload.get("catalog_scope")
+    if not isinstance(scope, Mapping):
+        blockers.append("catalog scope contract is missing")
+    else:
+        if scope.get("scope_type") != "initial_launch_subset":
+            blockers.append("catalog scope type must remain initial_launch_subset")
+        if scope.get("full_product_range_required_for_sprint3_closure") is not False:
+            blockers.append(
+                "catalog scope must not require the full product range for Sprint 3 closure"
+            )
+        if scope.get("additional_products_may_be_added_after_sprint3") is not True:
+            blockers.append("catalog scope must allow additional products after Sprint 3")
+        if scope.get("scope_complete_for_intended_initial_launch") is not True:
+            blockers.append("catalog scope is not complete for the intended initial launch")
+
+    source = payload.get("source_contract")
+    if not isinstance(source, Mapping):
+        blockers.append("catalog source contract is missing")
+        return blockers
+
+    required_true = (
+        "owner_source_required",
+        "owner_approval_required",
+        "source_updated_at_required",
+        "bilingual_en_ja_required",
+        "verified_media_source_required",
+    )
+    for field in required_true:
+        if source.get(field) is not True:
+            blockers.append(f"catalog source contract must keep {field}=true")
+
+    expected_values = {
+        "currency": "JPY",
+        "intake_product_status": "draft",
+        "intake_product_visibility": "hidden",
+    }
+    for field, expected in expected_values.items():
+        if source.get(field) != expected:
+            blockers.append(f"catalog source contract must keep {field}={expected}")
+
+    if source.get("production_write_authority_granted_by_handoff") is not False:
+        blockers.append(
+            "catalog source contract must keep production_write_authority_granted_by_handoff=false"
+        )
+
+    return blockers
+
+
 def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxReadiness:
     """Evaluate a catalog/tax intake package without granting mutation authority.
 
@@ -158,6 +210,7 @@ def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxRead
     products = [ProductRecord.from_mapping(value) for value in products_raw]
 
     blockers: list[str] = []
+    blockers.extend(_catalog_handoff_contract_blockers(payload))
     pending_product_tax_classes: list[str] = []
     category_keys = [value.key for value in categories]
     media_keys = [value.key for value in media]

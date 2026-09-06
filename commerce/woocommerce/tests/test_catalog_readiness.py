@@ -79,6 +79,7 @@ class CatalogTaxReadinessTests(unittest.TestCase):
                 },
             }
         )
+        payload["catalog_scope"]["scope_complete_for_intended_initial_launch"] = True
         return payload
 
     def test_pending_catalog_fails_closed_while_reconciled_exempt_tax_is_ready(self):
@@ -89,6 +90,9 @@ class CatalogTaxReadinessTests(unittest.TestCase):
         self.assertFalse(result.mutation_authorized)
         self.assertFalse(result.production_publish_authorized)
         self.assertIn("catalog approval is pending", result.blockers)
+        self.assertIn(
+            "catalog scope is not complete for the intended initial launch", result.blockers
+        )
         self.assertNotIn("Yamato separate-charge treatment is pending", result.blockers)
         self.assertNotIn("COD fee treatment is pending", result.blockers)
 
@@ -100,6 +104,51 @@ class CatalogTaxReadinessTests(unittest.TestCase):
         self.assertFalse(result.mutation_authorized)
         self.assertFalse(result.production_publish_authorized)
         self.assertEqual(result.blockers, ())
+
+    def test_launch_subset_must_be_confirmed_complete_before_catalog_can_be_ready(self):
+        payload = self.approved_package()
+        payload["catalog_scope"]["scope_complete_for_intended_initial_launch"] = False
+
+        result = evaluate_catalog_tax_readiness(payload)
+
+        self.assertFalse(result.catalog_ready)
+        self.assertFalse(result.ready_for_preproduction_configuration)
+        self.assertIn(
+            "catalog scope is not complete for the intended initial launch", result.blockers
+        )
+        self.assertFalse(result.mutation_authorized)
+        self.assertFalse(result.production_publish_authorized)
+
+    def test_source_contract_cannot_be_weakened_by_an_approved_handoff(self):
+        payload = self.approved_package()
+        payload["source_contract"]["owner_approval_required"] = False
+        payload["source_contract"]["currency"] = "USD"
+        payload["source_contract"]["production_write_authority_granted_by_handoff"] = True
+
+        result = evaluate_catalog_tax_readiness(payload)
+
+        self.assertFalse(result.catalog_ready)
+        self.assertIn(
+            "catalog source contract must keep owner_approval_required=true", result.blockers
+        )
+        self.assertIn("catalog source contract must keep currency=JPY", result.blockers)
+        self.assertIn(
+            "catalog source contract must keep production_write_authority_granted_by_handoff=false",
+            result.blockers,
+        )
+        self.assertFalse(result.mutation_authorized)
+        self.assertFalse(result.production_publish_authorized)
+
+    def test_missing_scope_or_source_contract_fails_closed(self):
+        payload = self.approved_package()
+        payload.pop("catalog_scope")
+        payload.pop("source_contract")
+
+        result = evaluate_catalog_tax_readiness(payload)
+
+        self.assertFalse(result.catalog_ready)
+        self.assertIn("catalog scope contract is missing", result.blockers)
+        self.assertIn("catalog source contract is missing", result.blockers)
 
     def test_exempt_tax_disabled_route_does_not_require_tax_class_shipping_or_cod_tax_treatment(self):
         payload = self.approved_package()
