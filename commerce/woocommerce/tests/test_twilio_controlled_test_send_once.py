@@ -23,6 +23,16 @@ class FakeTransport:
         return self.status_code, self.payload
 
 
+class RegionProbeTransport(module.OneShotTwilioTransport):
+    def __init__(self, auth_by_region):
+        self.auth_by_region = dict(auth_by_region)
+        self.probes = []
+
+    def _region_authenticates(self, *, config, region, api_base):
+        self.probes.append((region, api_base))
+        return bool(self.auth_by_region.get(region, False))
+
+
 class ControlledTwilioSendOnceTests(unittest.TestCase):
     def config(self, **overrides):
         values = {
@@ -44,6 +54,7 @@ class ControlledTwilioSendOnceTests(unittest.TestCase):
         self.assertFalse(result["automatic_retry"])
         self.assertFalse(result["destination_logged"])
         self.assertEqual(result["provider_status"], "queued")
+        self.assertEqual(result["twilio_region"], "unknown")
         self.assertNotIn("SM1234567890", str(result))
         self.assertNotIn("+819012345678", str(result))
 
@@ -87,6 +98,29 @@ class ControlledTwilioSendOnceTests(unittest.TestCase):
                 transport=transport,
             )
         self.assertEqual(transport.calls, [])
+
+    def test_region_resolver_selects_only_authenticated_region(self):
+        transport = RegionProbeTransport({"us1": False, "jp1": True})
+        region, api_base = transport._resolve_api_base(config=self.config())
+        self.assertEqual(region, "jp1")
+        self.assertEqual(api_base, "https://api.tokyo.jp1.twilio.com/2010-04-01")
+        self.assertEqual([item[0] for item in transport.probes], ["us1", "jp1"])
+
+    def test_region_resolver_fails_closed_when_no_region_authenticates(self):
+        transport = RegionProbeTransport({"us1": False, "jp1": False})
+        with self.assertRaisesRegex(module.ControlledTestError, "did not authenticate"):
+            transport._resolve_api_base(config=self.config())
+
+    def test_region_resolver_fails_closed_when_region_is_ambiguous(self):
+        transport = RegionProbeTransport({"us1": True, "jp1": True})
+        with self.assertRaisesRegex(module.ControlledTestError, "ambiguous"):
+            transport._resolve_api_base(config=self.config())
+
+    def test_region_probe_uses_nonexistent_message_identity_only(self):
+        self.assertRegex(module.NONEXISTENT_MESSAGE_SID, r"^SM0{32}$")
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertIn("Messages/{NONEXISTENT_MESSAGE_SID}.json", source)
+        self.assertNotIn("PageSize", source)
 
 
 if __name__ == "__main__":
