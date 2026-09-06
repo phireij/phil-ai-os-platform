@@ -27,16 +27,16 @@ class TwilioControlledTestNoSendPreflightTests(unittest.TestCase):
         rendered_prints = "\n".join(ast.unparse(node) for node in print_calls)
         self.assertNotIn("test_to", rendered_prints)
         self.assertNotIn("RUBY_TWILIO_TEST_TO", rendered_prints)
-        self.assertIn('controlled_destination_present=true', rendered_prints)
+        self.assertIn("controlled_destination_present=true", rendered_prints)
 
     def test_provider_must_remain_disabled(self):
         source = TOOL.read_text(encoding="utf-8")
         self.assertIn('record.get("provider_enabled") is not False', source)
-        self.assertIn('provider_enabled=false', source)
+        self.assertIn("provider_enabled=false", source)
 
     def test_callback_probe_is_non_persisting(self):
         source = TOOL.read_text(encoding="utf-8")
-        self.assertIn('MessageSid=SM00000000000000000000000000000000', source.replace('"', '').replace("'", ''))
+        self.assertIn('"MessageSid": "SM00000000000000000000000000000000"', source)
         self.assertIn('signed_fields = {"MessageStatus": "delivered"}', source)
         self.assertNotIn('signed_fields = {"MessageSid"', source)
 
