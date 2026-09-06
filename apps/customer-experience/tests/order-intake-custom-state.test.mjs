@@ -39,6 +39,16 @@ test("pickup captures a preferred time without importing unrevalidated shop hour
   assert.doesNotMatch(html, /pickup-time[^>]*(?:min|max)="/);
 });
 
+test("same-day pickup time cannot already be past in Japan without adding a lead-time rule", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  assert.match(source, /hourCycle: "h23"/);
+  assert.match(source, /function japanCurrentIsoMinute/);
+  assert.match(source, /requestedDate\.value === today && pickupTime\.value < japanCurrentIsoMinute\(now\)/);
+  assert.match(source, /pickupTime\.setCustomValidity\("Please select a pickup time that has not already passed\."\)/);
+  assert.match(source, /validatePickupTimeNotPast\(\);/);
+  assert.doesNotMatch(source, /min_lead_minutes|lead_time|\+\s*60_000/);
+});
+
 test("requested-date language distinguishes pickup from delivery without changing the field contract", async () => {
   const source = await readFile(sourceUrl, "utf8");
   const html = await readFile(htmlUrl, "utf8");
