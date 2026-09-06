@@ -53,6 +53,7 @@ jobs:
           python commerce/woocommerce/tools_twilio_controlled_test_no_send_preflight.py
 
       - name: Assert no outbound message execution exists in preflight
+        if: ${{ always() }}
         shell: bash
         run: |
           set -euo pipefail
