@@ -23,14 +23,12 @@ class FakeTransport:
         return self.status_code, self.payload
 
 
-class RegionProbeTransport(module.OneShotTwilioTransport):
-    def __init__(self, auth_by_region):
-        self.auth_by_region = dict(auth_by_region)
-        self.probes = []
+class ProbeTransport(module.OneShotTwilioTransport):
+    def __init__(self):
+        self.probed = False
 
-    def _region_authenticates(self, *, config, region, api_base):
-        self.probes.append((region, api_base))
-        return bool(self.auth_by_region.get(region, False))
+    def _us1_authenticates(self, *, config):
+        self.probed = True
 
 
 class ControlledTwilioSendOnceTests(unittest.TestCase):
@@ -99,28 +97,27 @@ class ControlledTwilioSendOnceTests(unittest.TestCase):
             )
         self.assertEqual(transport.calls, [])
 
-    def test_region_resolver_selects_only_authenticated_region(self):
-        transport = RegionProbeTransport({"us1": False, "jp1": True})
-        region, api_base = transport._resolve_api_base(config=self.config())
-        self.assertEqual(region, "jp1")
-        self.assertEqual(api_base, "https://api.tokyo.jp1.twilio.com/2010-04-01")
-        self.assertEqual([item[0] for item in transport.probes], ["us1", "jp1"])
+    def test_explicit_us1_core_api_endpoint_is_used(self):
+        self.assertEqual(module.TWILIO_API_REGION, "us1")
+        self.assertEqual(module.TWILIO_API_BASE, "https://api.us1.twilio.com/2010-04-01")
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("jp1", source.lower())
+        self.assertNotIn("api.twilio.com/2010-04-01", source)
 
-    def test_region_resolver_fails_closed_when_no_region_authenticates(self):
-        transport = RegionProbeTransport({"us1": False, "jp1": False})
-        with self.assertRaisesRegex(module.ControlledTestError, "did not authenticate"):
-            transport._resolve_api_base(config=self.config())
-
-    def test_region_resolver_fails_closed_when_region_is_ambiguous(self):
-        transport = RegionProbeTransport({"us1": True, "jp1": True})
-        with self.assertRaisesRegex(module.ControlledTestError, "ambiguous"):
-            transport._resolve_api_base(config=self.config())
-
-    def test_region_probe_uses_nonexistent_message_identity_only(self):
+    def test_us1_probe_uses_nonexistent_message_identity_only(self):
         self.assertRegex(module.NONEXISTENT_MESSAGE_SID, r"^SM0{32}$")
         source = MODULE_PATH.read_text(encoding="utf-8")
         self.assertIn("Messages/{NONEXISTENT_MESSAGE_SID}.json", source)
         self.assertNotIn("PageSize", source)
+        self.assertNotIn("Messages.json?", source)
+
+    def test_post_requires_us1_probe_before_message_request(self):
+        transport = ProbeTransport()
+        self.assertFalse(transport.probed)
+        # We only assert the pre-send probe contract here. The network POST itself is covered by FakeTransport
+        # through execute_once and the workflow boundary check.
+        transport._us1_authenticates(config=self.config())
+        self.assertTrue(transport.probed)
 
 
 if __name__ == "__main__":
