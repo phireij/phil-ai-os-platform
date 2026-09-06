@@ -42,30 +42,44 @@ def _validate_owner_catalog_object_shapes(payload: dict[str, Any]) -> None:
                     )
 
 
+def _localized_slug_blockers(
+    values: Any,
+    *,
+    entity_label: str,
+) -> list[str]:
+    blockers: list[str] = []
+    if not isinstance(values, list):
+        return blockers
+
+    for locale, locale_label in (("en", "English"), ("ja", "Japanese")):
+        seen: set[str] = set()
+        for item in values:
+            if not isinstance(item, Mapping):
+                continue
+            slug = item.get("slug")
+            if not isinstance(slug, Mapping):
+                continue
+            value = slug.get(locale)
+            if not isinstance(value, str) or not value.strip():
+                continue
+            normalized = value.strip()
+            if normalized in seen:
+                blockers.append(
+                    f"duplicate WooCommerce {entity_label} {locale_label} slug: {normalized}"
+                )
+            seen.add(normalized)
+    return blockers
+
+
 def _owner_catalog_identity_blockers(payload: dict[str, Any]) -> list[str]:
-    """Reject identities that would make the dry-run WooCommerce plan ambiguous."""
+    """Reject identities that would make either locale dry-run plan ambiguous."""
 
     blockers: list[str] = []
     categories = payload.get("categories", [])
     products = payload.get("products", [])
 
-    if isinstance(categories, list):
-        seen_slugs: set[str] = set()
-        for index, category in enumerate(categories, start=1):
-            if not isinstance(category, Mapping):
-                continue
-            slug = category.get("slug")
-            if not isinstance(slug, Mapping):
-                continue
-            en_slug = slug.get("en")
-            if not isinstance(en_slug, str) or not en_slug.strip():
-                continue
-            normalized = en_slug.strip()
-            if normalized in seen_slugs:
-                blockers.append(
-                    f"duplicate WooCommerce category English slug: {normalized}"
-                )
-            seen_slugs.add(normalized)
+    blockers.extend(_localized_slug_blockers(categories, entity_label="category"))
+    blockers.extend(_localized_slug_blockers(products, entity_label="product"))
 
     if isinstance(products, list):
         for index, product in enumerate(products, start=1):

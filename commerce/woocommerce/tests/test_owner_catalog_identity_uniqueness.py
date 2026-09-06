@@ -1,3 +1,4 @@
+import copy
 import importlib.util
 import json
 from pathlib import Path
@@ -72,6 +73,14 @@ class OwnerCatalogIdentityUniquenessTests(unittest.TestCase):
         )
         return payload
 
+    def additional_product(self, payload, *, sku="OWNER-002"):
+        product = copy.deepcopy(payload["products"][0])
+        product["sku"] = sku
+        product["name"] = {"en": "Owner Cake Two", "ja": "オーナーケーキ2"}
+        product["slug"] = {"en": "owner-cake-two", "ja": "owner-cake-two-ja"}
+        product["source"] = "owner-approved-catalog-identity-test-2"
+        return product
+
     def test_duplicate_woocommerce_category_english_slug_blocks_handoff(self):
         payload = self.ready_package()
         payload["categories"].append(
@@ -89,6 +98,44 @@ class OwnerCatalogIdentityUniquenessTests(unittest.TestCase):
         self.assertIn("duplicate WooCommerce category English slug: cakes", result["blockers"])
         self.assertFalse(result["mutation_authorized"])
         self.assertFalse(result["production_publish_authorized"])
+
+    def test_duplicate_woocommerce_category_japanese_slug_blocks_handoff(self):
+        payload = self.ready_package()
+        payload["categories"].append(
+            {
+                "key": "special-cakes",
+                "name": {"en": "Special Cakes", "ja": "特別ケーキ"},
+                "slug": {"en": "special-cakes", "ja": "cakes-ja"},
+                "parent_key": None,
+            }
+        )
+        result = validator.validate_package(payload)
+        self.assertFalse(result["catalog_ready"])
+        self.assertIn(
+            "duplicate WooCommerce category Japanese slug: cakes-ja", result["blockers"]
+        )
+
+    def test_duplicate_woocommerce_product_english_slug_blocks_handoff(self):
+        payload = self.ready_package()
+        product = self.additional_product(payload)
+        product["slug"]["en"] = "owner-cake"
+        payload["products"].append(product)
+        result = validator.validate_package(payload)
+        self.assertFalse(result["catalog_ready"])
+        self.assertIn(
+            "duplicate WooCommerce product English slug: owner-cake", result["blockers"]
+        )
+
+    def test_duplicate_woocommerce_product_japanese_slug_blocks_handoff(self):
+        payload = self.ready_package()
+        product = self.additional_product(payload)
+        product["slug"]["ja"] = "owner-cake-ja"
+        payload["products"].append(product)
+        result = validator.validate_package(payload)
+        self.assertFalse(result["catalog_ready"])
+        self.assertIn(
+            "duplicate WooCommerce product Japanese slug: owner-cake-ja", result["blockers"]
+        )
 
     def test_duplicate_product_category_reference_blocks_handoff(self):
         payload = self.ready_package()
