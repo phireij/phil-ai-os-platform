@@ -1,0 +1,95 @@
+name: Control API Twilio Candidate Post-Start Read-Only
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/control-api-twilio-candidate-poststart-readonly.yml'
+      - '.github/control-api-twilio-candidate-poststart-readonly-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -T 20 -p "$PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 "$VPS_USER@$VPS_HOST" true
+      - name: Inspect candidate and rollback state without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          ROOT=/opt/phil-ai-os-platform/phil-ai-os-platform-phase1
+          CURRENT=phil-ai-os/control-api:0.21.2-phase23p5
+          CANDIDATE=phil-ai-os/control-api:0.21.3-twilio-status-callback
+          CID="$(docker ps --filter name=phil-ai-os-core-control-api-1 --format '{{.ID}}')"
+          test -n "$CID"
+          echo current_image="$(docker inspect "$CID" --format '{{.Config.Image}}')"
+          test "$(docker inspect "$CID" --format '{{.Config.Image}}')" = "$CURRENT"
+          curl -fsS --max-time 3 http://127.0.0.1:4870/healthz >/dev/null
+          echo current_health=true
+
+          if docker image inspect "$CANDIDATE" >/dev/null 2>&1; then
+            echo candidate_image_present=true
+            docker image inspect "$CANDIDATE" --format 'candidate_id={{.Id}} created={{.Created}} user={{.Config.User}} working_dir={{.Config.WorkingDir}} cmd={{json .Config.Cmd}}'
+          else
+            echo candidate_image_present=false
+          fi
+
+          echo secret_dir_metadata_begin
+          stat -c 'path=%n mode=%a uid=%u gid=%g type=%F' "$ROOT/infrastructure/core/secrets" || true
+          stat -c 'path=%n mode=%a uid=%u gid=%g bytes=%s' "$ROOT/infrastructure/core/secrets/ruby_twilio_auth_token" 2>/dev/null || echo ruby_twilio_auth_token_present=false
+          namei -l "$ROOT/infrastructure/core/secrets/ruby_twilio_auth_token" 2>/dev/null || true
+          echo secret_dir_metadata_end
+
+          LATEST="$ROOT/runtime/twilio-status-callback-latest-rollback"
+          if test -f "$LATEST"; then
+            SNAP="$(cat "$LATEST")"
+            echo rollback_snapshot_present=true
+            echo rollback_snapshot_path="$SNAP"
+            test -f "$SNAP/app.py" && echo rollback_app_present=true
+            test -f "$SNAP/compose.yml" && echo rollback_compose_present=true
+            echo rollback_had_token="$(cat "$SNAP/had_token" 2>/dev/null || echo unknown)"
+          else
+            echo rollback_snapshot_present=false
+          fi
+
+          echo current_source_sha="$(sha256sum "$ROOT/services/core/control-api/app.py" | awk '{print $1}')"
+          grep -Fq 'image: phil-ai-os/control-api:0.21.2-phase23p5' "$ROOT/infrastructure/core/compose.yml" && echo compose_rollback_image=true
+          if grep -Fq 'PHIL_AI_OS_TWILIO_STATUS_CALLBACK_V1' "$ROOT/services/core/control-api/app.py"; then
+            echo callback_marker_after_rollback=true
+          else
+            echo callback_marker_after_rollback=false
+          fi
+          if grep -Fq 'philaios-twilio-status' "$ROOT/infrastructure/core/compose.yml"; then
+            echo callback_router_after_rollback=true
+          else
+            echo callback_router_after_rollback=false
+          fi
+
+          echo mutation=false
+          echo container_restart=false
+          echo image_build=false
+          echo sms_send=false
+          echo PHIL_AI_OS_TWILIO_CANDIDATE_POSTSTART_READONLY_OK
+          REMOTE
