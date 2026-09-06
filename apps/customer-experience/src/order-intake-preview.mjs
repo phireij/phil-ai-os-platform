@@ -61,6 +61,7 @@ function renderFulfillment() {
   const isYamato = method === "yamato";
   const isRubyCar = method === "ruby-car";
   yamatoWindowField.hidden = !isYamato;
+  yamatoWindow.disabled = !isYamato;
   rubyCarRouteGuidance.hidden = !isRubyCar;
   summaryWindow.textContent = isYamato
     ? yamatoWindow.options[yamatoWindow.selectedIndex]?.textContent || "No preference"
