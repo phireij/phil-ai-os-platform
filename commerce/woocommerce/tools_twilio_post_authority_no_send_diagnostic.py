@@ -5,7 +5,10 @@ import json
 import os
 from urllib import error, parse, request
 
-API_BASE = "https://api.us1.twilio.com/2010-04-01"
+API_BASES = (
+    ("default_us1", "https://api.twilio.com/2010-04-01"),
+    ("explicit_us1", "https://api.us1.twilio.com/2010-04-01"),
+)
 
 
 def _auth(user: str, password: str) -> str:
@@ -13,8 +16,15 @@ def _auth(user: str, password: str) -> str:
     return "Basic " + base64.b64encode(raw).decode("ascii")
 
 
-def _probe(account_sid: str, username: str, password: str, label: str) -> dict[str, object]:
-    endpoint = f"{API_BASE}/Accounts/{account_sid}/Messages.json"
+def _probe(
+    account_sid: str,
+    username: str,
+    password: str,
+    credential_label: str,
+    endpoint_label: str,
+    api_base: str,
+) -> dict[str, object]:
+    endpoint = f"{api_base}/Accounts/{account_sid}/Messages.json"
     # Deliberately omit To and Body so Twilio cannot create a message.
     form = parse.urlencode({"MessagingServiceSid": "MG00000000000000000000000000000000"}).encode("utf-8")
     req = request.Request(
@@ -30,7 +40,13 @@ def _probe(account_sid: str, username: str, password: str, label: str) -> dict[s
     )
     try:
         with request.urlopen(req, timeout=10) as response:
-            return {"credential": label, "http": int(response.status), "unexpected_success": True}
+            return {
+                "credential": credential_label,
+                "endpoint": endpoint_label,
+                "http": int(response.status),
+                "unexpected_success": True,
+                "message_requested": False,
+            }
     except error.HTTPError as exc:
         provider_code = None
         try:
@@ -40,7 +56,8 @@ def _probe(account_sid: str, username: str, password: str, label: str) -> dict[s
         except Exception:
             pass
         return {
-            "credential": label,
+            "credential": credential_label,
+            "endpoint": endpoint_label,
             "http": int(exc.code),
             "twilio_code": provider_code,
             "authorized_to_validate_post": int(exc.code) != 401,
@@ -58,9 +75,14 @@ def main() -> int:
         print(json.dumps({"status": "blocked", "reason": "required credential missing"}, sort_keys=True))
         return 2
 
+    credential_paths = (
+        ("standard_api_key", key_sid, key_secret),
+        ("account_sid_auth_token", account_sid, auth_token),
+    )
     results = [
-        _probe(account_sid, key_sid, key_secret, "standard_api_key"),
-        _probe(account_sid, account_sid, auth_token, "account_sid_auth_token"),
+        _probe(account_sid, username, password, credential_label, endpoint_label, api_base)
+        for endpoint_label, api_base in API_BASES
+        for credential_label, username, password in credential_paths
     ]
     print(json.dumps({"status": "ok", "message_requested": False, "results": results}, sort_keys=True))
     print("PHIL_AI_OS_TWILIO_POST_AUTHORITY_DIAGNOSTIC_NO_SEND message_requested=false")
