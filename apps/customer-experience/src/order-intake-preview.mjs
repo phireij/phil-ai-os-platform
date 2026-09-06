@@ -56,6 +56,21 @@ function fulfillmentDateCopy() {
   return selectedFulfillment() === "pickup" ? requestedDateCopy.pickup : requestedDateCopy.delivery;
 }
 
+function japanTodayIsoDate(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function enforceRequestedDateFloor() {
+  requestedDate.min = japanTodayIsoDate();
+}
+
 function validateReferenceImages() {
   const files = Array.from(referenceImages.files || []);
   if (files.length > 8) {
@@ -129,6 +144,7 @@ form.addEventListener("change", (event) => {
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
+  enforceRequestedDateFloor();
   validateReferenceImages();
   renderFulfillment();
   renderDate();
@@ -144,6 +160,7 @@ form.addEventListener("submit", (event) => {
   status.textContent = fulfillmentDateCopy().success;
 });
 
+enforceRequestedDateFloor();
 renderCustomFields();
 renderFulfillment();
 renderDate();
