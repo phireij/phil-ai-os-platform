@@ -1,0 +1,17 @@
+{
+  "record_version": 1,
+  "status": "readiness_candidate_only",
+  "provider": "twilio",
+  "messaging_service_name": "Ruby Transactional SMS",
+  "sender_identity": "RUBYSCAKE",
+  "template_locale": "bilingual",
+  "support_contact": "order@rubyscakedelights.com",
+  "status_callback_url": "https://hermes-agent-whow.srv1833510.hstgr.cloud/v1/webhooks/twilio/sms-status",
+  "outbound_authentication": "restricted_api_key",
+  "webhook_authentication": "account_auth_token",
+  "provider_enabled": false,
+  "automatic_retry_enabled": false,
+  "unrestricted_send_authority": false,
+  "controlled_handset_test_executed": false,
+  "notes": "Non-secret readiness data only. Secret SIDs/keys/tokens and test destination are never stored here."
+}
