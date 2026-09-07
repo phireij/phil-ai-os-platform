@@ -1,0 +1,62 @@
+name: Twilio Support Request Inspector
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      RUBY_TWILIO_ACCOUNT_SID: ${{ secrets.RUBY_TWILIO_ACCOUNT_SID }}
+      RUBY_TWILIO_API_KEY_SID: ${{ secrets.RUBY_TWILIO_API_KEY_SID }}
+      RUBY_TWILIO_API_KEY_SECRET: ${{ secrets.RUBY_TWILIO_API_KEY_SECRET }}
+      RUBY_TWILIO_MESSAGING_SERVICE_SID: ${{ secrets.RUBY_TWILIO_MESSAGING_SERVICE_SID }}
+      RUBY_TWILIO_AUTH_TOKEN: ${{ secrets.RUBY_TWILIO_AUTH_TOKEN }}
+      RUBY_TWILIO_TEST_TO: ${{ secrets.RUBY_TWILIO_TEST_TO }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Validate inspector regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest commerce/woocommerce/tests/test_twilio_support_request_inspector.py -v
+
+      - name: Assert inspector has no network transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E 'urlopen|requests\.|http\.client|socket\.|Messages\.json[^\"'"'"']*POST' \
+            commerce/woocommerce/tools_twilio_support_request_inspector.py
+          echo PHIL_AI_OS_TWILIO_SUPPORT_INSPECTOR_NO_NETWORK_BOUNDARY_GREEN
+
+      - name: Generate sanitized Twilio support request evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python commerce/woocommerce/tools_twilio_support_request_inspector.py | tee /tmp/twilio-support-inspector.jsonlog
+
+      - name: Publish sanitized evidence summary
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## Twilio Support Request Inspector'
+            echo
+            echo '- Network request performed: **false**'
+            echo '- Message requested: **false**'
+            echo '- Automatic retry: **not applicable**'
+            echo '- Raw credentials/destination: **not emitted by inspector contract**'
+            echo
+            echo 'Use the sanitized JSON in the workflow log when replying to Twilio Support.'
+          } >> "$GITHUB_STEP_SUMMARY"
