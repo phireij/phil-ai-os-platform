@@ -62,6 +62,44 @@ class WorkingCatalogOwnerActionPacketTests(unittest.TestCase):
             any(action.category == "fulfillment_decision_or_evidence" for action in bar)
         )
 
+    def test_category_candidate_blockers_are_included_in_owner_actions(self):
+        packet = build_working_catalog_owner_action_packet(self.load())
+        category_actions = [action for action in packet.actions if action.category == "category_mapping"]
+        self.assertTrue(category_actions)
+        moist = [action for action in category_actions if action.product_key == "RCD-MCH-RD"]
+        self.assertTrue(moist)
+        self.assertEqual(moist[0].requirement, "category source label is missing")
+        self.assertIn(
+            "final category hierarchy, bilingual names, slugs, and mappings require approval",
+            {action.requirement for action in category_actions},
+        )
+
+    def test_media_evidence_blockers_are_included_without_invented_references(self):
+        packet = build_working_catalog_owner_action_packet(self.load())
+        media_actions = [
+            action for action in packet.actions if action.category == "media_ingestion_evidence"
+        ]
+        self.assertTrue(media_actions)
+        by_product = {action.product_key: action for action in media_actions if action.product_key}
+        self.assertEqual(by_product["RCD-MCH-RD"].requirement, "media source state is missing")
+        self.assertEqual(
+            by_product["RCD-BAR-FMB"].requirement,
+            "verified media ingestion reference is unresolved",
+        )
+        self.assertTrue(all(action.decision_value is None for action in media_actions))
+
+    def test_supplemental_category_or_media_blockers_keep_packet_fail_closed(self):
+        payload = self.load()
+        payload["catalog_approved"] = True
+        payload["catalog_approval_ref"] = "owner-approval-placeholder-for-test"
+        payload["catalog_scope"]["scope_complete_for_intended_initial_launch"] = True
+        payload["source_snapshot"]["owner_declared_subset_complete"] = True
+        packet = build_working_catalog_owner_action_packet(payload)
+        self.assertFalse(packet.production_ready)
+        self.assertTrue(
+            any(action.category in {"category_mapping", "media_ingestion_evidence"} for action in packet.actions)
+        )
+
     def test_missing_structured_owner_evidence_becomes_owner_evidence_action(self):
         payload = self.load()
         payload["source_snapshot"]["field_evidence"] = [
