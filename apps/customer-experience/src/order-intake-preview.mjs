@@ -1,3 +1,4 @@
+import "./order-intake-review-summary.mjs";
 import {
   loadOrderIntakeDraft,
   saveOrderIntakeDraft,
