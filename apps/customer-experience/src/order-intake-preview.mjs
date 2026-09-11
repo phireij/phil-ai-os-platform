@@ -1,3 +1,8 @@
+import {
+  loadOrderIntakeDraft,
+  saveOrderIntakeDraft,
+} from "./order-intake-draft-state.mjs";
+
 const form = document.querySelector("#order-intake-form");
 const cakeType = document.querySelector("#cake-type");
 const customFields = document.querySelector("#custom-cake-fields");
@@ -14,6 +19,11 @@ const yamatoWindow = document.querySelector("#yamato-window");
 const yamatoWindowField = document.querySelector("#yamato-window-field");
 const rubyCarRouteGuidance = document.querySelector("#ruby-car-route-guidance");
 const referenceImages = document.querySelector("#reference-images");
+const customNotes = document.querySelector("#custom-notes");
+const photoTopper = form.querySelector('input[name="photo-topper"]');
+const edibleTopper = form.querySelector('input[name="edible-topper"]');
+const addonInputs = Array.from(form.querySelectorAll('input[name="addon"]'));
+const icingRequested = document.querySelector("#icing-requested");
 const status = document.querySelector("#intake-status");
 
 const summaryFulfillment = document.querySelector("#summary-fulfillment");
@@ -174,6 +184,45 @@ function renderWindow() {
   }
 }
 
+function currentDraftState() {
+  return {
+    fulfillment: selectedFulfillment(),
+    requestedDate: requestedDate.value,
+    pickupTime: pickupTime.value,
+    yamatoWindow: yamatoWindow.value,
+    cakeType: cakeType.value,
+    customNotes: customNotes.value,
+    photoTopper: Boolean(photoTopper?.checked),
+    edibleTopper: Boolean(edibleTopper?.checked),
+    addons: addonInputs.filter((input) => input.checked).map((input) => input.value),
+    icingRequested: Boolean(icingRequested?.checked),
+  };
+}
+
+function persistDraft() {
+  saveOrderIntakeDraft(window.sessionStorage, currentDraftState());
+}
+
+function restoreDraft() {
+  const draft = loadOrderIntakeDraft(window.sessionStorage);
+  if (!draft) return false;
+
+  const fulfillment = form.querySelector(`input[name="fulfillment"][value="${draft.fulfillment}"]`);
+  if (fulfillment) fulfillment.checked = true;
+  requestedDate.value = draft.requestedDate;
+  pickupTime.value = draft.pickupTime;
+  yamatoWindow.value = draft.yamatoWindow;
+  cakeType.value = draft.cakeType;
+  customNotes.value = draft.customNotes;
+  if (photoTopper) photoTopper.checked = draft.photoTopper;
+  if (edibleTopper) edibleTopper.checked = draft.edibleTopper;
+  addonInputs.forEach((input) => {
+    input.checked = draft.addons.includes(input.value);
+  });
+  if (icingRequested) icingRequested.checked = draft.icingRequested;
+  return true;
+}
+
 form.addEventListener("change", (event) => {
   if (event.target === cakeType) renderCustomFields();
   if (event.target.matches('input[name="fulfillment"]')) renderFulfillment();
@@ -182,7 +231,15 @@ form.addEventListener("change", (event) => {
   if (event.target.matches('input[name="fulfillment"]') || event.target === requestedDate || event.target === pickupTime) {
     validatePickupTimeNotPast();
   }
-  if (event.target === referenceImages) validateReferenceImages();
+  if (event.target === referenceImages) {
+    validateReferenceImages();
+  } else {
+    persistDraft();
+  }
+});
+
+form.addEventListener("input", (event) => {
+  if (event.target !== referenceImages) persistDraft();
 });
 
 form.addEventListener("submit", (event) => {
@@ -201,11 +258,17 @@ form.addEventListener("submit", (event) => {
     return;
   }
 
+  persistDraft();
   status.textContent = fulfillmentDateCopy().success;
 });
 
 enforceRequestedDateFloor();
+const draftRestored = restoreDraft();
 renderCustomFields();
 renderFulfillment();
 renderDate();
 renderWindow();
+validatePickupTimeNotPast();
+if (draftRestored) {
+  status.textContent = "Draft restored for this browser tab. Reference images must be selected again. / このタブの下書きを復元しました。参考画像は再度選択してください。";
+}
