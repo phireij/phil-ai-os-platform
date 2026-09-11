@@ -6,7 +6,18 @@ export function orderIntakeCartContextRows(storage) {
   return state ? orderIntakeReviewRows(state) : [];
 }
 
-export function renderOrderIntakeCartContext(root, storage = globalThis.sessionStorage, doc = globalThis.document) {
+export function orderIntakeCorrectionHref(search = "") {
+  const params = new URLSearchParams(search);
+  const lang = params.get("lang") === "ja" ? "ja" : null;
+  return lang ? `./order-intake-preview.html?lang=${lang}` : "./order-intake-preview.html";
+}
+
+export function renderOrderIntakeCartContext(
+  root,
+  storage = globalThis.sessionStorage,
+  doc = globalThis.document,
+  search = globalThis.location?.search || "",
+) {
   if (!root || !doc) return false;
   const rows = orderIntakeCartContextRows(storage);
   if (!rows.length) {
@@ -31,15 +42,30 @@ export function renderOrderIntakeCartContext(root, storage = globalThis.sessionS
     list.append(dt, dd);
   }
 
-  root.replaceChildren(heading, note, list);
+  const correction = doc.createElement("p");
+  const correctionLink = doc.createElement("a");
+  correctionLink.className = "detail-link";
+  correctionLink.href = orderIntakeCorrectionHref(search);
+  correctionLink.textContent = "Edit order request / ご注文リクエストを修正";
+  correction.append(correctionLink);
+
+  const correctionNote = doc.createElement("p");
+  correctionNote.className = "field-help";
+  correctionNote.textContent = "Your text choices are restored in this tab. Reference images must be selected again before review. / 入力内容はこのタブで復元されます。参考画像は確認前に再選択してください。";
+
+  root.replaceChildren(heading, note, list, correction, correctionNote);
   return true;
 }
 
-export function installOrderIntakeCartContext(doc = globalThis.document, storage = globalThis.sessionStorage) {
+export function installOrderIntakeCartContext(
+  doc = globalThis.document,
+  storage = globalThis.sessionStorage,
+  search = globalThis.location?.search || "",
+) {
   if (!doc) return false;
   const root = doc.querySelector("#order-intake-cart-context");
   if (!root) return false;
-  return renderOrderIntakeCartContext(root, storage, doc);
+  return renderOrderIntakeCartContext(root, storage, doc, search);
 }
 
 installOrderIntakeCartContext();

@@ -8,7 +8,10 @@ import {
   sanitizeOrderIntakeReviewCarryover,
   saveOrderIntakeReviewCarryover,
 } from "../src/order-intake-review-continuity.mjs";
-import { orderIntakeCartContextRows } from "../src/order-intake-cart-context.mjs";
+import {
+  orderIntakeCartContextRows,
+  orderIntakeCorrectionHref,
+} from "../src/order-intake-cart-context.mjs";
 
 function memoryStorage() {
   const values = new Map();
@@ -70,6 +73,13 @@ test("cart context reuses the bounded review rows without creating authority", (
   assert.ok(rows.some((row) => row.label.includes("Design notes") && row.value === "Happy 18th"));
   assert.ok(rows.some((row) => row.label.includes("Reference images") && row.value.includes("reference.webp")));
   assert.ok(rows.some((row) => row.label.includes("Topper") && row.value.includes("Photo")));
+});
+
+test("cart correction returns to order intake without losing supported locale", () => {
+  assert.equal(orderIntakeCorrectionHref(""), "./order-intake-preview.html");
+  assert.equal(orderIntakeCorrectionHref("?lang=ja"), "./order-intake-preview.html?lang=ja");
+  assert.equal(orderIntakeCorrectionHref("?lang=en"), "./order-intake-preview.html");
+  assert.equal(orderIntakeCorrectionHref("?lang=fr"), "./order-intake-preview.html");
 });
 
 test("unknown review versions and broken storage fail closed", () => {
