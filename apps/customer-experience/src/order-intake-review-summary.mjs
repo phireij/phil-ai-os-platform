@@ -1,3 +1,4 @@
+import { saveOrderIntakeReviewCarryover } from "./order-intake-review-continuity.mjs";
 import { buildOrderIntakeReviewState } from "./order-intake-review-state.mjs";
 
 const ADDON_LABELS = {
@@ -38,7 +39,7 @@ export function orderIntakeReviewRows(input = {}) {
   return Object.freeze(rows.map((row) => Object.freeze(row)));
 }
 
-function currentInput(form) {
+export function currentOrderIntakeReviewInput(form) {
   const cakeType = form.querySelector("#cake-type");
   const notes = form.querySelector("#custom-notes");
   const referenceImages = form.querySelector("#reference-images");
@@ -53,11 +54,13 @@ function currentInput(form) {
   };
 }
 
-export function renderOrderIntakeReviewSummary(form, summaryList, doc = globalThis.document) {
+export function renderOrderIntakeReviewSummary(form, summaryList, doc = globalThis.document, storage = globalThis.sessionStorage) {
   if (!form || !summaryList || !doc) return;
+  const input = currentOrderIntakeReviewInput(form);
+  saveOrderIntakeReviewCarryover(storage, input);
   summaryList.querySelectorAll('[data-order-intake-review="true"]').forEach((node) => node.remove());
 
-  for (const row of orderIntakeReviewRows(currentInput(form))) {
+  for (const row of orderIntakeReviewRows(input)) {
     const dt = doc.createElement("dt");
     const dd = doc.createElement("dd");
     dt.dataset.orderIntakeReview = "true";
@@ -68,13 +71,13 @@ export function renderOrderIntakeReviewSummary(form, summaryList, doc = globalTh
   }
 }
 
-export function installOrderIntakeReviewSummary(doc = globalThis.document) {
+export function installOrderIntakeReviewSummary(doc = globalThis.document, storage = globalThis.sessionStorage) {
   if (!doc) return false;
   const form = doc.querySelector("#order-intake-form");
   const summaryList = doc.querySelector(".intake-summary dl");
   if (!form || !summaryList) return false;
 
-  const render = () => renderOrderIntakeReviewSummary(form, summaryList, doc);
+  const render = () => renderOrderIntakeReviewSummary(form, summaryList, doc, storage);
   form.addEventListener("change", render);
   form.addEventListener("input", (event) => {
     if (event.target?.id !== "reference-images") render();
