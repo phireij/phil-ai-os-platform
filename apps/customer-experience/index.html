@@ -3,91 +3,134 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#fff8f4">
-  <meta name="description" content="Ruby's Cake Delights storefront progress preview">
+  <meta name="theme-color" content="#fff7f5">
+  <meta name="description" content="Phil AI OS isolated bilingual customer experience foundation">
   <meta name="robots" content="noindex,nofollow">
-  <link rel="stylesheet" href="./ruby-storefront-progress.css">
-  <title>Ruby's Cake Delights — Storefront Progress Preview</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./connectivity-status.css">
+  <link rel="stylesheet" href="./product-browse-ux.css">
+  <link rel="stylesheet" href="./product-detail-facts.css">
+  <link rel="stylesheet" href="./mobile-performance.css">
+  <title>Phil AI OS — Customer Experience Foundation</title>
 </head>
 <body>
-  <div class="preview-strip" data-i18n="previewStrip">PRE-PRODUCTION PREVIEW · Visual progress only · No live orders, payments, SMS, inventory, or WooCommerce writes</div>
-  <header class="store-header">
-    <a class="brand-lockup" href="./" aria-label="Ruby's Cake Delights progress preview home">
-      <span class="brand-mark" aria-hidden="true">R</span>
-      <span class="brand-copy"><strong>Ruby's Cake Delights</strong><span>Delight in Every Bite</span></span>
-    </a>
-    <div class="header-tools">
-      <nav class="store-nav" aria-label="Store preview navigation">
-        <a href="#favorites" data-i18n="navShop">Shop</a>
-        <a href="#services" data-i18n="navOrder">Order</a>
-        <a href="./order-intake-preview.html" data-i18n="navCustom">Custom Cake</a>
-        <a href="./quick-pickup-preview.html" data-i18n="navPickup">Quick Pickup</a>
-        <a class="nav-cta" href="./cart-preview.html" data-i18n="navCart">Cart preview</a>
-      </nav>
-      <label class="locale-control"><span class="sr-only">Language</span><select id="ruby-locale" aria-label="Language"><option value="en">EN</option><option value="ja">日本語</option></select></label>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">Phil AI OS · Sprint 4</p>
+      <a class="brand" href="./">Customer Experience</a>
+    </div>
+    <div class="header-actions">
+      <label class="locale-label" for="locale-select">Language</label>
+      <select id="locale-select" aria-label="Language">
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+      </select>
     </div>
   </header>
 
-  <main class="page">
-    <section class="hero" aria-labelledby="ruby-hero-title">
-      <div>
-        <p class="eyebrow" data-i18n="heroEyebrow">Ruby's Cake Delights · Ichikawa, Chiba</p>
-        <h1 id="ruby-hero-title" data-i18n="heroTitle">Sweet moments, made a little more special.</h1>
-        <p class="hero-copy" data-i18n="heroCopy">A first look at the customer-facing Ruby's Cake Delights storefront direction. This page is intentionally separated from production while the catalog, media, fulfillment rules and final launch approvals are still being completed.</p>
-        <div class="hero-actions">
-          <a class="button primary" href="#favorites" data-i18n="heroPrimary">Explore the working selection</a>
-          <a class="button secondary" href="./order-intake-preview.html" data-i18n="heroSecondary">Preview custom cake request</a>
+  <main id="main" tabindex="-1">
+    <section class="hero" aria-labelledby="hero-title">
+      <p class="status-pill">Isolated preview · No live checkout</p>
+      <h1 id="hero-title">Mobile-first bilingual storefront foundation</h1>
+      <p id="hero-copy">Synthetic data only. This preview proves customer flow without production WooCommerce connectivity.</p>
+      <div class="hero-actions" aria-label="Preview actions">
+        <a class="detail-link" href="#catalog-section">Browse products</a>
+        <a class="secondary-link" href="./cart-preview.html">Review cart flow</a>
+      </div>
+    </section>
+
+    <section class="journey-panel" aria-labelledby="journey-title">
+      <div class="section-heading compact-heading">
+        <div>
+          <p class="eyebrow">Simple ordering</p>
+          <h2 id="journey-title">From craving to confirmation</h2>
         </div>
       </div>
-      <div class="hero-visual" role="img" aria-label="Stylized Ruby's Cake Delights cake presentation placeholder">
-        <div class="cake-plate"></div>
-        <div class="visual-note" data-i18n="visualNote">Brand imagery and approved product photography will replace this presentation art in later preview checkpoints.</div>
-      </div>
-    </section>
-
-    <section id="favorites" class="section" aria-labelledby="favorites-title">
-      <div class="section-head">
-        <div><p class="eyebrow" data-i18n="catalogEyebrow">Working catalog preview</p><h2 id="favorites-title" data-i18n="catalogTitle">A taste of what's taking shape</h2></div>
-        <p data-i18n="catalogNote">These cards reflect the current working three-product subset only. They are not the final Initial Launch Catalog and are not published to WooCommerce.</p>
-      </div>
-      <div class="product-grid">
-        <article class="product-card">
-          <div class="product-art"><span aria-hidden="true">M</span><span class="working-chip" data-i18n="workingPreview">Working preview</span></div>
-          <div class="product-body"><h3>Moist Chocolate Round Cake</h3><p data-i18n="moistDescription">Rich chocolate cake presented here as a storefront layout preview while final media, Japanese copy and fulfillment details remain gated.</p><div class="product-price"><span data-i18n="moistPrice">From ¥3,500</span><small data-i18n="moistVariant">15 cm working variant</small></div><p class="copy-pending" data-i18n="jpNamePending">Japanese product name remains owner-gated and is intentionally not invented in this preview.</p></div>
+      <div class="journey-grid">
+        <article class="journey-step">
+          <span class="step-number" aria-hidden="true">1</span>
+          <div><h3 id="journey-browse-title">Choose your favorites</h3><p id="journey-browse-copy">Browse clear product details, price and availability.</p></div>
         </article>
-        <article class="product-card">
-          <div class="product-art bar"><span aria-hidden="true">F</span><span class="working-chip" data-i18n="workingPreview">Working preview</span></div>
-          <div class="product-body"><h3>Fudgy Milky Bar</h3><p data-i18n="fudgyDescription">A compact treat used to exercise product-card, cart and fulfillment presentation. Final temperature and packaging classification is still under review.</p><div class="product-price"><span>¥250</span><small data-i18n="workingPrice">Working catalog price</small></div><p class="copy-pending" data-i18n="jpNamePending">Japanese product name remains owner-gated and is intentionally not invented in this preview.</p></div>
+        <article class="journey-step">
+          <span class="step-number" aria-hidden="true">2</span>
+          <div><h3 id="journey-fulfillment-title">Choose fulfillment</h3><p id="journey-fulfillment-copy">See pickup and delivery guidance before checkout.</p></div>
         </article>
-        <article class="product-card">
-          <div class="product-art bread"><span aria-hidden="true">E</span><span class="working-chip" data-i18n="workingPreview">Working preview</span></div>
-          <div class="product-body"><h3>Cheezy Ensaymada</h3><p data-i18n="ensaymadaDescription">A savory-sweet pastry card using the owner-confirmed working price while final packaging, media and launch approval remain pending.</p><div class="product-price"><span>¥300</span><small data-i18n="ownerConfirmedPrice">Owner-confirmed working price</small></div><p class="copy-pending" data-i18n="jpNamePending">Japanese product name remains owner-gated and is intentionally not invented in this preview.</p></div>
+        <article class="journey-step">
+          <span class="step-number" aria-hidden="true">3</span>
+          <div><h3 id="journey-review-title">Review before submitting</h3><p id="journey-review-copy">Confirm item, price, shipping and payment details before the final action.</p></div>
         </article>
       </div>
     </section>
 
-    <section id="services" class="section" aria-labelledby="services-title">
-      <div class="section-head"><div><p class="eyebrow" data-i18n="servicesEyebrow">Ordering experience</p><h2 id="services-title" data-i18n="servicesTitle">Built around how Ruby's customers order</h2></div><p data-i18n="servicesNote">The visual storefront will progressively connect to the already-tested customer-flow foundations without enabling production actions early.</p></div>
-      <div class="service-grid">
-        <article class="service-card"><div class="service-icon">01</div><h3 data-i18n="serviceShopTitle">Shop ready-made favorites</h3><p data-i18n="serviceShopCopy">Browse clear product details, availability and fulfillment guidance before entering the governed checkout path.</p></article>
-        <article class="service-card"><div class="service-icon">02</div><h3 data-i18n="serviceCustomTitle">Request a custom cake</h3><p data-i18n="serviceCustomCopy">Choose requested date, fulfillment, cake type, reference images and add-ons through the existing mobile-first intake preview.</p></article>
-        <article class="service-card"><div class="service-icon">03</div><h3 data-i18n="servicePickupTitle">Quick Pickup</h3><p data-i18n="servicePickupCopy">A future WooCommerce pickup experience designed to remain fail-closed until inventory, capacity and payment readiness are confirmed.</p></article>
+    <section id="catalog-section" aria-labelledby="catalog-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Catalog</p>
+          <h2 id="catalog-title">Products</h2>
+        </div>
+        <p id="catalog-summary" aria-live="polite"></p>
+      </div>
+      <div id="catalog-grid" class="product-grid" aria-live="polite"></div>
+    </section>
+
+    <section id="product-section" class="detail-panel" hidden aria-labelledby="product-title">
+      <a id="back-link" class="text-link" href="./">← Back to catalog</a>
+      <div id="product-detail"></div>
+    </section>
+
+    <section class="preview-links" aria-labelledby="preview-links-title">
+      <p class="eyebrow">Customer-flow previews</p>
+      <h2 id="preview-links-title">Review the journey</h2>
+      <div class="preview-link-grid">
+        <a class="preview-link-card" href="./ruby-storefront-progress.html"><strong>Ruby storefront progress</strong><span>See a customer-facing branded progress checkpoint while production gates remain unchanged.</span></a>
+        <a class="preview-link-card" href="./cart-preview.html"><strong>Cart & payment handoff</strong><span>Review order guidance and payment-method presentation.</span></a>
+        <a class="preview-link-card" href="./confirmation-preview.html"><strong>Final confirmation</strong><span>Review the final-order information hierarchy before submission.</span></a>
+        <a class="preview-link-card" href="./quick-pickup-preview.html"><strong>Quick Pickup</strong><span>Review the fail-closed Quick Pickup readiness experience.</span></a>
+        <a class="preview-link-card" href="./order-intake-preview.html"><strong>Order request & custom cake</strong><span>Review the mobile-first requested-date, fulfillment, upload, and cake-add-on intake flow.</span></a>
       </div>
     </section>
 
-    <section class="progress-note" aria-label="Preview progress note">
-      <div><strong data-i18n="progressTitle">This is a visual progress checkpoint, not a launch candidate.</strong><p data-i18n="progressCopy">Future checkpoints will replace placeholders with approved Ruby branding, verified product media, bilingual customer copy and more production-shaped navigation as those inputs become ready.</p></div>
-      <span class="progress-pill" data-i18n="authorityPill">Production authority: unchanged</span>
+    <section class="safety-panel" aria-labelledby="safety-title">
+      <p class="eyebrow">Authority boundary</p>
+      <h2 id="safety-title">Checkout remains an intent</h2>
+      <p id="safety-copy">This Sprint 4 preview can compose and evaluate checkout intent locally. It cannot create an order, charge a payment, or mutate WooCommerce.</p>
     </section>
-
-    <p class="engineering-link"><a href="./engineering-preview.html">Open engineering flow preview</a></p>
   </main>
 
-  <nav class="mobile-dock" aria-label="Mobile storefront preview navigation">
-    <a href="#favorites" data-i18n="mobileShop">Shop</a><a href="./order-intake-preview.html" data-i18n="mobileCustom">Custom</a><a href="./quick-pickup-preview.html" data-i18n="mobilePickup">Pickup</a>
+  <nav class="mobile-action-dock" aria-label="Mobile preview navigation">
+    <a href="#catalog-section" aria-current="page"><span aria-hidden="true">⌕</span><span id="dock-shop-label">Shop</span></a>
+    <a href="./cart-preview.html"><span aria-hidden="true">▣</span><span id="dock-cart-label">Cart</span></a>
+    <a href="./quick-pickup-preview.html"><span aria-hidden="true">◎</span><span id="dock-pickup-label">Pickup</span></a>
   </nav>
 
-  <footer class="store-footer" data-i18n="footer">Ruby's Cake Delights · Storefront progress preview · Not indexed · Not production</footer>
-  <script type="module" src="./src/ruby-storefront-progress.mjs"></script>
+  <footer>
+    <p>Phil AI OS · Sprint 4 Customer Experience · synthetic fixture environment</p>
+  </footer>
+
+  <template id="product-card-template">
+    <article class="product-card">
+      <div class="product-media" aria-hidden="true"><span>CX</span></div>
+      <div class="product-card-body">
+        <div class="product-status-row">
+          <p class="availability"></p>
+          <span class="fulfillment-chip pickup-chip"></span>
+        </div>
+        <h3></h3>
+        <p class="description"></p>
+        <div class="product-card-footer">
+          <strong class="price"></strong>
+          <a class="detail-link">View</a>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <script type="module" src="./src/app.mjs"></script>
+  <script type="module" src="./src/mobile-ux.mjs"></script>
+  <script type="module" src="./src/product-browse-ux.mjs"></script>
+  <script type="module" src="./src/product-detail-facts.mjs"></script>
+  <script type="module" src="./src/connectivity-status.mjs"></script>
 </body>
 </html>
