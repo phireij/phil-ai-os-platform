@@ -42,6 +42,32 @@ class WorkingCatalogDraftPlanTests(unittest.TestCase):
         self.assertEqual(by_key["RCD-BRD-ENS-1"].price_jpy, 300)
         self.assertNotIn("price_jpy", by_key["RCD-BRD-ENS-1"].unresolved_fields)
 
+    def test_missing_ensaymada_owner_evidence_blocks_draft_plan(self):
+        payload = self.load()
+        payload["source_snapshot"]["field_evidence"] = [
+            item
+            for item in payload["source_snapshot"]["field_evidence"]
+            if item.get("product_key") != "RCD-BRD-ENS-1"
+        ]
+        with self.assertRaisesRegex(
+            ValueError,
+            "Cheezy Ensaymada ¥300 requires structured owner visual evidence",
+        ):
+            build_working_catalog_draft_plan(payload)
+
+    def test_missing_corrected_sku_evidence_blocks_draft_plan(self):
+        payload = self.load()
+        payload["source_snapshot"]["field_evidence"] = [
+            item
+            for item in payload["source_snapshot"]["field_evidence"]
+            if item.get("product_key") != "RCD-MCH-RD-21"
+        ]
+        with self.assertRaisesRegex(
+            ValueError,
+            "21 cm SKU correction requires structured owner direct evidence",
+        ):
+            build_working_catalog_draft_plan(payload)
+
     def test_unresolved_fulfillment_and_media_are_not_guessed(self):
         plan = build_working_catalog_draft_plan(self.load())
         by_key = {product.key: product for product in plan.products}
