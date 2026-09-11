@@ -45,18 +45,48 @@ class MemoryIdempotencyStore:
         self._results[result.idempotency_key] = result
 
 
-def comparable_remote_product(remote: Mapping[str, Any]) -> dict[str, Any]:
-    fields = (
+def _comparable_variable_attributes(remote: Mapping[str, Any]) -> list[dict[str, Any]]:
+    attributes: list[dict[str, Any]] = []
+    for item in remote.get("attributes", []):
+        if not isinstance(item, Mapping):
+            continue
+        name = str(item.get("name") or "")
+        options = item.get("options", [])
+        if not isinstance(options, list):
+            options = []
+        attributes.append(
+            {
+                "name": name,
+                "visible": bool(item.get("visible", False)),
+                "variation": bool(item.get("variation", False)),
+                "options": sorted(str(option) for option in options),
+            }
+        )
+    return sorted(attributes, key=lambda item: item["name"])
+
+
+def comparable_remote_product(
+    remote: Mapping[str, Any],
+    *,
+    variable: bool | None = None,
+) -> dict[str, Any]:
+    is_variable = remote.get("type") == "variable" if variable is None else variable
+    fields = [
         "sku",
         "name",
         "description",
         "slug",
-        "regular_price",
         "status",
         "catalog_visibility",
         "shipping_class",
-    )
+    ]
+    if is_variable:
+        fields.append("type")
+    else:
+        fields.append("regular_price")
     comparable = {field: remote.get(field) for field in fields}
+    if is_variable:
+        comparable["attributes"] = _comparable_variable_attributes(remote)
     target_meta = {
         "_philaios_temperature_modes",
         "_philaios_pickup_allowed",

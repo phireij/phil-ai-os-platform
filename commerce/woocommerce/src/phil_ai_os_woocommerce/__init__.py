@@ -52,6 +52,7 @@ from .models import (
     LocalizedText,
     MediaRecord,
     ProductRecord,
+    ProductVariationRecord,
 )
 from .orchestration import AuditedReconciliation, reconcile_with_audit
 from .production_transport import (
@@ -105,6 +106,7 @@ __all__ = [
     "NoCredentialsProvider",
     "NoWooCommerceSecretResolver",
     "ProductRecord",
+    "ProductVariationRecord",
     "ProductionConnectivityBlocked",
     "ProductionWooCommerceConfig",
     "ProductionWooCommerceTransport",

@@ -17,7 +17,7 @@ from phil_ai_os_woocommerce.models import ContractValidationError
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build a side-effect-free WooCommerce product reconciliation plan from "
+            "Build a side-effect-free WooCommerce product and variation reconciliation plan from "
             "an approved catalog intake file and a caller-supplied read-only remote snapshot."
         )
     )
@@ -26,7 +26,10 @@ def parse_args() -> argparse.Namespace:
         "--remote-snapshot",
         required=True,
         type=Path,
-        help="Read-only WooCommerce product snapshot JSON path (array or {products: [...]})",
+        help=(
+            "Read-only WooCommerce product snapshot JSON path (array or {products: [...]}); "
+            "variable parents must include expanded variation objects when variation comparison is required"
+        ),
     )
     parser.add_argument("--locale", choices=("en", "ja"), default="en")
     parser.add_argument("--output", type=Path, help="Optional output JSON path")
@@ -68,8 +71,12 @@ def main() -> int:
 
     print(
         "PHIL_AI_OS_CATALOG_DRY_RUN_GREEN "
-        f"create={plan['counts']['create']} update={plan['counts']['update']} "
-        f"noop={plan['counts']['noop']} network_call=false mutation_authorized=false",
+        f"products_create={plan['counts']['create']} products_update={plan['counts']['update']} "
+        f"products_noop={plan['counts']['noop']} "
+        f"variations_create={plan['variation_counts']['create']} "
+        f"variations_update={plan['variation_counts']['update']} "
+        f"variations_noop={plan['variation_counts']['noop']} "
+        "network_call=false mutation_authorized=false",
         file=sys.stderr,
     )
     return 0

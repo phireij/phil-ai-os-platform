@@ -51,6 +51,13 @@ class CatalogHandoffTemplateTests(unittest.TestCase):
         self.assertEqual(source["intake_product_status"], "draft")
         self.assertEqual(source["intake_product_visibility"], "hidden")
 
+    def test_handoff_contract_requires_parent_and_variation_skus_for_variable_products(self):
+        requirements = "\n".join(self.template()["handoff_requirements"])
+        self.assertIn("product_type (simple or variable)", requirements)
+        self.assertIn("unique parent SKU", requirements)
+        self.assertIn("unique SKU, JPY regular price, and attribute values", requirements)
+        self.assertIn("variable parent prices remain null", requirements)
+
     def test_handoff_never_grants_production_authority(self):
         payload = self.template()
         self.assertFalse(payload["source_contract"]["production_write_authority_granted_by_handoff"])
