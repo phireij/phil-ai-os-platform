@@ -55,7 +55,7 @@ export function renderWorkingCatalog(locale = document.documentElement.lang) {
     const initial = document.createElement("span");
     initial.setAttribute("aria-hidden", "true");
     initial.textContent = product.english_name.charAt(0).toUpperCase();
-    const chip = document.createElement("span");
+    const chip = document.createElement("div");
     chip.className = "working-chip";
     chip.textContent = labels[selected].workingPreview;
     art.append(initial, chip);
