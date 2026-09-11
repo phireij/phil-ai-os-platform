@@ -81,6 +81,12 @@ def build_working_catalog_gap_report(payload: dict[str, Any]) -> WorkingCatalogG
     if payload.get("production_publish_authorized") is not True:
         global_gaps.append("production publication authority is not granted")
 
+    source_snapshot = payload.get("source_snapshot") or {}
+    if not source_snapshot.get("drive_file_id"):
+        global_gaps.append("catalog source provenance is missing Drive file id")
+    if not source_snapshot.get("observed_modified_at"):
+        global_gaps.append("catalog source provenance is missing observed modified timestamp")
+
     products = payload.get("working_products") or []
     if not products:
         global_gaps.append("catalog contains no products")
