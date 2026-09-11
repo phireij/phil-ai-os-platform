@@ -40,6 +40,26 @@ class CatalogSnapshot:
         }
 
 
+@dataclass(frozen=True)
+class CatalogReconciliationSnapshot:
+    captured_at: str
+    products: tuple[dict[str, Any], ...]
+    network_read_only: bool = True
+    mutation_authorized: bool = False
+    production_publish_authorized: bool = False
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": "1.0",
+            "captured_at": self.captured_at,
+            "scope": "woocommerce_catalog_reconciliation_read_only",
+            "network_read_only": self.network_read_only,
+            "mutation_authorized": self.mutation_authorized,
+            "production_publish_authorized": self.production_publish_authorized,
+            "products": list(self.products),
+        }
+
+
 def _validated_capture_timestamp(value: str | None) -> str:
     if value is None:
         return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -63,6 +83,15 @@ def _optional_int(value: Any, *, context: str) -> int | None:
             f"WooCommerce read-only snapshot {context} must be an integer or null"
         )
     return value
+
+
+def _positive_int(value: Any, *, context: str) -> int:
+    parsed = _optional_int(value, context=context)
+    if parsed is None or parsed < 1:
+        raise ProductionConnectivityBlocked(
+            f"WooCommerce read-only snapshot {context} must be a positive integer"
+        )
+    return parsed
 
 
 def _string_field(value: Mapping[str, Any], field: str, *, context: str) -> str:
@@ -148,6 +177,86 @@ def _category_projection(value: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _reconciliation_attribute_projection(value: Mapping[str, Any]) -> dict[str, Any]:
+    raw_options = value.get("options", [])
+    if not isinstance(raw_options, list) or not all(isinstance(option, str) for option in raw_options):
+        raise ProductionConnectivityBlocked(
+            "WooCommerce read-only reconciliation snapshot product attribute options must be strings"
+        )
+    return {
+        "name": _string_field(value, "name", context="product attribute"),
+        "visible": _bool_field(value, "visible", context="product attribute"),
+        "variation": _bool_field(value, "variation", context="product attribute"),
+        "options": list(raw_options),
+    }
+
+
+def _variation_projection(value: Mapping[str, Any]) -> dict[str, Any]:
+    attributes = []
+    for attribute in _validated_nested_mappings(value, "attributes"):
+        attributes.append(
+            {
+                "name": _string_field(attribute, "name", context="variation attribute"),
+                "option": _string_field(attribute, "option", context="variation attribute"),
+            }
+        )
+    return {
+        "id": _positive_int(value.get("id"), context="variation id"),
+        "sku": _string_field(value, "sku", context="variation"),
+        "regular_price": _string_field(value, "regular_price", context="variation"),
+        "attributes": sorted(attributes, key=lambda item: (item["name"], item["option"])),
+    }
+
+
+_RECONCILIATION_META_KEYS = {
+    "_philaios_temperature_modes",
+    "_philaios_pickup_allowed",
+    "_philaios_delivery_allowed",
+    "_philaios_requires_order_approval",
+}
+
+
+def _reconciliation_product_projection(
+    value: Mapping[str, Any],
+    *,
+    variations: list[Mapping[str, Any]],
+) -> dict[str, Any]:
+    attributes = [
+        _reconciliation_attribute_projection(item)
+        for item in _validated_nested_mappings(value, "attributes")
+    ]
+    attributes.sort(key=lambda item: item["name"])
+
+    meta_data = []
+    for item in _validated_nested_mappings(value, "meta_data"):
+        key = _string_field(item, "key", context="product meta_data")
+        if key in _RECONCILIATION_META_KEYS:
+            meta_data.append({"key": key, "value": item.get("value")})
+    meta_data.sort(key=lambda item: item["key"])
+
+    product_type = _string_field(value, "type", context="product")
+    projected: dict[str, Any] = {
+        "id": _positive_int(value.get("id"), context="product id"),
+        "sku": _string_field(value, "sku", context="product"),
+        "name": _string_field(value, "name", context="product"),
+        "description": _string_field(value, "description", context="product"),
+        "slug": _string_field(value, "slug", context="product"),
+        "type": product_type,
+        "status": _string_field(value, "status", context="product"),
+        "catalog_visibility": _string_field(value, "catalog_visibility", context="product"),
+        "regular_price": _string_field(value, "regular_price", context="product"),
+        "shipping_class": _string_field(value, "shipping_class", context="product"),
+        "attributes": attributes,
+        "meta_data": meta_data,
+    }
+    if product_type == "variable":
+        projected["variations"] = sorted(
+            (_variation_projection(item) for item in variations),
+            key=lambda item: (item["sku"], item["id"]),
+        )
+    return projected
+
+
 def _collect_pages(
     transport: ReadOnlyWooCommerceTransport,
     path: str,
@@ -205,3 +314,44 @@ def collect_catalog_snapshot(
         products=products,
         categories=categories,
     )
+
+
+def collect_catalog_reconciliation_snapshot(
+    transport: ReadOnlyWooCommerceTransport,
+    *,
+    captured_at: str | None = None,
+    per_page: int = 100,
+    max_pages: int = 10,
+    variation_per_page: int = 100,
+    variation_max_pages: int = 10,
+) -> CatalogReconciliationSnapshot:
+    """Collect a bounded GET-only snapshot compatible with catalog dry-run comparison.
+
+    Variable products are expanded through ``/products/{id}/variations`` so the
+    dry-run can compare variation SKUs, prices, and attributes without guessing
+    from WooCommerce's parent-level numeric variation-id list. Only Phil AI OS
+    governance metadata required by reconciliation is retained; arbitrary product
+    metadata is deliberately excluded.
+    """
+
+    timestamp = _validated_capture_timestamp(captured_at)
+    products_raw = _collect_pages(transport, "/products", per_page=per_page, max_pages=max_pages)
+
+    projected: list[dict[str, Any]] = []
+    for raw in products_raw:
+        product_type = _string_field(raw, "type", context="product")
+        variations: list[Mapping[str, Any]] = []
+        if product_type == "variable":
+            product_id = _positive_int(raw.get("id"), context="variable product id")
+            variations = _collect_pages(
+                transport,
+                f"/products/{product_id}/variations",
+                per_page=variation_per_page,
+                max_pages=variation_max_pages,
+            )
+        projected.append(
+            _reconciliation_product_projection(raw, variations=variations)
+        )
+
+    products = tuple(sorted(projected, key=lambda item: (item["sku"], item["id"])))
+    return CatalogReconciliationSnapshot(captured_at=timestamp, products=products)
