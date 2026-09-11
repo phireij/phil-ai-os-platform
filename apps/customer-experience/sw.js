@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v24";
-// 2026-09-06: refresh the isolated shell for approved Ruby car route/fee guidance; no live route integration.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v25";
+// 2026-09-11: refresh the isolated shell for order-intake review continuity; no live commerce integration.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -51,6 +51,12 @@ const APP_SHELL = [
   "./src/pickup.mjs",
   "./src/quick-pickup-preview.mjs",
   "./src/order-intake-preview.mjs",
+  "./src/order-intake-draft-state.mjs",
+  "./src/order-intake-review-state.mjs",
+  "./src/order-intake-review-summary.mjs",
+  "./src/order-intake-review-continuity.mjs",
+  "./src/order-intake-cart-context.mjs",
+  "./src/order-intake-final-review.mjs",
   "./src/readiness-feedback.mjs",
   "./src/seo.mjs",
   "./src/ui-state.mjs",
