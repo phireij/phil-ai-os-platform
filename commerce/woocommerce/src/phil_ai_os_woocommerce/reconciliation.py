@@ -93,9 +93,10 @@ def comparable_remote_product(
         "_philaios_delivery_allowed",
         "_philaios_requires_order_approval",
     }
-    comparable["meta_data"] = [
+    meta_data = [
         {"key": item.get("key"), "value": item.get("value")}
         for item in remote.get("meta_data", [])
         if isinstance(item, Mapping) and item.get("key") in target_meta
     ]
+    comparable["meta_data"] = sorted(meta_data, key=lambda item: str(item["key"]))
     return comparable
