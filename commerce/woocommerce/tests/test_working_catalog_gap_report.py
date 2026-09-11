@@ -47,6 +47,56 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
         self.assertIn("production mutation authority is not granted", report.global_gaps)
         self.assertIn("production publication authority is not granted", report.global_gaps)
 
+    def test_missing_owner_evidence_is_a_global_readiness_gap(self):
+        payload = self.load()
+        payload["source_snapshot"]["field_evidence"] = [
+            item
+            for item in payload["source_snapshot"]["field_evidence"]
+            if item.get("product_key") != "RCD-BRD-ENS-1"
+        ]
+        report = build_working_catalog_gap_report(payload)
+        self.assertFalse(report.production_ready)
+        self.assertIn(
+            "owner evidence: Cheezy Ensaymada ¥300 requires structured owner visual evidence",
+            report.global_gaps,
+        )
+
+    def test_corrected_sku_requires_structured_owner_evidence(self):
+        payload = self.load()
+        payload["source_snapshot"]["field_evidence"] = [
+            item
+            for item in payload["source_snapshot"]["field_evidence"]
+            if item.get("product_key") != "RCD-MCH-RD-21"
+        ]
+        report = build_working_catalog_gap_report(payload)
+        self.assertFalse(report.production_ready)
+        self.assertIn(
+            "owner evidence: 21 cm SKU correction requires structured owner direct evidence",
+            report.global_gaps,
+        )
+
+    def test_empty_catalog_can_never_report_production_ready(self):
+        payload = self.load()
+        payload["working_products"] = []
+        payload["catalog_approved"] = True
+        payload["catalog_scope"]["scope_complete_for_intended_initial_launch"] = True
+        payload["catalog_approval_ref"] = "owner-approval:test"
+        payload["mutation_authorized"] = True
+        payload["production_publish_authorized"] = True
+        payload["source_snapshot"]["field_evidence"] = []
+        report = build_working_catalog_gap_report(payload)
+        self.assertFalse(report.production_ready)
+        self.assertIn("catalog contains no products", report.global_gaps)
+
+    def test_invalid_or_duplicate_sku_blocks_production_readiness(self):
+        payload = self.load()
+        payload["working_products"][1]["sku"] = "BAR-FMB"
+        payload["working_products"][2]["sku"] = "RCD-BAR-FMB"
+        report = build_working_catalog_gap_report(payload)
+        self.assertFalse(report.production_ready)
+        self.assertIn("invalid Ruby SKU: BAR-FMB", report.global_gaps)
+        self.assertIn("duplicate Ruby SKU: RCD-BAR-FMB", report.global_gaps)
+
 
 if __name__ == "__main__":
     unittest.main()
