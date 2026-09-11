@@ -30,6 +30,10 @@ from .order_quote_owner_decision_packet import (
     build_order_quote_owner_decision_packet,
 )
 from .order_quote_owner_decision_register import OrderQuoteOwnerDecisionPacketRegister
+from .order_quote_owner_decision_workspace import (
+    OrderQuoteOwnerDecisionWorkspaceError,
+    build_order_quote_owner_decision_workspace,
+)
 from .order_quote_preparation import OrderQuotePreparationError, build_order_quote_preparation
 from .order_quote_register import OrderQuoteDraftRegister
 from .order_review import OrderReviewQueue
@@ -61,6 +65,7 @@ __all__ = [
     "OrderQuoteDraftRegister",
     "OrderQuoteOwnerDecisionPacketError",
     "OrderQuoteOwnerDecisionPacketRegister",
+    "OrderQuoteOwnerDecisionWorkspaceError",
     "OrderQuotePreparationError",
     "OrderReviewDecisionError",
     "OrderReviewProposalRegister",
@@ -75,6 +80,7 @@ __all__ = [
     "build_order_quote_approval_workspace",
     "build_order_quote_draft",
     "build_order_quote_owner_decision_packet",
+    "build_order_quote_owner_decision_workspace",
     "build_order_quote_preparation",
     "build_order_review_decision_proposal",
     "build_order_review_workspace",
