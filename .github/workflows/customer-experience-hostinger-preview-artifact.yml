@@ -1,0 +1,56 @@
+name: Customer Experience Hostinger Preview Artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_non_production:
+        description: "Confirm artifact is for isolated non-production preview only"
+        required: true
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - "apps/customer-experience/**"
+      - ".github/workflows/customer-experience-hostinger-preview-artifact.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-preview-artifact:
+    if: ${{ github.event_name == 'pull_request' || inputs.confirm_non_production == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Run preview bundle safety tests
+        working-directory: apps/customer-experience
+        run: python -m unittest test_hostinger_preview_bundle.py
+
+      - name: Build isolated preview ZIP
+        run: |
+          mkdir -p /tmp/philaios-preview
+          python apps/customer-experience/tools_build_hostinger_preview.py \
+            /tmp/philaios-preview/ruby-cx-hostinger-preview.zip
+
+      - name: Assert artifact is non-production and non-deploying
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/philaios-preview/ruby-cx-hostinger-preview.zip
+          ! grep -Eiq 'ssh|scp|sftp|rsync|ftp|wp-cli|kubectl|docker|curl.*(-X|--request)[[:space:]]*(POST|PUT|PATCH|DELETE)' \
+            .github/workflows/customer-experience-hostinger-preview-artifact.yml
+          echo "PHIL_AI_OS_HOSTINGER_PREVIEW_ARTIFACT_NON_DEPLOYING_GREEN"
+          echo "production_publish_authorized=false dns_change_authorized=false payment_execution_authorized=false sms_send_authorized=false woo_mutation_authorized=false"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ruby-cx-hostinger-preview
+          path: /tmp/philaios-preview/ruby-cx-hostinger-preview.zip
+          if-no-files-found: error
+          retention-days: 3
