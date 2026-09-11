@@ -87,15 +87,21 @@ def comparable_remote_product(
     comparable = {field: remote.get(field) for field in fields}
     if is_variable:
         comparable["attributes"] = _comparable_variable_attributes(remote)
-    target_meta = {
+
+    target_meta_order = (
         "_philaios_temperature_modes",
         "_philaios_pickup_allowed",
         "_philaios_delivery_allowed",
         "_philaios_requires_order_approval",
+    )
+    values_by_key = {
+        str(item.get("key")): item.get("value")
+        for item in remote.get("meta_data", [])
+        if isinstance(item, Mapping) and item.get("key") in target_meta_order
     }
     comparable["meta_data"] = [
-        {"key": item.get("key"), "value": item.get("value")}
-        for item in remote.get("meta_data", [])
-        if isinstance(item, Mapping) and item.get("key") in target_meta
+        {"key": key, "value": values_by_key[key]}
+        for key in target_meta_order
+        if key in values_by_key
     ]
     return comparable
