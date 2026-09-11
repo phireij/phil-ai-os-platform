@@ -53,13 +53,13 @@ function currentInput(form) {
   };
 }
 
-export function renderOrderIntakeReviewSummary(form, summaryList) {
-  if (!form || !summaryList) return;
+export function renderOrderIntakeReviewSummary(form, summaryList, doc = globalThis.document) {
+  if (!form || !summaryList || !doc) return;
   summaryList.querySelectorAll('[data-order-intake-review="true"]').forEach((node) => node.remove());
 
   for (const row of orderIntakeReviewRows(currentInput(form))) {
-    const dt = document.createElement("dt");
-    const dd = document.createElement("dd");
+    const dt = doc.createElement("dt");
+    const dd = doc.createElement("dd");
     dt.dataset.orderIntakeReview = "true";
     dd.dataset.orderIntakeReview = "true";
     dt.textContent = row.label;
@@ -68,13 +68,19 @@ export function renderOrderIntakeReviewSummary(form, summaryList) {
   }
 }
 
-const form = document.querySelector("#order-intake-form");
-const summaryList = document.querySelector(".intake-summary dl");
-if (form && summaryList) {
-  const render = () => renderOrderIntakeReviewSummary(form, summaryList);
+export function installOrderIntakeReviewSummary(doc = globalThis.document) {
+  if (!doc) return false;
+  const form = doc.querySelector("#order-intake-form");
+  const summaryList = doc.querySelector(".intake-summary dl");
+  if (!form || !summaryList) return false;
+
+  const render = () => renderOrderIntakeReviewSummary(form, summaryList, doc);
   form.addEventListener("change", render);
   form.addEventListener("input", (event) => {
     if (event.target?.id !== "reference-images") render();
   });
   queueMicrotask(render);
+  return true;
 }
+
+installOrderIntakeReviewSummary();
