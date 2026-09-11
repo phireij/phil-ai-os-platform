@@ -1,0 +1,92 @@
+name: WooCommerce Production Read-Only Shipping Snapshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_read_only:
+        description: "Confirm this run must remain read-only and non-mutating"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    if: ${{ inputs.confirm_read_only == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate credential presence without printing values
+        shell: bash
+        env:
+          RUBY_WOO_PRODUCTION_BASE_URL: ${{ secrets.RUBY_WOO_PRODUCTION_BASE_URL }}
+          RUBY_WOO_PRODUCTION_CONSUMER_KEY: ${{ secrets.RUBY_WOO_PRODUCTION_CONSUMER_KEY }}
+          RUBY_WOO_PRODUCTION_CONSUMER_SECRET: ${{ secrets.RUBY_WOO_PRODUCTION_CONSUMER_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$RUBY_WOO_PRODUCTION_BASE_URL"
+          test -n "$RUBY_WOO_PRODUCTION_CONSUMER_KEY"
+          test -n "$RUBY_WOO_PRODUCTION_CONSUMER_SECRET"
+          echo "PHIL_AI_OS_WOO_PRODUCTION_SECRET_REFS_PRESENT"
+
+      - name: Assert shipping snapshot contains no mutation method
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E 'request\([[:space:]]*"(POST|PUT|DELETE|PATCH)"' \
+            commerce/woocommerce/tools_production_readonly_shipping_snapshot.py \
+            commerce/woocommerce/src/phil_ai_os_woocommerce/readonly_shipping_snapshot.py
+          echo "PHIL_AI_OS_WOO_PRODUCTION_READONLY_SHIPPING_MUTATION_BOUNDARY_GREEN"
+
+      - name: Run shipping snapshot regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=commerce/woocommerce/src \
+            python -m unittest commerce/woocommerce/tests/test_readonly_shipping_snapshot.py -v
+
+      - name: Capture sanitized shipping-zone and method metadata snapshot
+        shell: bash
+        env:
+          RUBY_WOO_PRODUCTION_BASE_URL: ${{ secrets.RUBY_WOO_PRODUCTION_BASE_URL }}
+          RUBY_WOO_PRODUCTION_CONSUMER_KEY: ${{ secrets.RUBY_WOO_PRODUCTION_CONSUMER_KEY }}
+          RUBY_WOO_PRODUCTION_CONSUMER_SECRET: ${{ secrets.RUBY_WOO_PRODUCTION_CONSUMER_SECRET }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/philaios-woo-readonly
+          python commerce/woocommerce/tools_production_readonly_shipping_snapshot.py \
+            /tmp/philaios-woo-readonly/shipping-snapshot.json
+
+      - name: Validate snapshot remains sanitized and non-authorizing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/philaios-woo-readonly/shipping-snapshot.json').read_text())
+          assert payload['network_read_only'] is True
+          assert payload['mutation_authorized'] is False
+          assert payload['payment_execution_authorized'] is False
+          assert payload['production_publish_authorized'] is False
+          assert payload['scope'] == 'woocommerce_shipping_zone_method_metadata_read_only'
+          for zone in payload['zones']:
+              for method in zone['methods']:
+                  assert 'settings' not in method
+          print('PHIL_AI_OS_WOO_PRODUCTION_READONLY_SHIPPING_SNAPSHOT_CONTRACT_GREEN')
+          PY
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: woo-production-readonly-shipping-snapshot
+          path: /tmp/philaios-woo-readonly/shipping-snapshot.json
+          if-no-files-found: error
+          retention-days: 1
