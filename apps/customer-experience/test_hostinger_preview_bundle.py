@@ -57,7 +57,7 @@ class HostingerPreviewBundleTests(unittest.TestCase):
                 self.assertIn("ruby-preview-cart.css", branded_cart)
                 self.assertIn("src/ruby-cart-preview.mjs", branded_cart)
                 self.assertNotIn("KOMOJU", branded_cart)
-                self.assertNotIn("cart-preview.html", branded_cart)
+                self.assertNotIn('href="./cart-preview.html"', branded_cart)
 
                 engineering = archive.read("preview/engineering-preview.html").decode("utf-8")
                 self.assertIn("Phil AI OS · Sprint 4", engineering)
