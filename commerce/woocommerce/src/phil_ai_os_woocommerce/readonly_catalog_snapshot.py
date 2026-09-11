@@ -187,7 +187,7 @@ def _reconciliation_attribute_projection(value: Mapping[str, Any]) -> dict[str, 
         "name": _string_field(value, "name", context="product attribute"),
         "visible": _bool_field(value, "visible", context="product attribute"),
         "variation": _bool_field(value, "variation", context="product attribute"),
-        "options": list(raw_options),
+        "options": sorted(raw_options),
     }
 
 
