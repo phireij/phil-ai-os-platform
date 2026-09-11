@@ -10,12 +10,14 @@ const labels = {
     fromPrice: "From",
     workingPrice: "Working catalog price",
     pendingCopy: "Japanese product name and description remain owner-gated. The approved English source copy is shown without inventing a translation.",
+    details: "View working details",
   },
   ja: {
     workingPreview: "作業中プレビュー",
     fromPrice: "〜",
     workingPrice: "作業中カタログ価格",
     pendingCopy: "日本語の商品名・商品説明はオーナー承認待ちです。未承認の翻訳は作成せず、承認済みの英語原文を表示しています。",
+    details: "作業中の商品詳細を見る",
   },
 };
 
@@ -90,6 +92,12 @@ export function renderWorkingCatalog(locale = document.documentElement.lang) {
       pending.textContent = labels[selected].pendingCopy;
       body.append(pending);
     }
+
+    const details = document.createElement("a");
+    details.className = "button secondary";
+    details.href = `./ruby-product-preview.html?product=${encodeURIComponent(product.key)}&lang=${selected}`;
+    details.textContent = labels[selected].details;
+    body.append(details);
 
     article.append(art, body);
     productGrid.append(article);
