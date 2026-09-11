@@ -14,6 +14,7 @@ from .order_quote_approval_decision import (
     SUPPORTED_QUOTE_APPROVAL_RECOMMENDATIONS,
     build_order_quote_approval_decision_proposal,
 )
+from .order_quote_approval_decision_register import OrderQuoteApprovalDecisionProposalRegister
 from .order_quote_approval_register import OrderQuoteApprovalRequestRegister
 from .order_quote_approval_workspace import (
     OrderQuoteApprovalWorkspaceError,
@@ -42,6 +43,7 @@ __all__ = [
     "OperationsQueue",
     "OrderIntakeHandoffError",
     "OrderQuoteApprovalDecisionError",
+    "OrderQuoteApprovalDecisionProposalRegister",
     "OrderQuoteApprovalRequestError",
     "OrderQuoteApprovalRequestRegister",
     "OrderQuoteApprovalWorkspaceError",
