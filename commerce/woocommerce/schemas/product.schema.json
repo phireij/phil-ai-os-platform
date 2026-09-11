@@ -4,13 +4,18 @@
   "title": "Phil AI OS Commerce Product",
   "type": "object",
   "additionalProperties": false,
-  "required": ["sku", "name", "description", "slug", "regular_price", "currency", "fulfillment", "status", "visibility", "category_keys", "media_keys", "source"],
+  "required": ["sku", "name", "description", "slug", "currency", "fulfillment", "status", "visibility", "category_keys", "media_keys", "source"],
   "properties": {
     "sku": {"type": "string", "minLength": 1},
+    "product_type": {"enum": ["simple", "variable"]},
     "name": {"$ref": "#/$defs/localizedText"},
     "description": {"$ref": "#/$defs/localizedText"},
     "slug": {"$ref": "#/$defs/localizedText"},
-    "regular_price": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]{1,2})?$"},
+    "regular_price": {"type": ["string", "null"], "pattern": "^[0-9]+(?:\\.[0-9]{1,2})?$"},
+    "variations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/productVariation"}
+    },
     "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
     "fulfillment": {"$ref": "#/$defs/fulfillmentProfile"},
     "status": {"enum": ["draft", "publish", "private"]},
@@ -25,6 +30,28 @@
       "enum": ["pending", "reduced_rate_food", "standard_rate", "exempt"]
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "required": ["product_type"],
+        "properties": {"product_type": {"const": "variable"}}
+      },
+      "then": {
+        "required": ["variations"],
+        "properties": {
+          "regular_price": {"type": "null"},
+          "variations": {"minItems": 1}
+        }
+      },
+      "else": {
+        "required": ["regular_price"],
+        "properties": {
+          "regular_price": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]{1,2})?$"},
+          "variations": {"maxItems": 0}
+        }
+      }
+    }
+  ],
   "$defs": {
     "localizedText": {
       "type": "object",
@@ -33,6 +60,21 @@
       "properties": {
         "en": {"type": "string", "minLength": 1},
         "ja": {"type": "string", "minLength": 1}
+      }
+    },
+    "productVariation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sku", "regular_price", "attributes"],
+      "properties": {
+        "sku": {"type": "string", "minLength": 1},
+        "regular_price": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]{1,2})?$"},
+        "attributes": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {"minLength": 1},
+          "additionalProperties": {"type": "string", "minLength": 1}
+        }
       }
     },
     "fulfillmentProfile": {
