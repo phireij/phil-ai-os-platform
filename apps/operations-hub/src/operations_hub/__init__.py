@@ -29,6 +29,7 @@ from .order_quote_owner_decision_packet import (
     OrderQuoteOwnerDecisionPacketError,
     build_order_quote_owner_decision_packet,
 )
+from .order_quote_owner_decision_register import OrderQuoteOwnerDecisionPacketRegister
 from .order_quote_preparation import OrderQuotePreparationError, build_order_quote_preparation
 from .order_quote_register import OrderQuoteDraftRegister
 from .order_review import OrderReviewQueue
@@ -59,6 +60,7 @@ __all__ = [
     "OrderQuoteDraftError",
     "OrderQuoteDraftRegister",
     "OrderQuoteOwnerDecisionPacketError",
+    "OrderQuoteOwnerDecisionPacketRegister",
     "OrderQuotePreparationError",
     "OrderReviewDecisionError",
     "OrderReviewProposalRegister",
