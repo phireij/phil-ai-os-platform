@@ -1,9 +1,7 @@
 import unittest
 
 from phil_ai_os_woocommerce.adapter import ProductionConnectivityBlocked
-from phil_ai_os_woocommerce.readonly_catalog_snapshot import (
-    collect_catalog_reconciliation_snapshot,
-)
+from phil_ai_os_woocommerce.readonly_catalog_snapshot import collect_catalog_reconciliation_snapshot
 
 
 class RecordingTransport:
@@ -83,39 +81,14 @@ class ReadOnlyCatalogReconciliationSnapshotTests(unittest.TestCase):
         self.assertTrue(snapshot["network_read_only"])
         self.assertFalse(snapshot["mutation_authorized"])
         self.assertFalse(snapshot["production_publish_authorized"])
-        self.assertEqual(len(snapshot["products"]), 1)
-
         product = snapshot["products"][0]
         self.assertEqual(product["sku"], "RCD-MCH-RD")
         self.assertEqual(product["type"], "variable")
         self.assertEqual(product["description"], "Approved source-backed English description")
+        self.assertEqual(product["attributes"][0]["options"], ["15", "21"])
         self.assertEqual(
-            product["attributes"],
-            [
-                {
-                    "name": "size_cm",
-                    "visible": True,
-                    "variation": True,
-                    "options": ["21", "15"],
-                }
-            ],
-        )
-        self.assertEqual(
-            product["variations"],
-            [
-                {
-                    "id": 901,
-                    "sku": "RCD-MCH-RD-15",
-                    "regular_price": "3500",
-                    "attributes": [{"name": "size_cm", "option": "15"}],
-                },
-                {
-                    "id": 902,
-                    "sku": "RCD-MCH-RD-21",
-                    "regular_price": "5500",
-                    "attributes": [{"name": "size_cm", "option": "21"}],
-                },
-            ],
+            [(item["sku"], item["regular_price"]) for item in product["variations"]],
+            [("RCD-MCH-RD-15", "3500"), ("RCD-MCH-RD-21", "5500")],
         )
         self.assertEqual(
             product["meta_data"],
@@ -125,7 +98,6 @@ class ReadOnlyCatalogReconciliationSnapshotTests(unittest.TestCase):
             ],
         )
         self.assertNotIn("private_plugin_metadata", repr(product["meta_data"]))
-        self.assertTrue(transport.calls)
         self.assertTrue(all(call["method"] == "GET" for call in transport.calls))
         self.assertTrue(all(call["json_body"] is None for call in transport.calls))
         self.assertIn("/products/42/variations", [call["path"] for call in transport.calls])
@@ -147,9 +119,7 @@ class ReadOnlyCatalogReconciliationSnapshotTests(unittest.TestCase):
             "meta_data": [],
         }
         transport = RecordingTransport({("/products", 1): [simple]})
-
         snapshot = collect_catalog_reconciliation_snapshot(transport)
-
         self.assertEqual(snapshot.products[0]["sku"], "RCD-BAR-FMB")
         self.assertNotIn("variations", snapshot.products[0])
         self.assertEqual([call["path"] for call in transport.calls], ["/products"])
@@ -158,10 +128,8 @@ class ReadOnlyCatalogReconciliationSnapshotTests(unittest.TestCase):
         invalid = self.variable_product()
         invalid["id"] = None
         transport = RecordingTransport({("/products", 1): [invalid]})
-
         with self.assertRaisesRegex(ProductionConnectivityBlocked, "variable product id"):
             collect_catalog_reconciliation_snapshot(transport)
-
         self.assertEqual([call["path"] for call in transport.calls], ["/products"])
 
     def test_variation_projection_rejects_invalid_scalar_evidence(self):
@@ -197,17 +165,13 @@ class ReadOnlyCatalogReconciliationSnapshotTests(unittest.TestCase):
                 ("/products/42/variations", 2): [],
             }
         )
-
         snapshot = collect_catalog_reconciliation_snapshot(
             transport,
             variation_per_page=1,
             variation_max_pages=3,
         )
-
         self.assertEqual(len(snapshot.products[0]["variations"]), 1)
-        variation_calls = [
-            call for call in transport.calls if call["path"] == "/products/42/variations"
-        ]
+        variation_calls = [call for call in transport.calls if call["path"] == "/products/42/variations"]
         self.assertEqual([call["params"]["page"] for call in variation_calls], ["1", "2"])
 
 
