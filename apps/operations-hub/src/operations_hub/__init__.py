@@ -10,6 +10,10 @@ from .normalizer import (
 from .order_intake import OrderIntakeHandoffError, normalize_order_intake_handoff
 from .order_quote_approval import OrderQuoteApprovalRequestError, build_order_quote_approval_request
 from .order_quote_approval_register import OrderQuoteApprovalRequestRegister
+from .order_quote_approval_workspace import (
+    OrderQuoteApprovalWorkspaceError,
+    build_order_quote_approval_workspace,
+)
 from .order_quote_draft import OrderQuoteDraftError, build_order_quote_draft
 from .order_quote_preparation import OrderQuotePreparationError, build_order_quote_preparation
 from .order_quote_register import OrderQuoteDraftRegister
@@ -34,6 +38,7 @@ __all__ = [
     "OrderIntakeHandoffError",
     "OrderQuoteApprovalRequestError",
     "OrderQuoteApprovalRequestRegister",
+    "OrderQuoteApprovalWorkspaceError",
     "OrderQuoteDraftError",
     "OrderQuoteDraftRegister",
     "OrderQuotePreparationError",
@@ -44,6 +49,7 @@ __all__ = [
     "SUPPORTED_REVIEW_DECISIONS",
     "SUPPORTED_SOURCES",
     "build_order_quote_approval_request",
+    "build_order_quote_approval_workspace",
     "build_order_quote_draft",
     "build_order_quote_preparation",
     "build_order_review_decision_proposal",
