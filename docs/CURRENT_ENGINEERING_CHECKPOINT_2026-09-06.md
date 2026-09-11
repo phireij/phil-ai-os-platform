@@ -1,9 +1,9 @@
 # Phil AI OS Platform — Current Engineering Checkpoint
 
-**Date:** 2026-09-07  
+**Date:** 2026-09-11  
 **Repository:** `phireij/phil-ai-os-platform`  
 **Baseline main at checkpoint creation:** `3fd367ec9b331b7b6e188a697b7b8cd3a9ed097c`  
-**Current merged main at this reconciliation:** `6f172afcf8af2431b9382f5a9beb1b965bbb9d6f`
+**Current merged main at this reconciliation:** `339b191b40170f64f5483ed744f8ebe244088a7d`
 
 This is an additive current-state supplement to the canonical Master Executive Roadmap. It records gates that changed after the latest roadmap wording without changing sprint positioning or production authority.
 
@@ -12,7 +12,7 @@ This is an additive current-state supplement to the canonical Master Executive R
 - **Sprint 3 — WooCommerce Foundation remains the CURRENT PRIMARY SPRINT.**
 - **Sprint 4 — Customer Experience remains bounded parallel acceleration only.**
 - The main Sprint 3 owner closure gate remains the final owner-approved production catalog/category/media source.
-- No production cutover, live KOMOJU payment execution, unrestricted SMS sending, DNS switch, or higher autonomy is authorized by this checkpoint.
+- No production cutover, live KOMOJU payment execution, unrestricted SMS sending, DNS switch, production catalog publication, or higher autonomy is authorized by this checkpoint.
 
 ## Twilio production callback — GREEN
 
@@ -52,22 +52,25 @@ The production SMS readiness candidate remains **disabled by default** and prese
 
 The combined no-send activation preflight is implemented and fail-closed. The approved test handset destination is already stored in GitHub Actions, provider identity and account binding checks are GREEN, and the Twilio account itself is verified `active` via a read-only Account resource diagnostic.
 
-Multiple bounded diagnostics have now isolated the remaining blocker to Twilio-side authorization of the Messages create operation:
+Twilio Support has now confirmed that the account is active, funded, has no account-level restrictions/compliance holds/risk flags preventing Messages API POST requests, and is authorized for Programmable Messaging SMS to Japan with the configured Alphanumeric Sender ID and Messaging Service.
 
-- Standard API key and Account SID/Auth Token both authenticate successfully for non-create checks.
-- The exact Messaging Service account binding is verified.
-- Japan (+81) Messaging Geographic Permission is enabled in Twilio Console.
-- `RUBYSCAKE` is attached to the `Ruby Transactional SMS` Messaging Service as an Alphanumeric Sender with SMS capability.
-- Account-level Alphanumeric Sender ID is enabled.
-- Both `api.twilio.com` and `api.us1.twilio.com` return HTTP 401 / Twilio `20003` for no-send POST authorization probes.
-- The no-send POST probe uses the real stored Messaging Service SID but deliberately omits both `To` and `Body`, so it cannot create or deliver a message.
-- Prior controlled handset attempts that reached the Messages endpoint were rejected by Twilio; no successful SMS has been accepted or delivered.
+PR #228 added a local/no-network support request inspector, and PR #229 added a manual GitHub Actions workflow that reconstructs the exact stored-secret request without sending any network request or SMS. The workflow completed GREEN using the stored production credential references and confirmed:
 
-The CEO has submitted a Twilio Support case for the account-level Messages POST authorization issue. Until Twilio responds and the root cause is resolved, **no further controlled handset send attempts should be made**. The provider remains generally disabled, `automatic_retry=false`, and no broader SMS authority is granted.
+- Account SID shape and endpoint placement are valid;
+- outbound Basic Auth uses the Standard API Key SID + API Key Secret;
+- webhook Auth Token is not used for outbound authentication;
+- `MessagingServiceSid` is used instead of `From`;
+- the payload is form-encoded;
+- no leading/trailing whitespace was detected in the stored credential/input values;
+- the inspector itself performs no network transport and requested/sent no message.
+
+Previous bounded diagnostics still show that Messages create/no-send POST authorization probes return HTTP 401 / Twilio `20003` even though non-create authentication checks succeed. The remaining issue is therefore still provider-side or provider-account/request-authority specific rather than an identified request-construction defect in Phil AI OS.
+
+Until Twilio Support provides an actionable remediation, **no further controlled handset send attempts should be made**. The provider remains generally disabled, `automatic_retry=false`, and no broader SMS authority is granted.
 
 ## Sprint 4 CX hardening merged
 
-The following bounded order-intake improvements are now merged and remain local/network-inert:
+The following bounded order-intake improvements are merged and remain local/network-inert:
 
 - PR #198 — hidden custom-cake controls are disabled while Basic cake is selected, preventing hidden custom inputs/files from participating in validation or future form serialization while preserving reversible customer state.
 - PR #199 — hidden Yamato time-window state is disabled for Ruby-car and shop-pickup modes while preserving the selection if the customer switches back to Yamato.
@@ -92,11 +95,55 @@ The owner-independent catalog path has been hardened before the Initial Launch C
 - PR #212 — controlled-review product actions reject duplicate `category_slugs` and `media_keys`, including whitespace-normalized duplicates.
 - PR #226 — read-only WooCommerce catalog snapshots reject duplicate category references within a product and reject product category slugs that are absent from the snapshot category inventory.
 
-These gates are validation/planning only. They do not perform WooCommerce network writes, create or publish products, delete existing products, execute payments, send SMS, change DNS, or grant mutation/execution/publication authority. WooCommerce Contract Tests, Sprint 3 Foundation CI including isolated WooCommerce runtime smoke, and Sprint 7 integrated readiness/runtime smoke were GREEN before each merge.
+These gates are validation/planning only. They do not perform WooCommerce network writes, create or publish products, delete existing products, execute payments, send SMS, change DNS, or grant mutation/execution/publication authority.
+
+## Ambient shipping / smaller-box path — GREEN in pre-production contracts
+
+Ruby's Cake Delights has approved smaller ambient-shipping support for products such as brownies and caramel bars.
+
+Merged work:
+
+- PR #231 — added a fail-closed ambient package-selection policy with `ambient_compact`, `ambient_60`, `ambient_80`, `ambient_100`, and `ambient_120` package classes. A SKU minimum is never downgraded; multi-unit/mixed Compact carts fall back to Size 60 unless physical packing evidence confirms Compact fit.
+- PR #232 — added a manual production **read-only** WooCommerce shipping-zone/method snapshot workflow using existing read-only credentials. It uses GET only, stores no shipping `settings`, and cannot create/enable/price shipping methods.
+- PR #235 — extended the canonical product schema with `ambient-compact`, `ambient-60`, `ambient-80`, `ambient-100`, `ambient-120` plus the `ambient` temperature mode.
+- PR #236 — aligned the runtime fulfillment model with the same ambient shipping classes and added regression coverage.
+
+Brownies and caramel bars are intended candidates for `ambient-compact`, subject to actual package-fit confirmation before their final catalog entries are approved. Live Hostinger/WooCommerce shipping-zone or rate mutation remains gated and has not been performed.
+
+## Ruby catalog SKU convention — GREEN
+
+PR #237 standardized the catalog authoring convention as:
+
+`RCD-PRODUCT-FORM[-OPTION]`
+
+Initial stable examples:
+
+- `RCD-MCH-RD-15` = Ruby's Cake Delights / Moist Chocolate / Round / 15 cm
+- `RCD-MCH-RD-21` = Ruby's Cake Delights / Moist Chocolate / Round / 21 cm
+- `RCD-MCH-SQ-21` = Ruby's Cake Delights / Moist Chocolate / Square / 21 cm
+
+Starting codes include `MCH = Moist Chocolate`, `RD = Round`, and `SQ = Square`. Customer-specific customization metadata (uploaded reference images, messages, colors, notes, etc.) is not encoded into the physical stock SKU unless Ruby intentionally sells it as a distinct stock-bearing variation.
+
+A deterministic SKU builder/parser and tests are merged. This standard is for catalog authoring/validation only and does not publish or mutate products.
+
+## AirREGI Quick Pickup / inventory bridge feasibility
+
+PR #230 started the bounded parallel feasibility investigation for WooCommerce Quick Pickup while preserving AirREGI as the intended physical shop inventory authority.
+
+Current conclusion:
+
+- WooCommerce Quick Pickup remains feasible as a customer-facing product feature.
+- AirREGI native inventory management is confirmed.
+- AirREGI's public Data Integration API documentation still does **not** document product/inventory quantity endpoints for arbitrary custom merchant integrations; direct inventory API integration therefore remains **UNPROVEN / fail-closed**.
+- PR #234 confirmed an official CSV fallback path: AirREGI can export current inventory for bulk editing and accept bulk inventory CSV updates, and its product-code field can intentionally align with external-system identifiers such as WooCommerce SKUs.
+
+A controlled CSV bridge is therefore technically possible if a supported direct inventory API cannot be established, but it must include freshness/staleness limits, conservative availability, deterministic SKU mapping, reconciliation and explicit production authority before launch. UI scraping is not authorized.
 
 ## Current operational blockers / owner dependencies
 
-1. **Primary Sprint 3 closure:** final owner-approved production catalog/category/media source (Initial Launch Catalog V1).
-2. **Controlled Twilio handset validation:** external dependency on Twilio Support to resolve account-level Messages API POST authorization (`HTTP 401 / Twilio 20003`). No further send attempts should be made until Twilio responds or provides an actionable remediation.
+1. **Primary Sprint 3 closure:** final owner-approved production catalog/category/media source (Initial Launch Catalog V1), including final product/variation SKUs and fulfillment/package classifications.
+2. **Ambient shipping production configuration:** actual Compact/product fit confirmation and final Yamato/customer-facing rate matrix are still required before live shipping configuration is proposed.
+3. **Controlled Twilio handset validation:** external dependency on Twilio Support to resolve Messages API POST authorization (`HTTP 401 / Twilio 20003`). No further send attempts should be made until Twilio provides actionable remediation.
+4. **AirREGI direct inventory bridge:** endpoint-level direct inventory API capability remains unproven; CSV fallback is documented but no production synchronization path is authorized.
 
-At this reconciliation point there are no known additional owner-independent Sprint 3 gaps that justify further micro-hardening. Work should remain focused on the two blockers above unless a new concrete issue is discovered.
+Owner-independent work should continue only where it materially improves the catalog/shipping handoff, read-only evidence, or integration feasibility. Do not manufacture micro-hardening simply to generate activity.
