@@ -5,9 +5,13 @@ from typing import Any, Iterable
 
 from .catalog_field_evidence import evaluate_field_evidence
 from .sku_policy import SkuPolicyError, parse_ruby_sku
+from .working_catalog_category_candidates import (
+    build_working_catalog_category_candidate_packet,
+)
 from .working_catalog_fulfillment_readiness import (
     evaluate_working_catalog_fulfillment_readiness,
 )
+from .working_catalog_media_evidence import build_working_catalog_media_evidence_packet
 
 
 @dataclass(frozen=True)
@@ -39,6 +43,27 @@ def _iter_skus(products: Iterable[dict[str, Any]]) -> Iterable[str]:
             variant_sku = variant.get("sku")
             if variant_sku:
                 yield str(variant_sku)
+
+
+def _partition_supplemental_blockers(
+    blockers: Iterable[str],
+    product_keys: Iterable[str],
+    prefix: str,
+) -> tuple[list[str], dict[str, list[str]]]:
+    keys = tuple(product_keys)
+    global_blockers: list[str] = []
+    product_blockers: dict[str, list[str]] = {key: [] for key in keys}
+    for blocker in blockers:
+        matched = False
+        for key in keys:
+            marker = f"{key}: "
+            if blocker.startswith(marker):
+                product_blockers[key].append(f"{prefix}: {blocker[len(marker):]}")
+                matched = True
+                break
+        if not matched:
+            global_blockers.append(f"{prefix}: {blocker}")
+    return global_blockers, product_blockers
 
 
 def build_working_catalog_gap_report(payload: dict[str, Any]) -> WorkingCatalogGapReport:
@@ -77,8 +102,25 @@ def build_working_catalog_gap_report(payload: dict[str, Any]) -> WorkingCatalogG
     fulfillment = evaluate_working_catalog_fulfillment_readiness(payload)
     fulfillment_by_position = tuple(fulfillment.product_results)
 
+    product_keys = tuple(_product_key(product) for product in products)
+    category_packet = build_working_catalog_category_candidate_packet(payload)
+    category_global, category_by_product = _partition_supplemental_blockers(
+        category_packet.blockers,
+        product_keys,
+        "Category",
+    )
+    media_packet = build_working_catalog_media_evidence_packet(payload)
+    media_global, media_by_product = _partition_supplemental_blockers(
+        media_packet.blockers,
+        product_keys,
+        "Media",
+    )
+    global_gaps.extend(category_global)
+    global_gaps.extend(media_global)
+
     product_gaps: list[ProductGap] = []
     for index, product in enumerate(products):
+        key = product_keys[index]
         missing: list[str] = []
         if not product.get("english_name"):
             missing.append("English product name")
@@ -106,11 +148,9 @@ def build_working_catalog_gap_report(payload: dict[str, Any]) -> WorkingCatalogG
         else:
             missing.append("Fulfillment: readiness result is missing")
 
-        if not product.get("photo_source_state") and product.get("product_type") != "variable":
-            missing.append("verified media source")
+        missing.extend(category_by_product.get(key, ()))
+        missing.extend(media_by_product.get(key, ()))
 
-        product_gaps.append(
-            ProductGap(_product_key(product), tuple(dict.fromkeys(missing)))
-        )
+        product_gaps.append(ProductGap(key, tuple(dict.fromkeys(missing))))
 
     return WorkingCatalogGapReport(tuple(dict.fromkeys(global_gaps)), tuple(product_gaps))
