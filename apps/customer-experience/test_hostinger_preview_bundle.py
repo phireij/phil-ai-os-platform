@@ -25,13 +25,14 @@ class HostingerPreviewBundleTests(unittest.TestCase):
                 self.assertIn("preview/ruby-cart-preview.html", names)
                 self.assertIn("preview/ruby-preview-cart.css", names)
                 self.assertIn("preview/PREVIEW_BOUNDARY.txt", names)
-                self.assertIn("preview/src/ruby-storefront.mjs", names)
-                self.assertIn("preview/src/ruby-working-catalog-preview.mjs", names)
-                self.assertIn("preview/src/ruby-working-product-detail.mjs", names)
-                self.assertIn("preview/src/ruby-product-preview.mjs", names)
-                self.assertIn("preview/src/ruby-preview-cart.mjs", names)
-                self.assertIn("preview/src/ruby-cart-preview.mjs", names)
-                self.assertTrue(any(name.startswith("preview/src/") and name.endswith(".mjs") for name in names))
+                self.assertIn("preview/src/ruby-storefront.js", names)
+                self.assertIn("preview/src/ruby-working-catalog-preview.js", names)
+                self.assertIn("preview/src/ruby-working-product-detail.js", names)
+                self.assertIn("preview/src/ruby-product-preview.js", names)
+                self.assertIn("preview/src/ruby-preview-cart.js", names)
+                self.assertIn("preview/src/ruby-cart-preview.js", names)
+                self.assertTrue(any(name.startswith("preview/src/") and name.endswith(".js") for name in names))
+                self.assertFalse(any(name.startswith("preview/src/") and name.endswith(".mjs") for name in names))
                 for target in preview_builder.ALLOWED_FETCH_TARGETS:
                     self.assertIn("preview/" + target.removeprefix("./"), names)
 
@@ -39,25 +40,35 @@ class HostingerPreviewBundleTests(unittest.TestCase):
                 self.assertIn("Ruby's Cake Delights", landing)
                 self.assertIn("ruby-storefront-progress.css", landing)
                 self.assertIn('id="ruby-working-products"', landing)
-                self.assertIn("src/ruby-storefront.mjs", landing)
+                self.assertIn("src/ruby-storefront.js", landing)
+                self.assertNotIn(".mjs", landing)
                 self.assertIn("ruby-cart-preview.html", landing)
                 self.assertNotIn('href="./cart-preview.html"', landing)
                 self.assertIn("engineering-preview.html", landing)
+                self.assertEqual(landing.count("PRE-PRODUCTION PREVIEW"), 1)
+                self.assertNotIn('class="phil-preview-boundary"', landing)
 
                 product_detail = archive.read("preview/ruby-product-preview.html").decode("utf-8")
                 self.assertIn('id="ruby-product-detail"', product_detail)
                 self.assertIn("ruby-product-preview.css", product_detail)
                 self.assertIn("ruby-preview-cart.css", product_detail)
-                self.assertIn("src/ruby-product-preview.mjs", product_detail)
+                self.assertIn("src/ruby-product-preview.js", product_detail)
+                self.assertNotIn(".mjs", product_detail)
                 self.assertIn("ruby-cart-preview.html", product_detail)
                 self.assertNotIn('href="./cart-preview.html"', product_detail)
 
                 branded_cart = archive.read("preview/ruby-cart-preview.html").decode("utf-8")
                 self.assertIn('id="ruby-preview-cart-root"', branded_cart)
                 self.assertIn("ruby-preview-cart.css", branded_cart)
-                self.assertIn("src/ruby-cart-preview.mjs", branded_cart)
+                self.assertIn("src/ruby-cart-preview.js", branded_cart)
+                self.assertNotIn(".mjs", branded_cart)
                 self.assertNotIn("KOMOJU", branded_cart)
                 self.assertNotIn('href="./cart-preview.html"', branded_cart)
+
+                storefront_module = archive.read("preview/src/ruby-storefront.js").decode("utf-8")
+                self.assertIn('./ruby-storefront-progress.js', storefront_module)
+                self.assertIn('./ruby-working-catalog-preview.js', storefront_module)
+                self.assertNotIn(".mjs", storefront_module)
 
                 engineering = archive.read("preview/engineering-preview.html").decode("utf-8")
                 self.assertIn("Phil AI OS · Sprint 4", engineering)
@@ -72,6 +83,7 @@ class HostingerPreviewBundleTests(unittest.TestCase):
                     self.assertIn("noarchive", lower)
                     self.assertNotIn("rubyscakedelights.shop", lower)
                     self.assertIn("PRE-PRODUCTION PREVIEW", text)
+                    self.assertNotIn(".mjs", text)
 
     def test_preview_boundary_injection_is_idempotent(self):
         source = "<html><head><meta name=\"robots\" content=\"noindex,nofollow\"></head><body><main>Test</main></body></html>"
@@ -81,31 +93,54 @@ class HostingerPreviewBundleTests(unittest.TestCase):
         self.assertEqual(once.count(preview_builder.PREVIEW_MARKER), 1)
         self.assertIn("noarchive", once.lower())
 
+    def test_existing_branded_preview_strip_is_not_duplicated(self):
+        source = (
+            "<html><head><meta name=\"robots\" content=\"noindex,nofollow\"></head><body>"
+            "<div class=\"preview-strip\">PRE-PRODUCTION PREVIEW · Visual progress only</div>"
+            "<main>Test</main></body></html>"
+        )
+        injected = preview_builder._inject_preview_boundary(source)
+        self.assertEqual(injected.count("PRE-PRODUCTION PREVIEW"), 1)
+        self.assertIn(preview_builder.PREVIEW_MARKER, injected)
+        self.assertNotIn('class="phil-preview-boundary"', injected)
+
+    def test_browser_module_refs_are_rewritten_for_shared_hosting(self):
+        source = (
+            '<script type="module" src="./src/app.mjs"></script>\n'
+            'import "./core.mjs";\n'
+            'export { thing } from "./thing.mjs";'
+        )
+        rewritten = preview_builder._rewrite_browser_module_refs(source)
+        self.assertNotIn(".mjs", rewritten)
+        self.assertIn("./src/app.js", rewritten)
+        self.assertIn("./core.js", rewritten)
+        self.assertIn("./thing.js", rewritten)
+
     def test_only_bundled_fixture_fetches_are_allowed(self):
         for target in sorted(preview_builder.ALLOWED_FETCH_TARGETS):
             preview_builder._validate_script_network_calls(
                 f'const response = await fetch("{target}", {{ cache: "no-store" }});',
-                "fixture.mjs",
+                "fixture.js",
             )
         with self.assertRaises(ValueError):
             preview_builder._validate_script_network_calls(
                 'await fetch("https://example.com/catalog.json");',
-                "external.mjs",
+                "external.js",
             )
         with self.assertRaises(ValueError):
             preview_builder._validate_script_network_calls(
                 'await fetch("./fixtures/not-bundled.json");',
-                "unknown-fixture.mjs",
+                "unknown-fixture.js",
             )
         with self.assertRaises(ValueError):
             preview_builder._validate_script_network_calls(
                 "await fetch(runtimeUrl);",
-                "dynamic.mjs",
+                "dynamic.js",
             )
         with self.assertRaises(ValueError):
             preview_builder._validate_script_network_calls(
                 "const xhr = new XMLHttpRequest();",
-                "xhr.mjs",
+                "xhr.js",
             )
 
 
