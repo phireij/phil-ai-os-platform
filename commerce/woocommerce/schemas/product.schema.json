@@ -42,11 +42,22 @@
       "properties": {
         "shipping_class": {
           "type": ["string", "null"],
-          "enum": ["cool-60", "cool-80", "cool-100", "cool-120", null]
+          "enum": [
+            "ambient-compact",
+            "ambient-60",
+            "ambient-80",
+            "ambient-100",
+            "ambient-120",
+            "cool-60",
+            "cool-80",
+            "cool-100",
+            "cool-120",
+            null
+          ]
         },
         "temperature_modes": {
           "type": "array",
-          "items": {"enum": ["frozen", "chilled"]},
+          "items": {"enum": ["ambient", "frozen", "chilled"]},
           "uniqueItems": true
         },
         "pickup_allowed": {"type": "boolean"},
