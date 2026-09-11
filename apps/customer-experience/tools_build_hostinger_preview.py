@@ -10,7 +10,13 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 ALLOWED_ROOT_SUFFIXES = {".html", ".css", ".svg", ".webmanifest"}
 ALLOWED_NESTED_SUFFIXES = {".mjs", ".json"}
-ALLOWED_FETCH_TARGETS = {"./fixtures/catalog.json"}
+ALLOWED_FETCH_TARGETS = {
+    "./fixtures/air-mobile-quick-pickup.json",
+    "./fixtures/catalog.json",
+    "./fixtures/final-confirmation.json",
+    "./fixtures/payment-provider.json",
+    "./fixtures/pickup-policy.json",
+}
 PREVIEW_MARKER = "PHIL_AI_OS_PREPRODUCTION_PREVIEW"
 ROBOTS_META = '<meta name="robots" content="noindex,nofollow,noarchive,nosnippet">'
 BANNER = (
@@ -29,7 +35,6 @@ def _inject_preview_boundary(text: str) -> str:
     if "<head" not in lower or "<body" not in lower:
         raise ValueError("HTML preview source must contain head and body elements")
 
-    # Replace any existing robots declaration with the stricter bundle policy.
     text = re.sub(
         r'<meta\s+name=["\']robots["\'][^>]*>',
         ROBOTS_META,
@@ -108,6 +113,12 @@ def _validate_bundle(destination: Path) -> None:
             raise ValueError(f"missing strict robots policy: {html.name}")
         if "rubyscakedelights.shop" in lower:
             raise ValueError(f"production hostname must not be embedded in preview bundle: {html.name}")
+
+    fixture_root = destination / "fixtures"
+    for target in ALLOWED_FETCH_TARGETS:
+        relative = target.removeprefix("./")
+        if not (destination / relative).is_file():
+            raise ValueError(f"allowlisted preview fixture is missing from bundle: {target}")
 
     for script in (destination / "src").glob("*.mjs"):
         _validate_script_network_calls(script.read_text(encoding="utf-8"), script.name)
