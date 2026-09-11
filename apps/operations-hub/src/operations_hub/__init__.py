@@ -15,6 +15,10 @@ from .order_quote_approval_decision import (
     build_order_quote_approval_decision_proposal,
 )
 from .order_quote_approval_decision_register import OrderQuoteApprovalDecisionProposalRegister
+from .order_quote_approval_decision_workspace import (
+    OrderQuoteApprovalDecisionWorkspaceError,
+    build_order_quote_approval_decision_workspace,
+)
 from .order_quote_approval_register import OrderQuoteApprovalRequestRegister
 from .order_quote_approval_workspace import (
     OrderQuoteApprovalWorkspaceError,
@@ -44,6 +48,7 @@ __all__ = [
     "OrderIntakeHandoffError",
     "OrderQuoteApprovalDecisionError",
     "OrderQuoteApprovalDecisionProposalRegister",
+    "OrderQuoteApprovalDecisionWorkspaceError",
     "OrderQuoteApprovalRequestError",
     "OrderQuoteApprovalRequestRegister",
     "OrderQuoteApprovalWorkspaceError",
@@ -58,6 +63,7 @@ __all__ = [
     "SUPPORTED_REVIEW_DECISIONS",
     "SUPPORTED_SOURCES",
     "build_order_quote_approval_decision_proposal",
+    "build_order_quote_approval_decision_workspace",
     "build_order_quote_approval_request",
     "build_order_quote_approval_workspace",
     "build_order_quote_draft",
