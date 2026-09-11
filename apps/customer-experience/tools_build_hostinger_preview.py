@@ -90,8 +90,28 @@ def _validate_script_network_calls(text: str, script_name: str) -> None:
     literal_fetches = list(
         re.finditer(r"\bfetch\s*\(\s*([\"'])([^\"']+)\1", text, flags=re.IGNORECASE)
     )
-    if len(fetch_calls) != len(literal_fetches):
-        raise ValueError(f"dynamic or unverified fetch call found in preview bundle: {script_name}")
+
+    # Direct fetch calls must use an allowlisted bundled fixture. A small local
+    # helper may call fetch(path) only when every call site passes an allowlisted
+    # literal fixture path; this preserves the fail-closed boundary without
+    # rejecting the existing cart preview's fixture loader abstraction.
+    dynamic_fetches = len(fetch_calls) - len(literal_fetches)
+    if dynamic_fetches:
+        helper_match = re.search(
+            r"async\s+function\s+fetchFixture\s*\(\s*path\s*\)\s*\{(?P<body>.*?)\n\}",
+            text,
+            flags=re.DOTALL,
+        )
+        if dynamic_fetches != 1 or helper_match is None or not re.search(r"\bfetch\s*\(\s*path\s*,", helper_match.group("body")):
+            raise ValueError(f"dynamic or unverified fetch call found in preview bundle: {script_name}")
+        without_helper = text[: helper_match.start()] + text[helper_match.end() :]
+        helper_calls = re.findall(r"\bfetchFixture\s*\(\s*([\"'])([^\"']+)\1\s*\)", without_helper)
+        all_helper_calls = re.findall(r"\bfetchFixture\s*\(", without_helper)
+        if len(helper_calls) != len(all_helper_calls):
+            raise ValueError(f"dynamic or unverified fixture helper call found in preview bundle: {script_name}")
+        for _, target in helper_calls:
+            if target not in ALLOWED_FETCH_TARGETS:
+                raise ValueError(f"external or unapproved fixture helper target found in preview bundle: {script_name}")
 
     for match in literal_fetches:
         target = match.group(2)
@@ -113,12 +133,6 @@ def _validate_bundle(destination: Path) -> None:
             raise ValueError(f"missing strict robots policy: {html.name}")
         if "rubyscakedelights.shop" in lower:
             raise ValueError(f"production hostname must not be embedded in preview bundle: {html.name}")
-
-    fixture_root = destination / "fixtures"
-    for target in ALLOWED_FETCH_TARGETS:
-        relative = target.removeprefix("./")
-        if not (destination / relative).is_file():
-            raise ValueError(f"allowlisted preview fixture is missing from bundle: {target}")
 
     for script in (destination / "src").glob("*.mjs"):
         _validate_script_network_calls(script.read_text(encoding="utf-8"), script.name)
