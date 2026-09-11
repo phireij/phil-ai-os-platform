@@ -172,6 +172,26 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
         self.assertIn("invalid Ruby SKU: BAR-FMB", report.global_gaps)
         self.assertIn("duplicate Ruby SKU: RCD-BAR-FMB", report.global_gaps)
 
+    def test_missing_drive_source_provenance_blocks_production_readiness(self):
+        payload = self.load()
+        payload["source_snapshot"].pop("drive_file_id", None)
+        report = build_working_catalog_gap_report(payload)
+        self.assertFalse(report.production_ready)
+        self.assertIn(
+            "catalog source provenance is missing Drive file id",
+            report.global_gaps,
+        )
+
+    def test_missing_source_modified_timestamp_blocks_production_readiness(self):
+        payload = self.load()
+        payload["source_snapshot"].pop("observed_modified_at", None)
+        report = build_working_catalog_gap_report(payload)
+        self.assertFalse(report.production_ready)
+        self.assertIn(
+            "catalog source provenance is missing observed modified timestamp",
+            report.global_gaps,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
