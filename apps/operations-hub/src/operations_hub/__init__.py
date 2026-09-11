@@ -15,6 +15,7 @@ from .order_review_decision import (
     build_order_review_decision_proposal,
 )
 from .order_review_register import OrderReviewProposalRegister
+from .order_review_workspace import OrderReviewWorkspaceError, build_order_review_workspace
 from .queue import OperationsQueue
 
 __all__ = [
@@ -29,9 +30,11 @@ __all__ = [
     "OrderReviewDecisionError",
     "OrderReviewProposalRegister",
     "OrderReviewQueue",
+    "OrderReviewWorkspaceError",
     "SUPPORTED_REVIEW_DECISIONS",
     "SUPPORTED_SOURCES",
     "build_order_review_decision_proposal",
+    "build_order_review_workspace",
     "classify_intent",
     "evaluate_governance",
     "normalize_channel_event",
