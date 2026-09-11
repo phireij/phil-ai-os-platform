@@ -14,6 +14,7 @@ from .order_review_decision import (
     SUPPORTED_REVIEW_DECISIONS,
     build_order_review_decision_proposal,
 )
+from .order_review_register import OrderReviewProposalRegister
 from .queue import OperationsQueue
 
 __all__ = [
@@ -26,6 +27,7 @@ __all__ = [
     "OperationsQueue",
     "OrderIntakeHandoffError",
     "OrderReviewDecisionError",
+    "OrderReviewProposalRegister",
     "OrderReviewQueue",
     "SUPPORTED_REVIEW_DECISIONS",
     "SUPPORTED_SOURCES",
