@@ -39,6 +39,34 @@ class WorkingCatalogSubsetTests(unittest.TestCase):
         self.assertFalse(result.valid_for_preparation)
         self.assertIn("21 cm SKU correction lacks explicit owner confirmation evidence", result.blockers)
 
+    def test_structured_sku_evidence_is_required_even_if_legacy_flag_is_true(self):
+        payload = self.load()
+        payload["source_snapshot"]["field_evidence"] = [
+            item
+            for item in payload["source_snapshot"]["field_evidence"]
+            if item.get("product_key") != "RCD-MCH-RD-21"
+        ]
+        result = evaluate_working_catalog_subset(payload)
+        self.assertFalse(result.valid_for_preparation)
+        self.assertIn(
+            "field evidence: 21 cm SKU correction requires structured owner direct evidence",
+            result.blockers,
+        )
+
+    def test_structured_ensaymada_price_evidence_is_required(self):
+        payload = self.load()
+        payload["source_snapshot"]["field_evidence"] = [
+            item
+            for item in payload["source_snapshot"]["field_evidence"]
+            if item.get("product_key") != "RCD-BRD-ENS-1"
+        ]
+        result = evaluate_working_catalog_subset(payload)
+        self.assertFalse(result.valid_for_preparation)
+        self.assertIn(
+            "field evidence: Cheezy Ensaymada ¥300 requires structured owner visual evidence",
+            result.blockers,
+        )
+
     def test_non_rcd_sku_fails_closed(self):
         payload = self.load()
         payload["working_products"][1]["sku"] = "BAR-FMB"

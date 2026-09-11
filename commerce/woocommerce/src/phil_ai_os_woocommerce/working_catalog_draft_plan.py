@@ -6,6 +6,7 @@ from typing import Any
 from .working_catalog_fulfillment_readiness import (
     evaluate_working_catalog_fulfillment_readiness,
 )
+from .working_catalog_subset import evaluate_working_catalog_subset
 
 
 @dataclass(frozen=True)
@@ -51,7 +52,14 @@ def build_working_catalog_draft_plan(payload: dict[str, Any]) -> WorkingCatalogD
     The plan intentionally preserves only confirmed fields. Missing bilingual copy,
     media, category, fulfillment, or package facts remain explicit unresolved fields.
     It never creates a schema-complete production payload and performs no network call.
+    Structured owner evidence and the working-subset guard must remain valid before any
+    owner-confirmed field is carried into the draft plan.
     """
+
+    subset = evaluate_working_catalog_subset(payload)
+    if not subset.valid_for_preparation:
+        joined = "; ".join(subset.blockers)
+        raise ValueError(f"working catalog subset is not valid for preparation: {joined}")
 
     fulfillment = evaluate_working_catalog_fulfillment_readiness(payload)
     fulfillment_by_key = {item.key: item for item in fulfillment.product_results}

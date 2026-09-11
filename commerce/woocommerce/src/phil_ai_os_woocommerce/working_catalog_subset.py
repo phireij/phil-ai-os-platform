@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from .catalog_field_evidence import evaluate_field_evidence
 from .sku_policy import parse_ruby_sku, SkuPolicyError
 
 
@@ -44,6 +45,9 @@ def evaluate_working_catalog_subset(payload: dict[str, Any]) -> WorkingCatalogSu
         blockers.append("working subset source snapshot is missing modified timestamp")
     if source_snapshot.get("owner_declared_subset_complete") is not False:
         blockers.append("owner_declared_subset_complete must remain false")
+
+    evidence_result = evaluate_field_evidence(payload)
+    blockers.extend(f"field evidence: {blocker}" for blocker in evidence_result.blockers)
 
     products = payload.get("working_products") or []
     if not products:
@@ -89,5 +93,5 @@ def evaluate_working_catalog_subset(payload: dict[str, Any]) -> WorkingCatalogSu
 
     return WorkingCatalogSubsetResult(
         valid_for_preparation=not blockers,
-        blockers=tuple(blockers),
+        blockers=tuple(dict.fromkeys(blockers)),
     )
