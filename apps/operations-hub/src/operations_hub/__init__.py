@@ -9,6 +9,11 @@ from .normalizer import (
 )
 from .order_intake import OrderIntakeHandoffError, normalize_order_intake_handoff
 from .order_review import OrderReviewQueue
+from .order_review_decision import (
+    OrderReviewDecisionError,
+    SUPPORTED_REVIEW_DECISIONS,
+    build_order_review_decision_proposal,
+)
 from .queue import OperationsQueue
 
 __all__ = [
@@ -20,8 +25,11 @@ __all__ = [
     "NormalizationError",
     "OperationsQueue",
     "OrderIntakeHandoffError",
+    "OrderReviewDecisionError",
     "OrderReviewQueue",
+    "SUPPORTED_REVIEW_DECISIONS",
     "SUPPORTED_SOURCES",
+    "build_order_review_decision_proposal",
     "classify_intent",
     "evaluate_governance",
     "normalize_channel_event",
