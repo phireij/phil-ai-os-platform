@@ -18,11 +18,20 @@ class HostingerPreviewBundleTests(unittest.TestCase):
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
                 self.assertIn("preview/index.html", names)
+                self.assertIn("preview/engineering-preview.html", names)
                 self.assertIn("preview/order-intake-preview.html", names)
                 self.assertIn("preview/PREVIEW_BOUNDARY.txt", names)
                 self.assertTrue(any(name.startswith("preview/src/") and name.endswith(".mjs") for name in names))
                 for target in preview_builder.ALLOWED_FETCH_TARGETS:
                     self.assertIn("preview/" + target.removeprefix("./"), names)
+
+                landing = archive.read("preview/index.html").decode("utf-8")
+                self.assertIn("Ruby's Cake Delights", landing)
+                self.assertIn("ruby-storefront-progress.css", landing)
+                self.assertIn("engineering-preview.html", landing)
+                engineering = archive.read("preview/engineering-preview.html").decode("utf-8")
+                self.assertIn("Phil AI OS · Sprint 4", engineering)
+                self.assertIn("Ruby storefront", engineering)
 
                 for name in sorted(n for n in names if n.endswith(".html")):
                     text = archive.read(name).decode("utf-8")
