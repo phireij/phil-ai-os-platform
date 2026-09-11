@@ -1,0 +1,108 @@
+{
+  "schema_version": "1.0",
+  "environment": "pre-production",
+  "package_state": "draft",
+  "catalog_approved": false,
+  "catalog_approval_ref": null,
+  "catalog_scope": {
+    "scope_type": "initial_launch_subset",
+    "full_product_range_required_for_sprint3_closure": false,
+    "additional_products_may_be_added_after_sprint3": true,
+    "scope_complete_for_intended_initial_launch": false
+  },
+  "source_contract": {
+    "owner_source_required": true,
+    "owner_approval_required": true,
+    "source_updated_at_required": true,
+    "bilingual_en_ja_required": true,
+    "verified_media_source_required": true,
+    "currency": "JPY",
+    "intake_product_status": "draft",
+    "intake_product_visibility": "hidden",
+    "production_write_authority_granted_by_handoff": false
+  },
+  "source_snapshot": {
+    "title": "Product Catalog ver2.docx",
+    "drive_file_id": "13gbwu9_l59AalbKofUJZVX4IziYCKZS7",
+    "observed_modified_at": "2026-09-11T02:24:32.696Z",
+    "owner_declared_subset_complete": false
+  },
+  "working_products": [
+    {
+      "product_type": "variable",
+      "parent_reference": "RCD-MCH-RD",
+      "english_name": "Moist Chocolate Round Cake",
+      "japanese_name": null,
+      "family": "Moist Chocolate",
+      "form": "Round Cake",
+      "english_description": "Deep, decadent, and incredibly moist chocolate cake covered in rich chocolate frosting—a true favorite for chocolate lovers of all ages.",
+      "japanese_description": null,
+      "source_temperature_marks": ["frozen"],
+      "source_package_rule": null,
+      "pickup_allowed": true,
+      "delivery_allowed": true,
+      "minimum_preparation_days": 5,
+      "maximum_advance_order_months": 2,
+      "allergens_source_text": "Dairy (Milk, Butter, or Cream), Wheat(Gluten), Eggs",
+      "variants": [
+        {"size_cm": 15, "sku": "RCD-MCH-RD-15", "price_jpy": 3500, "source_approval": "approved"},
+        {"size_cm": 21, "sku": "RCD-MCH-RD-21", "price_jpy": 5500, "source_approval": "approved", "source_typo": "RCS-MCH-RD-21", "owner_correction_confirmed": true}
+      ]
+    },
+    {
+      "product_type": "simple",
+      "sku": "RCD-BAR-FMB",
+      "price_jpy": 250,
+      "english_name": "Fudgy Milky Bar",
+      "japanese_name": null,
+      "family": "Caramel",
+      "form": "Rectangle",
+      "category_source_label": "Other",
+      "english_description": "Indulge in our delicious Fudgy Milky Bar! Featuring a rich, dense, and ultra-fudgy texture that melts in your mouth, this treat boasts a luscious flavor reminiscent of a classic caramel bar. Topped with crunchy nuts for the perfect contrast, it's an irresistible sweet snack that pairs wonderfully with your favorite coffee or tea.",
+      "japanese_description": null,
+      "source_temperature_marks": ["chilled", "ambient"],
+      "source_package_rule": "depends_on_total_pieces",
+      "ambient_package_candidate": "ambient-compact",
+      "ambient_package_candidate_confirmed": false,
+      "pickup_allowed": true,
+      "delivery_allowed": true,
+      "production_policy": "made_to_order",
+      "minimum_preparation_days": 3,
+      "maximum_advance_order_months": 2,
+      "photo_source_state": "attached_in_owner_source",
+      "allergens_source_text": "Contains Wheat, Dairy (Milk/Butter), Eggs, and Nuts."
+    },
+    {
+      "product_type": "simple",
+      "sku": "RCD-BRD-ENS-1",
+      "price_jpy": null,
+      "english_name": "Cheezy Ensaymada",
+      "japanese_name": null,
+      "family": "Bread",
+      "form": null,
+      "category_source_label": "Bread",
+      "english_description": "Indulge in our signature Cheezy Ensaymada! A beloved Filipino pastry favorite, this soft and fluffy bun is generously topped with rich butter, sweet sugar crystals, and a mountain of savory grated cheese. The irresistible combination of sweet and salty flavors makes it the perfect treat to enjoy with your favorite coffee or tea.",
+      "japanese_description": null,
+      "source_temperature_marks": ["chilled"],
+      "source_ambient_mark_checked": false,
+      "source_package_rule": "depends_on_total_items",
+      "pickup_allowed": true,
+      "delivery_allowed": true,
+      "production_policy": "made_to_order",
+      "minimum_preparation_days": 3,
+      "maximum_advance_order_months": 2,
+      "photo_source_state": "attached_in_owner_source",
+      "allergens_source_text": "Contains Wheat, Dairy (Milk/Butter), and Eggs."
+    }
+  ],
+  "known_blockers": [
+    "initial launch subset is not owner-confirmed complete",
+    "Japanese product names/descriptions are missing",
+    "verified media ingestion references are unresolved",
+    "shipping/package decisions are incomplete for quantity-dependent products",
+    "Cheezy Ensaymada price is not present in the extracted source",
+    "explicit Initial Launch Catalog V1 approval reference is missing"
+  ],
+  "mutation_authorized": false,
+  "production_publish_authorized": false
+}
