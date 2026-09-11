@@ -142,8 +142,18 @@ class FulfillmentProfile:
     requires_order_approval: bool = True
 
     def __post_init__(self) -> None:
-        allowed_classes = {"cool-60", "cool-80", "cool-100", "cool-120"}
-        allowed_temperatures = {"frozen", "chilled"}
+        allowed_classes = {
+            "ambient-compact",
+            "ambient-60",
+            "ambient-80",
+            "ambient-100",
+            "ambient-120",
+            "cool-60",
+            "cool-80",
+            "cool-100",
+            "cool-120",
+        }
+        allowed_temperatures = {"ambient", "frozen", "chilled"}
         if self.shipping_class is not None and self.shipping_class not in allowed_classes:
             raise ContractValidationError("unsupported WooCommerce shipping class")
         if len(set(self.temperature_modes)) != len(self.temperature_modes):
