@@ -10,6 +10,7 @@ from .normalizer import (
 from .order_intake import OrderIntakeHandoffError, normalize_order_intake_handoff
 from .order_quote_draft import OrderQuoteDraftError, build_order_quote_draft
 from .order_quote_preparation import OrderQuotePreparationError, build_order_quote_preparation
+from .order_quote_register import OrderQuoteDraftRegister
 from .order_review import OrderReviewQueue
 from .order_review_decision import (
     OrderReviewDecisionError,
@@ -30,6 +31,7 @@ __all__ = [
     "OperationsQueue",
     "OrderIntakeHandoffError",
     "OrderQuoteDraftError",
+    "OrderQuoteDraftRegister",
     "OrderQuotePreparationError",
     "OrderReviewDecisionError",
     "OrderReviewProposalRegister",
