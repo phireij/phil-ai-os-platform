@@ -31,6 +31,15 @@ BANNER_STYLE = """<style id="phil-preview-boundary-style">
 .phil-preview-boundary strong{letter-spacing:.06em}
 </style>"""
 ENGINEERING_LINK = '<p class="engineering-link"><a href="./engineering-preview.html">Open engineering flow preview</a></p>'
+EXISTING_PREVIEW_BOUNDARY_RE = re.compile(
+    r'class=["\'][^"\']*\bpreview-strip\b[^"\']*["\']',
+    flags=re.IGNORECASE,
+)
+
+
+def _rewrite_browser_module_refs(text: str) -> str:
+    """Use .js in the deployable bundle so shared hosting serves module MIME reliably."""
+    return text.replace(".mjs", ".js")
 
 
 def _inject_preview_boundary(text: str) -> str:
@@ -49,14 +58,19 @@ def _inject_preview_boundary(text: str) -> str:
         text = re.sub(r"</head>", f"  {ROBOTS_META}\n</head>", text, count=1, flags=re.IGNORECASE)
 
     if PREVIEW_MARKER not in text:
-        marker = f"<!-- {PREVIEW_MARKER} -->\n{BANNER_STYLE}\n{BANNER}\n"
+        has_visible_boundary = EXISTING_PREVIEW_BOUNDARY_RE.search(text) is not None
+        marker = f"<!-- {PREVIEW_MARKER} -->\n"
+        if not has_visible_boundary:
+            marker += f"{BANNER_STYLE}\n{BANNER}\n"
         text = re.sub(r"(<body[^>]*>)", r"\1\n" + marker, text, count=1, flags=re.IGNORECASE)
     return text
 
 
 def _write_preview_html(source: Path, target: Path) -> None:
     target.write_text(
-        _inject_preview_boundary(source.read_text(encoding="utf-8")),
+        _rewrite_browser_module_refs(
+            _inject_preview_boundary(source.read_text(encoding="utf-8"))
+        ),
         encoding="utf-8",
     )
 
@@ -73,7 +87,18 @@ def _write_hostinger_landing(source: Path, target: Path) -> None:
         )
         if replacements != 1:
             raise ValueError("Hostinger landing source must contain a main element")
-    target.write_text(_inject_preview_boundary(text), encoding="utf-8")
+    target.write_text(
+        _rewrite_browser_module_refs(_inject_preview_boundary(text)),
+        encoding="utf-8",
+    )
+
+
+def _copy_browser_module(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        _rewrite_browser_module_refs(source.read_text(encoding="utf-8")),
+        encoding="utf-8",
+    )
 
 
 def _copy_bundle_tree(destination: Path) -> None:
@@ -101,9 +126,13 @@ def _copy_bundle_tree(destination: Path) -> None:
             if not source.is_file() or source.suffix not in ALLOWED_NESTED_SUFFIXES:
                 continue
             relative = source.relative_to(ROOT)
-            target = destination / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, target)
+            if source.suffix == ".mjs":
+                target = destination / relative.with_suffix(".js")
+                _copy_browser_module(source, target)
+            else:
+                target = destination / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
 
     (destination / "PREVIEW_BOUNDARY.txt").write_text(
         "PRE-PRODUCTION ONLY\n"
@@ -164,9 +193,20 @@ def _validate_bundle(destination: Path) -> None:
             raise ValueError(f"missing strict robots policy: {html.name}")
         if "rubyscakedelights.shop" in lower:
             raise ValueError(f"production hostname must not be embedded in preview bundle: {html.name}")
+        if ".mjs" in text:
+            raise ValueError(f"Hostinger preview HTML must use .js browser modules: {html.name}")
 
-    for script in (destination / "src").glob("*.mjs"):
-        _validate_script_network_calls(script.read_text(encoding="utf-8"), script.name)
+    module_files = sorted((destination / "src").glob("*.js"))
+    if not module_files:
+        raise ValueError("preview bundle must contain Hostinger-compatible .js browser modules")
+    if any((destination / "src").glob("*.mjs")):
+        raise ValueError("preview bundle must not contain .mjs browser modules")
+
+    for script in module_files:
+        text = script.read_text(encoding="utf-8")
+        if ".mjs" in text:
+            raise ValueError(f"Hostinger preview module import must use .js: {script.name}")
+        _validate_script_network_calls(text, script.name)
 
 
 def build(output_zip: Path) -> Path:
