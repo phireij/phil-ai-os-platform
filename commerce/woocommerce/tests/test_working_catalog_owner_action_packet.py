@@ -51,11 +51,11 @@ class WorkingCatalogOwnerActionPacketTests(unittest.TestCase):
         requirements = {action.requirement for action in bar}
         self.assertIn("Japanese product name", requirements)
         self.assertIn(
-            "fulfillment:multiple temperature modes require owner classification",
+            "Fulfillment: multiple temperature modes require owner classification",
             requirements,
         )
         self.assertIn(
-            "fulfillment:quantity-dependent package rule requires final package policy",
+            "Fulfillment: quantity-dependent package rule requires final package policy",
             requirements,
         )
         self.assertTrue(
