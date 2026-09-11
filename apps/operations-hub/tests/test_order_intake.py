@@ -1,6 +1,5 @@
 import copy
-
-import pytest
+import unittest
 
 from operations_hub.order_intake import OrderIntakeHandoffError, normalize_order_intake_handoff
 
@@ -64,60 +63,60 @@ def handoff():
     }
 
 
-def test_normalizes_review_only_order_request_for_staff_review():
-    normalized = normalize_order_intake_handoff(handoff())
-    assert normalized["source"] == "customer_experience_order_intake"
-    assert normalized["kind"] == "order_request"
-    assert normalized["review_required"] is True
-    assert normalized["review_state"] == "pending_staff_review"
-    assert normalized["approval_state"] == "not_evaluated"
-    assert normalized["entities"]["fulfillment"]["method"] == "pickup"
-    assert normalized["entities"]["customization"]["reference_images"] == [
-        {"name": "reference.jpg", "type": "image/jpeg"}
-    ]
-    assert normalized["authority"]["mutation_authorized"] is False
-    assert normalized["authority"]["order_creation_authorized"] is False
-    assert normalized["authority"]["payment_execution_authorized"] is False
+class OrderIntakeHandoffTests(unittest.TestCase):
+    def test_normalizes_review_only_order_request_for_staff_review(self):
+        normalized = normalize_order_intake_handoff(handoff())
+        self.assertEqual(normalized["source"], "customer_experience_order_intake")
+        self.assertEqual(normalized["kind"], "order_request")
+        self.assertIs(normalized["review_required"], True)
+        self.assertEqual(normalized["review_state"], "pending_staff_review")
+        self.assertEqual(normalized["approval_state"], "not_evaluated")
+        self.assertEqual(normalized["entities"]["fulfillment"]["method"], "pickup")
+        self.assertEqual(
+            normalized["entities"]["customization"]["reference_images"],
+            [{"name": "reference.jpg", "type": "image/jpeg"}],
+        )
+        self.assertIs(normalized["authority"]["mutation_authorized"], False)
+        self.assertIs(normalized["authority"]["order_creation_authorized"], False)
+        self.assertIs(normalized["authority"]["payment_execution_authorized"], False)
+
+    def test_normalization_is_deterministic_for_same_handoff(self):
+        first = normalize_order_intake_handoff(handoff())
+        second = normalize_order_intake_handoff(handoff())
+        self.assertEqual(first["raw_handoff_fingerprint"], second["raw_handoff_fingerprint"])
+        self.assertEqual(first["lifecycle_correlation_id"], second["lifecycle_correlation_id"])
+
+    def test_rejects_authority_expansion(self):
+        payload = handoff()
+        payload["authority"]["orderCreationAuthorized"] = True
+        with self.assertRaisesRegex(OrderIntakeHandoffError, "orderCreationAuthorized"):
+            normalize_order_intake_handoff(payload)
+
+    def test_rejects_file_content_or_unbounded_reference_shape(self):
+        payload = handoff()
+        payload["request"]["customization"]["referenceImages"][0]["bytes"] = "private-file-content"
+        with self.assertRaisesRegex(OrderIntakeHandoffError, "forbidden file-content"):
+            normalize_order_intake_handoff(payload)
+
+    def test_rejects_inconsistent_fulfillment_fields(self):
+        payload = handoff()
+        payload["request"]["fulfillment"]["method"] = "ruby-car"
+        with self.assertRaisesRegex(OrderIntakeHandoffError, "pickupTime must be empty"):
+            normalize_order_intake_handoff(payload)
+
+    def test_basic_cake_cannot_smuggle_custom_only_fields(self):
+        payload = handoff()
+        customization = payload["request"]["customization"]
+        customization["cakeType"] = "basic"
+        with self.assertRaisesRegex(OrderIntakeHandoffError, "basic cake"):
+            normalize_order_intake_handoff(payload)
+
+    def test_rejects_non_review_only_request(self):
+        payload = copy.deepcopy(handoff())
+        payload["request"]["state"] = "ready_to_order"
+        with self.assertRaisesRegex(OrderIntakeHandoffError, "review_only"):
+            normalize_order_intake_handoff(payload)
 
 
-def test_normalization_is_deterministic_for_same_handoff():
-    first = normalize_order_intake_handoff(handoff())
-    second = normalize_order_intake_handoff(handoff())
-    assert first["raw_handoff_fingerprint"] == second["raw_handoff_fingerprint"]
-    assert first["lifecycle_correlation_id"] == second["lifecycle_correlation_id"]
-
-
-def test_rejects_authority_expansion():
-    payload = handoff()
-    payload["authority"]["orderCreationAuthorized"] = True
-    with pytest.raises(OrderIntakeHandoffError, match="orderCreationAuthorized"):
-        normalize_order_intake_handoff(payload)
-
-
-def test_rejects_file_content_or_unbounded_reference_shape():
-    payload = handoff()
-    payload["request"]["customization"]["referenceImages"][0]["bytes"] = "private-file-content"
-    with pytest.raises(OrderIntakeHandoffError, match="forbidden file-content"):
-        normalize_order_intake_handoff(payload)
-
-
-def test_rejects_inconsistent_fulfillment_fields():
-    payload = handoff()
-    payload["request"]["fulfillment"]["method"] = "ruby-car"
-    with pytest.raises(OrderIntakeHandoffError, match="pickupTime must be empty"):
-        normalize_order_intake_handoff(payload)
-
-
-def test_basic_cake_cannot_smuggle_custom_only_fields():
-    payload = handoff()
-    customization = payload["request"]["customization"]
-    customization["cakeType"] = "basic"
-    with pytest.raises(OrderIntakeHandoffError, match="basic cake"):
-        normalize_order_intake_handoff(payload)
-
-
-def test_rejects_non_review_only_request():
-    payload = copy.deepcopy(handoff())
-    payload["request"]["state"] = "ready_to_order"
-    with pytest.raises(OrderIntakeHandoffError, match="review_only"):
-        normalize_order_intake_handoff(payload)
+if __name__ == "__main__":
+    unittest.main()
