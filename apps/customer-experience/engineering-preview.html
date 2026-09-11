@@ -1,1 +1,91 @@
-placeholder
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#fff7f5">
+  <meta name="description" content="Phil AI OS isolated bilingual customer experience foundation">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./connectivity-status.css">
+  <link rel="stylesheet" href="./product-browse-ux.css">
+  <link rel="stylesheet" href="./product-detail-facts.css">
+  <link rel="stylesheet" href="./mobile-performance.css">
+  <title>Phil AI OS — Customer Experience Foundation</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">Phil AI OS · Sprint 4</p>
+      <a class="brand" href="./engineering-preview.html">Customer Experience</a>
+    </div>
+    <div class="header-actions">
+      <a class="secondary-link" href="./">Ruby storefront</a>
+      <label class="locale-label" for="locale-select">Language</label>
+      <select id="locale-select" aria-label="Language">
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+      </select>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="hero" aria-labelledby="hero-title">
+      <p class="status-pill">Isolated preview · No live checkout</p>
+      <h1 id="hero-title">Mobile-first bilingual storefront foundation</h1>
+      <p id="hero-copy">Synthetic data only. This engineering preview proves customer flow without production WooCommerce connectivity.</p>
+      <div class="hero-actions" aria-label="Preview actions">
+        <a class="detail-link" href="#catalog-section">Browse products</a>
+        <a class="secondary-link" href="./cart-preview.html">Review cart flow</a>
+      </div>
+    </section>
+
+    <section class="journey-panel" aria-labelledby="journey-title">
+      <div class="section-heading compact-heading"><div><p class="eyebrow">Simple ordering</p><h2 id="journey-title">From craving to confirmation</h2></div></div>
+      <div class="journey-grid">
+        <article class="journey-step"><span class="step-number" aria-hidden="true">1</span><div><h3 id="journey-browse-title">Choose your favorites</h3><p id="journey-browse-copy">Browse clear product details, price and availability.</p></div></article>
+        <article class="journey-step"><span class="step-number" aria-hidden="true">2</span><div><h3 id="journey-fulfillment-title">Choose fulfillment</h3><p id="journey-fulfillment-copy">See pickup and delivery guidance before checkout.</p></div></article>
+        <article class="journey-step"><span class="step-number" aria-hidden="true">3</span><div><h3 id="journey-review-title">Review before submitting</h3><p id="journey-review-copy">Confirm item, price, shipping and payment details before the final action.</p></div></article>
+      </div>
+    </section>
+
+    <section id="catalog-section" aria-labelledby="catalog-title">
+      <div class="section-heading"><div><p class="eyebrow">Catalog</p><h2 id="catalog-title">Products</h2></div><p id="catalog-summary" aria-live="polite"></p></div>
+      <div id="catalog-grid" class="product-grid" aria-live="polite"></div>
+    </section>
+
+    <section id="product-section" class="detail-panel" hidden aria-labelledby="product-title">
+      <a id="back-link" class="text-link" href="./engineering-preview.html">← Back to catalog</a>
+      <div id="product-detail"></div>
+    </section>
+
+    <section class="preview-links" aria-labelledby="preview-links-title">
+      <p class="eyebrow">Customer-flow previews</p>
+      <h2 id="preview-links-title">Review the journey</h2>
+      <div class="preview-link-grid">
+        <a class="preview-link-card" href="./"><strong>Ruby storefront preview</strong><span>See the customer-facing branded progress checkpoint while production gates remain unchanged.</span></a>
+        <a class="preview-link-card" href="./cart-preview.html"><strong>Cart & payment handoff</strong><span>Review order guidance and payment-method presentation.</span></a>
+        <a class="preview-link-card" href="./confirmation-preview.html"><strong>Final confirmation</strong><span>Review the final-order information hierarchy before submission.</span></a>
+        <a class="preview-link-card" href="./quick-pickup-preview.html"><strong>Quick Pickup</strong><span>Review the fail-closed Quick Pickup readiness experience.</span></a>
+        <a class="preview-link-card" href="./order-intake-preview.html"><strong>Order request & custom cake</strong><span>Review the mobile-first requested-date, fulfillment, upload, and cake-add-on intake flow.</span></a>
+      </div>
+    </section>
+
+    <section class="safety-panel" aria-labelledby="safety-title"><p class="eyebrow">Authority boundary</p><h2 id="safety-title">Checkout remains an intent</h2><p id="safety-copy">This Sprint 4 preview can compose and evaluate checkout intent locally. It cannot create an order, charge a payment, or mutate WooCommerce.</p></section>
+  </main>
+
+  <nav class="mobile-action-dock" aria-label="Mobile preview navigation"><a href="#catalog-section" aria-current="page"><span aria-hidden="true">⌕</span><span id="dock-shop-label">Shop</span></a><a href="./cart-preview.html"><span aria-hidden="true">▣</span><span id="dock-cart-label">Cart</span></a><a href="./quick-pickup-preview.html"><span aria-hidden="true">◎</span><span id="dock-pickup-label">Pickup</span></a></nav>
+
+  <footer><p>Phil AI OS · Sprint 4 Customer Experience · synthetic fixture engineering environment</p></footer>
+
+  <template id="product-card-template"><article class="product-card"><div class="product-media" aria-hidden="true"><span>CX</span></div><div class="product-card-body"><div class="product-status-row"><p class="availability"></p><span class="fulfillment-chip pickup-chip"></span></div><h3></h3><p class="description"></p><div class="product-card-footer"><strong class="price"></strong><a class="detail-link">View</a></div></div></article></template>
+
+  <script type="module" src="./src/app.mjs"></script>
+  <script type="module" src="./src/mobile-ux.mjs"></script>
+  <script type="module" src="./src/product-browse-ux.mjs"></script>
+  <script type="module" src="./src/product-detail-facts.mjs"></script>
+  <script type="module" src="./src/connectivity-status.mjs"></script>
+</body>
+</html>
