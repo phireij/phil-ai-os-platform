@@ -90,7 +90,7 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
 
     def test_invalid_or_duplicate_sku_blocks_production_readiness(self):
         payload = self.load()
-        payload["working_products"][1]["sku"] = "BAR-FMB"
+        payload["working_products"][0]["variants"][0]["sku"] = "BAR-FMB"
         payload["working_products"][2]["sku"] = "RCD-BAR-FMB"
         report = build_working_catalog_gap_report(payload)
         self.assertFalse(report.production_ready)
