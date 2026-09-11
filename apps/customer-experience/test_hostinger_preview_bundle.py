@@ -21,6 +21,8 @@ class HostingerPreviewBundleTests(unittest.TestCase):
                 self.assertIn("preview/engineering-preview.html", names)
                 self.assertIn("preview/order-intake-preview.html", names)
                 self.assertIn("preview/PREVIEW_BOUNDARY.txt", names)
+                self.assertIn("preview/src/ruby-storefront.mjs", names)
+                self.assertIn("preview/src/ruby-working-catalog-preview.mjs", names)
                 self.assertTrue(any(name.startswith("preview/src/") and name.endswith(".mjs") for name in names))
                 for target in preview_builder.ALLOWED_FETCH_TARGETS:
                     self.assertIn("preview/" + target.removeprefix("./"), names)
@@ -28,6 +30,8 @@ class HostingerPreviewBundleTests(unittest.TestCase):
                 landing = archive.read("preview/index.html").decode("utf-8")
                 self.assertIn("Ruby's Cake Delights", landing)
                 self.assertIn("ruby-storefront-progress.css", landing)
+                self.assertIn('id="ruby-working-products"', landing)
+                self.assertIn("src/ruby-storefront.mjs", landing)
                 self.assertIn("engineering-preview.html", landing)
                 engineering = archive.read("preview/engineering-preview.html").decode("utf-8")
                 self.assertIn("Phil AI OS · Sprint 4", engineering)
