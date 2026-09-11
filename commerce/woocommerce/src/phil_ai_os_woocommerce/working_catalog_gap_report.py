@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterable
+
+from .catalog_field_evidence import evaluate_field_evidence
+from .sku_policy import SkuPolicyError, parse_ruby_sku
 
 
 @dataclass(frozen=True)
@@ -24,6 +27,17 @@ def _product_key(product: dict[str, Any]) -> str:
     return str(product.get("sku") or product.get("parent_reference") or product.get("english_name") or "unknown")
 
 
+def _iter_skus(products: Iterable[dict[str, Any]]) -> Iterable[str]:
+    for product in products:
+        sku = product.get("sku")
+        if sku:
+            yield str(sku)
+        for variant in product.get("variants") or ():
+            variant_sku = variant.get("sku")
+            if variant_sku:
+                yield str(variant_sku)
+
+
 def build_working_catalog_gap_report(payload: dict[str, Any]) -> WorkingCatalogGapReport:
     global_gaps: list[str] = []
 
@@ -39,8 +53,26 @@ def build_working_catalog_gap_report(payload: dict[str, Any]) -> WorkingCatalogG
     if payload.get("production_publish_authorized") is not True:
         global_gaps.append("production publication authority is not granted")
 
+    products = payload.get("working_products") or []
+    if not products:
+        global_gaps.append("catalog contains no products")
+
+    evidence = evaluate_field_evidence(payload)
+    global_gaps.extend(f"owner evidence: {blocker}" for blocker in evidence.blockers)
+
+    seen_skus: set[str] = set()
+    for sku in _iter_skus(products):
+        try:
+            parse_ruby_sku(sku)
+        except SkuPolicyError:
+            global_gaps.append(f"invalid Ruby SKU: {sku}")
+            continue
+        if sku in seen_skus:
+            global_gaps.append(f"duplicate Ruby SKU: {sku}")
+        seen_skus.add(sku)
+
     product_gaps: list[ProductGap] = []
-    for product in payload.get("working_products") or []:
+    for product in products:
         missing: list[str] = []
         if not product.get("english_name"):
             missing.append("English product name")
@@ -72,4 +104,4 @@ def build_working_catalog_gap_report(payload: dict[str, Any]) -> WorkingCatalogG
 
         product_gaps.append(ProductGap(_product_key(product), tuple(missing)))
 
-    return WorkingCatalogGapReport(tuple(global_gaps), tuple(product_gaps))
+    return WorkingCatalogGapReport(tuple(dict.fromkeys(global_gaps)), tuple(product_gaps))
