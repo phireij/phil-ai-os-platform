@@ -30,6 +30,7 @@ BANNER_STYLE = """<style id="phil-preview-boundary-style">
 .phil-preview-boundary{position:relative;z-index:99999;padding:.65rem 1rem;text-align:center;background:#2b2020;color:#fff;font:600 13px/1.4 system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;letter-spacing:.01em}
 .phil-preview-boundary strong{letter-spacing:.06em}
 </style>"""
+ENGINEERING_LINK = '<p class="engineering-link"><a href="./engineering-preview.html">Open engineering flow preview</a></p>'
 
 
 def _inject_preview_boundary(text: str) -> str:
@@ -60,6 +61,21 @@ def _write_preview_html(source: Path, target: Path) -> None:
     )
 
 
+def _write_hostinger_landing(source: Path, target: Path) -> None:
+    text = source.read_text(encoding="utf-8")
+    if "engineering-preview.html" not in text:
+        text, replacements = re.subn(
+            r"</main>",
+            f"  {ENGINEERING_LINK}\n  </main>",
+            text,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        if replacements != 1:
+            raise ValueError("Hostinger landing source must contain a main element")
+    target.write_text(_inject_preview_boundary(text), encoding="utf-8")
+
+
 def _copy_bundle_tree(destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
 
@@ -75,7 +91,7 @@ def _copy_bundle_tree(destination: Path) -> None:
     # but promote the branded Ruby storefront to the temporary Hostinger preview
     # landing. The engineering shell remains directly reachable from that landing.
     _write_preview_html(ENGINEERING_LANDING_SOURCE, destination / "engineering-preview.html")
-    _write_preview_html(HOSTINGER_LANDING_SOURCE, destination / "index.html")
+    _write_hostinger_landing(HOSTINGER_LANDING_SOURCE, destination / "index.html")
 
     for dirname in ("src", "fixtures"):
         source_dir = ROOT / dirname
