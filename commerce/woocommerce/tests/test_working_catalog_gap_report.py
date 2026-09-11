@@ -30,7 +30,7 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
         self.assertIn("Japanese product name", by_key["RCD-BAR-FMB"])
         self.assertIn("final shipping/package class", by_key["RCD-BAR-FMB"])
 
-        self.assertIn("JPY price", by_key["RCD-BRD-ENS-1"])
+        self.assertNotIn("JPY price", by_key["RCD-BRD-ENS-1"])
         self.assertIn("Japanese product name", by_key["RCD-BRD-ENS-1"])
         self.assertIn("final shipping/package class", by_key["RCD-BRD-ENS-1"])
 
