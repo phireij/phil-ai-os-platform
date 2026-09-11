@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v26";
-// 2026-09-11: refresh the isolated shell for local order-review handoff preparation; no live commerce integration.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v27";
+// 2026-09-12: refresh the isolated shell and keep branded Ruby preview assets network-first so manual Hostinger uploads do not remain masked by an older service-worker cache.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -111,8 +111,30 @@ async function staticResponse(request) {
   }
 }
 
+function isRubyPreviewAsset(url) {
+  return url.pathname.includes("/src/ruby-")
+    || url.pathname.endsWith("/ruby-storefront-progress.css")
+    || url.pathname.endsWith("/ruby-product-preview.css")
+    || url.pathname.endsWith("/ruby-preview-cart.css");
+}
+
+async function rubyPreviewStaticResponse(request) {
+  try {
+    const response = await fetch(request, { cache: "no-store" });
+    return cacheSuccessful(request, response);
+  } catch {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    return new Response("", { status: 503, statusText: "Offline" });
+  }
+}
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
-  event.respondWith(event.request.mode === "navigate" ? navigationResponse(event.request) : staticResponse(event.request));
+  if (event.request.mode === "navigate") {
+    event.respondWith(navigationResponse(event.request));
+    return;
+  }
+  event.respondWith(isRubyPreviewAsset(url) ? rubyPreviewStaticResponse(event.request) : staticResponse(event.request));
 });
