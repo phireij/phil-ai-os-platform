@@ -1,5 +1,6 @@
 import "./ruby-storefront-progress.mjs";
 import { normalizeRubyLocale, workingProductDetailModel } from "./ruby-working-product-detail.mjs";
+import { addPreviewCartItem } from "./ruby-preview-cart.mjs";
 
 const detailRoot = document.querySelector("#ruby-product-detail");
 const localeSelect = document.querySelector("#ruby-locale");
@@ -14,6 +15,14 @@ const copy = Object.freeze({
     fulfillmentTitle: "Fulfillment status",
     variantsTitle: "Working size options",
     variantSku: "Working SKU",
+    cartTitle: "Local preview cart",
+    sizeLabel: "Choose a working size",
+    sizePlaceholder: "Select size",
+    addToCart: "Add to preview cart",
+    added: "Added to the local preview cart. No order was created.",
+    chooseSize: "Choose a size before adding this product.",
+    cartUnavailable: "Local preview cart storage is unavailable in this browser session.",
+    viewCart: "View preview cart",
     boundaryTitle: "Pre-production boundary",
     boundaryCopy: "This page does not show live availability and cannot create an order, charge a payment, send SMS, change inventory, or publish WooCommerce data.",
     unavailableTitle: "Preview boundary check failed.",
@@ -27,6 +36,14 @@ const copy = Object.freeze({
     fulfillmentTitle: "受取・配送ステータス",
     variantsTitle: "作業中サイズオプション",
     variantSku: "作業中SKU",
+    cartTitle: "ローカル・プレビューカート",
+    sizeLabel: "作業中サイズを選択",
+    sizePlaceholder: "サイズを選択",
+    addToCart: "プレビューカートに追加",
+    added: "ローカル・プレビューカートに追加しました。注文は作成されていません。",
+    chooseSize: "カートに追加する前にサイズを選択してください。",
+    cartUnavailable: "このブラウザセッションではローカル・プレビューカートを利用できません。",
+    viewCart: "プレビューカートを見る",
     boundaryTitle: "プレプロダクション境界",
     boundaryCopy: "この画面はリアルタイム在庫を表示せず、注文作成、決済、SMS送信、在庫変更、WooCommerce公開を実行できません。",
     unavailableTitle: "プレビュー境界チェックに失敗しました。",
@@ -58,6 +75,61 @@ function renderMessage(title, body, locale) {
   detailRoot.setAttribute("aria-busy", "false");
   document.title = `Ruby's Cake Delights — ${title}`;
   setBackLink(locale);
+}
+
+function renderPreviewCartControls(body, model, lang) {
+  const section = element("section", "ruby-product-cart-controls");
+  section.append(element("h2", null, copy[lang].cartTitle));
+
+  let variantSelect = null;
+  if (model.variants.length) {
+    const label = element("label", "ruby-product-cart-label", copy[lang].sizeLabel);
+    variantSelect = document.createElement("select");
+    variantSelect.className = "ruby-product-cart-select";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = copy[lang].sizePlaceholder;
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    variantSelect.append(placeholder);
+    for (const variant of model.variants) {
+      const option = document.createElement("option");
+      option.value = variant.sku;
+      option.textContent = `${variant.sizeCm} cm · ${variant.price}`;
+      variantSelect.append(option);
+    }
+    label.append(variantSelect);
+    section.append(label);
+  }
+
+  const actions = element("div", "ruby-product-cart-actions");
+  const addButton = element("button", "button primary", copy[lang].addToCart);
+  addButton.type = "button";
+  const viewCart = element("a", "button secondary", copy[lang].viewCart);
+  viewCart.href = `./ruby-cart-preview.html?lang=${lang}`;
+  actions.append(addButton, viewCart);
+  section.append(actions);
+
+  const status = element("p", "ruby-product-cart-status");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  section.append(status);
+
+  addButton.addEventListener("click", () => {
+    const variantSku = variantSelect ? variantSelect.value : null;
+    if (variantSelect && !variantSku) {
+      status.textContent = copy[lang].chooseSize;
+      return;
+    }
+    try {
+      addPreviewCartItem({ productKey: model.key, variantSku });
+      status.textContent = copy[lang].added;
+    } catch {
+      status.textContent = copy[lang].cartUnavailable;
+    }
+  });
+
+  body.append(section);
 }
 
 function renderProduct(locale = document.documentElement.lang) {
@@ -112,6 +184,8 @@ function renderProduct(locale = document.documentElement.lang) {
   fulfillment.append(element("p", null, model.fulfillment));
   fulfillment.append(element("p", "copy-pending", model.fulfillmentCaution));
   body.append(fulfillment);
+
+  renderPreviewCartControls(body, model, lang);
 
   const boundary = element("section", "ruby-product-boundary");
   boundary.append(element("strong", null, copy[lang].boundaryTitle));
