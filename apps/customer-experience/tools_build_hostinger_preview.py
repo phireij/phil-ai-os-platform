@@ -10,6 +10,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 ALLOWED_ROOT_SUFFIXES = {".html", ".css", ".svg", ".webmanifest"}
 ALLOWED_NESTED_SUFFIXES = {".mjs", ".json"}
+HOSTINGER_LANDING_SOURCE = ROOT / "ruby-storefront-progress.html"
+ENGINEERING_LANDING_SOURCE = ROOT / "index.html"
 ALLOWED_FETCH_TARGETS = {
     "./fixtures/air-mobile-quick-pickup.json",
     "./fixtures/catalog.json",
@@ -51,6 +53,13 @@ def _inject_preview_boundary(text: str) -> str:
     return text
 
 
+def _write_preview_html(source: Path, target: Path) -> None:
+    target.write_text(
+        _inject_preview_boundary(source.read_text(encoding="utf-8")),
+        encoding="utf-8",
+    )
+
+
 def _copy_bundle_tree(destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
 
@@ -58,9 +67,15 @@ def _copy_bundle_tree(destination: Path) -> None:
         if source.is_file() and source.suffix in ALLOWED_ROOT_SUFFIXES:
             target = destination / source.name
             if source.suffix == ".html":
-                target.write_text(_inject_preview_boundary(source.read_text(encoding="utf-8")), encoding="utf-8")
+                _write_preview_html(source, target)
             else:
                 shutil.copy2(source, target)
+
+    # Keep the repository's source index as the isolated engineering app shell,
+    # but promote the branded Ruby storefront to the temporary Hostinger preview
+    # landing. The engineering shell remains directly reachable from that landing.
+    _write_preview_html(ENGINEERING_LANDING_SOURCE, destination / "engineering-preview.html")
+    _write_preview_html(HOSTINGER_LANDING_SOURCE, destination / "index.html")
 
     for dirname in ("src", "fixtures"):
         source_dir = ROOT / dirname
