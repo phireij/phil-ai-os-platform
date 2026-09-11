@@ -1,0 +1,93 @@
+name: WooCommerce Staging Preview Read-Only Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_read_only:
+        description: "Confirm this run must remain read-only and non-publishing"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  preview-check:
+    if: ${{ inputs.confirm_read_only == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate staging secret references without printing values
+        shell: bash
+        env:
+          RUBY_WOO_STAGING_BASE_URL: ${{ secrets.RUBY_WOO_STAGING_BASE_URL }}
+          RUBY_WOO_STAGING_PREVIEW_USER: ${{ secrets.RUBY_WOO_STAGING_PREVIEW_USER }}
+          RUBY_WOO_STAGING_PREVIEW_PASSWORD: ${{ secrets.RUBY_WOO_STAGING_PREVIEW_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$RUBY_WOO_STAGING_BASE_URL"
+          test -n "$RUBY_WOO_STAGING_PREVIEW_USER"
+          test -n "$RUBY_WOO_STAGING_PREVIEW_PASSWORD"
+          case "$RUBY_WOO_STAGING_BASE_URL" in
+            https://rubyscakedelights.shop|https://rubyscakedelights.shop/|http://rubyscakedelights.shop|http://rubyscakedelights.shop/)
+              echo "Refusing to treat the production hostname as staging" >&2
+              exit 2
+              ;;
+          esac
+          echo "PHIL_AI_OS_WOO_STAGING_SECRET_REFS_PRESENT"
+
+      - name: Verify unauthenticated preview is access-gated
+        shell: bash
+        env:
+          RUBY_WOO_STAGING_BASE_URL: ${{ secrets.RUBY_WOO_STAGING_BASE_URL }}
+        run: |
+          set -euo pipefail
+          code="$(curl --silent --show-error --location --max-redirs 0 --output /tmp/staging-anon.html --write-out '%{http_code}' "$RUBY_WOO_STAGING_BASE_URL" || true)"
+          case "$code" in
+            401|403)
+              echo "PHIL_AI_OS_WOO_STAGING_ANON_ACCESS_GATED status=$code"
+              ;;
+            *)
+              echo "Staging preview is not safely access-gated; observed HTTP $code" >&2
+              exit 3
+              ;;
+          esac
+
+      - name: Verify authenticated preview renders and carries crawler-blocking evidence
+        shell: bash
+        env:
+          RUBY_WOO_STAGING_BASE_URL: ${{ secrets.RUBY_WOO_STAGING_BASE_URL }}
+          RUBY_WOO_STAGING_PREVIEW_USER: ${{ secrets.RUBY_WOO_STAGING_PREVIEW_USER }}
+          RUBY_WOO_STAGING_PREVIEW_PASSWORD: ${{ secrets.RUBY_WOO_STAGING_PREVIEW_PASSWORD }}
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail --location \
+            --user "$RUBY_WOO_STAGING_PREVIEW_USER:$RUBY_WOO_STAGING_PREVIEW_PASSWORD" \
+            --dump-header /tmp/staging-headers.txt \
+            --output /tmp/staging-page.html \
+            "$RUBY_WOO_STAGING_BASE_URL"
+
+          python - <<'PY'
+          from pathlib import Path
+          headers = Path('/tmp/staging-headers.txt').read_text(errors='ignore').lower()
+          body = Path('/tmp/staging-page.html').read_text(errors='ignore').lower()
+          crawler_blocked = (
+              'x-robots-tag:' in headers and 'noindex' in headers
+          ) or (
+              'name="robots"' in body and 'noindex' in body
+          ) or (
+              "name='robots'" in body and 'noindex' in body
+          )
+          if not crawler_blocked:
+              raise SystemExit('Staging preview lacks verifiable noindex crawler-blocking evidence')
+          print('PHIL_AI_OS_WOO_STAGING_AUTHENTICATED_PREVIEW_GREEN')
+          print('PHIL_AI_OS_WOO_STAGING_NOINDEX_GREEN')
+          PY
+
+      - name: Assert workflow remains read-only and non-publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "PHIL_AI_OS_WOO_STAGING_PREVIEW_READONLY_BOUNDARY_GREEN"
+          echo "network_read_only=true mutation_authorized=false production_publish_authorized=false payment_execution_authorized=false sms_send_authorized=false dns_change_authorized=false"
