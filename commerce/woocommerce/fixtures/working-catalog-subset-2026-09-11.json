@@ -26,8 +26,23 @@
     "drive_file_id": "13gbwu9_l59AalbKofUJZVX4IziYCKZS7",
     "observed_modified_at": "2026-09-11T02:24:32.696Z",
     "owner_declared_subset_complete": false,
-    "supplemental_owner_evidence": [
-      "2026-09-11 chat screenshot confirms Cheezy Ensaymada RCD-BRD-ENS-1 price ¥300"
+    "field_evidence": [
+      {
+        "product_key": "RCD-BRD-ENS-1",
+        "field": "price_jpy",
+        "value": 300,
+        "evidence_type": "owner_visual_confirmation",
+        "observed_at": "2026-09-11",
+        "note": "Owner-provided catalog screenshot visibly shows ¥300; Drive text extraction omitted the table value."
+      },
+      {
+        "product_key": "RCD-MCH-RD-21",
+        "field": "sku",
+        "value": "RCD-MCH-RD-21",
+        "evidence_type": "owner_direct_confirmation",
+        "observed_at": "2026-09-11",
+        "note": "Owner explicitly confirmed RCS-MCH-RD-21 is a typo and RCD-MCH-RD-21 is authoritative."
+      }
     ]
   },
   "working_products": [
