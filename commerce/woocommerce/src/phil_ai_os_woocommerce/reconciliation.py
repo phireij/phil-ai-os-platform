@@ -68,8 +68,9 @@ def _comparable_variable_attributes(remote: Mapping[str, Any]) -> list[dict[str,
 def comparable_remote_product(
     remote: Mapping[str, Any],
     *,
-    variable: bool = False,
+    variable: bool | None = None,
 ) -> dict[str, Any]:
+    is_variable = remote.get("type") == "variable" if variable is None else variable
     fields = [
         "sku",
         "name",
@@ -79,12 +80,12 @@ def comparable_remote_product(
         "catalog_visibility",
         "shipping_class",
     ]
-    if variable:
+    if is_variable:
         fields.append("type")
     else:
         fields.append("regular_price")
     comparable = {field: remote.get(field) for field in fields}
-    if variable:
+    if is_variable:
         comparable["attributes"] = _comparable_variable_attributes(remote)
     target_meta = {
         "_philaios_temperature_modes",
