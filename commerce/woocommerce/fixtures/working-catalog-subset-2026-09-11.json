@@ -25,7 +25,10 @@
     "title": "Product Catalog ver2.docx",
     "drive_file_id": "13gbwu9_l59AalbKofUJZVX4IziYCKZS7",
     "observed_modified_at": "2026-09-11T02:24:32.696Z",
-    "owner_declared_subset_complete": false
+    "owner_declared_subset_complete": false,
+    "supplemental_owner_evidence": [
+      "2026-09-11 chat screenshot confirms Cheezy Ensaymada RCD-BRD-ENS-1 price ¥300"
+    ]
   },
   "working_products": [
     {
@@ -75,7 +78,7 @@
     {
       "product_type": "simple",
       "sku": "RCD-BRD-ENS-1",
-      "price_jpy": null,
+      "price_jpy": 300,
       "english_name": "Cheezy Ensaymada",
       "japanese_name": null,
       "family": "Bread",
@@ -100,7 +103,6 @@
     "Japanese product names/descriptions are missing",
     "verified media ingestion references are unresolved",
     "shipping/package decisions are incomplete for quantity-dependent products",
-    "Cheezy Ensaymada price is not present in the extracted source",
     "explicit Initial Launch Catalog V1 approval reference is missing"
   ],
   "mutation_authorized": false,
