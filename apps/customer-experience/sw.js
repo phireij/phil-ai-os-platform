@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v25";
-// 2026-09-11: refresh the isolated shell for order-intake review continuity; no live commerce integration.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v26";
+// 2026-09-11: refresh the isolated shell for local order-review handoff preparation; no live commerce integration.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -57,6 +57,8 @@ const APP_SHELL = [
   "./src/order-intake-review-continuity.mjs",
   "./src/order-intake-cart-context.mjs",
   "./src/order-intake-final-review.mjs",
+  "./src/order-intake-request-envelope.mjs",
+  "./src/order-intake-review-handoff.mjs",
   "./src/readiness-feedback.mjs",
   "./src/seo.mjs",
   "./src/ui-state.mjs",

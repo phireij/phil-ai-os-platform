@@ -3,6 +3,7 @@ import {
   loadOrderIntakeDraft,
   saveOrderIntakeDraft,
 } from "./order-intake-draft-state.mjs";
+import { saveOrderIntakeReviewHandoff } from "./order-intake-review-handoff.mjs";
 
 const form = document.querySelector("#order-intake-form");
 const cakeType = document.querySelector("#cake-type");
@@ -200,6 +201,16 @@ function currentDraftState() {
   };
 }
 
+function currentReviewHandoffState() {
+  return {
+    ...currentDraftState(),
+    referenceImages: Array.from(referenceImages.files || []).map((file) => ({
+      name: file.name,
+      type: file.type,
+    })),
+  };
+}
+
 function persistDraft() {
   saveOrderIntakeDraft(window.sessionStorage, currentDraftState());
 }
@@ -260,6 +271,7 @@ form.addEventListener("submit", (event) => {
   }
 
   persistDraft();
+  saveOrderIntakeReviewHandoff(window.sessionStorage, currentReviewHandoffState());
   status.textContent = fulfillmentDateCopy().success;
 });
 
