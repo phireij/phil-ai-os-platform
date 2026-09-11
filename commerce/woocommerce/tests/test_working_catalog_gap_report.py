@@ -18,6 +18,14 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
         self.assertFalse(report.production_ready)
         self.assertIn("catalog approval is missing", report.global_gaps)
         self.assertIn("initial launch subset is not owner-confirmed complete", report.global_gaps)
+        self.assertIn(
+            "Category: final category hierarchy, bilingual names, slugs, and mappings require approval",
+            report.global_gaps,
+        )
+        self.assertIn(
+            "Media: primary media selection and verified ingestion references require review",
+            report.global_gaps,
+        )
 
     def test_current_product_gaps_are_reported_without_invention(self):
         report = build_working_catalog_gap_report(self.load())
@@ -27,6 +35,14 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
         self.assertIn("Japanese description", by_key["RCD-MCH-RD"])
         self.assertIn(
             "Fulfillment: final shipping/package class is missing",
+            by_key["RCD-MCH-RD"],
+        )
+        self.assertIn(
+            "Category: category source label is missing",
+            by_key["RCD-MCH-RD"],
+        )
+        self.assertIn(
+            "Media: media source state is missing",
             by_key["RCD-MCH-RD"],
         )
 
@@ -43,11 +59,19 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
             "Fulfillment: ambient package candidate lacks physical-fit confirmation",
             by_key["RCD-BAR-FMB"],
         )
+        self.assertIn(
+            "Media: verified media ingestion reference is unresolved",
+            by_key["RCD-BAR-FMB"],
+        )
 
         self.assertNotIn("JPY price", by_key["RCD-BRD-ENS-1"])
         self.assertIn("Japanese product name", by_key["RCD-BRD-ENS-1"])
         self.assertIn(
             "Fulfillment: quantity-dependent package rule requires final package policy",
+            by_key["RCD-BRD-ENS-1"],
+        )
+        self.assertIn(
+            "Media: verified media ingestion reference is unresolved",
             by_key["RCD-BRD-ENS-1"],
         )
 
@@ -74,6 +98,16 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
             "Fulfillment: ambient package candidate lacks physical-fit confirmation",
             by_key["RCD-BAR-FMB"],
         )
+
+    def test_variable_product_media_gap_cannot_disappear_from_readiness(self):
+        payload = self.load()
+        cake = next(
+            item for item in payload["working_products"] if item.get("parent_reference") == "RCD-MCH-RD"
+        )
+        self.assertIsNone(cake.get("photo_source_state"))
+        report = build_working_catalog_gap_report(payload)
+        by_key = {item.key: item.missing for item in report.product_gaps}
+        self.assertIn("Media: media source state is missing", by_key["RCD-MCH-RD"])
 
     def test_report_does_not_grant_authority_when_catalog_fields_are_filled(self):
         payload = self.load()
