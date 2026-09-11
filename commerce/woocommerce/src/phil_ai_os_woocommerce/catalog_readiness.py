@@ -214,7 +214,7 @@ def evaluate_catalog_tax_readiness(payload: Mapping[str, Any]) -> CatalogTaxRead
     pending_product_tax_classes: list[str] = []
     category_keys = [value.key for value in categories]
     media_keys = [value.key for value in media]
-    product_skus = [value.sku for value in products]
+    product_skus = [sku for product in products for sku in product.all_skus()]
 
     for label, values in (
         ("category key", category_keys),
