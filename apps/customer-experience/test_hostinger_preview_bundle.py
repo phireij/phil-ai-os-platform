@@ -21,6 +21,8 @@ class HostingerPreviewBundleTests(unittest.TestCase):
                 self.assertIn("preview/order-intake-preview.html", names)
                 self.assertIn("preview/PREVIEW_BOUNDARY.txt", names)
                 self.assertTrue(any(name.startswith("preview/src/") and name.endswith(".mjs") for name in names))
+                for target in preview_builder.ALLOWED_FETCH_TARGETS:
+                    self.assertIn("preview/" + target.removeprefix("./"), names)
 
                 for name in sorted(n for n in names if n.endswith(".html")):
                     text = archive.read(name).decode("utf-8")
@@ -40,15 +42,21 @@ class HostingerPreviewBundleTests(unittest.TestCase):
         self.assertEqual(once.count(preview_builder.PREVIEW_MARKER), 1)
         self.assertIn("noarchive", once.lower())
 
-    def test_only_bundled_fixture_fetch_is_allowed(self):
-        preview_builder._validate_script_network_calls(
-            'const response = await fetch("./fixtures/catalog.json", { cache: "no-store" });',
-            "fixture.mjs",
-        )
+    def test_only_bundled_fixture_fetches_are_allowed(self):
+        for target in sorted(preview_builder.ALLOWED_FETCH_TARGETS):
+            preview_builder._validate_script_network_calls(
+                f'const response = await fetch("{target}", {{ cache: "no-store" }});',
+                "fixture.mjs",
+            )
         with self.assertRaises(ValueError):
             preview_builder._validate_script_network_calls(
                 'await fetch("https://example.com/catalog.json");',
                 "external.mjs",
+            )
+        with self.assertRaises(ValueError):
+            preview_builder._validate_script_network_calls(
+                'await fetch("./fixtures/not-bundled.json");',
+                "unknown-fixture.mjs",
             )
         with self.assertRaises(ValueError):
             preview_builder._validate_script_network_calls(
