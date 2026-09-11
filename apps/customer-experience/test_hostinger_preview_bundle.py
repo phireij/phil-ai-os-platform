@@ -40,6 +40,27 @@ class HostingerPreviewBundleTests(unittest.TestCase):
         self.assertEqual(once.count(preview_builder.PREVIEW_MARKER), 1)
         self.assertIn("noarchive", once.lower())
 
+    def test_only_bundled_fixture_fetch_is_allowed(self):
+        preview_builder._validate_script_network_calls(
+            'const response = await fetch("./fixtures/catalog.json", { cache: "no-store" });',
+            "fixture.mjs",
+        )
+        with self.assertRaises(ValueError):
+            preview_builder._validate_script_network_calls(
+                'await fetch("https://example.com/catalog.json");',
+                "external.mjs",
+            )
+        with self.assertRaises(ValueError):
+            preview_builder._validate_script_network_calls(
+                "await fetch(runtimeUrl);",
+                "dynamic.mjs",
+            )
+        with self.assertRaises(ValueError):
+            preview_builder._validate_script_network_calls(
+                "const xhr = new XMLHttpRequest();",
+                "xhr.mjs",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
