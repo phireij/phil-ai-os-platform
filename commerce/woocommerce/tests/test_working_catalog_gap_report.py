@@ -25,14 +25,55 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
 
         self.assertIn("Japanese product name", by_key["RCD-MCH-RD"])
         self.assertIn("Japanese description", by_key["RCD-MCH-RD"])
-        self.assertIn("final shipping/package class", by_key["RCD-MCH-RD"])
+        self.assertIn(
+            "Fulfillment: final shipping/package class is missing",
+            by_key["RCD-MCH-RD"],
+        )
 
         self.assertIn("Japanese product name", by_key["RCD-BAR-FMB"])
-        self.assertIn("final shipping/package class", by_key["RCD-BAR-FMB"])
+        self.assertIn(
+            "Fulfillment: multiple temperature modes require owner classification",
+            by_key["RCD-BAR-FMB"],
+        )
+        self.assertIn(
+            "Fulfillment: quantity-dependent package rule requires final package policy",
+            by_key["RCD-BAR-FMB"],
+        )
+        self.assertIn(
+            "Fulfillment: ambient package candidate lacks physical-fit confirmation",
+            by_key["RCD-BAR-FMB"],
+        )
 
         self.assertNotIn("JPY price", by_key["RCD-BRD-ENS-1"])
         self.assertIn("Japanese product name", by_key["RCD-BRD-ENS-1"])
-        self.assertIn("final shipping/package class", by_key["RCD-BRD-ENS-1"])
+        self.assertIn(
+            "Fulfillment: quantity-dependent package rule requires final package policy",
+            by_key["RCD-BRD-ENS-1"],
+        )
+
+    def test_temperature_ambiguity_survives_even_if_package_rule_is_resolved(self):
+        payload = self.load()
+        bar = next(item for item in payload["working_products"] if item.get("sku") == "RCD-BAR-FMB")
+        bar["source_package_rule"] = "ambient_size_60"
+        report = build_working_catalog_gap_report(payload)
+        by_key = {item.key: item.missing for item in report.product_gaps}
+        self.assertIn(
+            "Fulfillment: multiple temperature modes require owner classification",
+            by_key["RCD-BAR-FMB"],
+        )
+
+    def test_unconfirmed_ambient_candidate_cannot_disappear_from_readiness(self):
+        payload = self.load()
+        bar = next(item for item in payload["working_products"] if item.get("sku") == "RCD-BAR-FMB")
+        bar["source_temperature_marks"] = ["ambient"]
+        bar["source_package_rule"] = "ambient_compact"
+        bar["ambient_package_candidate_confirmed"] = False
+        report = build_working_catalog_gap_report(payload)
+        by_key = {item.key: item.missing for item in report.product_gaps}
+        self.assertIn(
+            "Fulfillment: ambient package candidate lacks physical-fit confirmation",
+            by_key["RCD-BAR-FMB"],
+        )
 
     def test_report_does_not_grant_authority_when_catalog_fields_are_filled(self):
         payload = self.load()

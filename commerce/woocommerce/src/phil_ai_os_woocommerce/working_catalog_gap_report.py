@@ -5,6 +5,9 @@ from typing import Any, Iterable
 
 from .catalog_field_evidence import evaluate_field_evidence
 from .sku_policy import SkuPolicyError, parse_ruby_sku
+from .working_catalog_fulfillment_readiness import (
+    evaluate_working_catalog_fulfillment_readiness,
+)
 
 
 @dataclass(frozen=True)
@@ -71,8 +74,11 @@ def build_working_catalog_gap_report(payload: dict[str, Any]) -> WorkingCatalogG
             global_gaps.append(f"duplicate Ruby SKU: {sku}")
         seen_skus.add(sku)
 
+    fulfillment = evaluate_working_catalog_fulfillment_readiness(payload)
+    fulfillment_by_position = tuple(fulfillment.product_results)
+
     product_gaps: list[ProductGap] = []
-    for product in products:
+    for index, product in enumerate(products):
         missing: list[str] = []
         if not product.get("english_name"):
             missing.append("English product name")
@@ -92,16 +98,19 @@ def build_working_catalog_gap_report(payload: dict[str, Any]) -> WorkingCatalogG
             elif any(v.get("price_jpy") is None for v in variants):
                 missing.append("variation JPY price")
 
-        if product.get("delivery_allowed") is True:
-            if not product.get("source_temperature_marks"):
-                missing.append("temperature mode")
-            package_rule = product.get("source_package_rule")
-            if package_rule in (None, "depends_on_total_pieces", "depends_on_total_items"):
-                missing.append("final shipping/package class")
+        if index < len(fulfillment_by_position):
+            missing.extend(
+                f"Fulfillment: {blocker}"
+                for blocker in fulfillment_by_position[index].blockers
+            )
+        else:
+            missing.append("Fulfillment: readiness result is missing")
 
         if not product.get("photo_source_state") and product.get("product_type") != "variable":
             missing.append("verified media source")
 
-        product_gaps.append(ProductGap(_product_key(product), tuple(missing)))
+        product_gaps.append(
+            ProductGap(_product_key(product), tuple(dict.fromkeys(missing)))
+        )
 
     return WorkingCatalogGapReport(tuple(dict.fromkeys(global_gaps)), tuple(product_gaps))
