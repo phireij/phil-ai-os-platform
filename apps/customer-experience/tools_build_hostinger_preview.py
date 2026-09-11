@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import shutil
 import sys
 import zipfile
@@ -9,6 +10,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 ALLOWED_ROOT_SUFFIXES = {".html", ".css", ".svg", ".webmanifest"}
 ALLOWED_NESTED_SUFFIXES = {".mjs", ".json"}
+ALLOWED_FETCH_TARGETS = {"./fixtures/catalog.json"}
 PREVIEW_MARKER = "PHIL_AI_OS_PREPRODUCTION_PREVIEW"
 ROBOTS_META = '<meta name="robots" content="noindex,nofollow,noarchive,nosnippet">'
 BANNER = (
@@ -28,7 +30,6 @@ def _inject_preview_boundary(text: str) -> str:
         raise ValueError("HTML preview source must contain head and body elements")
 
     # Replace any existing robots declaration with the stricter bundle policy.
-    import re
     text = re.sub(
         r'<meta\s+name=["\']robots["\'][^>]*>',
         ROBOTS_META,
@@ -75,6 +76,24 @@ def _copy_bundle_tree(destination: Path) -> None:
     )
 
 
+def _validate_script_network_calls(text: str, script_name: str) -> None:
+    lower = text.lower()
+    if "xmlhttprequest" in lower:
+        raise ValueError(f"network-capable browser call found in preview bundle: {script_name}")
+
+    fetch_calls = list(re.finditer(r"\bfetch\s*\(", text, flags=re.IGNORECASE))
+    literal_fetches = list(
+        re.finditer(r"\bfetch\s*\(\s*([\"'])([^\"']+)\1", text, flags=re.IGNORECASE)
+    )
+    if len(fetch_calls) != len(literal_fetches):
+        raise ValueError(f"dynamic or unverified fetch call found in preview bundle: {script_name}")
+
+    for match in literal_fetches:
+        target = match.group(2)
+        if target not in ALLOWED_FETCH_TARGETS:
+            raise ValueError(f"external or unapproved fetch target found in preview bundle: {script_name}")
+
+
 def _validate_bundle(destination: Path) -> None:
     html_files = sorted(destination.glob("*.html"))
     if not html_files or not (destination / "index.html").exists():
@@ -91,9 +110,7 @@ def _validate_bundle(destination: Path) -> None:
             raise ValueError(f"production hostname must not be embedded in preview bundle: {html.name}")
 
     for script in (destination / "src").glob("*.mjs"):
-        text = script.read_text(encoding="utf-8").lower()
-        if "fetch(" in text or "xmlhttprequest" in text:
-            raise ValueError(f"network-capable browser call found in preview bundle: {script.name}")
+        _validate_script_network_calls(script.read_text(encoding="utf-8"), script.name)
 
 
 def build(output_zip: Path) -> Path:
