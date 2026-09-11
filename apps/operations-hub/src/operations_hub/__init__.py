@@ -8,6 +8,7 @@ from .normalizer import (
     normalize_channel_event,
 )
 from .order_intake import OrderIntakeHandoffError, normalize_order_intake_handoff
+from .order_review import OrderReviewQueue
 from .queue import OperationsQueue
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "NormalizationError",
     "OperationsQueue",
     "OrderIntakeHandoffError",
+    "OrderReviewQueue",
     "SUPPORTED_SOURCES",
     "classify_intent",
     "evaluate_governance",
