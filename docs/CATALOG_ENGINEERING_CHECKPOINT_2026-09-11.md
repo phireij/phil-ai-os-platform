@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-11  
 **Repository:** `phireij/phil-ai-os-platform`  
-**Current merged main at checkpoint creation:** `4575f2d40cb1d4114bd83171ab9b252586fa6486`
+**Current merged main at reconciliation:** `a9144f847d66835c01338a629d968ad6ad48cdc1`
 
 This is an additive Sprint 3 catalog checkpoint. It supplements, but does not replace, the canonical Master Executive Roadmap or `docs/CURRENT_ENGINEERING_CHECKPOINT_2026-09-06.md`.
 
@@ -29,9 +29,9 @@ The current working subset contains three customer-facing products:
 
 This subset remains **working / incomplete / non-authorizing**. It is not yet the final owner-approved Initial Launch Catalog V1.
 
-## Catalog safeguards merged through PR #248
+## Catalog safeguards merged through PR #277
 
-The current catalog preparation path now includes the following merged controls:
+The current catalog preparation and readiness path now includes the following merged controls:
 
 - **PR #240** — captured the three-product working catalog subset as a non-authorizing fixture and documentation source.
 - **PR #241** — added fail-closed working-subset validation, including Ruby SKU checks and preservation of owner-input blockers.
@@ -42,6 +42,10 @@ The current catalog preparation path now includes the following merged controls:
 - **PR #246** — added fail-closed fulfillment-readiness classification for temperature and shipping/package state.
 - **PR #247** — added a non-authorizing WooCommerce-style draft-plan builder that preserves only confirmed facts and keeps all unresolved fields explicit.
 - **PR #248** — added a side-effect-free CLI for rendering the draft/hidden working-catalog plan as machine-readable JSON.
+- **PR #249** — added this catalog engineering checkpoint so later work can reconcile against a single bounded source.
+- **PR #275** — bound working-subset and draft-plan preparation to the structured owner field-evidence validator. Confirmed values can no longer flow into draft planning when matching owner evidence is absent.
+- **PR #276** — made the final readiness report fail closed on an empty catalog, invalid or duplicate Ruby SKUs, and missing/invalid structured owner evidence.
+- **PR #277** — reconciled the final readiness report with the dedicated fulfillment-readiness evaluator so ambiguous temperature modes, quantity-dependent packaging, unsupported marks, missing package classes, and unconfirmed ambient Compact fit evidence remain visible blockers.
 
 All of these paths preserve explicit boundaries equivalent to:
 
@@ -66,13 +70,17 @@ The present working subset intentionally remains fail-closed:
   - temperature: resolved as `chilled`
   - package rule is quantity-dependent
 
-No unresolved classification is guessed or silently promoted to production readiness.
+The readiness report and the draft/preparation path now use the same fail-closed fulfillment facts. No unresolved classification is guessed or silently promoted to production readiness.
 
-## Draft-plan state
+## Draft-plan and readiness-report state
 
-The working catalog can now be rendered into draft/hidden WooCommerce planning skeletons without performing a network write. Confirmed SKUs, sizes, and prices are carried forward while unresolved facts remain explicit blockers.
+The working catalog can be rendered into draft/hidden WooCommerce planning skeletons without performing a network write. Confirmed SKUs, sizes, and prices are carried forward while unresolved facts remain explicit blockers.
 
-The draft-plan path intentionally does **not** synthesize missing Japanese copy, category mappings, verified media references, shipping/package classes, or owner approvals. It is preparation evidence only.
+The draft-plan path requires the current working subset to remain valid for preparation, including matching structured owner evidence for the Cheezy Ensaymada ¥300 value and the corrected 21 cm Moist Chocolate SKU. Removing that evidence causes preparation to fail closed rather than silently carrying the value forward.
+
+The final working-catalog readiness report independently preserves the same owner-evidence and SKU-integrity requirements and now consumes the dedicated fulfillment-readiness evaluator. It therefore cannot claim readiness from an empty catalog, duplicate/invalid SKU set, weakened owner evidence, or weaker local temperature/package interpretation.
+
+These paths intentionally do **not** synthesize missing Japanese copy, category mappings, verified media references, shipping/package classes, or owner approvals. They remain preparation/readiness evidence only.
 
 ## Remaining owner / operational gates
 
@@ -93,4 +101,6 @@ The draft-plan path intentionally does **not** synthesize missing Japanese copy,
 
 ## Recommended continuation rule
 
-Owner-independent Sprint 3 work should continue only where it materially improves preparation, evidence quality, deterministic handoff, or integration readiness. Do not invent catalog facts, synthesize owner decisions, or manufacture micro-hardening merely to create activity. When the owner completes additional catalog entries, the existing working-subset validation, gap-report, fulfillment-readiness, draft-plan, and CLI paths should be reused rather than replaced.
+Owner-independent Sprint 3 work should continue only where it materially improves preparation, evidence quality, deterministic handoff, or integration readiness. Do not invent catalog facts, synthesize owner decisions, or manufacture micro-hardening merely to create activity.
+
+At this checkpoint, the principal remaining Sprint 3 closure work is owner-gated rather than engineering-gated: final catalog scope, Japanese copy, category mapping, verified media, final fulfillment/package classifications, customer-facing shipping policy, and explicit catalog approval. Further engineering should therefore either consume newly supplied owner facts through the existing validators/planners or address another material cross-system readiness gap without expanding production authority.
