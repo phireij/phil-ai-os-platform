@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .working_catalog_category_candidates import build_working_catalog_category_candidate_packet
 from .working_catalog_gap_report import build_working_catalog_gap_report
+from .working_catalog_media_evidence import build_working_catalog_media_evidence_packet
 
 
 @dataclass(frozen=True)
@@ -71,44 +73,119 @@ def _category_for_product(blocker: str) -> str:
     return "owner_or_operational_review"
 
 
-def build_working_catalog_owner_action_packet(payload: dict[str, Any]) -> WorkingCatalogOwnerActionPacket:
-    """Translate existing catalog readiness blockers into a deterministic action packet.
+def _product_keys(payload: dict[str, Any]) -> set[str]:
+    keys: set[str] = set()
+    for product in payload.get("working_products") or []:
+        key = str(
+            product.get("sku")
+            or product.get("parent_reference")
+            or product.get("english_name")
+            or "unknown"
+        )
+        keys.add(key)
+    return keys
 
-    The packet never supplies a decision value, never resolves a blocker, and never grants
-    WooCommerce mutation or publication authority. It exists only to make the remaining
-    owner/operational inputs explicit without inventing catalog facts.
+
+def _split_product_blocker(blocker: str, product_keys: set[str]) -> tuple[str | None, str]:
+    prefix, separator, remainder = blocker.partition(": ")
+    if separator and prefix in product_keys:
+        return prefix, remainder
+    return None, blocker
+
+
+def _append_action(
+    actions: list[CatalogOwnerAction],
+    seen: set[tuple[str, str | None, str]],
+    *,
+    scope: str,
+    product_key: str | None,
+    category: str,
+    requirement: str,
+    source_blocker: str,
+) -> None:
+    identity = (scope, product_key, source_blocker)
+    if identity in seen:
+        return
+    seen.add(identity)
+    prefix = f"product:{product_key}" if product_key else "global"
+    actions.append(
+        CatalogOwnerAction(
+            action_key=f"{prefix}:{_slug(source_blocker)}",
+            scope=scope,
+            product_key=product_key,
+            category=category,
+            requirement=requirement,
+            source_blocker=source_blocker,
+        )
+    )
+
+
+def build_working_catalog_owner_action_packet(payload: dict[str, Any]) -> WorkingCatalogOwnerActionPacket:
+    """Translate current catalog readiness evidence into a deterministic owner action packet.
+
+    The packet combines the canonical readiness report with the category-candidate and media-
+    evidence packets so material Sprint 3 blockers cannot disappear merely because they live
+    outside the core gap report. It never supplies a decision value, resolves a blocker, or
+    grants WooCommerce mutation or publication authority.
     """
 
     report = build_working_catalog_gap_report(payload)
+    category_packet = build_working_catalog_category_candidate_packet(payload)
+    media_packet = build_working_catalog_media_evidence_packet(payload)
+    product_keys = _product_keys(payload)
     actions: list[CatalogOwnerAction] = []
+    seen: set[tuple[str, str | None, str]] = set()
 
     for blocker in report.global_gaps:
-        actions.append(
-            CatalogOwnerAction(
-                action_key=f"global:{_slug(blocker)}",
-                scope="global",
-                product_key=None,
-                category=_category_for_global(blocker),
-                requirement=blocker,
-                source_blocker=blocker,
-            )
+        _append_action(
+            actions,
+            seen,
+            scope="global",
+            product_key=None,
+            category=_category_for_global(blocker),
+            requirement=blocker,
+            source_blocker=blocker,
         )
 
     for product in report.product_gaps:
         for blocker in product.missing:
-            actions.append(
-                CatalogOwnerAction(
-                    action_key=f"product:{product.key}:{_slug(blocker)}",
-                    scope="product",
-                    product_key=product.key,
-                    category=_category_for_product(blocker),
-                    requirement=blocker,
-                    source_blocker=blocker,
-                )
+            _append_action(
+                actions,
+                seen,
+                scope="product",
+                product_key=product.key,
+                category=_category_for_product(blocker),
+                requirement=blocker,
+                source_blocker=blocker,
             )
 
+    for blocker in category_packet.blockers:
+        product_key, requirement = _split_product_blocker(blocker, product_keys)
+        _append_action(
+            actions,
+            seen,
+            scope="product" if product_key else "global",
+            product_key=product_key,
+            category="category_mapping",
+            requirement=requirement,
+            source_blocker=blocker,
+        )
+
+    for blocker in media_packet.blockers:
+        product_key, requirement = _split_product_blocker(blocker, product_keys)
+        _append_action(
+            actions,
+            seen,
+            scope="product" if product_key else "global",
+            product_key=product_key,
+            category="media_ingestion_evidence",
+            requirement=requirement,
+            source_blocker=blocker,
+        )
+
     actions.sort(key=lambda item: (item.scope, item.product_key or "", item.category, item.action_key))
+    supplemental_blockers_present = bool(category_packet.blockers or media_packet.blockers)
     return WorkingCatalogOwnerActionPacket(
         actions=tuple(actions),
-        production_ready=report.production_ready,
+        production_ready=report.production_ready and not supplemental_blockers_present,
     )
