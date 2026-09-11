@@ -66,7 +66,7 @@ def _category_for_global(blocker: str) -> str:
 def _category_for_product(blocker: str) -> str:
     if blocker in _PRODUCT_CATEGORY:
         return _PRODUCT_CATEGORY[blocker]
-    if blocker.startswith("fulfillment:"):
+    if blocker.lower().startswith("fulfillment:"):
         return "fulfillment_decision_or_evidence"
     return "owner_or_operational_review"
 
