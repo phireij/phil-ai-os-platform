@@ -53,6 +53,24 @@ class ProductContractTests(unittest.TestCase):
         with self.assertRaises(ContractValidationError):
             FulfillmentProfile("cool-60", ("chilled",), True, False)
 
+    def test_ambient_compact_fulfillment_is_supported(self):
+        profile = FulfillmentProfile("ambient-compact", ("ambient",), True, True)
+        payload = profile.to_wc_payload()
+        self.assertEqual(payload["shipping_class"], "ambient-compact")
+        metadata = {item["key"]: item["value"] for item in payload["meta_data"]}
+        self.assertEqual(metadata["_philaios_temperature_modes"], ["ambient"])
+
+    def test_all_ambient_regular_classes_are_supported(self):
+        for shipping_class in (
+            "ambient-60",
+            "ambient-80",
+            "ambient-100",
+            "ambient-120",
+        ):
+            with self.subTest(shipping_class=shipping_class):
+                profile = FulfillmentProfile(shipping_class, ("ambient",), True, True)
+                self.assertEqual(profile.to_wc_payload()["shipping_class"], shipping_class)
+
     def test_fulfillment_projection_is_explicit(self):
         payload = self.product().to_wc_payload("en")
         self.assertEqual(payload["shipping_class"], "cool-60")
