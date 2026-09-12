@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/operations/task-candidate.schema.json",
+  "title": "Phil AI OS Operations Task Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "state",
+    "task_candidate_id",
+    "lifecycle_correlation_id",
+    "source",
+    "kind",
+    "external_event_id",
+    "task_type",
+    "normalized_intent",
+    "risk_level",
+    "approval_required",
+    "approval_state",
+    "approval_reason",
+    "customer_context",
+    "authority"
+  ],
+  "properties": {
+    "schema": {"const": "phil-ai-os-operations-task-candidate"},
+    "version": {"const": 1},
+    "state": {"enum": ["awaiting_approval", "ready_for_operator_review"]},
+    "task_candidate_id": {"type": "string", "pattern": "^ops-task:[a-f0-9]{24}$"},
+    "lifecycle_correlation_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "source": {"enum": ["facebook", "instagram", "telegram", "whatsapp", "google_business"]},
+    "kind": {"enum": ["message", "comment", "review"]},
+    "external_event_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "task_type": {
+      "enum": [
+        "general_inquiry_task",
+        "product_inquiry_task",
+        "pickup_inquiry_task",
+        "order_inquiry_task",
+        "public_review_task",
+        "customer_issue_task"
+      ]
+    },
+    "normalized_intent": {
+      "enum": [
+        "general_inquiry",
+        "product_inquiry",
+        "pickup_inquiry",
+        "order_inquiry",
+        "review_feedback",
+        "complaint"
+      ]
+    },
+    "risk_level": {"enum": ["low", "medium", "high"]},
+    "approval_required": {"type": "boolean"},
+    "approval_state": {"enum": ["required", "not_required"]},
+    "approval_reason": {"type": ["string", "null"]},
+    "customer_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locale", "text"],
+      "properties": {
+        "locale": {"enum": ["en", "ja", "unknown"]},
+        "text": {"type": "string", "minLength": 1, "maxLength": 4000}
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operator_review_only",
+        "automatic_execution",
+        "execution_authorized",
+        "channel_reply_authorized",
+        "woo_commerce_mutation_authorized",
+        "order_creation_authorized",
+        "payment_execution_authorized",
+        "sms_send_authorized",
+        "inventory_mutation_authorized",
+        "production_publish_authorized",
+        "mutation_authorized",
+        "authority_effect"
+      ],
+      "properties": {
+        "operator_review_only": {"const": true},
+        "automatic_execution": {"const": false},
+        "execution_authorized": {"const": false},
+        "channel_reply_authorized": {"const": false},
+        "woo_commerce_mutation_authorized": {"const": false},
+        "order_creation_authorized": {"const": false},
+        "payment_execution_authorized": {"const": false},
+        "sms_send_authorized": {"const": false},
+        "inventory_mutation_authorized": {"const": false},
+        "production_publish_authorized": {"const": false},
+        "mutation_authorized": {"const": false},
+        "authority_effect": {"const": "none"}
+      }
+    }
+  }
+}
