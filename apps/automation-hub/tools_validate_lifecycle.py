@@ -19,7 +19,11 @@ from automation_hub import (  # noqa: E402
     build_task_automation_plan,
 )
 from operations_hub import (  # noqa: E402
+    ReplyDraftDecisionError,
     SUPPORTED_SOURCES,
+    build_reply_draft_decision_proposal,
+    build_reply_draft_proposal,
+    build_reply_operator_decision_packet,
     build_task_candidate,
     evaluate_governance,
     normalize_channel_event,
@@ -63,6 +67,8 @@ def main() -> None:
     audit = InMemoryAutomationAudit()
     approval_required_sources: set[str] = set()
     not_required_sources: set[str] = set()
+    reply_packet_sources: set[str] = set()
+    governance_blocked_reply_sources: set[str] = set()
     requests: dict[str, dict] = {}
 
     for source in SUPPORTED_SOURCES:
@@ -93,6 +99,54 @@ def main() -> None:
             fail(f"{source} task automation plan did not observe extracted task")
         if plan["steps"][1]["name"] != "validate_task_governance":
             fail(f"{source} task automation plan lost governance validation")
+
+        # Prove the customer-reply lifecycle remains bounded at explicit operator decision.
+        reply_draft = build_reply_draft_proposal(
+            task_candidate,
+            f"Simulation-only reply draft for {source}.",
+            drafted_by="hermes",
+        )
+        if reply_draft["authority"]["channel_reply_authorized"] is not False:
+            fail(f"{source} reply draft gained channel reply authority")
+        if task_candidate["approval_required"]:
+            try:
+                build_reply_draft_decision_proposal(
+                    reply_draft,
+                    recommendation="recommend_future_dispatch",
+                    reviewer_ref="operator:simulation",
+                )
+            except ReplyDraftDecisionError:
+                governance_blocked_reply_sources.add(source)
+            else:
+                fail(f"{source} governance-gated reply reached operator recommendation")
+        else:
+            decision_proposal = build_reply_draft_decision_proposal(
+                reply_draft,
+                recommendation="recommend_future_dispatch",
+                reviewer_ref="operator:simulation",
+            )
+            packet = build_reply_operator_decision_packet(reply_draft, decision_proposal)
+            if packet["state"] != "awaiting_explicit_operator_decision" or packet["operator_decision"] is not None:
+                fail(f"{source} operator decision packet state invalid")
+            packet_authority = packet.get("authority", {})
+            for field in (
+                "reply_approved",
+                "channel_reply_authorized",
+                "network_dispatch_authorized",
+                "execution_authorized",
+                "woo_commerce_mutation_authorized",
+                "order_creation_authorized",
+                "payment_execution_authorized",
+                "sms_send_authorized",
+                "inventory_mutation_authorized",
+                "production_publish_authorized",
+                "mutation_authorized",
+            ):
+                if packet_authority.get(field) is not False:
+                    fail(f"{source} operator decision packet gained {field}")
+            if packet_authority.get("authority_effect") != "none":
+                fail(f"{source} operator decision packet changed authority effect")
+            reply_packet_sources.add(source)
 
         store.register_plan(plan)
 
@@ -130,6 +184,10 @@ def main() -> None:
         fail(f"approval-required source matrix changed: {sorted(approval_required_sources)}")
     if not_required_sources != {"facebook", "instagram", "telegram"}:
         fail(f"approval-not-required source matrix changed: {sorted(not_required_sources)}")
+    if reply_packet_sources != {"facebook", "instagram", "telegram"}:
+        fail(f"operator-ready reply packet matrix changed: {sorted(reply_packet_sources)}")
+    if governance_blocked_reply_sources != {"whatsapp", "google_business"}:
+        fail(f"governance-blocked reply matrix changed: {sorted(governance_blocked_reply_sources)}")
 
     model = audit.read_model()
     expected_events = len(SUPPORTED_SOURCES) * 4
@@ -169,6 +227,11 @@ def main() -> None:
         "PHIL_AI_OS_SPRINT_6_TASK_AUTOMATION_BRIDGE_GREEN "
         f"sources={len(SUPPORTED_SOURCES)} approvals={len(approval_required_sources)} "
         f"no_approval={len(not_required_sources)} task_plan_identity=stable"
+    )
+    print(
+        "PHIL_AI_OS_SPRINT_6_REPLY_DECISION_BOUNDARY_GREEN "
+        f"operator_ready={len(reply_packet_sources)} governance_blocked={len(governance_blocked_reply_sources)} "
+        "operator_decision=unset dispatch=false network_call=false reply=false mutation=false authority_effect=none"
     )
     print(
         "PHIL_AI_OS_SPRINT_6_MULTICHANNEL_SIMULATION_GREEN "
