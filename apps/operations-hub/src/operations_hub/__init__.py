@@ -52,6 +52,11 @@ from .reply_draft_decision import (
     SUPPORTED_REPLY_DRAFT_RECOMMENDATIONS,
     build_reply_draft_decision_proposal,
 )
+from .reply_draft_decision_register import ReplyDraftDecisionProposalRegister
+from .reply_draft_decision_workspace import (
+    ReplyDraftDecisionWorkspaceError,
+    build_reply_draft_decision_workspace,
+)
 from .reply_draft_register import ReplyDraftRegister
 from .reply_draft_workspace import ReplyDraftWorkspaceError, build_reply_draft_workspace
 from .task_extraction import TaskExtractionError, build_task_candidate
@@ -84,6 +89,8 @@ __all__ = [
     "OrderReviewQueue",
     "OrderReviewWorkspaceError",
     "ReplyDraftDecisionError",
+    "ReplyDraftDecisionProposalRegister",
+    "ReplyDraftDecisionWorkspaceError",
     "ReplyDraftError",
     "ReplyDraftRegister",
     "ReplyDraftWorkspaceError",
@@ -105,6 +112,7 @@ __all__ = [
     "build_order_review_decision_proposal",
     "build_order_review_workspace",
     "build_reply_draft_decision_proposal",
+    "build_reply_draft_decision_workspace",
     "build_reply_draft_proposal",
     "build_reply_draft_workspace",
     "build_task_candidate",
