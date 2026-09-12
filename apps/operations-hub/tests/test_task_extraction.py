@@ -7,7 +7,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from operations_hub import evaluate_governance, normalize_channel_event  # noqa: E402
+from operations_hub import (  # noqa: E402
+    OperationsQueue,
+    OrderQuoteApprovalDecisionProposalRegister,
+    OrderQuoteApprovalRequestRegister,
+    OrderQuoteOwnerDecisionPacketRegister,
+    OrderReviewQueue,
+    build_operations_dashboard,
+    evaluate_governance,
+    normalize_channel_event,
+)
 from operations_hub.task_extraction import TaskExtractionError, build_task_candidate  # noqa: E402
 from operations_hub.task_queue import TaskCandidateQueue  # noqa: E402
 
@@ -80,6 +89,28 @@ class TaskExtractionTests(unittest.TestCase):
         self.assertEqual(1, model["task_type_counts"]["order_inquiry_task"])
         self.assertEqual(1, model["task_type_counts"]["customer_issue_task"])
         self.assertEqual(1, model["task_type_counts"]["public_review_task"])
+
+    def test_dashboard_surfaces_task_counts_without_customer_payloads(self):
+        task_queue = TaskCandidateQueue()
+        for source in ("facebook", "instagram", "telegram", "whatsapp", "google_business"):
+            task_queue.ingest(candidate(source))
+        dashboard = build_operations_dashboard(
+            OperationsQueue(),
+            OrderReviewQueue(),
+            OrderQuoteApprovalRequestRegister(),
+            OrderQuoteApprovalDecisionProposalRegister(),
+            OrderQuoteOwnerDecisionPacketRegister(),
+            task_queue=task_queue,
+        )
+        self.assertEqual(5, dashboard["tasks"]["task_count"])
+        self.assertEqual(2, dashboard["tasks"]["awaiting_approval"])
+        self.assertEqual(3, dashboard["tasks"]["ready_for_operator_review"])
+        serialized = json.dumps(dashboard, ensure_ascii=False)
+        self.assertNotIn("Can I order", serialized)
+        self.assertNotIn("customer_context", serialized)
+        self.assertFalse(dashboard["execution_authorized"])
+        self.assertFalse(dashboard["channel_reply_authorized"])
+        self.assertFalse(dashboard["mutation_authorized"])
 
     def test_rejects_governance_authority_expansion(self):
         event = normalize_channel_event(fixture("facebook"))
