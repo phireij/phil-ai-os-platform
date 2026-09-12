@@ -10,7 +10,14 @@ ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from operations_hub import InMemoryDeduplicator, SUPPORTED_SOURCES, evaluate_governance, normalize_channel_event  # noqa: E402
+from operations_hub import (  # noqa: E402
+    InMemoryDeduplicator,
+    SUPPORTED_SOURCES,
+    TaskCandidateQueue,
+    build_task_candidate,
+    evaluate_governance,
+    normalize_channel_event,
+)
 
 
 def fail(message: str) -> None:
@@ -21,11 +28,18 @@ def main() -> None:
     raw_schema = json.loads((REPO / "contracts/operations/raw-channel-event.schema.json").read_text(encoding="utf-8"))
     normalized_schema = json.loads((REPO / "contracts/operations/business-event.schema.json").read_text(encoding="utf-8"))
     governance_schema = json.loads((REPO / "contracts/operations/governance-evaluation.schema.json").read_text(encoding="utf-8"))
+    task_schema = json.loads((REPO / "contracts/operations/task-candidate.schema.json").read_text(encoding="utf-8"))
 
     raw_sources = tuple(raw_schema["properties"]["source"]["enum"])
     normalized_sources = tuple(normalized_schema["properties"]["source"]["enum"])
     governance_sources = tuple(governance_schema["properties"]["source"]["enum"])
-    if raw_sources != SUPPORTED_SOURCES or normalized_sources != SUPPORTED_SOURCES or governance_sources != SUPPORTED_SOURCES:
+    task_sources = tuple(task_schema["properties"]["source"]["enum"])
+    if not (
+        raw_sources == SUPPORTED_SOURCES
+        and normalized_sources == SUPPORTED_SOURCES
+        and governance_sources == SUPPORTED_SOURCES
+        and task_sources == SUPPORTED_SOURCES
+    ):
         fail("source allowlists must match runtime exactly")
     if normalized_schema["properties"]["mutation_authorized"].get("const") is not False:
         fail("normalized contract must keep mutation_authorized=false")
@@ -36,9 +50,31 @@ def main() -> None:
     if governance_schema["properties"]["authority_effect"].get("const") != "none":
         fail("governance contract authority_effect must remain none")
 
+    task_authority = task_schema["properties"]["authority"]["properties"]
+    if task_authority["operator_review_only"].get("const") is not True:
+        fail("task candidate must remain operator_review_only")
+    for field in (
+        "automatic_execution",
+        "execution_authorized",
+        "channel_reply_authorized",
+        "woo_commerce_mutation_authorized",
+        "order_creation_authorized",
+        "payment_execution_authorized",
+        "sms_send_authorized",
+        "inventory_mutation_authorized",
+        "production_publish_authorized",
+        "mutation_authorized",
+    ):
+        if task_authority[field].get("const") is not False:
+            fail(f"task candidate authority must keep {field}=false")
+    if task_authority["authority_effect"].get("const") != "none":
+        fail("task candidate authority_effect must remain none")
+
     dedupe = InMemoryDeduplicator()
     normalized = []
     evaluations = []
+    task_queue = TaskCandidateQueue()
+    tasks = []
     for source in SUPPORTED_SOURCES:
         fixture_path = ROOT / "fixtures" / f"{source}.json"
         if not fixture_path.is_file():
@@ -59,8 +95,23 @@ def main() -> None:
             for field in ("execution_authorized", "channel_reply_authorized", "mutation_authorized")
         ):
             fail(f"{source} governance evaluation gained authority")
+        task = build_task_candidate(event, evaluation)
+        if task["lifecycle_correlation_id"] != event["lifecycle_correlation_id"]:
+            fail(f"{source} task extraction lost lifecycle correlation")
+        authority = task.get("authority", {})
+        if authority.get("operator_review_only") is not True or authority.get("authority_effect") != "none":
+            fail(f"{source} task extraction authority boundary invalid")
+        if any(
+            value is not False
+            for field, value in authority.items()
+            if field not in {"operator_review_only", "authority_effect"}
+        ):
+            fail(f"{source} task extraction gained execution authority")
+        if task_queue.ingest(task).get("accepted") is not True:
+            fail(f"{source} task candidate was not accepted")
         normalized.append(event)
         evaluations.append(evaluation)
+        tasks.append(task)
 
     review_sources = {event["source"] for event in normalized if event["review_required"]}
     approval_sources = {item["source"] for item in evaluations if item["approval_required"]}
@@ -68,6 +119,16 @@ def main() -> None:
         fail("sensitive/public-review fixtures must route to review")
     if not {"whatsapp", "google_business"}.issubset(approval_sources):
         fail("sensitive/public-review fixtures must require governance approval")
+
+    task_model = task_queue.read_model()
+    if task_model.get("task_count") != len(SUPPORTED_SOURCES):
+        fail("task extraction must produce one candidate per fixture channel")
+    if task_model.get("awaiting_approval") != 2 or task_model.get("ready_for_operator_review") != 3:
+        fail("task extraction approval routing counts are invalid")
+    if task_model.get("execution_authorized") is not False or task_model.get("channel_reply_authorized") is not False:
+        fail("task candidate queue gained execution/reply authority")
+    if {task["source"] for task in tasks if task["state"] == "awaiting_approval"} != {"whatsapp", "google_business"}:
+        fail("task extraction approval state drift")
 
     sample = json.loads((REPO / "contracts/operations/fixtures/order-intent.sample.json").read_text(encoding="utf-8"))
     required = set(normalized_schema["required"])
@@ -98,6 +159,11 @@ def main() -> None:
     print(
         "PHIL_AI_OS_SPRINT_5_OPERATIONS_VALIDATION_GREEN "
         f"sources={len(normalized)} review_routed={len(review_sources)} approval_routed={len(approval_sources)}"
+    )
+    print(
+        "PHIL_AI_OS_SPRINT_5_TASK_EXTRACTION_GREEN "
+        f"tasks={task_model['task_count']} awaiting_approval={task_model['awaiting_approval']} "
+        f"operator_review={task_model['ready_for_operator_review']}"
     )
     print("PHIL_AI_OS_SPRINT_5_GOVERNANCE_BRIDGE_GREEN authority_effect=none")
 
