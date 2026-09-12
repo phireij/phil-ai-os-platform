@@ -59,6 +59,10 @@ from .reply_draft_decision_workspace import (
 )
 from .reply_draft_register import ReplyDraftRegister
 from .reply_draft_workspace import ReplyDraftWorkspaceError, build_reply_draft_workspace
+from .reply_operator_decision_packet import (
+    ReplyOperatorDecisionPacketError,
+    build_reply_operator_decision_packet,
+)
 from .task_extraction import TaskExtractionError, build_task_candidate
 from .task_queue import TaskCandidateQueue
 
@@ -94,6 +98,7 @@ __all__ = [
     "ReplyDraftError",
     "ReplyDraftRegister",
     "ReplyDraftWorkspaceError",
+    "ReplyOperatorDecisionPacketError",
     "SUPPORTED_QUOTE_APPROVAL_RECOMMENDATIONS",
     "SUPPORTED_REPLY_DRAFT_RECOMMENDATIONS",
     "SUPPORTED_REVIEW_DECISIONS",
@@ -115,6 +120,7 @@ __all__ = [
     "build_reply_draft_decision_workspace",
     "build_reply_draft_proposal",
     "build_reply_draft_workspace",
+    "build_reply_operator_decision_packet",
     "build_task_candidate",
     "classify_intent",
     "evaluate_governance",
