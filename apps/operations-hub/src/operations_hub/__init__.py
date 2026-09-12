@@ -46,6 +46,8 @@ from .order_review_decision import (
 from .order_review_register import OrderReviewProposalRegister
 from .order_review_workspace import OrderReviewWorkspaceError, build_order_review_workspace
 from .queue import OperationsQueue
+from .task_extraction import TaskExtractionError, build_task_candidate
+from .task_queue import TaskCandidateQueue
 
 __all__ = [
     "ChannelAdapterError",
@@ -76,6 +78,8 @@ __all__ = [
     "SUPPORTED_QUOTE_APPROVAL_RECOMMENDATIONS",
     "SUPPORTED_REVIEW_DECISIONS",
     "SUPPORTED_SOURCES",
+    "TaskCandidateQueue",
+    "TaskExtractionError",
     "build_operations_dashboard",
     "build_order_quote_approval_decision_proposal",
     "build_order_quote_approval_decision_workspace",
@@ -87,6 +91,7 @@ __all__ = [
     "build_order_quote_preparation",
     "build_order_review_decision_proposal",
     "build_order_review_workspace",
+    "build_task_candidate",
     "classify_intent",
     "evaluate_governance",
     "normalize_channel_event",
