@@ -134,21 +134,21 @@ def _sample_ruleset(*, enforcement: str = "active", include_checks: bool = True)
                 "type": "pull_request",
                 "parameters": {
                     "required_approving_review_count": 0,
-                    "dismiss_stale_reviews_on_push": false,
-                    "require_code_owner_review": false,
-                    "require_last_push_approval": false,
-                    "required_review_thread_resolution": true
-                }
+                    "dismiss_stale_reviews_on_push": False,
+                    "require_code_owner_review": False,
+                    "require_last_push_approval": False,
+                    "required_review_thread_resolution": True,
+                },
             },
             {
                 "type": "required_status_checks",
                 "parameters": {
-                    "strict_required_status_checks_policy": true,
-                    "do_not_enforce_on_create": false,
-                    "required_status_checks": checks
-                }
-            }
-        ]
+                    "strict_required_status_checks_policy": True,
+                    "do_not_enforce_on_create": False,
+                    "required_status_checks": checks,
+                },
+            },
+        ],
     }
 
 
