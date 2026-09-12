@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/operations/mission-control-lifecycle-projection.schema.json",
+  "title": "Phil AI OS Mission Control Lifecycle Projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "status",
+    "mission_control_mode",
+    "operations",
+    "automation",
+    "privacy",
+    "execution_authorized",
+    "channel_reply_authorized",
+    "network_dispatch_authorized",
+    "woo_commerce_mutation_authorized",
+    "order_creation_authorized",
+    "payment_execution_authorized",
+    "sms_send_authorized",
+    "inventory_mutation_authorized",
+    "production_publish_authorized",
+    "mutation_authorized",
+    "authority_effect"
+  ],
+  "properties": {
+    "schema": {"const": "phil-ai-os-mission-control-lifecycle-projection"},
+    "version": {"const": 1},
+    "status": {"const": "read_only"},
+    "mission_control_mode": {"const": "read_only"},
+    "operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel_events", "tasks", "tasks_awaiting_approval", "orders_pending_staff_review", "quotes_pending_approval", "owner_review_pending_packets"],
+      "properties": {
+        "channel_events": {"type": "integer", "minimum": 0},
+        "tasks": {"type": "integer", "minimum": 0},
+        "tasks_awaiting_approval": {"type": "integer", "minimum": 0},
+        "orders_pending_staff_review": {"type": "integer", "minimum": 0},
+        "quotes_pending_approval": {"type": "integer", "minimum": 0},
+        "owner_review_pending_packets": {"type": "integer", "minimum": 0}
+      }
+    },
+    "automation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_audit_events", "stage_counts", "lifecycle_count", "lifecycles", "simulated_only"],
+      "properties": {
+        "total_audit_events": {"type": "integer", "minimum": 0},
+        "stage_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+        "lifecycle_count": {"type": "integer", "minimum": 0},
+        "simulated_only": {"const": true},
+        "lifecycles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["lifecycle_correlation_id", "latest_sequence", "latest_stage", "latest_outcome", "event_count", "simulated"],
+            "properties": {
+              "lifecycle_correlation_id": {"type": "string", "minLength": 1},
+              "latest_sequence": {"type": "integer", "minimum": 1},
+              "latest_stage": {"type": "string", "minLength": 1},
+              "latest_outcome": {"type": "string", "minLength": 1},
+              "event_count": {"type": "integer", "minimum": 1},
+              "simulated": {"const": true}
+            }
+          }
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_customer_text_exposed", "custom_notes_exposed", "reference_image_names_exposed", "reply_draft_text_exposed"],
+      "properties": {
+        "raw_customer_text_exposed": {"const": false},
+        "custom_notes_exposed": {"const": false},
+        "reference_image_names_exposed": {"const": false},
+        "reply_draft_text_exposed": {"const": false}
+      }
+    },
+    "execution_authorized": {"const": false},
+    "channel_reply_authorized": {"const": false},
+    "network_dispatch_authorized": {"const": false},
+    "woo_commerce_mutation_authorized": {"const": false},
+    "order_creation_authorized": {"const": false},
+    "payment_execution_authorized": {"const": false},
+    "sms_send_authorized": {"const": false},
+    "inventory_mutation_authorized": {"const": false},
+    "production_publish_authorized": {"const": false},
+    "mutation_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}

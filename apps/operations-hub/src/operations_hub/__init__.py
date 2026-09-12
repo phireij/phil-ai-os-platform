@@ -1,6 +1,10 @@
 from .adapters import ChannelAdapterError, IngestionAdapter, MockChannelAdapter, retry_decision
 from .dashboard import OperationsDashboardError, build_operations_dashboard
 from .governance import GovernanceEvaluationError, evaluate_governance
+from .mission_control_projection import (
+    MissionControlProjectionError,
+    build_mission_control_lifecycle_projection,
+)
 from .normalizer import (
     InMemoryDeduplicator,
     NormalizationError,
@@ -71,6 +75,7 @@ __all__ = [
     "GovernanceEvaluationError",
     "InMemoryDeduplicator",
     "IngestionAdapter",
+    "MissionControlProjectionError",
     "MockChannelAdapter",
     "NormalizationError",
     "OperationsDashboardError",
@@ -105,6 +110,7 @@ __all__ = [
     "SUPPORTED_SOURCES",
     "TaskCandidateQueue",
     "TaskExtractionError",
+    "build_mission_control_lifecycle_projection",
     "build_operations_dashboard",
     "build_order_quote_approval_decision_proposal",
     "build_order_quote_approval_decision_workspace",
