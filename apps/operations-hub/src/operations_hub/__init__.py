@@ -1,4 +1,5 @@
 from .adapters import ChannelAdapterError, IngestionAdapter, MockChannelAdapter, retry_decision
+from .dashboard import OperationsDashboardError, build_operations_dashboard
 from .governance import GovernanceEvaluationError, evaluate_governance
 from .normalizer import (
     InMemoryDeduplicator,
@@ -53,6 +54,7 @@ __all__ = [
     "IngestionAdapter",
     "MockChannelAdapter",
     "NormalizationError",
+    "OperationsDashboardError",
     "OperationsQueue",
     "OrderIntakeHandoffError",
     "OrderQuoteApprovalDecisionError",
@@ -74,6 +76,7 @@ __all__ = [
     "SUPPORTED_QUOTE_APPROVAL_RECOMMENDATIONS",
     "SUPPORTED_REVIEW_DECISIONS",
     "SUPPORTED_SOURCES",
+    "build_operations_dashboard",
     "build_order_quote_approval_decision_proposal",
     "build_order_quote_approval_decision_workspace",
     "build_order_quote_approval_request",
