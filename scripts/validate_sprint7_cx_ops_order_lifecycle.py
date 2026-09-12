@@ -11,9 +11,13 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "apps/operations-hub/src"))
 
 from operations_hub import (  # noqa: E402
+    OrderQuoteApprovalDecisionProposalRegister,
+    OrderQuoteApprovalRequestRegister,
     OrderReviewQueue,
+    build_order_quote_approval_decision_proposal,
     build_order_quote_approval_request,
     build_order_quote_draft,
+    build_order_quote_owner_decision_packet,
     build_order_quote_preparation,
     build_order_review_decision_proposal,
     normalize_order_intake_handoff,
@@ -97,20 +101,60 @@ def main() -> None:
         reason="Synthetic approval-gate validation only.",
     )
 
-    lifecycle = [normalized, review, proposal, preparation, draft, approval_request]
+    approval_register = OrderQuoteApprovalRequestRegister()
+    registered_request = approval_register.register(approval_request)
+    duplicate_request = approval_register.register(approval_request)
+    if registered_request.get("accepted") is not True or duplicate_request.get("duplicate") is not True:
+        fail("quote approval request idempotency boundary changed")
+
+    decision_proposal = build_order_quote_approval_decision_proposal(
+        approval_request,
+        recommendation="recommend_quote_approval",
+        reviewer_ref="staff:synthetic-integration",
+        note="Recommendation only; synthetic integration validation.",
+    )
+    proposal_register = OrderQuoteApprovalDecisionProposalRegister()
+    registered_proposal = proposal_register.register(decision_proposal)
+    duplicate_proposal = proposal_register.register(decision_proposal)
+    if registered_proposal.get("accepted") is not True or duplicate_proposal.get("duplicate") is not True:
+        fail("quote approval recommendation idempotency boundary changed")
+
+    owner_packet = build_order_quote_owner_decision_packet(
+        approval_register,
+        proposal_register,
+        approval_request_id=approval_request["approval_request_id"],
+    )
+
+    lifecycle = [
+        normalized,
+        review,
+        proposal,
+        preparation,
+        draft,
+        approval_request,
+        decision_proposal,
+        owner_packet,
+    ]
     for index, stage in enumerate(lifecycle):
         if stage.get("lifecycle_correlation_id") != correlation_id:
             fail(f"correlation continuity failed at lifecycle stage {index}")
         assert_no_authority_expansion(stage, f"lifecycle[{index}]")
 
     if approval_request.get("state") != "approval_requested":
-        fail("quote approval request did not stop at approval_requested")
+        fail("quote approval request did not remain approval_requested")
     if approval_request.get("approval", {}).get("decision") is not None:
         fail("synthetic lifecycle unexpectedly made an approval decision")
+    if decision_proposal.get("state") != "recommendation_only":
+        fail("quote recommendation did not remain recommendation_only")
+    if owner_packet.get("state") != "awaiting_owner_decision":
+        fail("owner packet did not stop at awaiting_owner_decision")
+    if owner_packet.get("owner_decision", {}).get("decision") is not None:
+        fail("synthetic lifecycle unexpectedly made an owner decision")
 
     print(
         "PHIL_AI_OS_SPRINT_7_CX_OPS_ORDER_LIFECYCLE_GREEN "
-        "handoff=review_only queue=idempotent quote=approval_gated network=false mutation=false"
+        "handoff=review_only queue=idempotent quote=approval_gated owner=awaiting_decision "
+        "network=false mutation=false"
     )
 
 
