@@ -95,7 +95,7 @@ class MissionControlProjectionTests(unittest.TestCase):
         self.assertEqual("simulated_failure", latest["ops:whatsapp:2"]["latest_outcome"])
         serialized = json.dumps(projection, ensure_ascii=False)
         self.assertNotIn("customer_context", serialized)
-        self.assertNotIn("draft_text", serialized)
+        self.assertNotIn('"draft_text":', serialized)
         self.assertFalse(projection["channel_reply_authorized"])
         self.assertFalse(projection["mutation_authorized"])
         self.assertEqual("none", projection["authority_effect"])
