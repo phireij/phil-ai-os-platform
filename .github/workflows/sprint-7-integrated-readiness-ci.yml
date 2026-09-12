@@ -81,6 +81,9 @@ jobs:
           python -m unittest discover -s apps/operations-hub/tests -p 'test_*.py' -v
           python apps/operations-hub/tools_validate_operations.py
 
+      - name: Validate customer-to-owner order lifecycle branch matrix
+        run: python scripts/validate_sprint7_cx_ops_order_lifecycle.py
+
       - name: Automation regression
         run: |
           python -m compileall -q apps/automation-hub/src
