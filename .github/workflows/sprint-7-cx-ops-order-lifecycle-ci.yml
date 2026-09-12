@@ -1,0 +1,51 @@
+name: Sprint 7 CX Operations Order Lifecycle CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/customer-experience/tools_emit_order_intake_review_handoff.mjs"
+      - "apps/customer-experience/src/order-intake-*.mjs"
+      - "apps/operations-hub/src/operations_hub/order_*.py"
+      - "scripts/validate_sprint7_cx_ops_order_lifecycle.py"
+      - "docs/SPRINT_7_CX_OPS_ORDER_LIFECYCLE_READINESS_2026-09-12.md"
+      - ".github/workflows/sprint-7-cx-ops-order-lifecycle-ci.yml"
+  push:
+    branches:
+      - "sprint7/**"
+    paths:
+      - "apps/customer-experience/tools_emit_order_intake_review_handoff.mjs"
+      - "apps/customer-experience/src/order-intake-*.mjs"
+      - "apps/operations-hub/src/operations_hub/order_*.py"
+      - "scripts/validate_sprint7_cx_ops_order_lifecycle.py"
+      - "docs/SPRINT_7_CX_OPS_ORDER_LIFECYCLE_READINESS_2026-09-12.md"
+      - ".github/workflows/sprint-7-cx-ops-order-lifecycle-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cx-ops-order-lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - name: Check CX handoff emitter
+        run: node --check apps/customer-experience/tools_emit_order_intake_review_handoff.mjs
+
+      - name: Validate CX to Operations order lifecycle
+        run: python scripts/validate_sprint7_cx_ops_order_lifecycle.py
+
+      - name: Assert bounded cross-sprint authority
+        run: |
+          set -euo pipefail
+          ! grep -E 'Authorized:[[:space:]]*true|authorized["[:space:]]*:[[:space:]]*true' apps/customer-experience/tools_emit_order_intake_review_handoff.mjs scripts/validate_sprint7_cx_ops_order_lifecycle.py
+          echo PHIL_AI_OS_SPRINT_7_CX_OPS_AUTHORITY_BOUNDARY_GREEN
