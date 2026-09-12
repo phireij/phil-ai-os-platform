@@ -7,6 +7,7 @@ from .order_quote_approval_register import OrderQuoteApprovalRequestRegister
 from .order_quote_owner_decision_register import OrderQuoteOwnerDecisionPacketRegister
 from .order_review import OrderReviewQueue
 from .queue import OperationsQueue
+from .task_queue import TaskCandidateQueue
 
 
 class OperationsDashboardError(ValueError):
@@ -29,6 +30,7 @@ def build_operations_dashboard(
     approval_register: OrderQuoteApprovalRequestRegister,
     recommendation_register: OrderQuoteApprovalDecisionProposalRegister,
     owner_packet_register: OrderQuoteOwnerDecisionPacketRegister,
+    task_queue: TaskCandidateQueue | None = None,
 ) -> dict[str, Any]:
     """Aggregate bounded Operations Hub workload without exposing customer payloads or granting authority."""
     if not isinstance(channel_queue, OperationsQueue):
@@ -45,6 +47,8 @@ def build_operations_dashboard(
         raise OperationsDashboardError(
             "owner_packet_register must be an OrderQuoteOwnerDecisionPacketRegister"
         )
+    if task_queue is not None and not isinstance(task_queue, TaskCandidateQueue):
+        raise OperationsDashboardError("task_queue must be a TaskCandidateQueue or None")
 
     channels = _read_only(channel_queue.read_model(), "channel_queue")
     orders = _read_only(order_review_queue.read_model(), "order_review_queue")
@@ -53,6 +57,18 @@ def build_operations_dashboard(
         recommendation_register.read_model(), "recommendation_register"
     )
     owner_packets = _read_only(owner_packet_register.read_model(), "owner_packet_register")
+    tasks = (
+        _read_only(task_queue.read_model(), "task_queue")
+        if task_queue is not None
+        else {
+            "task_count": 0,
+            "duplicate_tasks": 0,
+            "awaiting_approval": 0,
+            "ready_for_operator_review": 0,
+            "task_type_counts": {},
+            "source_counts": {},
+        }
+    )
 
     return {
         "status": "read_only",
@@ -64,6 +80,14 @@ def build_operations_dashboard(
             "standard_queue": channels.get("standard_queue", 0),
             "source_counts": dict(channels.get("source_counts", {})),
             "intent_counts": dict(channels.get("intent_counts", {})),
+        },
+        "tasks": {
+            "task_count": tasks.get("task_count", 0),
+            "duplicate_tasks": tasks.get("duplicate_tasks", 0),
+            "awaiting_approval": tasks.get("awaiting_approval", 0),
+            "ready_for_operator_review": tasks.get("ready_for_operator_review", 0),
+            "task_type_counts": dict(tasks.get("task_type_counts", {})),
+            "source_counts": dict(tasks.get("source_counts", {})),
         },
         "orders": {
             "pending_staff_review": orders.get("pending_review", 0),
