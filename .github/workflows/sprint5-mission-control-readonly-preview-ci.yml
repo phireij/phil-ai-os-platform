@@ -1,0 +1,39 @@
+name: Sprint 5 Mission Control Read-only Preview CI
+
+on:
+  pull_request:
+    paths:
+      - 'apps/operations-hub/mission-control/**'
+      - 'apps/operations-hub/tools_validate_mission_control_preview.py'
+      - '.github/workflows/sprint5-mission-control-readonly-preview-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-readonly-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - name: Validate Mission Control preview boundary
+        run: python apps/operations-hub/tools_validate_mission_control_preview.py
+      - name: Serve preview locally
+        run: |
+          python -m http.server 8765 --directory apps/operations-hub/mission-control >/tmp/mission-control-preview.log 2>&1 &
+          echo $! >/tmp/mission-control-preview.pid
+          sleep 1
+      - name: HTTP smoke preview shell and fixture
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:8765/ >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8765/fixture.json >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8765/mission-control.mjs >/dev/null
+      - name: Stop local preview
+        if: always()
+        run: |
+          if [ -f /tmp/mission-control-preview.pid ]; then kill "$(cat /tmp/mission-control-preview.pid)" || true; fi
