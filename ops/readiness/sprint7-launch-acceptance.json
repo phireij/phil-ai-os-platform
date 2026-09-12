@@ -1,6 +1,6 @@
 {
-  "version": "sprint7-launch-acceptance-v3",
-  "date": "2026-09-04",
+  "version": "sprint7-launch-acceptance-v4",
+  "date": "2026-09-12",
   "bounded_engineering_readiness": {
     "current_head_integrated_regression_required": true,
     "isolated_runtime_smoke_required": true,
@@ -8,6 +8,8 @@
     "deployment_migration_runbooks_ready": true,
     "channel_activation_runbooks_ready": true,
     "operator_documentation_ready": true,
+    "main_branch_protection_policy_ready": true,
+    "mission_control_lifecycle_projection_ready": true,
     "final_current_head_ci_required": true
   },
   "verified_readiness": {
@@ -72,6 +74,10 @@
     "docs/SPRINT_7_OPERATOR_QUICK_START_2026-08-28.md",
     "docs/SPRINT_7_FINAL_CUTOVER_CONTROL_RUNBOOK_2026-09-02.md",
     "docs/SPRINT_7_LAUNCH_ACCEPTANCE_MATRIX_2026-08-28.md",
+    "docs/SPRINT_7_MAIN_BRANCH_PROTECTION_READINESS_2026-09-12.md",
+    "governance/github/main-branch-protection-policy.json",
+    "docs/SPRINT_7_MISSION_CONTROL_LIFECYCLE_PROJECTION_READINESS_2026-09-12.md",
+    "contracts/operations/mission-control-lifecycle-projection.schema.json",
     "ops/readiness/verified-ruby-business-profile.template.json",
     "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json",
     "ops/readiness/ruby-checkout-legal-payment-shipping-sync-2026-09-04.json",
