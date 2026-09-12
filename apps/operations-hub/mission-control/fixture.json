@@ -1,0 +1,60 @@
+{
+  "schema": "phil-ai-os-mission-control-lifecycle-projection",
+  "version": 1,
+  "status": "read_only",
+  "mission_control_mode": "read_only",
+  "operations": {
+    "channel_events": 5,
+    "tasks": 5,
+    "tasks_awaiting_approval": 2,
+    "orders_pending_staff_review": 1,
+    "quotes_pending_approval": 1,
+    "owner_review_pending_packets": 2
+  },
+  "automation": {
+    "total_audit_events": 8,
+    "stage_counts": {
+      "normalized": 2,
+      "governance": 2,
+      "planned": 2,
+      "simulated": 2
+    },
+    "lifecycle_count": 2,
+    "lifecycles": [
+      {
+        "lifecycle_correlation_id": "mc-demo-facebook-order-001",
+        "latest_sequence": 4,
+        "latest_stage": "simulated",
+        "latest_outcome": "operator_review_required",
+        "event_count": 4,
+        "simulated": true
+      },
+      {
+        "lifecycle_correlation_id": "mc-demo-whatsapp-issue-001",
+        "latest_sequence": 4,
+        "latest_stage": "governance",
+        "latest_outcome": "awaiting_approval",
+        "event_count": 4,
+        "simulated": true
+      }
+    ],
+    "simulated_only": true
+  },
+  "privacy": {
+    "raw_customer_text_exposed": false,
+    "custom_notes_exposed": false,
+    "reference_image_names_exposed": false,
+    "reply_draft_text_exposed": false
+  },
+  "execution_authorized": false,
+  "channel_reply_authorized": false,
+  "network_dispatch_authorized": false,
+  "woo_commerce_mutation_authorized": false,
+  "order_creation_authorized": false,
+  "payment_execution_authorized": false,
+  "sms_send_authorized": false,
+  "inventory_mutation_authorized": false,
+  "production_publish_authorized": false,
+  "mutation_authorized": false,
+  "authority_effect": "none"
+}
