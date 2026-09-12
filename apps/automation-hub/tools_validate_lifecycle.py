@@ -16,8 +16,14 @@ from automation_hub import (  # noqa: E402
     build_automation_plan,
     build_dry_run_boundary_request,
     build_recovery_plan,
+    build_task_automation_plan,
 )
-from operations_hub import SUPPORTED_SOURCES, evaluate_governance, normalize_channel_event  # noqa: E402
+from operations_hub import (  # noqa: E402
+    SUPPORTED_SOURCES,
+    build_task_candidate,
+    evaluate_governance,
+    normalize_channel_event,
+)
 
 
 def fail(message: str) -> None:
@@ -67,7 +73,27 @@ def main() -> None:
 
         event = normalize_channel_event(payload)
         governance = evaluate_governance(event)
-        plan = build_automation_plan(event, governance)
+        task_candidate = build_task_candidate(event, governance)
+        legacy_plan = build_automation_plan(event, governance)
+        plan = build_task_automation_plan(task_candidate)
+
+        for field in (
+            "plan_id",
+            "lifecycle_correlation_id",
+            "source",
+            "normalized_intent",
+            "risk_level",
+            "approval_required",
+            "approval_state",
+            "plan_state",
+        ):
+            if plan.get(field) != legacy_plan.get(field):
+                fail(f"{source} task/event automation plan alignment changed at {field}")
+        if plan["steps"][0]["name"] != "observe_task_candidate":
+            fail(f"{source} task automation plan did not observe extracted task")
+        if plan["steps"][1]["name"] != "validate_task_governance":
+            fail(f"{source} task automation plan lost governance validation")
+
         store.register_plan(plan)
 
         if plan["approval_required"]:
@@ -139,6 +165,11 @@ def main() -> None:
     if recovery["authority_effect"] != "none":
         fail("recovery plan authority effect changed")
 
+    print(
+        "PHIL_AI_OS_SPRINT_6_TASK_AUTOMATION_BRIDGE_GREEN "
+        f"sources={len(SUPPORTED_SOURCES)} approvals={len(approval_required_sources)} "
+        f"no_approval={len(not_required_sources)} task_plan_identity=stable"
+    )
     print(
         "PHIL_AI_OS_SPRINT_6_MULTICHANNEL_SIMULATION_GREEN "
         f"sources={len(SUPPORTED_SOURCES)} approvals={len(approval_required_sources)} "
