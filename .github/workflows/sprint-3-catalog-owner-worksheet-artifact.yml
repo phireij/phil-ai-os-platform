@@ -1,0 +1,96 @@
+name: Sprint 3 Catalog Owner Worksheet Artifact
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "commerce/woocommerce/fixtures/working-catalog-subset-*.json"
+      - "commerce/woocommerce/src/phil_ai_os_woocommerce/working_catalog_*.py"
+      - "commerce/woocommerce/tools_working_catalog_owner_worksheet.py"
+      - "commerce/woocommerce/tests/test_working_catalog_owner_worksheet.py"
+      - ".github/workflows/sprint-3-catalog-owner-worksheet-artifact.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "commerce/woocommerce/fixtures/working-catalog-subset-*.json"
+      - "commerce/woocommerce/src/phil_ai_os_woocommerce/working_catalog_*.py"
+      - "commerce/woocommerce/tools_working_catalog_owner_worksheet.py"
+      - "commerce/woocommerce/tests/test_working_catalog_owner_worksheet.py"
+      - ".github/workflows/sprint-3-catalog-owner-worksheet-artifact.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-owner-worksheet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Run owner worksheet regression tests
+        env:
+          PYTHONPATH: commerce/woocommerce/src
+        run: python -m unittest commerce.woocommerce.tests.test_working_catalog_owner_worksheet -v
+
+      - name: Build source-backed owner worksheet
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/philaios-catalog-owner-worksheet
+          python commerce/woocommerce/tools_working_catalog_owner_worksheet.py \
+            --input commerce/woocommerce/fixtures/working-catalog-subset-2026-09-11.json \
+            --output /tmp/philaios-catalog-owner-worksheet/ruby-working-catalog-owner-worksheet.csv \
+            --requirements-output /tmp/philaios-catalog-owner-worksheet/ruby-working-catalog-owner-requirements.json
+
+      - name: Validate artifact boundary and source-backed structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import csv
+          import json
+          from pathlib import Path
+
+          root = Path('/tmp/philaios-catalog-owner-worksheet')
+          csv_path = root / 'ruby-working-catalog-owner-worksheet.csv'
+          req_path = root / 'ruby-working-catalog-owner-requirements.json'
+          assert csv_path.is_file()
+          assert req_path.is_file()
+          raw = csv_path.read_bytes()
+          assert raw.startswith(b'\xef\xbb\xbf'), 'worksheet must remain UTF-8 BOM for spreadsheet compatibility'
+          with csv_path.open('r', encoding='utf-8-sig', newline='') as handle:
+              rows = list(csv.DictReader(handle))
+          assert len(rows) == 5
+          by_sku = {row['sku']: row for row in rows}
+          assert by_sku['RCD-MCH-RD']['record_type'] == 'variable_parent'
+          assert by_sku['RCD-MCH-RD']['price_jpy'] == ''
+          assert by_sku['RCD-MCH-RD-15']['parent_sku'] == 'RCD-MCH-RD'
+          assert by_sku['RCD-MCH-RD-15']['price_jpy'] == '3500'
+          assert by_sku['RCD-MCH-RD-21']['parent_sku'] == 'RCD-MCH-RD'
+          assert by_sku['RCD-MCH-RD-21']['price_jpy'] == '5500'
+          assert by_sku['RCD-BAR-FMB']['price_jpy'] == '250'
+          assert by_sku['RCD-BRD-ENS-1']['price_jpy'] == '300'
+          for sku in ('RCD-MCH-RD', 'RCD-BAR-FMB', 'RCD-BRD-ENS-1'):
+              assert by_sku[sku]['japanese_name'] == ''
+              assert by_sku[sku]['primary_media_ref'] == ''
+              assert by_sku[sku]['shipping_class'] == ''
+          requirements = json.loads(req_path.read_text(encoding='utf-8'))
+          assert requirements['global_requirements']
+          assert requirements['network_call_performed'] is False
+          assert requirements['mutation_authorized'] is False
+          assert requirements['production_publish_authorized'] is False
+          print('PHIL_AI_OS_CATALOG_OWNER_WORKSHEET_ARTIFACT_BOUNDARY_GREEN rows=5 network_call=false mutation_authorized=false production_publish_authorized=false')
+          PY
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ruby-working-catalog-owner-worksheet
+          path: /tmp/philaios-catalog-owner-worksheet/
+          if-no-files-found: error
+          retention-days: 7
