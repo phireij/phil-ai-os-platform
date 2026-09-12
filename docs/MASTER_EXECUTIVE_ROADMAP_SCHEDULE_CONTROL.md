@@ -54,6 +54,8 @@ The catalog path now supports the owner workflow end-to-end without granting pro
 8. changes to source-backed values such as price require fresh evidence;
 9. no worksheet edit is automatically applied to the canonical catalog or WooCommerce.
 
+The durable Sprint 3 owner-input closure gate remains the **final owner-approved production catalog** for the intended Initial Launch Catalog V1 scope. Air Mobile and other later launch inputs do not replace or broaden that Sprint 3 gate.
+
 ## 12 SEP 2026 OPERATIONS / AUTOMATION / SPRINT 7 RECONCILIATION
 
 Ahead-of-schedule bounded work has materially reduced later-sprint engineering risk:
