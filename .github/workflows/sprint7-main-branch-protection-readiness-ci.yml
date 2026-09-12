@@ -1,0 +1,30 @@
+name: Sprint 7 Main Branch Protection Readiness CI
+
+on:
+  pull_request:
+    paths:
+      - 'governance/github/**'
+      - 'scripts/validate_main_branch_ruleset.py'
+      - '.github/workflows/sprint7-main-branch-protection-readiness-ci.yml'
+      - 'docs/SPRINT_7_MAIN_BRANCH_PROTECTION_READINESS_2026-09-12.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  branch-protection-validator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - name: Compile validator
+        run: python -m py_compile scripts/validate_main_branch_ruleset.py
+      - name: Self-test fail-closed ruleset policy
+        run: python scripts/validate_main_branch_ruleset.py --self-test
+      - name: Assert workflow is non-authorizing
+        run: |
+          test "${{ github.event_name }}" = "pull_request" -o "${{ github.event_name }}" = "workflow_dispatch"
+          echo "PHIL_AI_OS_MAIN_BRANCH_PROTECTION_READINESS_CI_GREEN authority_effect=none"
