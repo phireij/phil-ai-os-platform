@@ -3,50 +3,83 @@
 # Master Executive Roadmap & Schedule Control
 
 **Original 8-Sprint Plan • Accelerated Multi-Agent Delivery • V1 Launch Control**  
-**Last reconciled:** 6 September 2026 — Sprint 3 remains primary; Sprint 4 continues bounded parallel acceleration
+**Last reconciled:** 12 September 2026 — Sprint 3 remains primary and owner-gated; Sprint 4 continues bounded parallel acceleration; Sprint 5–7 readiness has advanced materially ahead of formal entry
 
 | FIRST ISSUED | OWNER | LAST RECONCILED | CANONICAL SOURCE |
 | --- | --- | --- | --- |
-| 28 Aug 2026 | CEO / CTO Office | 6 Sep 2026 | GitHub master roadmap |
+| 28 Aug 2026 | CEO / CTO Office | 12 Sep 2026 | GitHub master roadmap |
 
 # CURRENT EXECUTIVE STATUS
 
 | SCHEDULE HEALTH | CURRENT ROADMAP | STRETCH FINISH |
 | --- | --- | --- |
-| **AHEAD** | **SPRINT 3 PRIMARY / SPRINT 4 PARALLEL** | **25 SEP 2026** |
+| **AHEAD / OWNER-GATED** | **SPRINT 3 PRIMARY / SPRINT 4 PARALLEL / LATER-SPRINT READINESS ADVANCED** | **25 SEP 2026** |
 
 | CONTROL ITEM | CURRENT STATUS |
 | --- | --- |
-| Overall schedule health | **AHEAD OF ORIGINAL 2-MONTH PLAN** |
-| Executive roadmap position | **Sprint 3 — WooCommerce Foundation remains the CURRENT PRIMARY SPRINT; Sprint 4 — Customer Experience is active in bounded parallel work ahead of formal entry.** |
-| Current engineering gate | **Finalize the owner-approved production catalog/category/media source.** Ruby car fulfillment/pricing policy, mixed-cart rules, requested-vs-confirmed delivery contracts, custom-cake intake contracts, mobile-first order-intake preview and network-inert routing seams are GREEN. Production catalog writes, live route calls, real payments, live SMS, publication execution and cutover remain separately fail-closed. |
-| Last completed checkpoint | Ruby car policy and route/fee UX were reconciled end-to-end through non-authorizing contracts: fixed-origin fulfillment policy, injected read-only routing adapter, Google Routes request/response mapping contract and mobile-first bilingual route guidance are merged GREEN. Sprint 4 and Sprint 7 regressions remained GREEN after the latest CX change. |
+| Overall schedule health | **AHEAD OF ORIGINAL 2-MONTH PLAN.** The current schedule constraint is owner/external evidence rather than missing core engineering. |
+| Executive roadmap position | **Sprint 3 — WooCommerce Foundation remains the CURRENT PRIMARY SPRINT. Sprint 4 — Customer Experience continues bounded parallel acceleration. Sprint 5–7 capabilities are pre-built only where non-authorizing and safe; formal sprint advancement has not been claimed.** |
+| Current engineering gate | **Finalize and approve Initial Launch Catalog V1.** The catalog engineering path now supports simple products, variable parents, multiple sellable variation SKUs, owner worksheet generation, artifact publication, and fail-closed edited-worksheet intake review. Production catalog mutation/publication remains blocked. |
+| Last completed checkpoint | **PR #320 merged GREEN** — deterministic catalog worksheet intake review now detects SKU/parent/variation drift, preserves owner edits as proposals, flags source-backed changes as requiring fresh evidence, and never auto-applies changes. Current `main`: `e478099fa22b8de0f651c596e720acf0a547ab36`. |
+| Sprint 3 catalog readiness | Working source-backed subset is prepared for owner completion. Moist Chocolate Round Cake is modeled as one variable product with parent `RCD-MCH-RD` and sellable variations `RCD-MCH-RD-15` / `RCD-MCH-RD-21`. Fudgy Milky Bar and Cheezy Ensaymada remain simple products. Final catalog completeness/approval is still pending. |
 | WooCommerce / tax | Pre-production foundation and production read-only identity/connectivity are GREEN. 2026 consumption-tax posture remains exempt / not Qualified-Invoice registered; WooCommerce tax remains disabled. |
+| Sprint 4 / CX | Mobile-first PWA/catalog/product/cart/checkout/pickup/custom-cake foundations are materially GREEN in isolated/non-production scope. Custom-cake reference-image selection remains bounded and privacy-aware. Hostinger preview publication remains manual and non-production. |
+| Sprint 5 / Operations Hub | Five-channel normalization, task extraction, read-only dashboard, reply-draft proposals, review workspaces, recommendation proposals and explicit non-authorizing decision packets are pre-built and tested. No live customer reply authority is enabled. |
+| Sprint 6 / Automation | Task-derived automation planning, multichannel simulation, bounded approval simulation, dry-run boundary requests, audit and recovery proof are GREEN. No automatic/live execution authority is enabled. |
+| Sprint 7 / launch readiness | Integrated readiness CI is GREEN on current work. Customer-to-owner lifecycle branch matrix, read-only Mission Control lifecycle projection, launch-acceptance evidence synchronization and branch-protection readiness checks exist. Live cutover remains NO-GO until all final gates are satisfied. |
 | KOMOJU | Live dashboard/configuration evidence, approved initial payment subset, matching WooCommerce checkout configuration and Live Konbini 3-day expiry are GREEN readiness facts. **No real-payment execution authority is implied.** |
-| Twilio | Ruby-owned paid account, `Ruby Transactional SMS` Messaging Service and `RUBYSCAKE` alpha sender are recorded. Restricted API-key outbound boundary and signed status-webhook code boundary are GREEN. Production no-send preflight, deployed public callback verification and controlled handset test remain pending readiness gates. |
-| Mission Control | Multi-agent read model operational; operator/write authority intentionally bounded; Hermes remains intentionally idle while Mission Control is read-only. |
-| Multi-agent capability | Foundation proven; governed handoff demonstrated; normal specialist execution intentionally disabled. |
+| Twilio | Ruby-owned paid account, `Ruby Transactional SMS` Messaging Service and `RUBYSCAKE` sender are recorded. Restricted API-key outbound boundary and signed webhook boundary are GREEN. Provider-side/handset validation remains externally blocked; no live SMS authority is granted. |
+| Air Mobile / AirREGI | Air Mobile Quick Pickup production URL remains external input. Direct AirREGI inventory API remains unproven; CSV fallback is the safe documented path. No production inventory bridge is authorized. |
+| Mission Control | Read-only lifecycle/result projection is prepared. Mission Control write authority remains disabled and Hermes remains intentionally idle for live execution. |
+| Repository protection | Launch-gate validator correctly reports the actual GitHub `main` ruleset/protection requirement as unresolved. Current connected GitHub app lacks administration permission to activate it. |
 | Current autonomy ceiling | **A0 — no autonomous production side-effect/execution expansion** |
 | Execution task-class allowlist | **general only** |
 | Working target | **27–30 September 2026** |
 | Safety target | **2 October 2026** |
 | Original 2-month target | Approximately **19 October 2026** from the 19 August start |
-| Schedule variance | Materially ahead. Engineering/readiness elements from later sprints are being prepared early, but formal executive sprint position remains Sprint 3 with bounded Sprint 4 overlap. |
-| Immediate next action | Continue non-authorizing Sprint 3/Sprint 4 preparation while waiting for the final owner-approved production catalog. Preserve all production mutation, payment, SMS, routing, publication and cutover gates. |
+| Schedule variance | Materially ahead of the original sequence because later-sprint foundations have been safely prepared early. Owner/external gates now dominate the remaining critical path. |
+| Immediate next action | Continue only material non-authorizing preparation while awaiting final catalog facts/approval and external launch evidence. Do not manufacture filler work or cross production gates. |
 
-**6 SEP 2026 ROUTING / CX RECONCILIATION —** The CEO-approved Ruby car delivery policy is now canonical for Chiba/Tokyo/Kanagawa/Saitama eligibility, one-way road-distance pricing, >75-minute review, toll/parking handling and >80 km fail-closed behavior. The earlier foundation note that treated distance/pricing as pending is explicitly superseded. A disabled-by-default Ruby car routing adapter and network-inert Google Routes contract are merged; neither can make a live route call by itself. The isolated mobile-first order-intake preview now exposes bilingual Ruby car guidance and a pending route-review state without creating an order, uploading files, calculating a live route, charging payment or mutating WooCommerce.
+## 12 SEP 2026 CATALOG ROUND-TRIP RECONCILIATION
 
-**6 SEP 2026 TWILIO BOUNDARY RECONCILIATION —** Outbound Twilio REST access is separated from webhook validation: restricted API key SID/secret are used for the outbound API boundary, while the account Auth Token is reserved for signed webhook validation. A fail-closed signed delivery-status HTTP boundary exists in code. Production route deployment, canonical callback URL/runtime Auth Token configuration, Twilio callback verification and the controlled handset test remain pending. No live SMS has been authorized by readiness or sent by these changes.
+The catalog path now supports the owner workflow end-to-end without granting production authority:
 
-**4 SEP 2026 TOKUSHOHO CEO TEXT-APPROVAL RECONCILIATION —** The CEO approved the final Tokushoho publication-candidate text. This is candidate-text approval only. Publication execution, production mutation, payment execution, DNS/public cutover and automatic production execution remain separately gated. Actual final WooCommerce confirmation-screen evidence remains a separate readiness gate downstream of usable pre-production catalog availability.
+1. source-backed working catalog facts are projected into an owner-editable UTF-8 CSV;
+2. variable products expose parent SKU and distinct variation SKUs explicitly;
+3. unresolved Japanese copy, categories, media references and fulfillment decisions remain blank instead of being invented;
+4. a bounded GitHub Actions artifact publishes the worksheet and unresolved-requirements package;
+5. edited worksheets can be read back through a fail-closed intake reviewer;
+6. structural SKU/parent/variation tampering is rejected;
+7. owner-input cells become proposals only;
+8. changes to source-backed values such as price require fresh evidence;
+9. no worksheet edit is automatically applied to the canonical catalog or WooCommerce.
 
-**4 SEP 2026 ROADMAP RECONCILIATION —** KOMOJU merchant Live dashboard evidence, the CEO-approved initial production payment subset, matching WooCommerce checkout configuration, Live Konbini expiry at 3 days, payment-timing wording, the non-published Tokushoho candidate and static final-screen checklist are GREEN as readiness/configuration evidence only. They do not prove or authorize a real payment.
+## 12 SEP 2026 OPERATIONS / AUTOMATION / SPRINT 7 RECONCILIATION
 
-**3 SEP 2026 TAX RECONCILIATION —** Ruby’s Cake Delights is treated as consumption-tax exempt for 2026 under the reviewed evidence, is not registered for Qualified Invoices and has made no voluntary taxable-business election. WooCommerce tax remains disabled. No tax-table write is required under the current decision.
+Ahead-of-schedule bounded work has materially reduced later-sprint engineering risk:
+
+- Operations Hub can normalize five channel fixtures, extract review-only tasks, maintain idempotent read-only queues, aggregate workload status, draft replies, and represent operator recommendations/decision packets without sending anything.
+- Automation Hub can bridge extracted tasks into deterministic Hermes/general simulation plans, preserve lifecycle identity, simulate required approvals, create dry-run boundary requests, and record append-only audit/recovery evidence.
+- Sprint 7 integration proves customer/order lifecycle branches stop safely at owner decision boundaries, and Mission Control can consume a privacy-preserving read-only lifecycle projection.
+- Main branch protection remains an actual later launch gate; the readiness validator must remain RED/NO-GO until a real GitHub ruleset or equivalent protection exists.
+
+These capabilities are **preparation/readiness only**. They do not convert Sprint 5, Sprint 6 or Sprint 7 into formally completed executive sprints and do not increase production authority.
+
+## Earlier reconciliations retained
+
+**6 SEP 2026 ROUTING / CX RECONCILIATION —** The CEO-approved Ruby car delivery policy is canonical for Chiba/Tokyo/Kanagawa/Saitama eligibility, one-way road-distance pricing, >75-minute review, toll/parking handling and >80 km fail-closed behavior. A disabled-by-default routing adapter and network-inert Google Routes contract exist; no live route call is authorized.
+
+**6 SEP 2026 TWILIO BOUNDARY RECONCILIATION —** Outbound Twilio REST access is separated from webhook validation: restricted API key SID/secret are used for outbound API authentication, while the account Auth Token is reserved for signed webhook validation. No live SMS has been authorized by readiness work.
+
+**4 SEP 2026 TOKUSHOHO CEO TEXT-APPROVAL RECONCILIATION —** The CEO approved the final Tokushoho publication-candidate text. Approval scope is candidate text only; publication execution, payment execution, DNS/public cutover and automatic execution remain separately gated.
+
+**4 SEP 2026 PAYMENT RECONCILIATION —** KOMOJU merchant Live dashboard evidence, the CEO-approved initial payment subset, matching WooCommerce checkout configuration, Live Konbini expiry at 3 days, payment wording and static final-screen checklist are GREEN readiness/configuration evidence only.
+
+**3 SEP 2026 TAX RECONCILIATION —** Ruby’s Cake Delights is treated as consumption-tax exempt for 2026 under the reviewed evidence, is not registered for Qualified Invoices and has made no voluntary taxable-business election. WooCommerce tax remains disabled.
 
 ### Schedule health definitions
 
-**AHEAD:** Materially earlier than baseline; no critical dependency threatens target.  
+**AHEAD:** Materially earlier than baseline; no critical dependency currently makes the working target unrealistic.  
 **ON TRACK:** Expected to meet working target under normal execution.  
 **AT RISK:** Dependencies could push target; recovery remains realistic.  
 **DELAYED:** Evidence indicates target will be missed without re-baselining.
@@ -82,7 +115,7 @@ V1 must preserve these properties:
 - AI subscription optimization
 - Final architecture
 
-**Control note:** Architecture Specification v1.0 is frozen. Sprint 0 architecture decisions are consolidated and no longer a current delivery gate.
+**Control note:** Architecture Specification v1.0 is frozen. Sprint 0 decisions are no longer a current delivery gate.
 
 ## Sprint 1 — Infrastructure
 
@@ -96,7 +129,7 @@ V1 must preserve these properties:
 - Telegram notifier
 - Mission Control
 
-**Control note:** GitHub, Control API, approvals/notifications, Telegram, browser Mission Control, monitoring, backups, recovery and audit foundations are GREEN. Supabase is deferred from the Core V1 critical path; durable Control API SQLite remains canonical.
+**Control note:** GitHub, Control API, approvals/notifications, Telegram, browser Mission Control, monitoring, backups, recovery and audit foundations are GREEN. Supabase remains deferred from the Core V1 critical path; durable Control API SQLite remains canonical.
 
 ## Sprint 2 — AI Infrastructure
 
@@ -108,14 +141,13 @@ V1 must preserve these properties:
 - notify CEO
 - approval links
 - task routing
-- No WooCommerce yet
 
-**Control note:** Sprint 2 is formally closed GREEN. Phase 2.3 P1–P5, architecture freeze and core AI infrastructure were completed ahead of the original sequence. Supabase remains deferred from the Core V1 critical path.
+**Control note:** Sprint 2 is formally closed GREEN. Phase 2.3 P1–P5, architecture freeze and core AI infrastructure were completed ahead of the original sequence.
 
 ## Sprint 3 — WooCommerce Foundation
 
-**Status: CURRENT PRIMARY SPRINT / FOUNDATION GREEN / PRODUCTION PREPARATION ACTIVE**  
-**Window:** 1–7 Sep 2026
+**Status: CURRENT PRIMARY SPRINT / ENGINEERING FOUNDATION GREEN / OWNER CLOSURE GATE OPEN**  
+**Window:** Original window 1–7 Sep 2026; formal closure delayed by owner catalog input while later bounded work proceeds in parallel
 
 - Docker
 - Products
@@ -126,12 +158,14 @@ V1 must preserve these properties:
 - English
 - Fulfillment contracts
 - Payment/SMS/routing readiness boundaries
+- Variable products and multiple variation SKUs
+- Owner worksheet generation and intake review
 
-**Control note:** Core WooCommerce contracts, isolated runtime, product/category/media/inventory/localization boundaries and pre-production configuration are GREEN. Production read-only WooCommerce identity/connectivity is GREEN. Tax decision is GREEN with tax disabled. Mixed-cart temperature behavior, Yamato Cool Size 120 / 15 kg fail-close, requested-vs-confirmed delivery lifecycle, custom-cake/private-image/add-on contracts and CEO-approved Ruby car delivery policy are implemented as pre-production contracts. A network-inert routing seam exists for future Google Routes integration. The remaining Sprint 3 owner-input closure gate is the **final owner-approved production catalog**. Production catalog mutation, publication, real payment, live routing and live SMS remain fail-closed.
+**Control note:** Core WooCommerce contracts, isolated runtime, catalog/category/media/inventory/localization boundaries, tax posture, variable-product/multi-SKU support, read-only reconciliation, owner worksheet artifact generation and fail-closed intake review are GREEN. The principal remaining Sprint 3 closure gate is the **final owner-approved Initial Launch Catalog V1** plus associated bilingual/media/fulfillment evidence. Production catalog mutation/publication, real payment, live routing and live SMS remain fail-closed.
 
 ## Sprint 4 — Customer Experience
 
-**Status: PARTIALLY ACTIVE IN PARALLEL / BOUNDED FOUNDATION GREEN EARLY**  
+**Status: BOUNDED PARALLEL ACCELERATION / FOUNDATION MATERIALLY GREEN / FORMAL ENTRY PENDING SPRINT 3 CLOSURE**  
 **Window:** 8–14 Sep 2026
 
 - Mobile-first
@@ -142,11 +176,11 @@ V1 must preserve these properties:
 - Pickup
 - Bilingual customer experience
 
-**Control note:** Approved overlap is active because commerce/API contracts stabilized early. Mobile/PWA, bilingual customer flow, cart/checkout/pickup and KOMOJU handoff foundations are GREEN. The isolated mobile-first order-intake preview now covers requested delivery, Yamato/Ruby car/pickup preferences, custom-cake inputs, private reference-image selection, cake-only topper choices and non-authorizing Ruby car route guidance. It remains local/network-inert. Formal Sprint 4 roadmap entry remains after Sprint 3 closure.
+**Control note:** Mobile/PWA, branded catalog/detail/cart, checkout/pickup, custom-cake intake, private reference-image selection and KOMOJU handoff foundations are materially GREEN in isolated non-production scope. Hostinger preview deployment remains a manually controlled non-production step. Formal Sprint 4 completion is not claimed while Sprint 3 remains formally open.
 
 ## Sprint 5 — Operations Hub
 
-**Status: FORMAL ENTRY PENDING / BOUNDED FOUNDATION PRE-COMPLETED EARLY**  
+**Status: FORMAL ENTRY PENDING / SUBSTANTIAL BOUNDED FOUNDATION PRE-COMPLETED EARLY**  
 **Window:** 15–20 Sep 2026
 
 - Facebook
@@ -157,20 +191,20 @@ V1 must preserve these properties:
 - Extract orders/tasks
 - Needs approval
 
-**Control note:** Channel normalization, read-only Operations Hub and governance boundaries have been prepared and tested early. This is advance readiness only; formal Sprint 5 entry remains scheduled after Sprint 4.
+**Control note:** Five-channel fixture normalization, governance evaluation, task extraction, idempotent task queues, unified read-only workload dashboard, reply-draft proposals/review, operator recommendation proposals and explicit non-authorizing decision packets are prepared and tested. No channel reply or production mutation authority is enabled.
 
 ## Sprint 6 — Automation
 
-**Status: FORMAL ENTRY PENDING / BOUNDED AUTOMATION READINESS PRE-COMPLETED EARLY**  
+**Status: FORMAL ENTRY PENDING / SUBSTANTIAL SIMULATION READINESS PRE-COMPLETED EARLY**  
 **Window:** 21–25 Sep 2026
 
 - Mission Control → Buzz → Hermes/agents → WooCommerce/Operations Hub → Telegram/approval → CEO
 
-**Control note:** Simulation-only automation, approvals, dry-run execution boundaries, replay protection and audit/recovery plans are GREEN early. Live automation authority remains A0/general/Hermes-only and formal Sprint 6 entry remains scheduled.
+**Control note:** Task-derived automation planning, deterministic lifecycle correlation, approval simulation, dry-run execution boundaries, multichannel lifecycle validation, audit and bounded recovery are GREEN in simulation. Live automation remains A0/general/Hermes-only with automatic execution disabled.
 
 ## Sprint 7 — Testing, Production Readiness, Documentation & Launch
 
-**Status: FUTURE FORMAL SPRINT / BOUNDED READINESS ARTIFACTS PRE-COMPLETED EARLY**  
+**Status: FUTURE FORMAL SPRINT / INTEGRATED READINESS MATERIALLY PRE-COMPLETED EARLY**  
 **Window:** 25–30 Sep 2026; safety 2 Oct
 
 - Testing
@@ -182,7 +216,7 @@ V1 must preserve these properties:
 - Training
 - Launch
 
-**Control note:** A significant share of regression, recovery, launch-gate and acceptance preparation has been pre-completed early. Sprint 7 integrated readiness regression is already exercised on current changes, but formal Sprint 7 entry occurs only after Sprints 3–6 are formally traversed/closed. Final live launch remains separately gated.
+**Control note:** Integrated readiness CI, customer-to-owner lifecycle branch matrix, security/recovery checks, launch acceptance structures, main-protection readiness validation and privacy-preserving read-only Mission Control lifecycle projection are prepared. Final live launch remains separately gated by owner/external/admin evidence and CEO/CTO Go/No-Go.
 
 # 3. Revised Integrated Schedule
 
@@ -190,16 +224,16 @@ V1 must preserve these properties:
 | --- | --- | --- |
 | 19–28 Aug | Architecture + core infrastructure + advanced AI infrastructure | **COMPLETED / AHEAD** |
 | 28–31 Aug | Sprint 2 closure; Phase 2.3 P1–P5 GREEN; Architecture Spec v1.0 frozen; Supabase deferred | **COMPLETED / CLOSED GREEN** |
-| 1–7 Sep | Sprint 3 — WooCommerce Foundation + production-preparation inputs | **CURRENT PRIMARY SPRINT / AHEAD** |
-| 8–14 Sep | Sprint 4 — Customer Experience; bounded overlap already active ahead of schedule | **PARTIALLY ACTIVE IN PARALLEL / EARLY** |
-| 15–20 Sep | Sprint 5 — Operations Hub | **FORMAL ENTRY PENDING / FOUNDATION PRE-COMPLETED EARLY** |
-| 21–25 Sep | Sprint 6 — Full Automation | **FORMAL ENTRY PENDING / READINESS PRE-COMPLETED EARLY** |
-| 25–30 Sep | Sprint 7 — final testing, production, security, docs, training, launch | **FUTURE FORMAL SPRINT / READINESS PRE-COMPLETED EARLY** |
+| 1–7 Sep | Sprint 3 — WooCommerce Foundation + production-preparation inputs | **CURRENT PRIMARY / OWNER-GATED CLOSURE** |
+| 8–14 Sep | Sprint 4 — Customer Experience | **BOUNDED PARALLEL ACCELERATION / MATERIAL FOUNDATION GREEN** |
+| 15–20 Sep | Sprint 5 — Operations Hub | **FORMAL ENTRY PENDING / SUBSTANTIAL FOUNDATION PRE-COMPLETED** |
+| 21–25 Sep | Sprint 6 — Full Automation | **FORMAL ENTRY PENDING / SUBSTANTIAL SIMULATION READINESS PRE-COMPLETED** |
+| 25–30 Sep | Sprint 7 — final testing, production, security, docs, training, launch | **FUTURE FORMAL SPRINT / INTEGRATED READINESS ADVANCED** |
 | 2 Oct | Safety launch deadline | **SAFETY RESERVE** |
 
 # 4. Multi-Agent Acceleration Strategy
 
-The main mechanism for pulling Sprint 7 toward 25 September is parallel development under centralized governance. The architecture has proven multiple agent identities, bounded authority, durable ownership and a controlled Hermes → specialist handoff; normal specialist execution remains intentionally disabled until separately governed activation.
+The mechanism for pulling Sprint 7 toward 25 September remains parallel development under centralized governance.
 
 | WORKSTREAM / AGENT ROLE | PRIMARY RESPONSIBILITY |
 | --- | --- |
@@ -277,48 +311,54 @@ Update/review when:
 
 ## Immediate — Sprint 3 completion gate
 
-**Status: CURRENT / bounded by the final owner-approved production catalog; engineering foundation and current non-authorizing readiness work are GREEN.**
+**Status: CURRENT / owner-input gated. Engineering foundation and deterministic intake path are GREEN.**
 
 Complete or confirm before Sprint 3 formal closure:
 
-- Finalize the approved production catalog/category/media source, including SKU, size class, temperature profile, pickup/Yamato/Ruby-car eligibility, bilingual content, preparation/advance-order rules, stock policy and approved photos.
-- Finalize catalog-associated product-by-product temperature/fulfillment eligibility where not yet supplied.
-- Preserve the reconciled 2026 tax posture: consumption-tax exempt, Qualified Invoice not registered, WooCommerce tax disabled.
-- Preserve the verified KOMOJU readiness facts as readiness evidence only; real payment remains blocked.
-- Preserve the CEO-approved Ruby car policy as current truth; do not regress to the earlier “pricing pending” foundation note.
-- Keep WooCommerce production catalog mutation fail-closed until the final catalog is complete and separately revalidated.
-- Continue Sprint 4 work in parallel where it remains non-authorizing and independent of the missing catalog input.
+- Finalize the intended **Initial Launch Catalog V1 subset**.
+- Complete/approve English and Japanese names/descriptions/slugs where required.
+- Confirm approved categories and bilingual category mapping/slugs.
+- Supply/confirm controlled primary media references and gallery decisions.
+- Confirm product fulfillment facts: temperature classification, pickup/delivery eligibility, package/shipping class, preparation time, advance-order window and stock policy.
+- Complete physical packaging evidence where required (fit/cushioning/stack/drop/thermal validation).
+- Confirm customer-facing shipping/handling/free-shipping policy.
+- Provide the explicit catalog approval reference required by launch readiness.
+- Keep all production WooCommerce catalog mutation/publication fail-closed until the final package is complete and separately revalidated.
+
+The owner-editable worksheet and fail-closed intake reviewer are now the preferred handoff path for catalog facts. The system must not invent missing owner values.
 
 ### Catalog-associated reminder after owner submission
 
-After the owner finalizes/submits the production catalog, explicitly reconcile:
+After the owner finalizes/submits the catalog, explicitly reconcile:
 
 - final add-on SKU list and prices;
 - add-on inventory behavior;
 - which add-ons appear inline on cake product pages;
 - final icing policy and any additional-color surcharge.
 
-Do **not** activate the historical working example of ¥200 per additional icing color unless the owner explicitly confirms that policy.
+Do **not** activate historical working examples unless the owner explicitly confirms them.
 
 ## Parallel external / later launch dependencies
 
-- Air Mobile Order Quick Pickup exact production URL when available.
-- Twilio production no-send preflight after required restricted-key/account/service secret references are present.
-- Public HTTPS Twilio delivery-status route deployment and callback verification, using Account Auth Token only for signature validation.
-- Final bilingual transactional SMS template and controlled handset receipt/payment-link verification before any controlled live SMS test.
-- Safe actual WooCommerce final confirmation-screen evidence and checklist acceptance.
-- Tokushoho publication execution only when its independent readiness prerequisites are GREEN.
-- Near-cutover backup/restore freshness.
-- Main-branch protection/ruleset coverage before final public launch.
-- Final production Go/No-Go.
+- Air Mobile Order Quick Pickup exact production URL.
+- Twilio provider/account authorization resolution plus controlled handset validation.
+- Public HTTPS Twilio delivery-status route/callback verification when separately authorized.
+- Safe actual WooCommerce final confirmation-screen evidence and owner acceptance.
+- KOMOJU final live acceptance / real-money gate; no real payment before explicit authorization.
+- Tokushoho publication execution only when independent readiness prerequisites are GREEN.
+- Near-cutover backup/restore freshness check performed close to actual cutover, not prematurely.
+- Actual GitHub `main` protection/ruleset coverage before final public launch.
+- Public cutover/DNS confirmation.
+- Final CEO/CTO production Go/No-Go.
 
 ## Parallel acceleration while Sprint 3 remains current
 
-- Maintain A0 autonomy, general-only execution and Hermes-only bounded routing; specialists remain disabled for normal execution.
-- Keep Mission Control read-only until a separately governed mutation-authority decision.
-- Keep real KOMOJU payment execution, live SMS sending, live routing-provider calls, public-domain/DNS cutover and automatic production execution fail-closed until their separate acceptance gates are satisfied.
-- Preserve CEO approvals already recorded for narrowly controlled future validation; do not reinterpret them as unrestricted authority.
-- Use earned lead time for testing, reconciliation, runbooks and launch preparation rather than skipping formal sprint control.
+- Maintain A0 autonomy, general-only execution and Hermes-only bounded routing; specialists remain disabled for normal live execution.
+- Keep Mission Control read-only until separately governed write/mutation authority is approved.
+- Keep real KOMOJU payment execution, live SMS sending, live routing-provider calls, production catalog mutation/publication, public-domain/DNS cutover and automatic production execution fail-closed.
+- Preserve CEO approvals already recorded for narrow readiness/candidate-text scopes; never reinterpret them as unrestricted authority.
+- Continue only work that materially improves preparation, evidence quality, deterministic handoff, testing, training or launch safety.
+- Do not create cosmetic micro-hardening PRs merely to keep activity moving.
 
 # 9. Executive Target Statement
 
@@ -332,14 +372,20 @@ These targets remain materially ahead of the original approximately two-month ob
 
 # 10. Change Log
 
-- **28 Aug 2026** — Reconciled Phase 2.x engineering work with the original 8-Sprint plan and established this file as the master schedule-control roadmap. Schedule effect: Stretch Sep 25; working Sep 27–30; safety Oct 2; current state AHEAD.
-- **2 Sep 2026** — Reconciled the executive roadmap to Sprint 3 as the current primary sprint, with Sprint 4 partially active in parallel. Recorded Sprint 2 CLOSED GREEN, Sprint 0/1 closure, WooCommerce pre-production and production read-only identity GREEN, and classified later Sprint 5–7 work as early readiness rather than formal sprint entry.
-- **3 Sep 2026** — Reconciled owner-provided 2024/2025 business tax evidence and owner confirmation of no Qualified Invoice registration and no voluntary taxable-business election. Japan 2026 consumption-tax decision is GREEN as exempt; WooCommerce tax route remains disabled and non-authorizing. Final owner-approved production catalog became the only remaining Sprint 3 owner-input gate.
-- **4 Sep 2026** — Reconciled KOMOJU Live dashboard evidence, CEO-approved production payment subset, matching WooCommerce checkout configuration and actual Live Konbini expiry at **3 days** as GREEN. No sprint advancement or payment authority expansion occurred.
-- **4 Sep 2026** — Reconciled customer-facing payment timing/deadline wording and prepared the final non-published Tokushoho publication candidate plus static final checkout/order-confirmation compliance checklist.
-- **4 Sep 2026** — Recorded explicit CEO approval of the final Tokushoho publication-candidate text. Approval scope is candidate text only; publication execution and actual final-screen acceptance remain separately gated.
-- **5–6 Sep 2026** — Reconciled Twilio provider architecture: Ruby paid account/service/sender setup is recorded; outbound REST uses a restricted API key; Account Auth Token is isolated to signed webhook validation; a fail-closed status-webhook HTTP code boundary exists. Production no-send preflight, public callback deployment/verification and the controlled handset test remain pending. No SMS was sent.
-- **6 Sep 2026** — Finalized the CEO-approved Ruby car delivery policy and implemented mixed-cart/fulfillment contracts, requested-vs-confirmed delivery lifecycle, custom-cake/private image/add-on contracts, a disabled-by-default Ruby car routing adapter, a network-inert Google Routes mapping contract and bilingual mobile-first Ruby car guidance. Sprint 4 and Sprint 7 regressions were GREEN on the latest CX reconciliation. No live route call, WooCommerce mutation, payment, dispatch, SMS or cutover occurred.
-- **6 Sep 2026** — Removed Ruby car distance/pricing from the current pending-business-decision set by explicitly superseding the earlier foundation note with `RUBY_CAR_DELIVERY_POLICY_2026-09-06.md`. Remaining owner work is concentrated on the final production catalog and catalog-associated product/add-on/icing decisions.
+- **28 Aug 2026** — Reconciled Phase 2.x engineering work with the original 8-Sprint plan and established this file as the master schedule-control roadmap. Stretch Sep 25; working Sep 27–30; safety Oct 2.
+- **2 Sep 2026** — Reconciled roadmap to Sprint 3 as current primary sprint with Sprint 4 bounded parallel acceleration. Recorded Sprint 2 CLOSED GREEN and later Sprint 5–7 work as early readiness rather than formal sprint entry.
+- **3 Sep 2026** — Reconciled 2026 tax decision as consumption-tax exempt / not Qualified-Invoice registered; WooCommerce tax disabled. Final owner-approved catalog became the only remaining Sprint 3 owner-input gate.
+- **4 Sep 2026** — Reconciled KOMOJU Live readiness evidence, approved initial payment subset, checkout configuration, Konbini 3-day expiry, payment wording and Tokushoho candidate text. No real-payment/publication authority expansion.
+- **5–6 Sep 2026** — Reconciled Twilio restricted-key/auth-token separation and fail-closed status-webhook boundary. No live SMS authority.
+- **6 Sep 2026** — Finalized CEO-approved Ruby car delivery policy and related bounded CX/fulfillment/routing contracts. No live route/payment/dispatch/SMS/cutover authority.
+- **11 Sep 2026** — Catalog engineering reached source-backed working-subset readiness, including owner field-evidence rules, category/media/fulfillment safeguards, variable-product preparation and fail-closed readiness reporting.
+- **12 Sep 2026** — PR #297/#298 state reconciled: first-class variable-product/multi-SKU support and GET-only WooCommerce parent/variation reconciliation are GREEN.
+- **12 Sep 2026** — PR #299/#300/#301 state reconciled: synthetic Sprint 4 end-to-end journey, Sprint 5 multichannel smoke and Sprint 6 five-channel automation simulation are GREEN without live side effects.
+- **12 Sep 2026** — PR #303/#304 state reconciled: customer-to-owner order lifecycle and branch matrix are GREEN and intentionally stop at `awaiting_owner_decision`.
+- **12 Sep 2026** — PR #305–#313 state reconciled: unified Operations Hub dashboard, task extraction, task→automation bridge, reply draft/review/recommendation/decision proposal layers and cross-channel reply lifecycle are GREEN, all non-authorizing.
+- **12 Sep 2026** — PR #314–#316 state reconciled: main-branch-protection readiness remains a real external/admin gate; privacy-preserving read-only Mission Control lifecycle projection and Sprint 7 launch-acceptance synchronization are GREEN.
+- **12 Sep 2026** — PR #317/#318 state reconciled: source-backed owner-editable catalog worksheet and short-retention GitHub Actions artifact pipeline are GREEN.
+- **12 Sep 2026** — PR #319 added the additive catalog engineering checkpoint and reconciled the current owner-gated catalog state.
+- **12 Sep 2026** — PR #320 added deterministic fail-closed owner worksheet intake review. Owner edits remain proposals; source-backed changes require fresh evidence; no automatic apply or production authority was introduced. Current merged `main` at this reconciliation: `e478099fa22b8de0f651c596e720acf0a547ab36`.
 
 > **DOCUMENT CONTROL RULE:** Do not create a replacement master timeline for ordinary schedule updates. Review and update this canonical roadmap, refresh the status dashboard at the top, and record material changes in the Change Log.
