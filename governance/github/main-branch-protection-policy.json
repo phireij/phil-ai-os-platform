@@ -1,0 +1,25 @@
+{
+  "schema": "phil-ai-os-github-main-branch-protection-policy",
+  "version": 1,
+  "target_branch": "main",
+  "required_enforcement": "active",
+  "required_rule_types": [
+    "deletion",
+    "non_fast_forward",
+    "pull_request",
+    "required_status_checks"
+  ],
+  "minimum_required_status_checks": 2,
+  "required_status_check_contexts": [
+    "integrated-contract-regression",
+    "isolated-runtime-smoke"
+  ],
+  "pull_request": {
+    "minimum_approving_review_count": 0,
+    "require_code_owner_review": false,
+    "require_last_push_approval": false,
+    "required_review_thread_resolution": true
+  },
+  "launch_gate": true,
+  "production_authority_effect": "none"
+}
