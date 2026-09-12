@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/operations/reply-draft-decision-proposal.schema.json",
+  "title": "Phil AI OS Operations Reply Draft Decision Proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "state",
+    "decision_proposal_id",
+    "reply_draft_id",
+    "task_candidate_id",
+    "lifecycle_correlation_id",
+    "source",
+    "recommendation",
+    "reviewer_ref",
+    "note",
+    "effects",
+    "mutation_authorized"
+  ],
+  "properties": {
+    "schema": {"const": "phil-ai-os-operations-reply-draft-decision-proposal"},
+    "version": {"const": 1},
+    "state": {"const": "recommendation_only"},
+    "decision_proposal_id": {"type": "string", "pattern": "^ops-reply-decision:[a-f0-9]{24}$"},
+    "reply_draft_id": {"type": "string", "pattern": "^ops-reply:[a-f0-9]{24}$"},
+    "task_candidate_id": {"type": "string", "pattern": "^ops-task:[a-f0-9]{24}$"},
+    "lifecycle_correlation_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "source": {"enum": ["facebook", "instagram", "telegram", "whatsapp", "google_business"]},
+    "recommendation": {"enum": ["recommend_future_dispatch", "request_reply_revision", "reject_reply_draft"]},
+    "reviewer_ref": {"type": "string", "minLength": 1, "maxLength": 120},
+    "note": {"type": "string", "maxLength": 1000},
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operator_decision_recorded",
+        "reply_approved",
+        "channel_reply_authorized",
+        "network_dispatch_authorized",
+        "execution_authorized",
+        "woo_commerce_mutation_authorized",
+        "order_creation_authorized",
+        "payment_execution_authorized",
+        "sms_send_authorized",
+        "inventory_mutation_authorized",
+        "production_publish_authorized"
+      ],
+      "properties": {
+        "operator_decision_recorded": {"const": false},
+        "reply_approved": {"const": false},
+        "channel_reply_authorized": {"const": false},
+        "network_dispatch_authorized": {"const": false},
+        "execution_authorized": {"const": false},
+        "woo_commerce_mutation_authorized": {"const": false},
+        "order_creation_authorized": {"const": false},
+        "payment_execution_authorized": {"const": false},
+        "sms_send_authorized": {"const": false},
+        "inventory_mutation_authorized": {"const": false},
+        "production_publish_authorized": {"const": false}
+      }
+    },
+    "mutation_authorized": {"const": false}
+  }
+}
