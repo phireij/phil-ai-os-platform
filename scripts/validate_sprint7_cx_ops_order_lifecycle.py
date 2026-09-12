@@ -13,6 +13,8 @@ sys.path.insert(0, str(REPO / "apps/operations-hub/src"))
 from operations_hub import (  # noqa: E402
     OrderQuoteApprovalDecisionProposalRegister,
     OrderQuoteApprovalRequestRegister,
+    OrderQuoteOwnerDecisionPacketError,
+    OrderQuotePreparationError,
     OrderReviewQueue,
     build_order_quote_approval_decision_proposal,
     build_order_quote_approval_request,
@@ -40,6 +42,21 @@ def assert_no_authority_expansion(value: Any, path: str = "root") -> None:
     elif isinstance(value, list):
         for index, child in enumerate(value):
             assert_no_authority_expansion(child, f"{path}[{index}]")
+
+
+def expect_quote_preparation_blocked(review: dict[str, Any], decision: str) -> None:
+    proposal = build_order_review_decision_proposal(
+        review,
+        decision,
+        "staff:synthetic-branch-matrix",
+        "Synthetic branch-matrix validation only.",
+    )
+    assert_no_authority_expansion(proposal, f"review_branch.{decision}")
+    try:
+        build_order_quote_preparation(review, proposal)
+    except OrderQuotePreparationError:
+        return
+    fail(f"{decision} unexpectedly became eligible for quote preparation")
 
 
 def main() -> None:
@@ -80,6 +97,11 @@ def main() -> None:
     review = queue.review_detail(correlation_id)
     if review is None:
         fail("review detail missing")
+
+    # Negative staff-review branches must stop before quote preparation.
+    expect_quote_preparation_blocked(review, "request_customer_revision")
+    expect_quote_preparation_blocked(review, "decline_request")
+
     proposal = build_order_review_decision_proposal(
         review,
         "accept_for_quote_review",
@@ -148,9 +170,62 @@ def main() -> None:
         fail("quote recommendation did not remain recommendation_only")
     if owner_packet.get("state") != "awaiting_owner_decision":
         fail("owner packet did not stop at awaiting_owner_decision")
+    if owner_packet.get("recommendation") != "recommend_quote_approval":
+        fail("owner packet lost the quote-approval recommendation")
     if owner_packet.get("owner_decision", {}).get("decision") is not None:
         fail("synthetic lifecycle unexpectedly made an owner decision")
 
+    # A bounded staff recommendation to revise the quote may reach owner review,
+    # but it must remain recommendation-only and non-authorizing.
+    revision_proposal = build_order_quote_approval_decision_proposal(
+        approval_request,
+        recommendation="request_quote_revision",
+        reviewer_ref="staff:synthetic-branch-matrix",
+        note="Synthetic quote-revision recommendation only.",
+    )
+    assert_no_authority_expansion(revision_proposal, "quote_revision_proposal")
+    revision_register = OrderQuoteApprovalDecisionProposalRegister()
+    revision_registered = revision_register.register(revision_proposal)
+    if revision_registered.get("accepted") is not True:
+        fail("quote revision recommendation was not registered")
+    revision_packet = build_order_quote_owner_decision_packet(
+        approval_register,
+        revision_register,
+        approval_request_id=approval_request["approval_request_id"],
+    )
+    if revision_packet.get("recommendation") != "request_quote_revision":
+        fail("owner packet lost the quote-revision recommendation")
+    if revision_packet.get("state") != "awaiting_owner_decision":
+        fail("quote-revision packet did not remain awaiting_owner_decision")
+    if revision_packet.get("owner_decision", {}).get("decision") is not None:
+        fail("quote-revision branch unexpectedly made an owner decision")
+    if revision_packet.get("lifecycle_correlation_id") != correlation_id:
+        fail("quote-revision branch correlation continuity failed")
+    assert_no_authority_expansion(revision_packet, "quote_revision_packet")
+
+    # Conflicting staff recommendations must fail closed before an owner packet
+    # can be constructed from ambiguous evidence.
+    conflict_register = OrderQuoteApprovalDecisionProposalRegister()
+    if conflict_register.register(decision_proposal).get("accepted") is not True:
+        fail("quote approval recommendation was not accepted for conflict test")
+    if conflict_register.register(revision_proposal).get("accepted") is not True:
+        fail("quote revision recommendation was not accepted for conflict test")
+    try:
+        build_order_quote_owner_decision_packet(
+            approval_register,
+            conflict_register,
+            approval_request_id=approval_request["approval_request_id"],
+        )
+    except OrderQuoteOwnerDecisionPacketError:
+        pass
+    else:
+        fail("conflicting quote recommendations unexpectedly produced an owner packet")
+
+    print(
+        "PHIL_AI_OS_SPRINT_7_ORDER_LIFECYCLE_BRANCH_MATRIX_GREEN "
+        "customer_revision=blocked decline=blocked quote_revision=owner_review_only "
+        "recommendation_conflict=blocked"
+    )
     print(
         "PHIL_AI_OS_SPRINT_7_CX_OPS_ORDER_LIFECYCLE_GREEN "
         "handoff=review_only queue=idempotent quote=approval_gated owner=awaiting_decision "
