@@ -46,6 +46,8 @@ from .order_review_decision import (
 from .order_review_register import OrderReviewProposalRegister
 from .order_review_workspace import OrderReviewWorkspaceError, build_order_review_workspace
 from .queue import OperationsQueue
+from .reply_draft import ReplyDraftError, build_reply_draft_proposal
+from .reply_draft_register import ReplyDraftRegister
 from .task_extraction import TaskExtractionError, build_task_candidate
 from .task_queue import TaskCandidateQueue
 
@@ -75,6 +77,8 @@ __all__ = [
     "OrderReviewProposalRegister",
     "OrderReviewQueue",
     "OrderReviewWorkspaceError",
+    "ReplyDraftError",
+    "ReplyDraftRegister",
     "SUPPORTED_QUOTE_APPROVAL_RECOMMENDATIONS",
     "SUPPORTED_REVIEW_DECISIONS",
     "SUPPORTED_SOURCES",
@@ -91,6 +95,7 @@ __all__ = [
     "build_order_quote_preparation",
     "build_order_review_decision_proposal",
     "build_order_review_workspace",
+    "build_reply_draft_proposal",
     "build_task_candidate",
     "classify_intent",
     "evaluate_governance",
