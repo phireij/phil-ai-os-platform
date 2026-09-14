@@ -1,0 +1,35 @@
+name: Workflow Supply-Chain Policy CI
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/validate_workflow_supply_chain.py'
+      - 'tests/test_workflow_supply_chain_policy.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/validate_workflow_supply_chain.py'
+      - 'tests/test_workflow_supply_chain_policy.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-supply-chain-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Run validator unit tests
+        run: python -m unittest tests.test_workflow_supply_chain_policy -v
+
+      - name: Enforce immutable workflow dependencies and safe triggers
+        run: python scripts/validate_workflow_supply_chain.py --root .
