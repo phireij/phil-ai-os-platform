@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from typing import Any
@@ -66,6 +67,8 @@ class OrderReviewProposalRegister:
         if not isinstance(proposal_id, str) or not proposal_id.startswith("order-review:"):
             raise OrderReviewDecisionError("invalid proposal_id")
         if proposal_id in self._proposals:
+            if proposal != self._proposals[proposal_id]:
+                raise OrderReviewDecisionError("proposal_id conflicts with existing proposal content")
             self._duplicates += 1
             return {
                 "accepted": False,
@@ -74,7 +77,7 @@ class OrderReviewProposalRegister:
                 "mutation_authorized": False,
             }
 
-        self._proposals[proposal_id] = dict(proposal)
+        self._proposals[proposal_id] = copy.deepcopy(proposal)
         return {
             "accepted": True,
             "duplicate": False,
@@ -115,6 +118,6 @@ class OrderReviewProposalRegister:
             "reviewer_ref": proposal["reviewer_ref"],
             "note": proposal.get("note", ""),
             "state": proposal["state"],
-            "effects": dict(proposal["effects"]),
+            "effects": copy.deepcopy(proposal["effects"]),
             "mutation_authorized": False,
         }
