@@ -125,10 +125,23 @@ def build_operations_dashboard(
         raise OperationsDashboardError("channel intent_counts must match channel total_events")
 
     task_count = _validated_count(tasks.get("task_count", 0), "task task_count")
+    task_duplicate_tasks = _validated_count(tasks.get("duplicate_tasks", 0), "task duplicate_tasks")
+    task_awaiting_approval = _validated_count(tasks.get("awaiting_approval", 0), "task awaiting_approval")
+    task_ready_for_operator_review = _validated_count(
+        tasks.get("ready_for_operator_review", 0), "task ready_for_operator_review"
+    )
+    task_type_counts = _validated_count_map(tasks.get("task_type_counts", {}), "task task_type_counts")
+    task_source_counts = _validated_count_map(tasks.get("source_counts", {}), "task source_counts")
     if task_queue is not None:
         task_items = _validated_items(tasks.get("items"), "task")
         if task_count != len(task_items):
             raise OperationsDashboardError("task task_count must match task items")
+    if task_awaiting_approval + task_ready_for_operator_review != task_count:
+        raise OperationsDashboardError("task state counts must match task task_count")
+    if sum(task_type_counts.values()) != task_count:
+        raise OperationsDashboardError("task task_type_counts must match task task_count")
+    if sum(task_source_counts.values()) != task_count:
+        raise OperationsDashboardError("task source_counts must match task task_count")
 
     order_items = _validated_items(orders.get("items"), "order review")
     order_pending_review = _validated_count(orders.get("pending_review", 0), "order pending_review")
@@ -178,11 +191,11 @@ def build_operations_dashboard(
         },
         "tasks": {
             "task_count": task_count,
-            "duplicate_tasks": tasks.get("duplicate_tasks", 0),
-            "awaiting_approval": tasks.get("awaiting_approval", 0),
-            "ready_for_operator_review": tasks.get("ready_for_operator_review", 0),
-            "task_type_counts": dict(tasks.get("task_type_counts", {})),
-            "source_counts": dict(tasks.get("source_counts", {})),
+            "duplicate_tasks": task_duplicate_tasks,
+            "awaiting_approval": task_awaiting_approval,
+            "ready_for_operator_review": task_ready_for_operator_review,
+            "task_type_counts": task_type_counts,
+            "source_counts": task_source_counts,
         },
         "orders": {
             "pending_staff_review": order_pending_review,
