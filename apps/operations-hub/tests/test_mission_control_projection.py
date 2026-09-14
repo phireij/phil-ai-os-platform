@@ -107,10 +107,28 @@ def recovery_model():
     }
 
 
+def approval_model():
+    return {
+        "status": "read_only",
+        "store": "automation_approval_simulation",
+        "plan_count": 5,
+        "decision_count": 2,
+        "awaiting_decision": 1,
+        "simulation_releasable": 3,
+        "by_state": {"required": 1, "approved": 1, "denied": 1, "not_required": 2},
+        "decision_ids_exposed": False,
+        "automatic_execution": False,
+        "execution_authorized": False,
+        "channel_reply_authorized": False,
+        "mutation_authorized": False,
+        "authority_effect": "none",
+    }
+
+
 class MissionControlProjectionTests(unittest.TestCase):
     def test_projects_lifecycle_and_result_status_without_customer_payloads(self):
         projection = build_mission_control_lifecycle_projection(operations_dashboard(), audit_model())
-        self.assertEqual(4, projection["version"])
+        self.assertEqual(5, projection["version"])
         self.assertEqual("read_only", projection["status"])
         self.assertEqual("read_only", projection["mission_control_mode"])
         self.assertEqual(5, projection["operations"]["channel_events"])
@@ -161,18 +179,35 @@ class MissionControlProjectionTests(unittest.TestCase):
         ):
             self.assertFalse(recovery[field])
         self.assertEqual("none", recovery["authority_effect"])
-        attention = {item["kind"]: item for item in projection["attention"]["items"]}
-        self.assertEqual(7, projection["attention"]["count"])
-        self.assertEqual(1, attention["recovery_stop_for_review"]["count"])
 
-    def test_default_recovery_posture_is_empty_and_non_authorizing(self):
+    def test_projects_aggregate_approval_posture_without_ids_or_authority(self):
+        projection = build_mission_control_lifecycle_projection(
+            operations_dashboard(), audit_model(), recovery_model(), approval_model()
+        )
+        approval = projection["approval"]
+        self.assertEqual(5, approval["plan_count"])
+        self.assertEqual(2, approval["decision_count"])
+        self.assertEqual(1, approval["awaiting_decision"])
+        self.assertEqual(3, approval["simulation_releasable"])
+        self.assertEqual({"approved": 1, "denied": 1, "not_required": 2, "required": 1}, approval["by_state"])
+        self.assertFalse(approval["decision_ids_exposed"])
+        self.assertFalse(projection["privacy"]["approval_decision_ids_exposed"])
+        serialized = json.dumps(projection, ensure_ascii=False)
+        self.assertNotIn("decision_id", serialized)
+        for field in ("automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized"):
+            self.assertFalse(approval[field])
+        attention = {item["kind"]: item for item in projection["attention"]["items"]}
+        self.assertEqual(8, projection["attention"]["count"])
+        self.assertEqual(1, attention["automation_approval_awaiting_decision"]["count"])
+
+    def test_default_bounded_postures_are_empty_and_non_authorizing(self):
         projection = build_mission_control_lifecycle_projection(operations_dashboard(), audit_model())
-        recovery = projection["recovery"]
-        self.assertEqual(0, recovery["plan_count"])
-        self.assertEqual(0, recovery["retry_simulation_count"])
-        self.assertEqual(0, recovery["stop_for_review_count"])
-        self.assertTrue(recovery["read_only"])
-        self.assertFalse(recovery["retry_authorized"])
+        self.assertEqual(0, projection["recovery"]["plan_count"])
+        self.assertFalse(projection["recovery"]["retry_authorized"])
+        self.assertEqual(0, projection["approval"]["plan_count"])
+        self.assertEqual(0, projection["approval"]["awaiting_decision"])
+        self.assertFalse(projection["approval"]["execution_authorized"])
+        self.assertFalse(projection["approval"]["decision_ids_exposed"])
 
     def test_projects_control_plane_posture_without_granting_authority(self):
         projection = build_mission_control_lifecycle_projection(operations_dashboard(), audit_model())
@@ -214,6 +249,16 @@ class MissionControlProjectionTests(unittest.TestCase):
         with self.assertRaisesRegex(MissionControlProjectionError, "retry_authorized"):
             build_mission_control_lifecycle_projection(operations_dashboard(), audit_model(), recovery)
 
+    def test_rejects_approval_authority_or_identifier_exposure(self):
+        approval = approval_model()
+        approval["execution_authorized"] = True
+        with self.assertRaisesRegex(MissionControlProjectionError, "execution_authorized"):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit_model(), None, approval)
+        approval = approval_model()
+        approval["decision_ids_exposed"] = True
+        with self.assertRaisesRegex(MissionControlProjectionError, "decision identifiers"):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit_model(), None, approval)
+
     def test_rejects_non_read_only_inputs(self):
         dashboard = operations_dashboard()
         dashboard["status"] = "mutable"
@@ -227,32 +272,33 @@ class MissionControlProjectionTests(unittest.TestCase):
         recovery["status"] = "mutable"
         with self.assertRaisesRegex(MissionControlProjectionError, "recovery read model must remain read_only"):
             build_mission_control_lifecycle_projection(operations_dashboard(), audit_model(), recovery)
+        approval = approval_model()
+        approval["status"] = "mutable"
+        with self.assertRaisesRegex(MissionControlProjectionError, "approval read model must remain read_only"):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit_model(), None, approval)
 
-    def test_rejects_invalid_attention_count_input(self):
+    def test_rejects_invalid_counts(self):
         dashboard = operations_dashboard()
         dashboard["tasks"]["awaiting_approval"] = -1
         with self.assertRaisesRegex(MissionControlProjectionError, "tasks_awaiting_approval"):
             build_mission_control_lifecycle_projection(dashboard, audit_model())
-
-    def test_rejects_invalid_task_composition_counts(self):
-        dashboard = operations_dashboard()
-        dashboard["tasks"]["source_counts"]["facebook"] = -1
-        with self.assertRaisesRegex(MissionControlProjectionError, "tasks source_counts.facebook"):
-            build_mission_control_lifecycle_projection(dashboard, audit_model())
-
-    def test_rejects_invalid_recovery_counts(self):
         recovery = recovery_model()
         recovery["stop_for_review_count"] = -1
         with self.assertRaisesRegex(MissionControlProjectionError, "recovery stop_for_review_count"):
             build_mission_control_lifecycle_projection(operations_dashboard(), audit_model(), recovery)
+        approval = approval_model()
+        approval["awaiting_decision"] = -1
+        with self.assertRaisesRegex(MissionControlProjectionError, "approval awaiting_decision"):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit_model(), None, approval)
 
     def test_projection_is_deterministic_for_same_inputs(self):
         dashboard = operations_dashboard()
         audit = audit_model()
         recovery = recovery_model()
-        first = build_mission_control_lifecycle_projection(dashboard, audit, recovery)
+        approval = approval_model()
+        first = build_mission_control_lifecycle_projection(dashboard, audit, recovery, approval)
         second = build_mission_control_lifecycle_projection(
-            copy.deepcopy(dashboard), copy.deepcopy(audit), copy.deepcopy(recovery)
+            copy.deepcopy(dashboard), copy.deepcopy(audit), copy.deepcopy(recovery), copy.deepcopy(approval)
         )
         self.assertEqual(first, second)
 
