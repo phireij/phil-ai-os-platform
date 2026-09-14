@@ -36,6 +36,18 @@
       <div id="metric-grid" class="metric-grid" aria-live="polite"></div>
     </section>
 
+    <section class="split-grid" aria-label="Operator attention and control-plane posture">
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">Operator attention</p><h2>Needs review</h2></div><span id="attention-chip" class="state-chip">0 items</span></div>
+        <div id="attention-list" class="lifecycle-list"></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">Control plane</p><h2>Agent posture</h2></div><span class="state-chip safe">A0</span></div>
+        <dl id="control-plane-list" class="safety-list"></dl>
+      </article>
+    </section>
+
     <section class="split-grid" aria-label="Mission Control detail panels">
       <article class="panel">
         <div class="panel-head"><div><p class="eyebrow">Automation</p><h2>Lifecycle status</h2></div><span id="simulation-chip" class="state-chip">simulated only</span></div>
@@ -55,7 +67,7 @@
 
     <section class="operator-note" aria-labelledby="operator-title">
       <div><p class="eyebrow">Operator guidance</p><h2 id="operator-title">What this screen is for</h2></div>
-      <p>Use Mission Control to understand workload, identify items waiting for approval, and inspect simulated lifecycle state. This preview intentionally contains no approve, send, retry, execute, publish or mutation controls.</p>
+      <p>Use Mission Control to understand workload, identify items waiting for approval, inspect agent/control-plane posture and review simulated lifecycle state. This preview intentionally contains no approve, send, retry, execute, publish or mutation controls.</p>
     </section>
   </main>
 
