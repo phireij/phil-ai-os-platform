@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from .order_quote_approval_decision import (
@@ -57,7 +58,10 @@ class OrderQuoteApprovalDecisionProposalRegister:
         if pricing.get("currency") != "JPY" or pricing.get("customer_accepted") is not False:
             raise OrderQuoteApprovalDecisionError("decision proposal pricing state is invalid")
 
-        if proposal_id in self._proposals:
+        existing = self._proposals.get(proposal_id)
+        if existing is not None:
+            if existing != proposal:
+                raise OrderQuoteApprovalDecisionError("decision proposal content changed for existing decision_proposal_id")
             self._duplicates += 1
             return {
                 "accepted": False,
@@ -67,7 +71,7 @@ class OrderQuoteApprovalDecisionProposalRegister:
                 "mutation_authorized": False,
             }
 
-        self._proposals[proposal_id] = dict(proposal)
+        self._proposals[proposal_id] = copy.deepcopy(proposal)
         return {
             "accepted": True,
             "duplicate": False,
@@ -110,4 +114,4 @@ class OrderQuoteApprovalDecisionProposalRegister:
         proposal = self._proposals.get(decision_proposal_id)
         if proposal is None:
             return None
-        return dict(proposal)
+        return copy.deepcopy(proposal)
