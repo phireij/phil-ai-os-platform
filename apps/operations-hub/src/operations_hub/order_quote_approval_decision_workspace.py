@@ -80,6 +80,7 @@ def build_order_quote_approval_decision_workspace(
             )
 
         correlation_id = request.get("lifecycle_correlation_id")
+        source_draft_id = request.get("source_draft_id")
         recommendations: list[str] = []
         proposal_ids: list[str] = []
         for proposal in proposals:
@@ -101,6 +102,10 @@ def build_order_quote_approval_decision_workspace(
             if not isinstance(proposal_detail, dict):
                 raise OrderQuoteApprovalDecisionWorkspaceError(
                     "decision proposal detail is unavailable"
+                )
+            if proposal_detail.get("source_draft_id") != source_draft_id:
+                raise OrderQuoteApprovalDecisionWorkspaceError(
+                    "decision proposal source_draft_id does not match approval request"
                 )
             proposal_pricing = proposal_detail.get("pricing")
             if not isinstance(proposal_pricing, dict):
@@ -131,7 +136,7 @@ def build_order_quote_approval_decision_workspace(
         rows.append({
             "approval_request_id": request_id,
             "lifecycle_correlation_id": correlation_id,
-            "source_draft_id": request.get("source_draft_id"),
+            "source_draft_id": source_draft_id,
             "approval_state": request.get("state"),
             "quote_amount": request.get("quote_amount"),
             "shipping_amount": request.get("shipping_amount"),
