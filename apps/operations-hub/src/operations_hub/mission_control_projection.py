@@ -33,7 +33,69 @@ def _validated_count_map(value: Any, label: str) -> dict[str, int]:
     return dict(sorted(result.items()))
 
 
-def _attention_items(operations: dict[str, int], lifecycles: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _project_recovery(recovery_read_model: dict[str, Any] | None) -> dict[str, Any]:
+    if recovery_read_model is None:
+        return {
+            "plan_count": 0,
+            "duplicate_plans": 0,
+            "retry_simulation_count": 0,
+            "stop_for_review_count": 0,
+            "error_code_counts": {},
+            "read_only": True,
+            "automatic_retry": False,
+            "retry_authorized": False,
+            "automatic_rollback": False,
+            "rollback_authorized": False,
+            "execution_authorized": False,
+            "mutation_authorized": False,
+            "authority_effect": "none",
+        }
+    if not isinstance(recovery_read_model, dict) or recovery_read_model.get("status") != "read_only":
+        raise MissionControlProjectionError("recovery read model must remain read_only")
+    if recovery_read_model.get("authority_effect") != "none":
+        raise MissionControlProjectionError("recovery authority_effect must remain none")
+    _require_false(
+        recovery_read_model,
+        (
+            "automatic_retry",
+            "retry_authorized",
+            "automatic_rollback",
+            "rollback_authorized",
+            "execution_authorized",
+            "mutation_authorized",
+        ),
+        "recovery",
+    )
+    return {
+        "plan_count": _validated_count(recovery_read_model.get("plan_count", 0), "recovery plan_count"),
+        "duplicate_plans": _validated_count(
+            recovery_read_model.get("duplicate_plans", 0), "recovery duplicate_plans"
+        ),
+        "retry_simulation_count": _validated_count(
+            recovery_read_model.get("retry_simulation_count", 0), "recovery retry_simulation_count"
+        ),
+        "stop_for_review_count": _validated_count(
+            recovery_read_model.get("stop_for_review_count", 0), "recovery stop_for_review_count"
+        ),
+        "error_code_counts": _validated_count_map(
+            recovery_read_model.get("error_code_counts", {}), "recovery error_code_counts"
+        ),
+        "read_only": True,
+        "automatic_retry": False,
+        "retry_authorized": False,
+        "automatic_rollback": False,
+        "rollback_authorized": False,
+        "execution_authorized": False,
+        "mutation_authorized": False,
+        "authority_effect": "none",
+    }
+
+
+def _attention_items(
+    operations: dict[str, int],
+    lifecycles: list[dict[str, Any]],
+    recovery: dict[str, Any],
+) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     for key, label, priority in (
         ("tasks_awaiting_approval", "Tasks awaiting approval", "high"),
@@ -44,6 +106,17 @@ def _attention_items(operations: dict[str, int], lifecycles: list[dict[str, Any]
         count = _validated_count(operations.get(key, 0), f"operations {key}")
         if count:
             items.append({"kind": key, "label": label, "count": count, "priority": priority})
+
+    stop_for_review = recovery["stop_for_review_count"]
+    if stop_for_review:
+        items.append(
+            {
+                "kind": "recovery_stop_for_review",
+                "label": "Recovery items stopped for review",
+                "count": stop_for_review,
+                "priority": "high",
+            }
+        )
 
     failure_count = sum(
         1
@@ -66,8 +139,9 @@ def _attention_items(operations: dict[str, int], lifecycles: list[dict[str, Any]
 def build_mission_control_lifecycle_projection(
     operations_dashboard: dict[str, Any],
     automation_audit: dict[str, Any],
+    recovery_read_model: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Project bounded lifecycle/result status for read-only Mission Control consumption."""
+    """Project bounded lifecycle/result/recovery status for read-only Mission Control consumption."""
     if not isinstance(operations_dashboard, dict) or operations_dashboard.get("status") != "read_only":
         raise MissionControlProjectionError("operations dashboard must remain read_only")
     _require_false(
@@ -168,11 +242,12 @@ def build_mission_control_lifecycle_projection(
         "customer_payloads_exposed": False,
         "normalized_intent_exposed": False,
     }
-    attention = _attention_items(operations, lifecycles)
+    recovery = _project_recovery(recovery_read_model)
+    attention = _attention_items(operations, lifecycles, recovery)
 
     return {
         "schema": "phil-ai-os-mission-control-lifecycle-projection",
-        "version": 3,
+        "version": 4,
         "status": "read_only",
         "mission_control_mode": "read_only",
         "control_plane": {
@@ -186,6 +261,7 @@ def build_mission_control_lifecycle_projection(
         },
         "operations": operations,
         "task_composition": task_composition,
+        "recovery": recovery,
         "attention": {
             "count": sum(item["count"] for item in attention),
             "items": attention,
