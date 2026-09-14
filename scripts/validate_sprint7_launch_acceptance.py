@@ -49,6 +49,7 @@ def main() -> None:
     require(branch_policy.get("target_branch") == "main", "branch-protection policy target drift")
     require(branch_policy.get("required_enforcement") == "active", "branch-protection enforcement target drift")
     require(branch_policy.get("production_authority_effect") == "none", "branch-protection policy expanded authority")
+    require(branch_policy.get("launch_gate") is True, "branch-protection policy lost launch-gate status")
     required_rule_types = set(branch_policy.get("required_rule_types") or [])
     require(
         {"deletion", "non_fast_forward", "pull_request", "required_status_checks"}.issubset(required_rule_types),
@@ -58,6 +59,25 @@ def main() -> None:
         set(branch_policy.get("required_status_check_contexts") or [])
         == {"integrated-contract-regression", "isolated-runtime-smoke"},
         "branch-protection required status contexts drift",
+    )
+    pull_request_policy = branch_policy.get("pull_request")
+    require(isinstance(pull_request_policy, dict), "branch-protection pull-request policy missing")
+    minimum_approvals = pull_request_policy.get("minimum_approving_review_count")
+    require(
+        isinstance(minimum_approvals, int) and minimum_approvals >= 0,
+        "branch-protection minimum approving review count invalid",
+    )
+    require(
+        isinstance(pull_request_policy.get("require_code_owner_review"), bool),
+        "branch-protection code-owner review policy invalid",
+    )
+    require(
+        isinstance(pull_request_policy.get("require_last_push_approval"), bool),
+        "branch-protection last-push approval policy invalid",
+    )
+    require(
+        pull_request_policy.get("required_review_thread_resolution") is True,
+        "branch-protection policy must require review-thread resolution",
     )
 
     props = mc_schema.get("properties") or {}
