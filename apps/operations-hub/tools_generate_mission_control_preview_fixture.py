@@ -18,7 +18,14 @@ def build_source_models() -> tuple[dict, dict]:
     operations_dashboard = {
         "status": "read_only",
         "channels": {"total_events": 5},
-        "tasks": {"task_count": 5, "awaiting_approval": 2},
+        "tasks": {
+            "task_count": 5,
+            "duplicate_tasks": 1,
+            "awaiting_approval": 2,
+            "ready_for_operator_review": 3,
+            "source_counts": {"facebook": 2, "instagram": 1, "telegram": 1, "whatsapp": 1},
+            "task_type_counts": {"customer_message_review": 2, "order_intent_review": 3},
+        },
         "orders": {"pending_staff_review": 1},
         "quotes": {"pending_approval": 1},
         "owner_review": {"pending_packets": 2},
@@ -88,7 +95,7 @@ def main() -> None:
         current = OUT.read_text(encoding="utf-8")
         if current != generated:
             raise SystemExit("PHIL_AI_OS_MISSION_CONTROL_FIXTURE_DRIFT: regenerate fixture before merging")
-        print("PHIL_AI_OS_MISSION_CONTROL_FIXTURE_GREEN generated_from_projection=true authority_effect=none")
+        print("PHIL_AI_OS_MISSION_CONTROL_FIXTURE_GREEN generated_from_projection=true task_composition=read_only authority_effect=none")
         return
 
     OUT.write_text(generated, encoding="utf-8")
