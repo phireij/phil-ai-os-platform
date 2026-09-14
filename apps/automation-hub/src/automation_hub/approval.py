@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+import hashlib
+import json
 from typing import Any
 
 
@@ -16,6 +18,7 @@ class ApprovalReplayError(ApprovalSimulationError):
 @dataclass
 class _ApprovalRecord:
     state: str
+    plan_fingerprint: str
     decision_id: str | None = None
 
 
@@ -26,12 +29,16 @@ class ApprovalSimulationStore:
     def register_plan(self, plan: dict[str, Any]) -> dict[str, Any]:
         _validate_plan_boundary(plan)
         plan_id = _require_plan_id(plan)
+        fingerprint = _plan_fingerprint(plan)
         state = "required" if plan.get("approval_required") is True else "not_required"
         current = self._records.get(plan_id)
         if current is None:
-            self._records[plan_id] = _ApprovalRecord(state=state)
-        elif current.state != state:
-            raise ApprovalSimulationError("plan approval requirement changed after registration")
+            self._records[plan_id] = _ApprovalRecord(state=state, plan_fingerprint=fingerprint)
+        else:
+            if current.plan_fingerprint != fingerprint:
+                raise ApprovalSimulationError("plan content changed after registration")
+            if current.state != state:
+                raise ApprovalSimulationError("plan approval requirement changed after registration")
         return self.read(plan_id)
 
     def decide(self, plan_id: str, decision: str, decision_id: str) -> dict[str, Any]:
@@ -56,6 +63,8 @@ class ApprovalSimulationStore:
         record = self._records.get(plan_id)
         if record is None:
             raise ApprovalSimulationError("plan is not registered")
+        if record.plan_fingerprint != _plan_fingerprint(plan):
+            raise ApprovalSimulationError("plan content changed after registration")
         if record.state == "required":
             raise ApprovalSimulationError("approval is still required")
         if record.state == "denied":
@@ -86,7 +95,7 @@ class ApprovalSimulationStore:
         }
 
     def read_model(self) -> dict[str, Any]:
-        """Return aggregate approval posture without exposing decision identifiers."""
+        """Return aggregate approval posture without exposing decision identifiers or plan fingerprints."""
         counts = Counter(record.state for record in self._records.values())
         decision_count = sum(record.decision_id is not None for record in self._records.values())
         return {
@@ -101,6 +110,7 @@ class ApprovalSimulationStore:
                 for state in ("required", "approved", "denied", "not_required")
             },
             "decision_ids_exposed": False,
+            "plan_fingerprints_exposed": False,
             "automatic_execution": False,
             "execution_authorized": False,
             "channel_reply_authorized": False,
@@ -116,7 +126,17 @@ def _require_plan_id(plan: dict[str, Any]) -> str:
     return plan_id
 
 
+def _plan_fingerprint(plan: dict[str, Any]) -> str:
+    try:
+        encoded = json.dumps(plan, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise ApprovalSimulationError("plan must be JSON-serializable") from exc
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _validate_plan_boundary(plan: dict[str, Any]) -> None:
+    if not isinstance(plan, dict):
+        raise ApprovalSimulationError("plan must be an object")
     if plan.get("authority_effect") != "none":
         raise ApprovalSimulationError("plan authority_effect must be none")
     for field in ("automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized"):
