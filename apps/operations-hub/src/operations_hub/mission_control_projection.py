@@ -123,18 +123,31 @@ def _project_approval(approval_read_model: dict[str, Any] | None) -> dict[str, A
         ),
         "approval",
     )
+    plan_count = _validated_count(approval_read_model.get("plan_count", 0), "approval plan_count")
+    decision_count = _validated_count(approval_read_model.get("decision_count", 0), "approval decision_count")
+    awaiting_decision = _validated_count(
+        approval_read_model.get("awaiting_decision", 0), "approval awaiting_decision"
+    )
+    simulation_releasable = _validated_count(
+        approval_read_model.get("simulation_releasable", 0), "approval simulation_releasable"
+    )
+    by_state = _validated_count_map(approval_read_model.get("by_state", {}), "approval by_state")
+    if set(by_state) != {"required", "approved", "denied", "not_required"}:
+        raise MissionControlProjectionError("approval by_state must contain each known state")
+    if sum(by_state.values()) != plan_count:
+        raise MissionControlProjectionError("approval plan_count must match approval by_state")
+    if decision_count != by_state.get("approved", 0) + by_state.get("denied", 0):
+        raise MissionControlProjectionError("approval decision_count must match approval by_state")
+    if awaiting_decision != by_state.get("required", 0):
+        raise MissionControlProjectionError("approval awaiting_decision must match approval by_state")
+    if simulation_releasable != by_state.get("approved", 0) + by_state.get("not_required", 0):
+        raise MissionControlProjectionError("approval simulation_releasable must match approval by_state")
     return {
-        "plan_count": _validated_count(approval_read_model.get("plan_count", 0), "approval plan_count"),
-        "decision_count": _validated_count(
-            approval_read_model.get("decision_count", 0), "approval decision_count"
-        ),
-        "awaiting_decision": _validated_count(
-            approval_read_model.get("awaiting_decision", 0), "approval awaiting_decision"
-        ),
-        "simulation_releasable": _validated_count(
-            approval_read_model.get("simulation_releasable", 0), "approval simulation_releasable"
-        ),
-        "by_state": _validated_count_map(approval_read_model.get("by_state", {}), "approval by_state"),
+        "plan_count": plan_count,
+        "decision_count": decision_count,
+        "awaiting_decision": awaiting_decision,
+        "simulation_releasable": simulation_releasable,
+        "by_state": by_state,
         "read_only": True,
         "decision_ids_exposed": False,
         "automatic_execution": False,

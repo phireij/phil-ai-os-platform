@@ -271,6 +271,29 @@ class MissionControlProjectionTests(unittest.TestCase):
         with self.assertRaisesRegex(MissionControlProjectionError, "decision identifiers"):
             build_mission_control_lifecycle_projection(operations_dashboard(), audit_model(), None, approval)
 
+    def test_rejects_approval_aggregate_metadata_that_does_not_match_states(self):
+        for field, value, message in (
+            ("plan_count", 4, "plan_count must match"),
+            ("decision_count", 1, "decision_count must match"),
+            ("awaiting_decision", 0, "awaiting_decision must match"),
+            ("simulation_releasable", 2, "simulation_releasable must match"),
+        ):
+            with self.subTest(field=field):
+                approval = approval_model()
+                approval[field] = value
+                with self.assertRaisesRegex(MissionControlProjectionError, message):
+                    build_mission_control_lifecycle_projection(operations_dashboard(), audit_model(), None, approval)
+
+    def test_rejects_incomplete_or_unknown_approval_states(self):
+        approval = approval_model()
+        approval["by_state"]["unexpected"] = 0
+        with self.assertRaisesRegex(MissionControlProjectionError, "each known state"):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit_model(), None, approval)
+        approval = approval_model()
+        del approval["by_state"]["denied"]
+        with self.assertRaisesRegex(MissionControlProjectionError, "each known state"):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit_model(), None, approval)
+
     def test_rejects_non_read_only_inputs(self):
         dashboard = operations_dashboard()
         dashboard["status"] = "mutable"
