@@ -86,6 +86,25 @@ class OrderQuoteDraftTests(unittest.TestCase):
         )
         self.assertEqual(first["draft_id"], second["draft_id"])
 
+    def test_source_mutation_does_not_change_built_request_context(self):
+        source = preparation()
+        draft = build_order_quote_draft(
+            source, quote_amount=5000, shipping_amount=0, total_amount=5000, prepared_by="staff:ruby"
+        )
+        draft_id = draft["draft_id"]
+        source_fingerprint = draft["source_fingerprint"]
+
+        source["request_context"]["customization"]["reference_images"][0]["name"] = "mutated.jpg"
+        source["request_context"]["customization"]["addons"].append("message-plaque")
+
+        self.assertEqual(
+            draft["request_context"]["customization"]["reference_images"][0]["name"],
+            "reference.jpg",
+        )
+        self.assertEqual(draft["request_context"]["customization"]["addons"], ["candles"])
+        self.assertEqual(draft["draft_id"], draft_id)
+        self.assertEqual(draft["source_fingerprint"], source_fingerprint)
+
     def test_rejects_total_that_does_not_reconcile(self):
         with self.assertRaisesRegex(OrderQuoteDraftError, "total_amount must equal"):
             build_order_quote_draft(
