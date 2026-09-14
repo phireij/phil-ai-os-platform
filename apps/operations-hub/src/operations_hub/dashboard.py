@@ -41,6 +41,14 @@ def _validated_count_map(value: Any, label: str) -> dict[str, int]:
     return dict(sorted(result.items()))
 
 
+def _validated_items(value: Any, label: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise OperationsDashboardError(f"{label} items must be a list")
+    if any(not isinstance(item, dict) for item in value):
+        raise OperationsDashboardError(f"{label} items must contain objects")
+    return value
+
+
 def build_operations_dashboard(
     channel_queue: OperationsQueue,
     order_review_queue: OrderReviewQueue,
@@ -100,6 +108,41 @@ def build_operations_dashboard(
     if sum(channel_intent_counts.values()) != channel_total_events:
         raise OperationsDashboardError("channel intent_counts must match channel total_events")
 
+    order_items = _validated_items(orders.get("items"), "order review")
+    order_pending_review = _validated_count(orders.get("pending_review", 0), "order pending_review")
+    order_duplicate_handoffs = _validated_count(orders.get("duplicate_handoffs", 0), "order duplicate_handoffs")
+    if order_pending_review != len(order_items):
+        raise OperationsDashboardError("order pending_review must match order review items")
+
+    approval_items = _validated_items(approvals.get("items"), "approval")
+    pending_approval_count = _validated_count(
+        approvals.get("pending_approval_count", 0), "approval pending_approval_count"
+    )
+    duplicate_approval_requests = _validated_count(
+        approvals.get("duplicate_requests", 0), "approval duplicate_requests"
+    )
+    if pending_approval_count != len(approval_items):
+        raise OperationsDashboardError("approval pending_approval_count must match approval items")
+
+    recommendation_items = _validated_items(recommendations.get("items"), "recommendation")
+    recommendation_proposal_count = _validated_count(
+        recommendations.get("proposal_count", 0), "recommendation proposal_count"
+    )
+    duplicate_recommendations = _validated_count(
+        recommendations.get("duplicate_proposals", 0), "recommendation duplicate_proposals"
+    )
+    if recommendation_proposal_count != len(recommendation_items):
+        raise OperationsDashboardError("recommendation proposal_count must match recommendation items")
+
+    owner_packet_items = _validated_items(owner_packets.get("items"), "owner packet")
+    owner_packet_count = _validated_count(owner_packets.get("packet_count", 0), "owner packet_count")
+    duplicate_owner_packets = _validated_count(owner_packets.get("duplicate_packets", 0), "owner duplicate_packets")
+    if owner_packet_count != len(owner_packet_items):
+        raise OperationsDashboardError("owner packet_count must match owner packet items")
+    owner_decision_pending = owner_packets.get("owner_decision_pending")
+    if owner_decision_pending is not bool(owner_packet_items):
+        raise OperationsDashboardError("owner_decision_pending must match owner packet items")
+
     return {
         "status": "read_only",
         "dashboard": "operations_hub_workload",
@@ -120,19 +163,19 @@ def build_operations_dashboard(
             "source_counts": dict(tasks.get("source_counts", {})),
         },
         "orders": {
-            "pending_staff_review": orders.get("pending_review", 0),
-            "duplicate_handoffs": orders.get("duplicate_handoffs", 0),
+            "pending_staff_review": order_pending_review,
+            "duplicate_handoffs": order_duplicate_handoffs,
         },
         "quotes": {
-            "pending_approval": approvals.get("pending_approval_count", 0),
-            "duplicate_approval_requests": approvals.get("duplicate_requests", 0),
-            "recommendation_proposals": recommendations.get("proposal_count", 0),
-            "duplicate_recommendations": recommendations.get("duplicate_proposals", 0),
+            "pending_approval": pending_approval_count,
+            "duplicate_approval_requests": duplicate_approval_requests,
+            "recommendation_proposals": recommendation_proposal_count,
+            "duplicate_recommendations": duplicate_recommendations,
         },
         "owner_review": {
-            "pending_packets": owner_packets.get("packet_count", 0),
-            "duplicate_packets": owner_packets.get("duplicate_packets", 0),
-            "owner_decision_pending": owner_packets.get("owner_decision_pending") is True,
+            "pending_packets": owner_packet_count,
+            "duplicate_packets": duplicate_owner_packets,
+            "owner_decision_pending": owner_decision_pending,
         },
         "privacy": {
             "raw_customer_text_exposed": False,
