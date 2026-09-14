@@ -90,6 +90,25 @@ class AutomationAuditTests(unittest.TestCase):
         with self.assertRaises(AutomationAuditError):
             InMemoryAutomationAudit().record_boundary_request(plan, request)
 
+    def test_noncanonical_request_id_fails_closed(self):
+        plan, _, request = build_flow("instagram")
+        request["request_id"] = "dry-run:tampered"
+        with self.assertRaisesRegex(AutomationAuditError, "request_id"):
+            InMemoryAutomationAudit().record_boundary_request(plan, request)
+
+    def test_tampered_boundary_semantics_fail_closed(self):
+        plan, _, request = build_flow("instagram")
+        for field, value in (
+            ("target", "other_boundary"),
+            ("operation", "other_operation"),
+            ("task_class", "specialist"),
+            ("assigned_agent", "other-agent"),
+        ):
+            changed = json.loads(json.dumps(request))
+            changed[field] = value
+            with self.assertRaises(AutomationAuditError):
+                InMemoryAutomationAudit().record_boundary_request(plan, changed)
+
     def test_non_dry_run_request_fails_closed(self):
         plan, _, request = build_flow("instagram")
         request["dry_run"] = False

@@ -112,6 +112,11 @@ def _plan_fingerprint(plan: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _expected_request_id(plan: dict[str, Any]) -> str:
+    material = f"{plan['plan_id']}|{plan['lifecycle_correlation_id']}|dry-run".encode("utf-8")
+    return "dry-run:" + hashlib.sha256(material).hexdigest()[:24]
+
+
 def _validate_plan(plan: dict[str, Any]) -> None:
     if not isinstance(plan, dict):
         raise AutomationAuditError("plan must be an object")
@@ -126,12 +131,22 @@ def _validate_plan(plan: dict[str, Any]) -> None:
 
 
 def _validate_request(plan: dict[str, Any], request: dict[str, Any]) -> None:
+    if not isinstance(request, dict):
+        raise AutomationAuditError("request must be an object")
     if request.get("plan_id") != plan.get("plan_id") or request.get("lifecycle_correlation_id") != plan.get("lifecycle_correlation_id"):
         raise AutomationAuditError("request does not match plan")
+    if request.get("request_id") != _expected_request_id(plan):
+        raise AutomationAuditError("request_id does not match canonical boundary request")
+    if request.get("target") != "execution_boundary" or request.get("operation") != "preview_request":
+        raise AutomationAuditError("request boundary target or operation is invalid")
+    if request.get("task_class") != "general" or request.get("assigned_agent") != "hermes":
+        raise AutomationAuditError("request routing is outside bounded baseline")
     if request.get("mode") != "dry_run" or request.get("dry_run") is not True:
         raise AutomationAuditError("only dry-run requests may be audited here")
     if request.get("dispatch") is not False or request.get("network_call") is not False:
         raise AutomationAuditError("request may not dispatch or call network")
+    if request.get("authority_effect") != "none":
+        raise AutomationAuditError("request authority_effect must remain none")
     for field in ("automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized"):
         if request.get(field) is not False:
             raise AutomationAuditError(f"request {field} must remain false")
