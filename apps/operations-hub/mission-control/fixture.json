@@ -1,6 +1,6 @@
 {
   "schema": "phil-ai-os-mission-control-lifecycle-projection",
-  "version": 4,
+  "version": 5,
   "status": "read_only",
   "mission_control_mode": "read_only",
   "control_plane": {
@@ -37,6 +37,25 @@
     "customer_payloads_exposed": false,
     "normalized_intent_exposed": false
   },
+  "approval": {
+    "plan_count": 5,
+    "decision_count": 2,
+    "awaiting_decision": 1,
+    "simulation_releasable": 3,
+    "by_state": {
+      "approved": 1,
+      "denied": 1,
+      "not_required": 2,
+      "required": 1
+    },
+    "read_only": true,
+    "decision_ids_exposed": false,
+    "automatic_execution": false,
+    "execution_authorized": false,
+    "channel_reply_authorized": false,
+    "mutation_authorized": false,
+    "authority_effect": "none"
+  },
   "recovery": {
     "plan_count": 2,
     "duplicate_plans": 0,
@@ -56,7 +75,7 @@
     "authority_effect": "none"
   },
   "attention": {
-    "count": 7,
+    "count": 8,
     "items": [
       {
         "kind": "tasks_awaiting_approval",
@@ -81,6 +100,12 @@
         "label": "Owner review packets",
         "count": 2,
         "priority": "medium"
+      },
+      {
+        "kind": "automation_approval_awaiting_decision",
+        "label": "Automation approvals awaiting decision",
+        "count": 1,
+        "priority": "high"
       },
       {
         "kind": "recovery_stop_for_review",
@@ -124,7 +149,8 @@
     "raw_customer_text_exposed": false,
     "custom_notes_exposed": false,
     "reference_image_names_exposed": false,
-    "reply_draft_text_exposed": false
+    "reply_draft_text_exposed": false,
+    "approval_decision_ids_exposed": false
   },
   "execution_authorized": false,
   "channel_reply_authorized": false,
