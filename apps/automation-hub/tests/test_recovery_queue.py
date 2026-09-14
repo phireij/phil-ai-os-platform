@@ -49,6 +49,7 @@ class RecoveryPlanQueueTests(unittest.TestCase):
         self.assertEqual(2, model["plan_count"])
         self.assertEqual(1, model["retry_simulation_count"])
         self.assertEqual(1, model["stop_for_review_count"])
+        self.assertFalse(model["plan_fingerprints_exposed"])
         self.assertFalse(model["automatic_retry"])
         self.assertFalse(model["retry_authorized"])
         self.assertFalse(model["automatic_rollback"])
@@ -66,14 +67,28 @@ class RecoveryPlanQueueTests(unittest.TestCase):
         self.assertTrue(second["duplicate"])
         self.assertEqual(1, queue.read_model()["duplicate_plans"])
 
-    def test_read_model_does_not_expose_request_payload(self):
+    def test_conflicting_duplicate_recovery_id_fails_closed(self):
+        queue = RecoveryPlanQueue()
+        plan = build_plan("telegram", retryable=True, attempt=1)
+        queue.ingest(plan)
+        changed = json.loads(json.dumps(plan))
+        changed["lifecycle_correlation_id"] = "tampered-correlation"
+        self.assertEqual(plan["recovery_id"], changed["recovery_id"])
+        with self.assertRaisesRegex(RecoveryPlanError, "content changed"):
+            queue.ingest(changed)
+        self.assertEqual(0, queue.read_model()["duplicate_plans"])
+
+    def test_read_model_does_not_expose_request_payload_or_fingerprint(self):
         queue = RecoveryPlanQueue()
         queue.ingest(build_plan("instagram", retryable=True, attempt=1))
-        serialized = json.dumps(queue.read_model(), ensure_ascii=False)
+        model = queue.read_model()
+        serialized = json.dumps(model, ensure_ascii=False)
         self.assertNotIn("customer_context", serialized)
         self.assertNotIn("request_payload", serialized)
         self.assertNotIn("dispatch", serialized)
         self.assertNotIn("network_call", serialized)
+        self.assertFalse(model["plan_fingerprints_exposed"])
+        self.assertNotIn('"plan_fingerprint":', serialized)
 
     def test_retry_limit_routes_to_review(self):
         queue = RecoveryPlanQueue()
