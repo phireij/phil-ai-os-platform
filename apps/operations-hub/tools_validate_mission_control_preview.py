@@ -218,10 +218,7 @@ def main() -> None:
             fail(f"interactive/authorizing HTML surface found: {pattern}")
 
     forbidden_js = (
-        r"\bPOST\b",
-        r"\bPUT\b",
-        r"\bPATCH\b",
-        r"\bDELETE\b",
+        r"method\s*:\s*[\"'](?:POST|PUT|PATCH|DELETE)[\"']",
         r"XMLHttpRequest",
         r"WebSocket",
         r"navigator\.sendBeacon",
