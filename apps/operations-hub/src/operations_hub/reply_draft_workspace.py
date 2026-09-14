@@ -40,6 +40,10 @@ def build_reply_draft_workspace(
             raise ReplyDraftWorkspaceError("reply draft/task lifecycle correlation mismatch")
         if item.get("source") != task.get("source"):
             raise ReplyDraftWorkspaceError("reply draft/task source mismatch")
+        if item.get("task_type") != task.get("task_type"):
+            raise ReplyDraftWorkspaceError("reply draft/task task_type mismatch")
+        if item.get("normalized_intent") != task.get("normalized_intent"):
+            raise ReplyDraftWorkspaceError("reply draft/task normalized_intent mismatch")
         if item.get("state") != "awaiting_operator_approval":
             raise ReplyDraftWorkspaceError("reply draft must remain awaiting_operator_approval")
 
