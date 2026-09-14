@@ -68,6 +68,37 @@ class OrderQuoteApprovalRequestRegisterTests(unittest.TestCase):
         self.assertTrue(duplicate["duplicate"])
         self.assertEqual(register.read_model()["duplicate_requests"], 1)
 
+    def test_conflicting_duplicate_request_id_fails_closed(self):
+        register = OrderQuoteApprovalRequestRegister()
+        register.register(approval_request())
+        changed = approval_request()
+        changed["reason"] = "Different review reason"
+        with self.assertRaisesRegex(OrderQuoteApprovalRequestError, "content changed"):
+            register.register(changed)
+        self.assertEqual(register.read_model()["duplicate_requests"], 0)
+
+    def test_registration_deep_copies_nested_request_state(self):
+        register = OrderQuoteApprovalRequestRegister()
+        payload = approval_request()
+        register.register(payload)
+        payload["pricing"]["total_amount"] = 999999
+        payload["authority"]["quote_authorized"] = True
+        model = register.read_model()
+        self.assertEqual(model["items"][0]["total_amount"], 5800)
+        detail = register.request_detail(payload["approval_request_id"])
+        self.assertEqual(detail["pricing"]["total_amount"], 5800)
+        self.assertFalse(detail["authority"]["quote_authorized"])
+
+    def test_detail_nested_mutation_does_not_change_register(self):
+        register = OrderQuoteApprovalRequestRegister()
+        register.register(approval_request())
+        detail = register.request_detail("quote-approval:0123456789abcdefghijklmn")
+        detail["pricing"]["total_amount"] = 1
+        detail["authority"]["quote_authorized"] = True
+        fresh = register.request_detail("quote-approval:0123456789abcdefghijklmn")
+        self.assertEqual(fresh["pricing"]["total_amount"], 5800)
+        self.assertFalse(fresh["authority"]["quote_authorized"])
+
     def test_rejects_predecided_approval(self):
         payload = copy.deepcopy(approval_request())
         payload["approval"]["decision"] = "approved"
