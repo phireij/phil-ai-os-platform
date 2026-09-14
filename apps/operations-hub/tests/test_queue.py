@@ -1,3 +1,4 @@
+import copy
 import json
 import sys
 import unittest
@@ -35,6 +36,34 @@ class OperationsQueueTests(unittest.TestCase):
         view = queue.read_model()
         self.assertEqual(1, view["total_events"])
         self.assertEqual(1, view["duplicate_events"])
+
+    def test_conflicting_event_content_under_same_idempotency_key_fails_closed(self):
+        queue = OperationsQueue()
+        first_payload = load_fixture("facebook")
+        first = normalize_channel_event(first_payload)
+        queue.ingest(first)
+
+        second_payload = copy.deepcopy(first_payload)
+        second_payload["text"] = "Different customer message"
+        second = normalize_channel_event(second_payload)
+        self.assertEqual(first["idempotency_key"], second["idempotency_key"])
+        with self.assertRaisesRegex(NormalizationError, "conflicts with different event content"):
+            queue.ingest(second)
+        self.assertEqual(0, queue.read_model()["duplicate_events"])
+
+    def test_queue_copies_ingested_event_state(self):
+        queue = OperationsQueue()
+        event = normalize_channel_event(load_fixture("instagram"))
+        original_intent = event["normalized_intent"]
+        queue.ingest(event)
+        event["normalized_intent"] = "complaint"
+        event["review_required"] = True
+        event["mutation_authorized"] = True
+
+        view = queue.read_model()
+        self.assertEqual(original_intent, view["items"][0]["normalized_intent"])
+        self.assertFalse(view["items"][0]["review_required"])
+        self.assertFalse(view["items"][0]["mutation_authorized"])
 
     def test_public_review_appears_in_review_queue_count(self):
         queue = OperationsQueue()
