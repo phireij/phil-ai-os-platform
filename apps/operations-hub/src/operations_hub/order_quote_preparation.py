@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from typing import Any
@@ -83,7 +84,7 @@ def build_order_quote_preparation(
             "customization": {
                 "cake_type": customization.get("cake_type"),
                 "custom_notes": customization.get("custom_notes", ""),
-                "reference_images": list(customization.get("reference_images", [])),
+                "reference_images": copy.deepcopy(customization.get("reference_images", [])),
                 "reference_image_count": customization.get("reference_image_count", 0),
                 "photo_topper": customization.get("photo_topper") is True,
                 "edible_topper": customization.get("edible_topper") is True,

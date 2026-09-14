@@ -73,6 +73,20 @@ class OrderQuotePreparationTests(unittest.TestCase):
         self.assertFalse(first["authority"]["payment_execution_authorized"])
         self.assertFalse(first["authority"]["mutation_authorized"])
 
+    def test_source_mutation_does_not_change_built_reference_metadata(self):
+        review = review_detail()
+        proposal = accepted_proposal(review)
+        packet = build_order_quote_preparation(review, proposal)
+        fingerprint = packet["source_fingerprint"]
+
+        review["entities"]["customization"]["reference_images"][0]["name"] = "mutated.jpg"
+
+        self.assertEqual(
+            packet["request_context"]["customization"]["reference_images"][0]["name"],
+            "reference.jpg",
+        )
+        self.assertEqual(packet["source_fingerprint"], fingerprint)
+
     def test_rejects_revision_or_decline_proposals(self):
         review = review_detail()
         for decision in ("request_customer_revision", "decline_request"):
