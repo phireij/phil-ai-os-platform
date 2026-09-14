@@ -51,36 +51,63 @@ function renderMetrics(data) {
   }));
 }
 
+function renderCountList(target, values, emptyLabel) {
+  const entries = Object.entries(values ?? {});
+  if (!entries.length) {
+    const empty = document.createElement("p");
+    empty.className = "load-state";
+    empty.textContent = emptyLabel;
+    target.replaceChildren(empty);
+    return;
+  }
+  target.replaceChildren(...entries.map(([label, count]) => {
+    const row = document.createElement("div");
+    row.className = "safety-row";
+    const dt = document.createElement("dt");
+    dt.textContent = pretty(label);
+    const dd = document.createElement("dd");
+    dd.className = "off";
+    dd.textContent = text(count);
+    row.append(dt, dd);
+    return row;
+  }));
+}
+
 function renderTaskComposition(data) {
-  const sourceList = document.querySelector("#task-source-list");
-  const typeList = document.querySelector("#task-type-list");
   const composition = data.task_composition ?? {};
-
-  const renderCounts = (target, values, emptyLabel) => {
-    const entries = Object.entries(values ?? {});
-    if (!entries.length) {
-      const empty = document.createElement("p");
-      empty.className = "load-state";
-      empty.textContent = emptyLabel;
-      target.replaceChildren(empty);
-      return;
-    }
-    target.replaceChildren(...entries.map(([label, count]) => {
-      const row = document.createElement("div");
-      row.className = "safety-row";
-      const dt = document.createElement("dt");
-      dt.textContent = pretty(label);
-      const dd = document.createElement("dd");
-      dd.className = "off";
-      dd.textContent = text(count);
-      row.append(dt, dd);
-      return row;
-    }));
-  };
-
-  renderCounts(sourceList, composition.by_source, "No task-source counts in this projection.");
-  renderCounts(typeList, composition.by_type, "No task-type counts in this projection.");
+  renderCountList(document.querySelector("#task-source-list"), composition.by_source, "No task-source counts in this projection.");
+  renderCountList(document.querySelector("#task-type-list"), composition.by_type, "No task-type counts in this projection.");
   document.querySelector("#task-duplicate-chip").textContent = `${composition.duplicate_tasks ?? 0} duplicate${composition.duplicate_tasks === 1 ? "" : "s"}`;
+}
+
+function renderRecovery(data) {
+  const recovery = data.recovery ?? {};
+  const list = document.querySelector("#recovery-list");
+  const rows = [
+    ["Recovery plans", recovery.plan_count],
+    ["Retry simulation candidates", recovery.retry_simulation_count],
+    ["Stopped for review", recovery.stop_for_review_count],
+    ["Duplicate plans", recovery.duplicate_plans],
+  ];
+  list.replaceChildren(...rows.map(([label, value]) => {
+    const row = document.createElement("div");
+    row.className = "safety-row";
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.className = "off";
+    dd.textContent = text(value ?? 0);
+    row.append(dt, dd);
+    return row;
+  }));
+  renderCountList(
+    document.querySelector("#recovery-error-list"),
+    recovery.error_code_counts,
+    "No simulated recovery error codes in this projection."
+  );
+  document.querySelector("#recovery-chip").textContent = recovery.stop_for_review_count
+    ? `${recovery.stop_for_review_count} needs review`
+    : "clear";
 }
 
 function renderAttention(data) {
@@ -213,7 +240,7 @@ function renderPrivacy(data) {
 
 function assertReadOnly(data) {
   if (data.schema !== "phil-ai-os-mission-control-lifecycle-projection") throw new Error("Unexpected projection schema");
-  if (data.version !== 3) throw new Error("Unsupported Mission Control projection version");
+  if (data.version !== 4) throw new Error("Unsupported Mission Control projection version");
   if (data.status !== "read_only" || data.mission_control_mode !== "read_only") throw new Error("Mission Control is not read-only");
   if (data.authority_effect !== "none") throw new Error("Unexpected authority effect");
   for (const [key] of safetyFields) if (data[key] !== false) throw new Error(`Unsafe authority flag: ${key}`);
@@ -223,6 +250,11 @@ function assertReadOnly(data) {
   const tasks = data.task_composition ?? {};
   if (tasks.read_only !== true || tasks.customer_payloads_exposed !== false || tasks.normalized_intent_exposed !== false) {
     throw new Error("Task composition privacy/read-only boundary invalid");
+  }
+  const recovery = data.recovery ?? {};
+  if (recovery.read_only !== true || recovery.authority_effect !== "none") throw new Error("Recovery projection must remain read-only");
+  for (const key of ["automatic_retry", "retry_authorized", "automatic_rollback", "rollback_authorized", "execution_authorized", "mutation_authorized"]) {
+    if (recovery[key] !== false) throw new Error(`Unsafe recovery flag: ${key}`);
   }
   const control = data.control_plane ?? {};
   if (control.autonomy_level !== "A0" || control.execution_task_class !== "general") throw new Error("Unexpected control-plane baseline");
@@ -242,6 +274,7 @@ async function boot() {
     assertReadOnly(data);
     renderMetrics(data);
     renderTaskComposition(data);
+    renderRecovery(data);
     renderAttention(data);
     renderControlPlane(data);
     renderLifecycles(data);
@@ -252,7 +285,7 @@ async function boot() {
     state.textContent = `${data.operations.tasks} tasks · ${data.operations.tasks_awaiting_approval} awaiting approval · ${data.operations.tasks_ready_for_operator_review} ready for review`;
   } catch (error) {
     state.textContent = `Fail-closed: ${error.message}`;
-    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#attention-list", "#control-plane-list", "#lifecycle-list", "#safety-list", "#privacy-grid"]) {
+    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#recovery-list", "#recovery-error-list", "#attention-list", "#control-plane-list", "#lifecycle-list", "#safety-list", "#privacy-grid"]) {
       document.querySelector(selector)?.replaceChildren();
     }
   }
