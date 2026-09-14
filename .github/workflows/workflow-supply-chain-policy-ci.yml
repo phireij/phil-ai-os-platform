@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -31,5 +33,23 @@ jobs:
       - name: Run validator unit tests
         run: python -m unittest tests.test_workflow_supply_chain_policy -v
 
-      - name: Enforce immutable workflow dependencies and safe triggers
-        run: python scripts/validate_workflow_supply_chain.py --root .
+      - name: Enforce full-repository workflow policy with explicit legacy pin baseline
+        run: >-
+          python scripts/validate_workflow_supply_chain.py
+          --root .
+          --allow-legacy-mutable-actions
+
+      - name: Enforce strict policy on touched workflows
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="${PR_BASE_SHA:-${PUSH_BEFORE_SHA:-}}"
+          : > /tmp/changed-workflows.txt
+          if test -n "$BASE_SHA" && ! printf '%s' "$BASE_SHA" | grep -Eq '^0+$'; then
+            git diff --name-only "$BASE_SHA" HEAD -- '.github/workflows/*.yml' '.github/workflows/*.yaml' > /tmp/changed-workflows.txt
+          fi
+          cat /tmp/changed-workflows.txt
+          python scripts/validate_workflow_supply_chain.py --root . --paths-file /tmp/changed-workflows.txt
