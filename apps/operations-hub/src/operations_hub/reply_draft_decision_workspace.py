@@ -35,6 +35,8 @@ def build_reply_draft_decision_workspace(
         draft = draft_items.get(draft_id)
         if draft is None:
             raise ReplyDraftDecisionWorkspaceError("decision proposal references an unknown reply draft")
+        if proposal.get("task_candidate_id") != draft.get("task_candidate_id"):
+            raise ReplyDraftDecisionWorkspaceError("decision proposal/reply draft task candidate mismatch")
         if proposal.get("lifecycle_correlation_id") != draft.get("lifecycle_correlation_id"):
             raise ReplyDraftDecisionWorkspaceError("decision proposal/reply draft correlation mismatch")
         if proposal.get("source") != draft.get("source"):
