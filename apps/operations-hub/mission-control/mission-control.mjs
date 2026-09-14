@@ -99,26 +99,19 @@ function renderApproval(data) {
     row.append(dt, dd);
     return row;
   }));
-  renderCountList(
-    document.querySelector("#approval-state-list"),
-    approval.by_state,
-    "No approval-state counts in this projection."
-  );
-  document.querySelector("#approval-chip").textContent = approval.awaiting_decision
-    ? `${approval.awaiting_decision} awaiting decision`
-    : "clear";
+  renderCountList(document.querySelector("#approval-state-list"), approval.by_state, "No approval-state counts in this projection.");
+  document.querySelector("#approval-chip").textContent = approval.awaiting_decision ? `${approval.awaiting_decision} awaiting decision` : "clear";
 }
 
 function renderRecovery(data) {
   const recovery = data.recovery ?? {};
-  const list = document.querySelector("#recovery-list");
   const rows = [
     ["Recovery plans", recovery.plan_count],
     ["Retry simulation candidates", recovery.retry_simulation_count],
     ["Stopped for review", recovery.stop_for_review_count],
     ["Duplicate plans", recovery.duplicate_plans],
   ];
-  list.replaceChildren(...rows.map(([label, value]) => {
+  document.querySelector("#recovery-list").replaceChildren(...rows.map(([label, value]) => {
     const row = document.createElement("div");
     row.className = "safety-row";
     const dt = document.createElement("dt");
@@ -129,14 +122,8 @@ function renderRecovery(data) {
     row.append(dt, dd);
     return row;
   }));
-  renderCountList(
-    document.querySelector("#recovery-error-list"),
-    recovery.error_code_counts,
-    "No simulated recovery error codes in this projection."
-  );
-  document.querySelector("#recovery-chip").textContent = recovery.stop_for_review_count
-    ? `${recovery.stop_for_review_count} needs review`
-    : "clear";
+  renderCountList(document.querySelector("#recovery-error-list"), recovery.error_code_counts, "No simulated recovery error codes in this projection.");
+  document.querySelector("#recovery-chip").textContent = recovery.stop_for_review_count ? `${recovery.stop_for_review_count} needs review` : "clear";
 }
 
 function renderAttention(data) {
@@ -191,6 +178,42 @@ function renderControlPlane(data) {
   }));
 }
 
+function renderChannelReadiness(data) {
+  const list = document.querySelector("#channel-readiness-list");
+  const channels = data.channels ?? [];
+  document.querySelector("#channel-readiness-chip").textContent = `${data.channel_count ?? 0} gated channels`;
+  list.replaceChildren(...channels.map((channel) => {
+    const article = document.createElement("article");
+    article.className = "lifecycle";
+    const top = document.createElement("div");
+    top.className = "lifecycle-top";
+    const name = document.createElement("span");
+    name.className = "lifecycle-id";
+    name.textContent = pretty(channel.channel);
+    const chip = document.createElement("span");
+    chip.className = "state-chip safe";
+    chip.textContent = "not live";
+    top.append(name, chip);
+    const meta = document.createElement("div");
+    meta.className = "lifecycle-meta";
+    for (const [label, value] of [
+      ["Identity", pretty(channel.identity_state)],
+      ["Credentials", channel.credential_introduced ? "introduced" : "not introduced"],
+      ["Inbound", channel.inbound_activation_authorized ? "authorized" : "gated"],
+      ["Outbound reply", channel.outbound_reply_authorized ? "authorized" : "gated"],
+    ]) {
+      const cell = document.createElement("span");
+      cell.textContent = label;
+      const strong = document.createElement("strong");
+      strong.textContent = text(value);
+      cell.append(strong);
+      meta.append(cell);
+    }
+    article.append(top, meta);
+    return article;
+  }));
+}
+
 function renderLifecycles(data) {
   const list = document.querySelector("#lifecycle-list");
   const lifecycles = data.automation?.lifecycles ?? [];
@@ -215,11 +238,7 @@ function renderLifecycles(data) {
     top.append(id, chip);
     const meta = document.createElement("div");
     meta.className = "lifecycle-meta";
-    for (const [label, value] of [
-      ["Latest stage", item.latest_stage],
-      ["Sequence", item.latest_sequence],
-      ["Audit events", item.event_count],
-    ]) {
+    for (const [label, value] of [["Latest stage", item.latest_stage], ["Sequence", item.latest_sequence], ["Audit events", item.event_count]]) {
       const cell = document.createElement("span");
       cell.textContent = label;
       const strong = document.createElement("strong");
@@ -278,43 +297,53 @@ function assertReadOnly(data) {
   if (data.automation?.simulated_only !== true) throw new Error("Automation projection must remain simulated-only");
   if (data.attention?.read_only !== true) throw new Error("Operator attention projection must remain read-only");
   const tasks = data.task_composition ?? {};
-  if (tasks.read_only !== true || tasks.customer_payloads_exposed !== false || tasks.normalized_intent_exposed !== false) {
-    throw new Error("Task composition privacy/read-only boundary invalid");
-  }
+  if (tasks.read_only !== true || tasks.customer_payloads_exposed !== false || tasks.normalized_intent_exposed !== false) throw new Error("Task composition privacy/read-only boundary invalid");
   const approval = data.approval ?? {};
-  if (approval.read_only !== true || approval.authority_effect !== "none" || approval.decision_ids_exposed !== false) {
-    throw new Error("Approval projection must remain privacy-safe and read-only");
-  }
-  for (const key of ["automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized"]) {
-    if (approval[key] !== false) throw new Error(`Unsafe approval flag: ${key}`);
-  }
+  if (approval.read_only !== true || approval.authority_effect !== "none" || approval.decision_ids_exposed !== false) throw new Error("Approval projection must remain privacy-safe and read-only");
+  for (const key of ["automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized"]) if (approval[key] !== false) throw new Error(`Unsafe approval flag: ${key}`);
   const recovery = data.recovery ?? {};
   if (recovery.read_only !== true || recovery.authority_effect !== "none") throw new Error("Recovery projection must remain read-only");
-  for (const key of ["automatic_retry", "retry_authorized", "automatic_rollback", "rollback_authorized", "execution_authorized", "mutation_authorized"]) {
-    if (recovery[key] !== false) throw new Error(`Unsafe recovery flag: ${key}`);
-  }
+  for (const key of ["automatic_retry", "retry_authorized", "automatic_rollback", "rollback_authorized", "execution_authorized", "mutation_authorized"]) if (recovery[key] !== false) throw new Error(`Unsafe recovery flag: ${key}`);
   const control = data.control_plane ?? {};
   if (control.autonomy_level !== "A0" || control.execution_task_class !== "general") throw new Error("Unexpected control-plane baseline");
   if (control.hermes_state !== "idle") throw new Error("Hermes must remain idle in this preview");
-  for (const key of ["specialists_enabled", "mission_control_write_enabled", "live_execution_enabled"]) {
-    if (control[key] !== false) throw new Error(`Unsafe control-plane flag: ${key}`);
-  }
+  for (const key of ["specialists_enabled", "mission_control_write_enabled", "live_execution_enabled"]) if (control[key] !== false) throw new Error(`Unsafe control-plane flag: ${key}`);
   if (control.operator_decision_required_for_sensitive_actions !== true) throw new Error("Sensitive actions must require operator decision");
+}
+
+function assertChannelReadiness(data) {
+  if (data.schema !== "phil-ai-os-mission-control-channel-readiness" || data.version !== 1 || data.status !== "read_only") throw new Error("Unexpected channel readiness projection");
+  if (data.autonomy_level !== "A0" || data.execution_task_class !== "general" || data.assigned_agent !== "hermes") throw new Error("Channel readiness governance baseline drift");
+  if (data.specialists_enabled !== false || data.live_channel_connectivity_authorized !== false || data.outbound_reply_authorized !== false || data.customer_account_mutation_authorized !== false || data.authority_effect !== "none") throw new Error("Unsafe channel readiness authority");
+  if (data.channel_count !== 5 || !Array.isArray(data.channels) || data.channels.length !== 5) throw new Error("Channel readiness set drift");
+  const expected = new Set(["facebook", "instagram", "telegram", "whatsapp", "google_business"]);
+  for (const channel of data.channels) {
+    if (!expected.delete(channel.channel)) throw new Error("Unexpected or duplicate operations channel");
+    for (const key of ["credential_introduced", "live_connectivity_authorized", "inbound_activation_authorized", "outbound_reply_authorized"]) if (channel[key] !== false) throw new Error(`Unsafe channel flag: ${channel.channel}.${key}`);
+    if (channel.write_scope_separate_gate !== true) throw new Error(`Channel write scope not separately gated: ${channel.channel}`);
+  }
+  if (expected.size) throw new Error("Missing operations channel readiness");
 }
 
 async function boot() {
   const state = document.querySelector("#load-state");
   try {
-    const response = await fetch("./fixture.json", { cache: "no-store" });
-    if (!response.ok) throw new Error(`Projection fixture HTTP ${response.status}`);
-    const data = await response.json();
+    const [projectionResponse, channelResponse] = await Promise.all([
+      fetch("./fixture.json", { cache: "no-store" }),
+      fetch("./channel-readiness.json", { cache: "no-store" }),
+    ]);
+    if (!projectionResponse.ok) throw new Error(`Projection fixture HTTP ${projectionResponse.status}`);
+    if (!channelResponse.ok) throw new Error(`Channel readiness HTTP ${channelResponse.status}`);
+    const [data, channelData] = await Promise.all([projectionResponse.json(), channelResponse.json()]);
     assertReadOnly(data);
+    assertChannelReadiness(channelData);
     renderMetrics(data);
     renderTaskComposition(data);
     renderApproval(data);
     renderRecovery(data);
     renderAttention(data);
     renderControlPlane(data);
+    renderChannelReadiness(channelData);
     renderLifecycles(data);
     renderSafety(data);
     renderPrivacy(data);
@@ -323,9 +352,7 @@ async function boot() {
     state.textContent = `${data.operations.tasks} tasks · ${data.operations.tasks_awaiting_approval} awaiting approval · ${data.operations.tasks_ready_for_operator_review} ready for review`;
   } catch (error) {
     state.textContent = `Fail-closed: ${error.message}`;
-    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#approval-list", "#approval-state-list", "#recovery-list", "#recovery-error-list", "#attention-list", "#control-plane-list", "#lifecycle-list", "#safety-list", "#privacy-grid"]) {
-      document.querySelector(selector)?.replaceChildren();
-    }
+    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#approval-list", "#approval-state-list", "#recovery-list", "#recovery-error-list", "#attention-list", "#control-plane-list", "#channel-readiness-list", "#lifecycle-list", "#safety-list", "#privacy-grid"]) document.querySelector(selector)?.replaceChildren();
   }
 }
 
