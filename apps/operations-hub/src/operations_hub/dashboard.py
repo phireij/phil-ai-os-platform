@@ -19,8 +19,9 @@ def _read_only(model: Any, label: str) -> dict[str, Any]:
         raise OperationsDashboardError(f"{label} read model must be an object")
     if model.get("status") != "read_only":
         raise OperationsDashboardError(f"{label} read model must remain read_only")
-    if model.get("mutation_authorized") is not False:
-        raise OperationsDashboardError(f"{label} read model must remain non-authorizing")
+    for field, value in model.items():
+        if field.endswith("_authorized") and value is not False:
+            raise OperationsDashboardError(f"{label} read model {field} must remain false")
     return model
 
 
