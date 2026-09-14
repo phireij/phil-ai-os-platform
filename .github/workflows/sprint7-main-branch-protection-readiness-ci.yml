@@ -24,6 +24,58 @@ jobs:
         run: python -m py_compile scripts/validate_main_branch_ruleset.py
       - name: Self-test fail-closed ruleset policy
         run: python scripts/validate_main_branch_ruleset.py --self-test
+      - name: Inspect live repository rulesets read-only
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth=( -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' )
+
+          curl --fail --silent --show-error "${auth[@]}" "${api}/rulesets?includes_parents=false" > /tmp/rulesets-summary.json
+          jq 'map({id,name,target,enforcement})' /tmp/rulesets-summary.json > /tmp/rulesets-summary-sanitized.json
+
+          : > /tmp/rulesets-details.ndjson
+          while IFS= read -r ruleset_id; do
+            [ -n "${ruleset_id}" ] || continue
+            curl --fail --silent --show-error "${auth[@]}" "${api}/rulesets/${ruleset_id}" >> /tmp/rulesets-details.ndjson
+            printf '\n' >> /tmp/rulesets-details.ndjson
+          done < <(jq -r '.[].id // empty' /tmp/rulesets-summary.json)
+
+          if [ -s /tmp/rulesets-details.ndjson ]; then
+            jq -s '.' /tmp/rulesets-details.ndjson > /tmp/rulesets-live.json
+          else
+            printf '[]\n' > /tmp/rulesets-live.json
+          fi
+
+          set +e
+          validation_output=$(python scripts/validate_main_branch_ruleset.py --rulesets /tmp/rulesets-live.json 2>&1)
+          validation_status=$?
+          set -e
+
+          {
+            echo '## Main branch protection live diagnostic'
+            echo
+            echo '- inspection: read-only GitHub repository rulesets API'
+            echo '- authority effect: none'
+            echo "- rulesets observed: $(jq 'length' /tmp/rulesets-summary.json)"
+            if [ "${validation_status}" -eq 0 ]; then
+              echo '- launch gate: GREEN'
+              echo '- validator: PHIL_AI_OS_MAIN_BRANCH_RULESET_GREEN'
+            else
+              echo '- launch gate: NO-GO'
+              echo '- validator: PHIL_AI_OS_MAIN_BRANCH_RULESET_NOT_READY'
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          cat /tmp/rulesets-summary-sanitized.json
+          if [ "${validation_status}" -eq 0 ]; then
+            printf '%s\n' "${validation_output}"
+          else
+            printf 'PHIL_AI_OS_MAIN_BRANCH_RULESET_LIVE_DIAGNOSTIC_COMPLETE launch_gate=no-go authority_effect=none\n'
+          fi
       - name: Assert workflow is non-authorizing
         run: |
           test "${{ github.event_name }}" = "pull_request" -o "${{ github.event_name }}" = "workflow_dispatch"
