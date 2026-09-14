@@ -14,14 +14,26 @@ class OperationsDashboardError(ValueError):
     pass
 
 
+def _require_non_authorizing(record: dict[str, Any], label: str) -> None:
+    for field, value in record.items():
+        if field.endswith("_authorized") and value is not False:
+            raise OperationsDashboardError(f"{label} {field} must remain false")
+
+
 def _read_only(model: Any, label: str) -> dict[str, Any]:
     if not isinstance(model, dict):
         raise OperationsDashboardError(f"{label} read model must be an object")
     if model.get("status") != "read_only":
         raise OperationsDashboardError(f"{label} read model must remain read_only")
-    for field, value in model.items():
-        if field.endswith("_authorized") and value is not False:
-            raise OperationsDashboardError(f"{label} read model {field} must remain false")
+    _require_non_authorizing(model, f"{label} read model")
+    items = model.get("items")
+    if items is not None:
+        if not isinstance(items, list):
+            raise OperationsDashboardError(f"{label} read model items must be a list")
+        for index, item in enumerate(items):
+            if not isinstance(item, dict):
+                raise OperationsDashboardError(f"{label} read model item[{index}] must be an object")
+            _require_non_authorizing(item, f"{label} read model item[{index}]")
     return model
 
 
