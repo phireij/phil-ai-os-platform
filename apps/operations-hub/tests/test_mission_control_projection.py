@@ -243,6 +243,18 @@ class MissionControlProjectionTests(unittest.TestCase):
         with self.assertRaisesRegex(MissionControlProjectionError, "channel_reply_authorized"):
             build_mission_control_lifecycle_projection(operations_dashboard(), audit)
 
+    def test_rejects_automation_audit_total_that_does_not_match_items(self):
+        audit = audit_model()
+        audit["total_events"] += 1
+        with self.assertRaisesRegex(MissionControlProjectionError, "total_events must match"):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit)
+
+    def test_rejects_automation_audit_stage_counts_that_do_not_match_items(self):
+        audit = audit_model()
+        audit["by_stage"]["result_preview"] -= 1
+        with self.assertRaisesRegex(MissionControlProjectionError, "by_stage must match"):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit)
+
     def test_rejects_recovery_authority_expansion(self):
         recovery = recovery_model()
         recovery["retry_authorized"] = True

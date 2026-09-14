@@ -238,6 +238,7 @@ def build_mission_control_lifecycle_projection(
         raise MissionControlProjectionError("automation audit items must be a list")
 
     lifecycle_events: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    computed_stage_counts: dict[str, int] = defaultdict(int)
     for item in items:
         if not isinstance(item, dict):
             raise MissionControlProjectionError("automation audit item must be an object")
@@ -257,6 +258,18 @@ def build_mission_control_lifecycle_projection(
         if not isinstance(stage, str) or not stage or not isinstance(outcome, str) or not outcome:
             raise MissionControlProjectionError("automation stage and outcome are required")
         lifecycle_events[lifecycle_id].append(item)
+        computed_stage_counts[stage] += 1
+
+    declared_total_events = _validated_count(
+        automation_audit.get("total_events", 0), "automation total_events"
+    )
+    if declared_total_events != len(items):
+        raise MissionControlProjectionError("automation total_events must match automation audit items")
+    declared_stage_counts = _validated_count_map(
+        automation_audit.get("by_stage", {}), "automation by_stage"
+    )
+    if declared_stage_counts != dict(sorted(computed_stage_counts.items())):
+        raise MissionControlProjectionError("automation by_stage must match automation audit items")
 
     lifecycles = []
     for lifecycle_id, events in sorted(lifecycle_events.items()):
@@ -337,8 +350,8 @@ def build_mission_control_lifecycle_projection(
             "read_only": True,
         },
         "automation": {
-            "total_audit_events": _validated_count(automation_audit.get("total_events", 0), "automation total_events"),
-            "stage_counts": _validated_count_map(automation_audit.get("by_stage", {}), "automation by_stage"),
+            "total_audit_events": declared_total_events,
+            "stage_counts": declared_stage_counts,
             "lifecycle_count": len(lifecycles),
             "lifecycles": lifecycles,
             "simulated_only": True,
