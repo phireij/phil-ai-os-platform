@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from collections import Counter
 from typing import Any
 
@@ -19,7 +20,7 @@ class OperationsQueue:
         if decision.duplicate:
             self._duplicate_count += 1
             return {"accepted": False, "duplicate": True, "idempotency_key": decision.idempotency_key}
-        self._events.append(dict(event))
+        self._events.append(copy.deepcopy(event))
         return {"accepted": True, "duplicate": False, "idempotency_key": decision.idempotency_key}
 
     def read_model(self) -> dict[str, Any]:
