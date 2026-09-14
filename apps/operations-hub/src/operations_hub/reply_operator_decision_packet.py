@@ -63,7 +63,11 @@ def build_reply_operator_decision_packet(
     material = {
         "reply_draft_id": reply_draft["reply_draft_id"],
         "decision_proposal_id": decision_proposal["decision_proposal_id"],
+        "task_candidate_id": reply_draft["task_candidate_id"],
         "lifecycle_correlation_id": reply_draft["lifecycle_correlation_id"],
+        "source": reply_draft["source"],
+        "locale": reply_draft["locale"],
+        "draft_text": reply_draft["draft_text"],
         "recommendation": recommendation,
     }
     fingerprint = hashlib.sha256(_canonical_json(material).encode("utf-8")).hexdigest()
