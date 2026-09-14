@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections import Counter
+import hashlib
+import json
 from typing import Any
 
 from .recovery import RecoveryPlanError
@@ -11,12 +13,16 @@ class RecoveryPlanQueue:
 
     def __init__(self) -> None:
         self._plans: dict[str, dict[str, Any]] = {}
+        self._fingerprints: dict[str, str] = {}
         self._duplicates = 0
 
     def ingest(self, plan: dict[str, Any]) -> dict[str, Any]:
         _validate_plan(plan)
         recovery_id = plan["recovery_id"]
+        fingerprint = _plan_fingerprint(plan)
         if recovery_id in self._plans:
+            if self._fingerprints.get(recovery_id) != fingerprint:
+                raise RecoveryPlanError("recovery plan content changed for existing recovery_id")
             self._duplicates += 1
             return {
                 "accepted": False,
@@ -28,6 +34,7 @@ class RecoveryPlanQueue:
                 "mutation_authorized": False,
             }
         self._plans[recovery_id] = dict(plan)
+        self._fingerprints[recovery_id] = fingerprint
         return {
             "accepted": True,
             "duplicate": False,
@@ -72,6 +79,7 @@ class RecoveryPlanQueue:
             "stop_for_review_count": action_counts.get("stop_for_review", 0),
             "error_code_counts": dict(sorted(error_counts.items())),
             "items": items,
+            "plan_fingerprints_exposed": False,
             "automatic_retry": False,
             "retry_authorized": False,
             "automatic_rollback": False,
@@ -80,6 +88,14 @@ class RecoveryPlanQueue:
             "mutation_authorized": False,
             "authority_effect": "none",
         }
+
+
+def _plan_fingerprint(plan: dict[str, Any]) -> str:
+    try:
+        encoded = json.dumps(plan, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise RecoveryPlanError("recovery plan must be JSON-serializable") from exc
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _validate_plan(plan: Any) -> None:
