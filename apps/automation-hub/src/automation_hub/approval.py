@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -82,6 +83,29 @@ class ApprovalSimulationStore:
             "decision_id": record.decision_id,
             "authority_effect": "none",
             "execution_authorized": False,
+        }
+
+    def read_model(self) -> dict[str, Any]:
+        """Return aggregate approval posture without exposing decision identifiers."""
+        counts = Counter(record.state for record in self._records.values())
+        decision_count = sum(record.decision_id is not None for record in self._records.values())
+        return {
+            "status": "read_only",
+            "store": "automation_approval_simulation",
+            "plan_count": len(self._records),
+            "decision_count": decision_count,
+            "awaiting_decision": counts.get("required", 0),
+            "simulation_releasable": counts.get("approved", 0) + counts.get("not_required", 0),
+            "by_state": {
+                state: counts.get(state, 0)
+                for state in ("required", "approved", "denied", "not_required")
+            },
+            "decision_ids_exposed": False,
+            "automatic_execution": False,
+            "execution_authorized": False,
+            "channel_reply_authorized": False,
+            "mutation_authorized": False,
+            "authority_effect": "none",
         }
 
 
