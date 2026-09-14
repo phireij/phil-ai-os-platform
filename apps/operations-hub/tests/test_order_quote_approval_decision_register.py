@@ -61,6 +61,37 @@ class OrderQuoteApprovalDecisionProposalRegisterTests(unittest.TestCase):
         self.assertTrue(duplicate["duplicate"])
         self.assertEqual(register.read_model()["duplicate_proposals"], 1)
 
+    def test_conflicting_duplicate_proposal_id_fails_closed(self):
+        register = OrderQuoteApprovalDecisionProposalRegister()
+        register.register(proposal())
+        changed = proposal()
+        changed["note"] = "Conflicting recommendation evidence"
+        with self.assertRaisesRegex(OrderQuoteApprovalDecisionError, "content changed"):
+            register.register(changed)
+        self.assertEqual(register.read_model()["duplicate_proposals"], 0)
+
+    def test_registration_deep_copies_nested_proposal_state(self):
+        register = OrderQuoteApprovalDecisionProposalRegister()
+        payload = proposal()
+        register.register(payload)
+        payload["pricing"]["total_amount"] = 999999
+        payload["effects"]["quote_authorized"] = True
+        model = register.read_model()
+        self.assertEqual(model["items"][0]["total_amount"], 5800)
+        detail = register.proposal_detail(payload["decision_proposal_id"])
+        self.assertEqual(detail["pricing"]["total_amount"], 5800)
+        self.assertFalse(detail["effects"]["quote_authorized"])
+
+    def test_detail_nested_mutation_does_not_change_register(self):
+        register = OrderQuoteApprovalDecisionProposalRegister()
+        register.register(proposal())
+        detail = register.proposal_detail("quote-approval-proposal:0123456789abcdefghijklmn")
+        detail["pricing"]["total_amount"] = 1
+        detail["effects"]["quote_authorized"] = True
+        fresh = register.proposal_detail("quote-approval-proposal:0123456789abcdefghijklmn")
+        self.assertEqual(fresh["pricing"]["total_amount"], 5800)
+        self.assertFalse(fresh["effects"]["quote_authorized"])
+
     def test_accepts_revision_recommendation_without_authority(self):
         payload = proposal()
         payload["recommendation"] = "request_quote_revision"
