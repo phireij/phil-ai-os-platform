@@ -89,6 +89,15 @@ jobs:
           rollback_authorized=false
           This artifact is a static non-production preview package only. It does not grant deployment or production authority.
           EOF
+          cat > "$out/PROVENANCE.txt" <<EOF
+          Phil AI OS Mission Control bounded preview provenance
+          source_commit=${GITHUB_SHA}
+          workflow=${GITHUB_WORKFLOW}
+          workflow_run_id=${GITHUB_RUN_ID}
+          workflow_run_attempt=${GITHUB_RUN_ATTEMPT}
+          repository=${GITHUB_REPOSITORY}
+          authority_effect=none
+          EOF
           test -f "$out/preview/index.html"
           test -f "$out/preview/fixture.json"
           test -f "$out/preview/channel-readiness.json"
@@ -97,7 +106,22 @@ jobs:
           grep -q 'mode=read_only' "$out/BOUNDARY.txt"
           grep -q 'live_channel_connectivity=false' "$out/BOUNDARY.txt"
           grep -q 'authority_effect=none' "$out/BOUNDARY.txt"
-          echo 'PHIL_AI_OS_MISSION_CONTROL_PREVIEW_ARTIFACT_GREEN mode=read_only channels=5 live_connectivity=false authority_effect=none deployment_authority=false'
+          grep -q "source_commit=${GITHUB_SHA}" "$out/PROVENANCE.txt"
+          (
+            cd "$out"
+            sha256sum \
+              BOUNDARY.txt \
+              PROVENANCE.txt \
+              preview/index.html \
+              preview/fixture.json \
+              preview/channel-readiness.json \
+              preview/mission-control.mjs \
+              contracts/mission-control-lifecycle-projection.schema.json \
+              > MANIFEST.sha256
+            sha256sum --check MANIFEST.sha256
+          )
+          test -s "$out/MANIFEST.sha256"
+          echo 'PHIL_AI_OS_MISSION_CONTROL_PREVIEW_ARTIFACT_GREEN mode=read_only channels=5 provenance=recorded manifest=sha256 live_connectivity=false authority_effect=none deployment_authority=false'
       - name: Upload bounded Mission Control preview artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
