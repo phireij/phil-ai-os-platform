@@ -36,6 +36,18 @@
       <div id="metric-grid" class="metric-grid" aria-live="polite"></div>
     </section>
 
+    <section class="split-grid" aria-label="Task composition overview">
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">Task queue</p><h2>By source</h2></div><span id="task-duplicate-chip" class="state-chip">0 duplicates</span></div>
+        <dl id="task-source-list" class="safety-list"></dl>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">Task queue</p><h2>By type</h2></div><span class="state-chip safe">metadata only</span></div>
+        <dl id="task-type-list" class="safety-list"></dl>
+      </article>
+    </section>
+
     <section class="split-grid" aria-label="Operator attention and control-plane posture">
       <article class="panel">
         <div class="panel-head"><div><p class="eyebrow">Operator attention</p><h2>Needs review</h2></div><span id="attention-chip" class="state-chip">0 items</span></div>
@@ -67,7 +79,7 @@
 
     <section class="operator-note" aria-labelledby="operator-title">
       <div><p class="eyebrow">Operator guidance</p><h2 id="operator-title">What this screen is for</h2></div>
-      <p>Use Mission Control to understand workload, identify items waiting for approval, inspect agent/control-plane posture and review simulated lifecycle state. This preview intentionally contains no approve, send, retry, execute, publish or mutation controls.</p>
+      <p>Use Mission Control to understand workload and task composition, identify items waiting for approval, inspect agent/control-plane posture and review simulated lifecycle state. Task composition is metadata-only: customer payloads and normalized intent remain excluded. This preview intentionally contains no approve, send, retry, execute, publish or mutation controls.</p>
     </section>
   </main>
 
