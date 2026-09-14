@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from .order_quote_approval import OrderQuoteApprovalRequestError
@@ -72,7 +73,10 @@ class OrderQuoteApprovalRequestRegister:
         if not isinstance(source_draft_id, str) or not source_draft_id.startswith("quote-draft:"):
             raise OrderQuoteApprovalRequestError("invalid source_draft_id")
 
-        if request_id in self._requests:
+        existing = self._requests.get(request_id)
+        if existing is not None:
+            if existing != request:
+                raise OrderQuoteApprovalRequestError("approval request content changed for existing approval_request_id")
             self._duplicates += 1
             return {
                 "accepted": False,
@@ -82,7 +86,7 @@ class OrderQuoteApprovalRequestRegister:
                 "mutation_authorized": False,
             }
 
-        self._requests[request_id] = dict(request)
+        self._requests[request_id] = copy.deepcopy(request)
         return {
             "accepted": True,
             "duplicate": False,
@@ -134,7 +138,7 @@ class OrderQuoteApprovalRequestRegister:
             "state": request["state"],
             "requested_by": request.get("requested_by"),
             "reason": request.get("reason", ""),
-            "pricing": dict(request["pricing"]),
-            "approval": dict(request["approval"]),
-            "authority": dict(request["authority"]),
+            "pricing": copy.deepcopy(request["pricing"]),
+            "approval": copy.deepcopy(request["approval"]),
+            "authority": copy.deepcopy(request["authority"]),
         }
