@@ -5,8 +5,10 @@ on:
     paths:
       - 'apps/operations-hub/mission-control/**'
       - 'apps/operations-hub/tools_generate_mission_control_preview_fixture.py'
+      - 'apps/operations-hub/tools_generate_mission_control_channel_readiness.py'
       - 'apps/operations-hub/tools_validate_mission_control_preview.py'
       - 'apps/operations-hub/src/operations_hub/mission_control_projection.py'
+      - 'ops/readiness/sprint7-channel-activation-readiness.json'
       - 'contracts/operations/mission-control-lifecycle-projection.schema.json'
       - '.github/workflows/sprint5-mission-control-readonly-preview-ci.yml'
   push:
@@ -15,8 +17,10 @@ on:
     paths:
       - 'apps/operations-hub/mission-control/**'
       - 'apps/operations-hub/tools_generate_mission_control_preview_fixture.py'
+      - 'apps/operations-hub/tools_generate_mission_control_channel_readiness.py'
       - 'apps/operations-hub/tools_validate_mission_control_preview.py'
       - 'apps/operations-hub/src/operations_hub/mission_control_projection.py'
+      - 'ops/readiness/sprint7-channel-activation-readiness.json'
       - 'contracts/operations/mission-control-lifecycle-projection.schema.json'
       - '.github/workflows/sprint5-mission-control-readonly-preview-ci.yml'
   workflow_dispatch:
@@ -37,6 +41,8 @@ jobs:
           python-version: '3.12'
       - name: Verify fixture is generated from Mission Control projection
         run: python apps/operations-hub/tools_generate_mission_control_preview_fixture.py --check
+      - name: Verify channel readiness is generated from canonical readiness state
+        run: python apps/operations-hub/tools_generate_mission_control_channel_readiness.py --check
       - name: Validate Mission Control preview boundary and v5 contract alignment
         run: python apps/operations-hub/tools_validate_mission_control_preview.py
       - name: Serve preview locally
@@ -44,10 +50,11 @@ jobs:
           python -m http.server 8765 --directory apps/operations-hub/mission-control >/tmp/mission-control-preview.log 2>&1 &
           echo $! >/tmp/mission-control-preview.pid
           sleep 1
-      - name: HTTP smoke preview shell and fixture
+      - name: HTTP smoke preview shell and bounded projections
         run: |
           curl --fail --silent --show-error http://127.0.0.1:8765/ >/dev/null
           curl --fail --silent --show-error http://127.0.0.1:8765/fixture.json >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8765/channel-readiness.json >/dev/null
           curl --fail --silent --show-error http://127.0.0.1:8765/mission-control.mjs >/dev/null
       - name: Stop local preview
         if: always()
@@ -70,6 +77,8 @@ jobs:
           hermes=idle
           live_execution=false
           mission_control_writes=false
+          live_channel_connectivity=false
+          inbound_channel_activation=false
           customer_replies=false
           payment_execution=false
           sms_send=false
@@ -82,11 +91,13 @@ jobs:
           EOF
           test -f "$out/preview/index.html"
           test -f "$out/preview/fixture.json"
+          test -f "$out/preview/channel-readiness.json"
           test -f "$out/preview/mission-control.mjs"
           test -f "$out/contracts/mission-control-lifecycle-projection.schema.json"
           grep -q 'mode=read_only' "$out/BOUNDARY.txt"
+          grep -q 'live_channel_connectivity=false' "$out/BOUNDARY.txt"
           grep -q 'authority_effect=none' "$out/BOUNDARY.txt"
-          echo 'PHIL_AI_OS_MISSION_CONTROL_PREVIEW_ARTIFACT_GREEN mode=read_only authority_effect=none deployment_authority=false'
+          echo 'PHIL_AI_OS_MISSION_CONTROL_PREVIEW_ARTIFACT_GREEN mode=read_only channels=5 live_connectivity=false authority_effect=none deployment_authority=false'
       - name: Upload bounded Mission Control preview artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:

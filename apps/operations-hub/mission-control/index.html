@@ -84,6 +84,14 @@
       </article>
     </section>
 
+    <section class="panel" aria-labelledby="channels-title">
+      <div class="panel-head">
+        <div><p class="eyebrow">Operations channels</p><h2 id="channels-title">Activation readiness</h2></div>
+        <span id="channel-readiness-chip" class="state-chip safe">read only</span>
+      </div>
+      <div id="channel-readiness-list" class="lifecycle-list"></div>
+    </section>
+
     <section class="split-grid" aria-label="Mission Control detail panels">
       <article class="panel">
         <div class="panel-head"><div><p class="eyebrow">Automation</p><h2>Lifecycle status</h2></div><span id="simulation-chip" class="state-chip">simulated only</span></div>
@@ -103,11 +111,11 @@
 
     <section class="operator-note" aria-labelledby="operator-title">
       <div><p class="eyebrow">Operator guidance</p><h2 id="operator-title">What this screen is for</h2></div>
-      <p>Use Mission Control to understand workload and task composition, see bounded approval and recovery posture, identify items waiting for review, inspect agent/control-plane posture and review simulated lifecycle state. Approval identifiers remain hidden, and approval, retry and rollback authority remain disabled. This preview intentionally contains no approve, send, retry, execute, publish or mutation controls.</p>
+      <p>Use Mission Control to understand workload and task composition, see bounded approval and recovery posture, identify items waiting for review, inspect channel activation readiness, inspect agent/control-plane posture and review simulated lifecycle state. Channel readiness is informational only; live connectivity and outbound reply authority remain separately gated. This preview intentionally contains no approve, send, retry, execute, publish or mutation controls.</p>
     </section>
   </main>
 
-  <footer>Phil AI OS · Mission Control read-only preview · synthetic projection · no production authority</footer>
+  <footer>Phil AI OS · Mission Control read-only preview · bounded projections · no production authority</footer>
   <script type="module" src="./mission-control.mjs"></script>
 </body>
 </html>

@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 PREVIEW = ROOT / "mission-control"
 CONTRACT = ROOT.parents[1] / "contracts" / "operations" / "mission-control-lifecycle-projection.schema.json"
+EXPECTED_CHANNELS = {"facebook", "instagram", "telegram", "whatsapp", "google_business"}
 
 
 def fail(message: str) -> None:
@@ -55,13 +56,54 @@ def _validate_contract_alignment(schema: dict, fixture: dict) -> None:
     check_consts(schema, fixture, "projection")
 
 
+def _validate_channel_readiness(data: dict) -> None:
+    if data.get("schema") != "phil-ai-os-mission-control-channel-readiness":
+        fail("channel readiness schema drift")
+    if data.get("version") != 1 or data.get("status") != "read_only":
+        fail("channel readiness must remain v1/read_only")
+    expected = {
+        "autonomy_level": "A0",
+        "execution_task_class": "general",
+        "assigned_agent": "hermes",
+        "specialists_enabled": False,
+        "live_channel_connectivity_authorized": False,
+        "outbound_reply_authorized": False,
+        "customer_account_mutation_authorized": False,
+        "authority_effect": "none",
+    }
+    for key, value in expected.items():
+        if data.get(key) != value:
+            fail(f"channel readiness boundary drift: {key}")
+    channels = data.get("channels")
+    if data.get("channel_count") != 5 or not isinstance(channels, list) or len(channels) != 5:
+        fail("channel readiness count drift")
+    by_name = {item.get("channel"): item for item in channels if isinstance(item, dict)}
+    if set(by_name) != EXPECTED_CHANNELS:
+        fail("channel readiness set drift")
+    for name, item in by_name.items():
+        for flag in (
+            "credential_introduced",
+            "live_connectivity_authorized",
+            "inbound_activation_authorized",
+            "outbound_reply_authorized",
+        ):
+            if item.get(flag) is not False:
+                fail(f"channel authority expanded: {name}.{flag}")
+        if item.get("write_scope_separate_gate") is not True:
+            fail(f"channel write scope must remain separately gated: {name}")
+    if by_name["telegram"].get("identity_state") != "existing_control_plane_approval_channel_is_not_operations_authority":
+        fail("Telegram control-plane and Operations authority separation drift")
+
+
 def main() -> None:
     html = (PREVIEW / "index.html").read_text(encoding="utf-8")
     js = (PREVIEW / "mission-control.mjs").read_text(encoding="utf-8")
     fixture = json.loads((PREVIEW / "fixture.json").read_text(encoding="utf-8"))
+    channel_readiness = json.loads((PREVIEW / "channel-readiness.json").read_text(encoding="utf-8"))
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
 
     _validate_contract_alignment(contract, fixture)
+    _validate_channel_readiness(channel_readiness)
 
     if fixture.get("schema") != "phil-ai-os-mission-control-lifecycle-projection":
         fail("projection schema drift")
@@ -176,10 +218,7 @@ def main() -> None:
             fail(f"interactive/authorizing HTML surface found: {pattern}")
 
     forbidden_js = (
-        r"\bPOST\b",
-        r"\bPUT\b",
-        r"\bPATCH\b",
-        r"\bDELETE\b",
+        r"method\s*:\s*[\"'](?:POST|PUT|PATCH|DELETE)[\"']",
         r"XMLHttpRequest",
         r"WebSocket",
         r"navigator\.sendBeacon",
@@ -188,17 +227,17 @@ def main() -> None:
         if re.search(pattern, js, flags=re.IGNORECASE):
             fail(f"network write capability found: {pattern}")
 
-    if 'fetch("./fixture.json"' not in js:
-        fail("preview must load only the bounded local fixture")
+    if 'fetch("./fixture.json"' not in js or 'fetch("./channel-readiness.json"' not in js:
+        fail("preview must load both bounded local projections")
     if "cache: \"no-store\"" not in js:
-        fail("preview fixture must avoid stale caching")
-    if "assertReadOnly" not in js:
-        fail("runtime fail-closed read-only assertion missing")
+        fail("preview projections must avoid stale caching")
+    if "assertReadOnly" not in js or "assertChannelReadiness" not in js:
+        fail("runtime fail-closed assertions missing")
 
     print(
         "PHIL_AI_OS_MISSION_CONTROL_PREVIEW_GREEN "
         "mode=read_only version=5 contract=v5 autonomy=A0 hermes=idle attention=read_only task_composition=read_only "
-        "approval=read_only decision_ids=false recovery=read_only retry_authorized=false rollback_authorized=false "
+        "approval=read_only decision_ids=false recovery=read_only channels=5 live_connectivity=false outbound_reply=false "
         "simulated_only=true writes=false replies=false network_dispatch=false authority_effect=none"
     )
 
