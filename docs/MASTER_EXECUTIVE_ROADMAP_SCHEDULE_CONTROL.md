@@ -3,11 +3,11 @@
 # Master Executive Roadmap & Schedule Control
 
 **Original 8-Sprint Plan • Accelerated Multi-Agent Delivery • V1 Launch Control**  
-**Last reconciled:** 12 September 2026 — Sprint 3 remains primary and owner-gated; Sprint 4 continues bounded parallel acceleration; Sprint 5–7 readiness has advanced materially ahead of formal entry
+**Last reconciled:** 14 September 2026 — Sprint 3 remains primary and owner/external-gated; Sprint 4 remains bounded parallel; Mission Control / Operations / Automation readiness has advanced materially without production authority expansion
 
 | FIRST ISSUED | OWNER | LAST RECONCILED | CANONICAL SOURCE |
 | --- | --- | --- | --- |
-| 28 Aug 2026 | CEO / CTO Office | 12 Sep 2026 | GitHub master roadmap |
+| 28 Aug 2026 | CEO / CTO Office | 14 Sep 2026 | GitHub master roadmap |
 
 # CURRENT EXECUTIVE STATUS
 
@@ -19,18 +19,18 @@
 | --- | --- |
 | Overall schedule health | **AHEAD OF ORIGINAL 2-MONTH PLAN.** The current schedule constraint is owner/external evidence rather than missing core engineering. |
 | Executive roadmap position | **Sprint 3 — WooCommerce Foundation remains the CURRENT PRIMARY SPRINT. Sprint 4 — Customer Experience continues bounded parallel acceleration. Sprint 5–7 capabilities are pre-built only where non-authorizing and safe; formal sprint advancement has not been claimed.** |
-| Current engineering gate | **Finalize and approve Initial Launch Catalog V1.** The catalog engineering path now supports simple products, variable parents, multiple sellable variation SKUs, owner worksheet generation, artifact publication, and fail-closed edited-worksheet intake review. Production catalog mutation/publication remains blocked. |
-| Last completed checkpoint | **PR #320 merged GREEN** — deterministic catalog worksheet intake review now detects SKU/parent/variation drift, preserves owner edits as proposals, flags source-backed changes as requiring fresh evidence, and never auto-applies changes. Current `main`: `e478099fa22b8de0f651c596e720acf0a547ab36`. |
+| Current engineering gate | **Finalize and approve Initial Launch Catalog V1.** The catalog engineering path supports simple products, variable parents, multiple sellable variation SKUs, owner worksheet generation, artifact publication and fail-closed edited-worksheet intake review. Twilio provider-side/handset validation remains externally blocked. Production catalog mutation/publication and live SMS remain blocked. |
+| Last completed checkpoint | **PR #335 merged GREEN** — Mission Control now surfaces deterministic read-only activation posture for Facebook, Instagram, Telegram, WhatsApp and Google Business from canonical readiness state, with live connectivity, inbound activation and outbound replies remaining fail-closed. Current `main`: `ffd5f02511dc1e9cbf00602d0363d471b6a35384`. |
 | Sprint 3 catalog readiness | Working source-backed subset is prepared for owner completion. Moist Chocolate Round Cake is modeled as one variable product with parent `RCD-MCH-RD` and sellable variations `RCD-MCH-RD-15` / `RCD-MCH-RD-21`. Fudgy Milky Bar and Cheezy Ensaymada remain simple products. Final catalog completeness/approval is still pending. |
 | WooCommerce / tax | Pre-production foundation and production read-only identity/connectivity are GREEN. 2026 consumption-tax posture remains exempt / not Qualified-Invoice registered; WooCommerce tax remains disabled. |
-| Sprint 4 / CX | Mobile-first PWA/catalog/product/cart/checkout/pickup/custom-cake foundations are materially GREEN in isolated/non-production scope. Custom-cake reference-image selection remains bounded and privacy-aware. Hostinger preview publication remains manual and non-production. |
-| Sprint 5 / Operations Hub | Five-channel normalization, task extraction, read-only dashboard, reply-draft proposals, review workspaces, recommendation proposals and explicit non-authorizing decision packets are pre-built and tested. No live customer reply authority is enabled. |
-| Sprint 6 / Automation | Task-derived automation planning, multichannel simulation, bounded approval simulation, dry-run boundary requests, audit and recovery proof are GREEN. No automatic/live execution authority is enabled. |
-| Sprint 7 / launch readiness | Integrated readiness CI is GREEN on current work. Customer-to-owner lifecycle branch matrix, read-only Mission Control lifecycle projection, launch-acceptance evidence synchronization and branch-protection readiness checks exist. Live cutover remains NO-GO until all final gates are satisfied. |
+| Sprint 4 / CX | Mobile-first PWA/catalog/product/cart/checkout/pickup/custom-cake foundations are materially GREEN in isolated/non-production scope. Storefront visual hierarchy was further polished in bounded preview source. Hostinger preview publication remains manual and non-production. |
+| Sprint 5 / Operations Hub | Five-channel normalization, task extraction, read-only workload/task views, reply proposal/review/decision layers, Mission Control projection v5, packaged read-only preview artifact and deterministic five-channel activation-readiness view are GREEN in bounded scope. No live channel connectivity or reply authority is enabled. |
+| Sprint 6 / Automation | Task-derived automation planning, multichannel simulation, bounded approval simulation/read model, recovery review posture, dry-run boundary requests and audit proof are GREEN. Mission Control can observe aggregate approval/recovery posture without identifiers or authority. No automatic/live execution authority is enabled. |
+| Sprint 7 / launch readiness | Integrated readiness CI remains GREEN on current bounded work. Customer-to-owner lifecycle branch matrix, Mission Control v5 contract alignment, packaged read-only preview, launch-acceptance synchronization and branch-protection readiness checks exist. Live cutover remains NO-GO until all final gates are satisfied. |
 | KOMOJU | Live dashboard/configuration evidence, approved initial payment subset, matching WooCommerce checkout configuration and Live Konbini 3-day expiry are GREEN readiness facts. **No real-payment execution authority is implied.** |
 | Twilio | Ruby-owned paid account, `Ruby Transactional SMS` Messaging Service and `RUBYSCAKE` sender are recorded. Restricted API-key outbound boundary and signed webhook boundary are GREEN. Provider-side/handset validation remains externally blocked; no live SMS authority is granted. |
 | Air Mobile / AirREGI | Air Mobile Quick Pickup production URL remains external input. Direct AirREGI inventory API remains unproven; CSV fallback is the safe documented path. No production inventory bridge is authorized. |
-| Mission Control | Read-only lifecycle/result projection is prepared. Mission Control write authority remains disabled and Hermes remains intentionally idle for live execution. |
+| Mission Control | Read-only lifecycle/result, workload, task-composition, approval, recovery, control-plane and five-channel activation-readiness projections are prepared and packaged as a bounded static artifact. Mission Control write authority remains disabled and Hermes remains intentionally idle for live execution. |
 | Repository protection | Launch-gate validator correctly reports the actual GitHub `main` ruleset/protection requirement as unresolved. Current connected GitHub app lacks administration permission to activate it. |
 | Current autonomy ceiling | **A0 — no autonomous production side-effect/execution expansion** |
 | Execution task-class allowlist | **general only** |
@@ -38,7 +38,20 @@
 | Safety target | **2 October 2026** |
 | Original 2-month target | Approximately **19 October 2026** from the 19 August start |
 | Schedule variance | Materially ahead of the original sequence because later-sprint foundations have been safely prepared early. Owner/external gates now dominate the remaining critical path. |
-| Immediate next action | Continue only material non-authorizing preparation while awaiting final catalog facts/approval and external launch evidence. Do not manufacture filler work or cross production gates. |
+| Immediate next action | Continue only material non-authorizing preparation while awaiting final catalog facts/approval, Twilio/provider evidence and other external launch inputs. Do not manufacture filler work or cross production gates. |
+
+## 14 SEP 2026 MISSION CONTROL / OPERATIONS / AUTOMATION RECONCILIATION
+
+Bounded later-sprint preparation advanced materially while Sprint 3 remained owner/external-gated:
+
+- Mission Control evolved into a deterministic read-only operator preview covering workload, task composition, operator attention, A0/general/Hermes-idle control-plane posture, simulated lifecycle status, aggregate approval posture and bounded recovery posture.
+- The Mission Control lifecycle projection contract was reconciled to version 5 so the committed JSON Schema and runtime projection cannot silently diverge.
+- CI now generates and packages a short-retention static Mission Control preview artifact with explicit non-production authority boundaries.
+- Automation Hub now exposes privacy-safe aggregate approval posture and bounded recovery-review state without decision identifiers, retry authority, rollback authority or execution authority.
+- Mission Control now derives five-channel activation readiness from canonical Sprint 7 readiness state for Facebook, Instagram, Telegram, WhatsApp and Google Business. Credential introduction, live connectivity, inbound activation, outbound replies and customer-account mutation remain false.
+- Telegram control-plane approval capability remains explicitly separate from Operations Hub Telegram channel authority.
+
+This work is **preparation/readiness only**. It does not formally close or enter Sprint 5, Sprint 6 or Sprint 7, and it does not increase production authority.
 
 ## 12 SEP 2026 CATALOG ROUND-TRIP RECONCILIATION
 
@@ -178,7 +191,7 @@ V1 must preserve these properties:
 - Pickup
 - Bilingual customer experience
 
-**Control note:** Mobile/PWA, branded catalog/detail/cart, checkout/pickup, custom-cake intake, private reference-image selection and KOMOJU handoff foundations are materially GREEN in isolated non-production scope. Hostinger preview deployment remains a manually controlled non-production step. Formal Sprint 4 completion is not claimed while Sprint 3 remains formally open.
+**Control note:** Mobile/PWA, branded catalog/detail/cart, checkout/pickup, custom-cake intake, private reference-image selection and KOMOJU handoff foundations are materially GREEN in isolated non-production scope. Bounded storefront visual hierarchy/polish improvements are merged in source. Hostinger preview deployment remains a manually controlled non-production step. Formal Sprint 4 completion is not claimed while Sprint 3 remains formally open.
 
 ## Sprint 5 — Operations Hub
 
@@ -193,7 +206,7 @@ V1 must preserve these properties:
 - Extract orders/tasks
 - Needs approval
 
-**Control note:** Five-channel fixture normalization, governance evaluation, task extraction, idempotent task queues, unified read-only workload dashboard, reply-draft proposals/review, operator recommendation proposals and explicit non-authorizing decision packets are prepared and tested. No channel reply or production mutation authority is enabled.
+**Control note:** Five-channel fixture normalization, governance evaluation, task extraction, idempotent task queues, unified read-only workload dashboard, reply-draft proposals/review, operator recommendation/decision layers, Mission Control projection v5, packaged static preview and canonical five-channel activation-readiness projection are prepared and tested. No live channel connectivity, inbound activation, channel reply or production mutation authority is enabled.
 
 ## Sprint 6 — Automation
 
@@ -202,7 +215,7 @@ V1 must preserve these properties:
 
 - Mission Control → Buzz → Hermes/agents → WooCommerce/Operations Hub → Telegram/approval → CEO
 
-**Control note:** Task-derived automation planning, deterministic lifecycle correlation, approval simulation, dry-run execution boundaries, multichannel lifecycle validation, audit and bounded recovery are GREEN in simulation. Live automation remains A0/general/Hermes-only with automatic execution disabled.
+**Control note:** Task-derived automation planning, deterministic lifecycle correlation, approval simulation plus privacy-safe aggregate approval posture, dry-run execution boundaries, multichannel lifecycle validation, append-only audit and bounded recovery-review posture are GREEN in simulation. Live automation remains A0/general/Hermes-only with automatic execution, retry and rollback disabled.
 
 ## Sprint 7 — Testing, Production Readiness, Documentation & Launch
 
@@ -218,7 +231,7 @@ V1 must preserve these properties:
 - Training
 - Launch
 
-**Control note:** Integrated readiness CI, customer-to-owner lifecycle branch matrix, security/recovery checks, launch acceptance structures, main-protection readiness validation and privacy-preserving read-only Mission Control lifecycle projection are prepared. Final live launch remains separately gated by owner/external/admin evidence and CEO/CTO Go/No-Go.
+**Control note:** Integrated readiness CI, customer-to-owner lifecycle branch matrix, security/recovery checks, launch acceptance structures, main-protection readiness validation, Mission Control v5 schema/runtime alignment, packaged bounded preview and privacy-preserving read-only channel readiness are prepared. Final live launch remains separately gated by owner/external/admin evidence and CEO/CTO Go/No-Go.
 
 # 3. Revised Integrated Schedule
 
@@ -357,6 +370,7 @@ Do **not** activate historical working examples unless the owner explicitly conf
 
 - Maintain A0 autonomy, general-only execution and Hermes-only bounded routing; specialists remain disabled for normal live execution.
 - Keep Mission Control read-only until separately governed write/mutation authority is approved.
+- Keep external Operations channels disconnected until each channel's activation prerequisites and separate write/reply gates are satisfied.
 - Keep real KOMOJU payment execution, live SMS sending, live routing-provider calls, production catalog mutation/publication, public-domain/DNS cutover and automatic production execution fail-closed.
 - Preserve CEO approvals already recorded for narrow readiness/candidate-text scopes; never reinterpret them as unrestricted authority.
 - Continue only work that materially improves preparation, evidence quality, deterministic handoff, testing, training or launch safety.
@@ -388,6 +402,12 @@ These targets remain materially ahead of the original approximately two-month ob
 - **12 Sep 2026** — PR #314–#316 state reconciled: main-branch-protection readiness remains a real external/admin gate; privacy-preserving read-only Mission Control lifecycle projection and Sprint 7 launch-acceptance synchronization are GREEN.
 - **12 Sep 2026** — PR #317/#318 state reconciled: source-backed owner-editable catalog worksheet and short-retention GitHub Actions artifact pipeline are GREEN.
 - **12 Sep 2026** — PR #319 added the additive catalog engineering checkpoint and reconciled the current owner-gated catalog state.
-- **12 Sep 2026** — PR #320 added deterministic fail-closed owner worksheet intake review. Owner edits remain proposals; source-backed changes require fresh evidence; no automatic apply or production authority was introduced. Current merged `main` at this reconciliation: `e478099fa22b8de0f651c596e720acf0a547ab36`.
+- **12 Sep 2026** — PR #320 added deterministic fail-closed owner worksheet intake review. Owner edits remain proposals; source-backed changes require fresh evidence; no automatic apply or production authority was introduced.
+- **12 Sep 2026** — PR #321 reconciled this canonical roadmap through catalog intake and later-sprint readiness; PR #322 clarified historical Sprint 5/6 closure records as bounded engineering workstream closures rather than formal executive-roadmap closure; PR #323 reconciled the Sprint 7 operator guide and bounded rehearsal checklist.
+- **12 Sep 2026** — PR #324 improved Ruby storefront preview visual hierarchy in source without changing production authority or claiming live Hostinger deployment.
+- **14 Sep 2026** — PR #325–#330 advanced Mission Control and Automation bounded readiness: read-only Mission Control operator preview, projection-derived fixtures, control-plane posture, task composition, recovery-review queue and recovery posture became GREEN.
+- **14 Sep 2026** — PR #331/#332 added privacy-safe aggregate automation approval posture and surfaced it in Mission Control projection v5 without decision identifiers or execution authority.
+- **14 Sep 2026** — PR #333 aligned the Mission Control JSON contract with runtime projection v5; PR #334 added validated static preview artifact publication on relevant `main` changes.
+- **14 Sep 2026** — PR #335 added deterministic five-channel activation-readiness visibility in Mission Control from canonical readiness state. Facebook, Instagram, Telegram, WhatsApp and Google Business remain disconnected and non-authorizing. Current merged `main` at this reconciliation: `ffd5f02511dc1e9cbf00602d0363d471b6a35384`.
 
 > **DOCUMENT CONTROL RULE:** Do not create a replacement master timeline for ordinary schedule updates. Review and update this canonical roadmap, refresh the status dashboard at the top, and record material changes in the Change Log.
