@@ -9,10 +9,10 @@ PINNED_CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
 
 
 class WorkflowSupplyChainPolicyTests(unittest.TestCase):
-    def write_workflow(self, body: str) -> Path:
+    def write_workflow(self, body: str, name: str = "workflow.yml") -> Path:
         temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temp_dir.cleanup)
-        path = Path(temp_dir.name) / "workflow.yml"
+        path = Path(temp_dir.name) / name
         path.write_text(body, encoding="utf-8")
         return path
 
@@ -27,6 +27,23 @@ class WorkflowSupplyChainPolicyTests(unittest.TestCase):
         errors = validate_workflow(path)
         self.assertEqual(len(errors), 1)
         self.assertIn("immutable 40-character commit SHA", errors[0])
+
+    def test_legacy_mutable_action_can_be_grandfathered_for_full_scan(self):
+        path = self.write_workflow(
+            "jobs:\n  test:\n    steps:\n      - uses: actions/checkout@v4\n",
+            name="phase-1-old.yml",
+        )
+        self.assertEqual(validate_workflow(path, allow_legacy_mutable_actions=True), [])
+        self.assertEqual(len(validate_workflow(path)), 1)
+
+    def test_legacy_exemption_never_allows_pull_request_target(self):
+        path = self.write_workflow(
+            "on:\n  pull_request_target:\n",
+            name="phase-2-old.yml",
+        )
+        errors = validate_workflow(path, allow_legacy_mutable_actions=True)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("pull_request_target is prohibited", errors[0])
 
     def test_rejects_pull_request_target(self):
         path = self.write_workflow("on:\n  pull_request_target:\n")
