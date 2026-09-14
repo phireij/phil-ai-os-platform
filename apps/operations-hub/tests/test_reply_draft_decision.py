@@ -15,6 +15,7 @@ from operations_hub import (  # noqa: E402
     evaluate_governance,
     normalize_channel_event,
 )
+from operations_hub.reply_draft_decision_register import ReplyDraftDecisionProposalRegister  # noqa: E402
 
 
 def fixture(source: str):
@@ -89,6 +90,52 @@ class ReplyDraftDecisionTests(unittest.TestCase):
             note="Adjust wording.",
         )
         self.assertEqual(first["decision_proposal_id"], second["decision_proposal_id"])
+
+    def test_register_is_idempotent_for_exact_proposal(self):
+        proposal = build_reply_draft_decision_proposal(
+            reply_draft("facebook"),
+            recommendation="recommend_future_dispatch",
+            reviewer_ref="operator:test",
+            note="Ready for later operator decision.",
+        )
+        register = ReplyDraftDecisionProposalRegister()
+        self.assertTrue(register.register(proposal)["accepted"])
+        self.assertTrue(register.register(proposal)["duplicate"])
+        self.assertEqual(1, register.read_model()["duplicate_proposals"])
+
+    def test_register_rejects_conflicting_content_for_existing_proposal_id(self):
+        proposal = build_reply_draft_decision_proposal(
+            reply_draft("facebook"),
+            recommendation="recommend_future_dispatch",
+            reviewer_ref="operator:test",
+            note="Ready for later operator decision.",
+        )
+        register = ReplyDraftDecisionProposalRegister()
+        register.register(proposal)
+        conflicting = copy.deepcopy(proposal)
+        conflicting["note"] = "Changed note under the same proposal ID"
+        with self.assertRaisesRegex(ReplyDraftDecisionError, "conflicts with existing proposal content"):
+            register.register(conflicting)
+        self.assertEqual(0, register.read_model()["duplicate_proposals"])
+
+    def test_register_and_detail_isolate_nested_proposal_state(self):
+        proposal = build_reply_draft_decision_proposal(
+            reply_draft("telegram"),
+            recommendation="request_reply_revision",
+            reviewer_ref="operator:test",
+            note="Adjust wording.",
+        )
+        proposal_id = proposal["decision_proposal_id"]
+        register = ReplyDraftDecisionProposalRegister()
+        register.register(proposal)
+
+        proposal["effects"]["channel_reply_authorized"] = True
+        stored = register.proposal_detail(proposal_id)
+        self.assertFalse(stored["effects"]["channel_reply_authorized"])
+
+        stored["effects"]["channel_reply_authorized"] = True
+        reread = register.proposal_detail(proposal_id)
+        self.assertFalse(reread["effects"]["channel_reply_authorized"])
 
     def test_rejects_reply_authority_tampering(self):
         draft = reply_draft("facebook")

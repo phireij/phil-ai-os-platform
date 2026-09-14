@@ -76,6 +76,36 @@ class OrderReviewProposalRegisterTests(unittest.TestCase):
         self.assertTrue(second["duplicate"])
         self.assertEqual(register.read_model()["duplicate_proposals"], 1)
 
+    def test_conflicting_content_for_existing_proposal_id_fails_closed(self):
+        detail = review_detail()
+        proposal = build_order_review_decision_proposal(
+            detail, "request_customer_revision", "staff:ruby", "Please clarify the design."
+        )
+        register = OrderReviewProposalRegister()
+        register.register(proposal, detail)
+        conflicting = copy.deepcopy(proposal)
+        conflicting["note"] = "Changed note under the same proposal ID"
+        with self.assertRaisesRegex(OrderReviewDecisionError, "conflicts with existing proposal content"):
+            register.register(conflicting, detail)
+        self.assertEqual(register.read_model()["duplicate_proposals"], 0)
+
+    def test_register_and_detail_isolate_nested_proposal_state(self):
+        detail = review_detail()
+        proposal = build_order_review_decision_proposal(
+            detail, "accept_for_quote_review", "staff:ruby", "Proceed."
+        )
+        proposal_id = proposal["proposal_id"]
+        register = OrderReviewProposalRegister()
+        register.register(proposal, detail)
+
+        proposal["effects"]["quote_authorized"] = True
+        stored = register.proposal_detail(proposal_id)
+        self.assertFalse(stored["effects"]["quote_authorized"])
+
+        stored["effects"]["quote_authorized"] = True
+        reread = register.proposal_detail(proposal_id)
+        self.assertFalse(reread["effects"]["quote_authorized"])
+
     def test_rejects_source_fingerprint_mismatch(self):
         detail = review_detail()
         proposal = build_order_review_decision_proposal(

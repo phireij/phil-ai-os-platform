@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from collections import Counter
 from typing import Any
 
@@ -17,6 +18,8 @@ class ReplyDraftRegister:
         _validate_proposal(proposal)
         reply_draft_id = proposal["reply_draft_id"]
         if reply_draft_id in self._drafts:
+            if proposal != self._drafts[reply_draft_id]:
+                raise ReplyDraftError("reply_draft_id conflicts with existing draft content")
             self._duplicates += 1
             return {
                 "accepted": False,
@@ -24,7 +27,7 @@ class ReplyDraftRegister:
                 "reply_draft_id": reply_draft_id,
                 "channel_reply_authorized": False,
             }
-        self._drafts[reply_draft_id] = dict(proposal)
+        self._drafts[reply_draft_id] = copy.deepcopy(proposal)
         return {
             "accepted": True,
             "duplicate": False,
@@ -69,7 +72,7 @@ class ReplyDraftRegister:
 
     def detail(self, reply_draft_id: str) -> dict[str, Any] | None:
         draft = self._drafts.get(reply_draft_id)
-        return dict(draft) if draft is not None else None
+        return copy.deepcopy(draft) if draft is not None else None
 
 
 def _validate_proposal(proposal: Any) -> None:
