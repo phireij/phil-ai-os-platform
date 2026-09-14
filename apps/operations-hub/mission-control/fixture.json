@@ -1,6 +1,6 @@
 {
   "schema": "phil-ai-os-mission-control-lifecycle-projection",
-  "version": 3,
+  "version": 4,
   "status": "read_only",
   "mission_control_mode": "read_only",
   "control_plane": {
@@ -37,8 +37,26 @@
     "customer_payloads_exposed": false,
     "normalized_intent_exposed": false
   },
+  "recovery": {
+    "plan_count": 2,
+    "duplicate_plans": 0,
+    "retry_simulation_count": 1,
+    "stop_for_review_count": 1,
+    "error_code_counts": {
+      "synthetic_permanent_failure": 1,
+      "synthetic_timeout": 1
+    },
+    "read_only": true,
+    "automatic_retry": false,
+    "retry_authorized": false,
+    "automatic_rollback": false,
+    "rollback_authorized": false,
+    "execution_authorized": false,
+    "mutation_authorized": false,
+    "authority_effect": "none"
+  },
   "attention": {
-    "count": 6,
+    "count": 7,
     "items": [
       {
         "kind": "tasks_awaiting_approval",
@@ -63,6 +81,12 @@
         "label": "Owner review packets",
         "count": 2,
         "priority": "medium"
+      },
+      {
+        "kind": "recovery_stop_for_review",
+        "label": "Recovery items stopped for review",
+        "count": 1,
+        "priority": "high"
       }
     ],
     "read_only": true

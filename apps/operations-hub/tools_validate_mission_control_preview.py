@@ -20,8 +20,8 @@ def main() -> None:
 
     if fixture.get("schema") != "phil-ai-os-mission-control-lifecycle-projection":
         fail("projection schema drift")
-    if fixture.get("version") != 3:
-        fail("Mission Control projection version must be 3")
+    if fixture.get("version") != 4:
+        fail("Mission Control projection version must be 4")
     if fixture.get("status") != "read_only" or fixture.get("mission_control_mode") != "read_only":
         fail("Mission Control must remain read_only")
     if fixture.get("authority_effect") != "none":
@@ -44,6 +44,34 @@ def main() -> None:
             fail(f"task composition {group} must be an object")
         if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in values.values()):
             fail(f"task composition {group} contains invalid counts")
+
+    recovery = fixture.get("recovery", {})
+    if recovery.get("read_only") is not True or recovery.get("authority_effect") != "none":
+        fail("recovery posture must remain read-only with no authority effect")
+    for field in (
+        "plan_count",
+        "duplicate_plans",
+        "retry_simulation_count",
+        "stop_for_review_count",
+    ):
+        value = recovery.get(field)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            fail(f"recovery {field} must be a non-negative integer")
+    error_counts = recovery.get("error_code_counts")
+    if not isinstance(error_counts, dict) or any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in error_counts.values()
+    ):
+        fail("recovery error_code_counts invalid")
+    for field in (
+        "automatic_retry",
+        "retry_authorized",
+        "automatic_rollback",
+        "rollback_authorized",
+        "execution_authorized",
+        "mutation_authorized",
+    ):
+        if recovery.get(field) is not False:
+            fail(f"recovery authority expanded: {field}")
 
     control = fixture.get("control_plane", {})
     if control.get("autonomy_level") != "A0":
@@ -111,8 +139,9 @@ def main() -> None:
 
     print(
         "PHIL_AI_OS_MISSION_CONTROL_PREVIEW_GREEN "
-        "mode=read_only version=3 autonomy=A0 hermes=idle attention=read_only task_composition=read_only "
-        "simulated_only=true writes=false replies=false network_dispatch=false authority_effect=none"
+        "mode=read_only version=4 autonomy=A0 hermes=idle attention=read_only task_composition=read_only "
+        "recovery=read_only retry_authorized=false rollback_authorized=false simulated_only=true "
+        "writes=false replies=false network_dispatch=false authority_effect=none"
     )
 
 

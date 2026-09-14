@@ -14,7 +14,7 @@ from operations_hub import build_mission_control_lifecycle_projection  # noqa: E
 OUT = ROOT / "mission-control" / "fixture.json"
 
 
-def build_source_models() -> tuple[dict, dict]:
+def build_source_models() -> tuple[dict, dict, dict]:
     operations_dashboard = {
         "status": "read_only",
         "channels": {"total_events": 5},
@@ -76,12 +76,28 @@ def build_source_models() -> tuple[dict, dict]:
         "items": items,
         "authority_effect": "none",
     }
-    return operations_dashboard, automation_audit
+    recovery_read_model = {
+        "status": "read_only",
+        "queue": "automation_recovery_review",
+        "plan_count": 2,
+        "duplicate_plans": 0,
+        "retry_simulation_count": 1,
+        "stop_for_review_count": 1,
+        "error_code_counts": {"synthetic_timeout": 1, "synthetic_permanent_failure": 1},
+        "automatic_retry": False,
+        "retry_authorized": False,
+        "automatic_rollback": False,
+        "rollback_authorized": False,
+        "execution_authorized": False,
+        "mutation_authorized": False,
+        "authority_effect": "none",
+    }
+    return operations_dashboard, automation_audit, recovery_read_model
 
 
 def render() -> str:
-    dashboard, audit = build_source_models()
-    projection = build_mission_control_lifecycle_projection(dashboard, audit)
+    dashboard, audit, recovery = build_source_models()
+    projection = build_mission_control_lifecycle_projection(dashboard, audit, recovery)
     return json.dumps(projection, indent=2, ensure_ascii=False) + "\n"
 
 
@@ -95,7 +111,10 @@ def main() -> None:
         current = OUT.read_text(encoding="utf-8")
         if current != generated:
             raise SystemExit("PHIL_AI_OS_MISSION_CONTROL_FIXTURE_DRIFT: regenerate fixture before merging")
-        print("PHIL_AI_OS_MISSION_CONTROL_FIXTURE_GREEN generated_from_projection=true task_composition=read_only authority_effect=none")
+        print(
+            "PHIL_AI_OS_MISSION_CONTROL_FIXTURE_GREEN generated_from_projection=true "
+            "task_composition=read_only recovery=read_only authority_effect=none"
+        )
         return
 
     OUT.write_text(generated, encoding="utf-8")
