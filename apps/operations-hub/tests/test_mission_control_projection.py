@@ -117,6 +117,7 @@ def approval_model():
         "simulation_releasable": 3,
         "by_state": {"required": 1, "approved": 1, "denied": 1, "not_required": 2},
         "decision_ids_exposed": False,
+        "plan_fingerprints_exposed": False,
         "automatic_execution": False,
         "execution_authorized": False,
         "channel_reply_authorized": False,
@@ -192,6 +193,8 @@ class MissionControlProjectionTests(unittest.TestCase):
         self.assertEqual({"approved": 1, "denied": 1, "not_required": 2, "required": 1}, approval["by_state"])
         self.assertFalse(approval["decision_ids_exposed"])
         self.assertFalse(projection["privacy"]["approval_decision_ids_exposed"])
+        self.assertFalse(approval["plan_fingerprints_exposed"])
+        self.assertFalse(projection["privacy"]["approval_plan_fingerprints_exposed"])
         serialized = json.dumps(projection, ensure_ascii=False)
         self.assertNotIn('"decision_id":', serialized)
         for field in ("automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized"):
@@ -269,6 +272,10 @@ class MissionControlProjectionTests(unittest.TestCase):
         approval = approval_model()
         approval["decision_ids_exposed"] = True
         with self.assertRaisesRegex(MissionControlProjectionError, "decision identifiers"):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit_model(), None, approval)
+        approval = approval_model()
+        approval["plan_fingerprints_exposed"] = True
+        with self.assertRaisesRegex(MissionControlProjectionError, "plan fingerprints"):
             build_mission_control_lifecycle_projection(operations_dashboard(), audit_model(), None, approval)
 
     def test_rejects_approval_aggregate_metadata_that_does_not_match_states(self):

@@ -101,6 +101,7 @@ def build_source_models() -> tuple[dict, dict, dict, dict]:
         "simulation_releasable": 3,
         "by_state": {"required": 1, "approved": 1, "denied": 1, "not_required": 2},
         "decision_ids_exposed": False,
+        "plan_fingerprints_exposed": False,
         "automatic_execution": False,
         "execution_authorized": False,
         "channel_reply_authorized": False,

@@ -137,6 +137,8 @@ def main() -> None:
         fail("approval posture must remain read-only with no authority effect")
     if approval.get("decision_ids_exposed") is not False:
         fail("approval decision identifiers must remain hidden")
+    if approval.get("plan_fingerprints_exposed") is not False:
+        fail("approval plan fingerprints must remain hidden")
     for field in ("plan_count", "decision_count", "awaiting_decision", "simulation_releasable"):
         value = approval.get(field)
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:

@@ -50,6 +50,7 @@
     },
     "read_only": true,
     "decision_ids_exposed": false,
+    "plan_fingerprints_exposed": false,
     "automatic_execution": false,
     "execution_authorized": false,
     "channel_reply_authorized": false,
@@ -150,7 +151,8 @@
     "custom_notes_exposed": false,
     "reference_image_names_exposed": false,
     "reply_draft_text_exposed": false,
-    "approval_decision_ids_exposed": false
+    "approval_decision_ids_exposed": false,
+    "approval_plan_fingerprints_exposed": false
   },
   "execution_authorized": false,
   "channel_reply_authorized": false,

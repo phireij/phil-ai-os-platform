@@ -101,6 +101,7 @@ def _project_approval(approval_read_model: dict[str, Any] | None) -> dict[str, A
             "by_state": {},
             "read_only": True,
             "decision_ids_exposed": False,
+            "plan_fingerprints_exposed": False,
             "automatic_execution": False,
             "execution_authorized": False,
             "channel_reply_authorized": False,
@@ -113,6 +114,8 @@ def _project_approval(approval_read_model: dict[str, Any] | None) -> dict[str, A
         raise MissionControlProjectionError("approval authority_effect must remain none")
     if approval_read_model.get("decision_ids_exposed") is not False:
         raise MissionControlProjectionError("approval decision identifiers must remain hidden")
+    if approval_read_model.get("plan_fingerprints_exposed") is not False:
+        raise MissionControlProjectionError("approval plan fingerprints must remain hidden")
     _require_false(
         approval_read_model,
         (
@@ -150,6 +153,7 @@ def _project_approval(approval_read_model: dict[str, Any] | None) -> dict[str, A
         "by_state": by_state,
         "read_only": True,
         "decision_ids_exposed": False,
+        "plan_fingerprints_exposed": False,
         "automatic_execution": False,
         "execution_authorized": False,
         "channel_reply_authorized": False,
@@ -375,6 +379,7 @@ def build_mission_control_lifecycle_projection(
             "reference_image_names_exposed": False,
             "reply_draft_text_exposed": False,
             "approval_decision_ids_exposed": False,
+            "approval_plan_fingerprints_exposed": False,
         },
         "execution_authorized": False,
         "channel_reply_authorized": False,

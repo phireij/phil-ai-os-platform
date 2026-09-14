@@ -115,6 +115,7 @@
         "by_state",
         "read_only",
         "decision_ids_exposed",
+        "plan_fingerprints_exposed",
         "automatic_execution",
         "execution_authorized",
         "channel_reply_authorized",
@@ -132,6 +133,7 @@
         },
         "read_only": {"const": true},
         "decision_ids_exposed": {"const": false},
+        "plan_fingerprints_exposed": {"const": false},
         "automatic_execution": {"const": false},
         "execution_authorized": {"const": false},
         "channel_reply_authorized": {"const": false},
@@ -234,14 +236,16 @@
         "custom_notes_exposed",
         "reference_image_names_exposed",
         "reply_draft_text_exposed",
-        "approval_decision_ids_exposed"
+        "approval_decision_ids_exposed",
+        "approval_plan_fingerprints_exposed"
       ],
       "properties": {
         "raw_customer_text_exposed": {"const": false},
         "custom_notes_exposed": {"const": false},
         "reference_image_names_exposed": {"const": false},
         "reply_draft_text_exposed": {"const": false},
-        "approval_decision_ids_exposed": {"const": false}
+        "approval_decision_ids_exposed": {"const": false},
+        "approval_plan_fingerprints_exposed": {"const": false}
       }
     },
     "execution_authorized": {"const": false},
