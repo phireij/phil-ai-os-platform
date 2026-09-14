@@ -18,6 +18,16 @@ const safetyFields = [
   ["production_publish_authorized", "Production publish"],
 ];
 
+const controlPlaneFields = [
+  ["autonomy_level", "Autonomy level"],
+  ["execution_task_class", "Execution task class"],
+  ["hermes_state", "Hermes"],
+  ["specialists_enabled", "Specialists"],
+  ["mission_control_write_enabled", "Mission Control writes"],
+  ["live_execution_enabled", "Live execution"],
+  ["operator_decision_required_for_sensitive_actions", "Sensitive actions"],
+];
+
 function text(value) {
   return String(value ?? "—");
 }
@@ -33,6 +43,58 @@ function renderMetrics(data) {
     valueNode.textContent = text(data.operations?.[key] ?? 0);
     card.append(labelNode, valueNode);
     return card;
+  }));
+}
+
+function renderAttention(data) {
+  const list = document.querySelector("#attention-list");
+  const items = data.attention?.items ?? [];
+  document.querySelector("#attention-chip").textContent = `${data.attention?.count ?? 0} items`;
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "load-state";
+    empty.textContent = "No bounded operator-attention items in this projection.";
+    list.replaceChildren(empty);
+    return;
+  }
+  list.replaceChildren(...items.map((item) => {
+    const article = document.createElement("article");
+    article.className = "lifecycle";
+    const top = document.createElement("div");
+    top.className = "lifecycle-top";
+    const label = document.createElement("span");
+    label.className = "lifecycle-id";
+    label.textContent = text(item.label);
+    const chip = document.createElement("span");
+    chip.className = "state-chip";
+    chip.textContent = `${text(item.count)} · ${text(item.priority)}`;
+    top.append(label, chip);
+    article.append(top);
+    return article;
+  }));
+}
+
+function renderControlPlane(data) {
+  const list = document.querySelector("#control-plane-list");
+  list.replaceChildren(...controlPlaneFields.map(([key, label]) => {
+    const row = document.createElement("div");
+    row.className = "safety-row";
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    const value = data.control_plane?.[key];
+    if (key === "operator_decision_required_for_sensitive_actions") {
+      dd.textContent = value === true ? "OPERATOR REQUIRED" : "UNSAFE";
+      if (value === true) dd.className = "off";
+    } else if (typeof value === "boolean") {
+      dd.textContent = value ? "ENABLED" : "DISABLED";
+      if (value === false) dd.className = "off";
+    } else {
+      dd.textContent = text(value).toUpperCase();
+      dd.className = "off";
+    }
+    row.append(dt, dd);
+    return row;
   }));
 }
 
@@ -114,11 +176,20 @@ function renderPrivacy(data) {
 
 function assertReadOnly(data) {
   if (data.schema !== "phil-ai-os-mission-control-lifecycle-projection") throw new Error("Unexpected projection schema");
+  if (data.version !== 2) throw new Error("Unsupported Mission Control projection version");
   if (data.status !== "read_only" || data.mission_control_mode !== "read_only") throw new Error("Mission Control is not read-only");
   if (data.authority_effect !== "none") throw new Error("Unexpected authority effect");
   for (const [key] of safetyFields) if (data[key] !== false) throw new Error(`Unsafe authority flag: ${key}`);
   if (data.mutation_authorized !== false || data.order_creation_authorized !== false) throw new Error("Mutation/order authority must remain disabled");
   if (data.automation?.simulated_only !== true) throw new Error("Automation projection must remain simulated-only");
+  if (data.attention?.read_only !== true) throw new Error("Operator attention projection must remain read-only");
+  const control = data.control_plane ?? {};
+  if (control.autonomy_level !== "A0" || control.execution_task_class !== "general") throw new Error("Unexpected control-plane baseline");
+  if (control.hermes_state !== "idle") throw new Error("Hermes must remain idle in this preview");
+  for (const key of ["specialists_enabled", "mission_control_write_enabled", "live_execution_enabled"]) {
+    if (control[key] !== false) throw new Error(`Unsafe control-plane flag: ${key}`);
+  }
+  if (control.operator_decision_required_for_sensitive_actions !== true) throw new Error("Sensitive actions must require operator decision");
 }
 
 async function boot() {
@@ -129,6 +200,8 @@ async function boot() {
     const data = await response.json();
     assertReadOnly(data);
     renderMetrics(data);
+    renderAttention(data);
+    renderControlPlane(data);
     renderLifecycles(data);
     renderSafety(data);
     renderPrivacy(data);
@@ -137,10 +210,9 @@ async function boot() {
     state.textContent = `${data.operations.tasks} tasks · ${data.operations.tasks_awaiting_approval} awaiting approval`;
   } catch (error) {
     state.textContent = `Fail-closed: ${error.message}`;
-    document.querySelector("#metric-grid").replaceChildren();
-    document.querySelector("#lifecycle-list").replaceChildren();
-    document.querySelector("#safety-list").replaceChildren();
-    document.querySelector("#privacy-grid").replaceChildren();
+    for (const selector of ["#metric-grid", "#attention-list", "#control-plane-list", "#lifecycle-list", "#safety-list", "#privacy-grid"]) {
+      document.querySelector(selector)?.replaceChildren();
+    }
   }
 }
 
