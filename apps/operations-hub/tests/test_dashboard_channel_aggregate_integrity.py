@@ -33,7 +33,11 @@ def valid_channel_model():
         "standard_queue": 2,
         "source_counts": {"facebook": 2, "telegram": 1},
         "intent_counts": {"order": 2, "question": 1},
-        "items": [],
+        "items": [
+            {"mutation_authorized": False},
+            {"mutation_authorized": False},
+            {"mutation_authorized": False},
+        ],
         "mutation_authorized": False,
     }
 
