@@ -9,6 +9,16 @@ on:
       - 'apps/operations-hub/src/operations_hub/mission_control_projection.py'
       - 'contracts/operations/mission-control-lifecycle-projection.schema.json'
       - '.github/workflows/sprint5-mission-control-readonly-preview-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/operations-hub/mission-control/**'
+      - 'apps/operations-hub/tools_generate_mission_control_preview_fixture.py'
+      - 'apps/operations-hub/tools_validate_mission_control_preview.py'
+      - 'apps/operations-hub/src/operations_hub/mission_control_projection.py'
+      - 'contracts/operations/mission-control-lifecycle-projection.schema.json'
+      - '.github/workflows/sprint5-mission-control-readonly-preview-ci.yml'
   workflow_dispatch:
 
 permissions:
@@ -17,6 +27,7 @@ permissions:
 jobs:
   validate-readonly-preview:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -42,3 +53,44 @@ jobs:
         if: always()
         run: |
           if [ -f /tmp/mission-control-preview.pid ]; then kill "$(cat /tmp/mission-control-preview.pid)" || true; fi
+      - name: Package bounded read-only Mission Control preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          out=/tmp/philaios-mission-control-readonly-preview
+          mkdir -p "$out/preview" "$out/contracts"
+          cp -a apps/operations-hub/mission-control/. "$out/preview/"
+          cp contracts/operations/mission-control-lifecycle-projection.schema.json "$out/contracts/"
+          cat > "$out/BOUNDARY.txt" <<'EOF'
+          Phil AI OS Mission Control bounded preview artifact
+          mode=read_only
+          authority_effect=none
+          autonomy=A0
+          task_class=general
+          hermes=idle
+          live_execution=false
+          mission_control_writes=false
+          customer_replies=false
+          payment_execution=false
+          sms_send=false
+          woo_commerce_mutation=false
+          inventory_mutation=false
+          production_publish=false
+          retry_authorized=false
+          rollback_authorized=false
+          This artifact is a static non-production preview package only. It does not grant deployment or production authority.
+          EOF
+          test -f "$out/preview/index.html"
+          test -f "$out/preview/fixture.json"
+          test -f "$out/preview/mission-control.mjs"
+          test -f "$out/contracts/mission-control-lifecycle-projection.schema.json"
+          grep -q 'mode=read_only' "$out/BOUNDARY.txt"
+          grep -q 'authority_effect=none' "$out/BOUNDARY.txt"
+          echo 'PHIL_AI_OS_MISSION_CONTROL_PREVIEW_ARTIFACT_GREEN mode=read_only authority_effect=none deployment_authority=false'
+      - name: Upload bounded Mission Control preview artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: phil-ai-os-mission-control-readonly-preview
+          path: /tmp/philaios-mission-control-readonly-preview/
+          if-no-files-found: error
+          retention-days: 7
