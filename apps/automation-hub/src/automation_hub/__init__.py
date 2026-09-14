@@ -3,6 +3,7 @@ from .audit import AutomationAuditError, AutomationAuditEvent, InMemoryAutomatio
 from .boundary import BoundaryRequestError, build_dry_run_boundary_request
 from .planner import AutomationPlanError, build_automation_plan, build_task_automation_plan
 from .recovery import RecoveryPlanError, build_recovery_plan
+from .recovery_queue import RecoveryPlanQueue
 
 __all__ = [
     "ApprovalReplayError",
@@ -14,6 +15,7 @@ __all__ = [
     "BoundaryRequestError",
     "InMemoryAutomationAudit",
     "RecoveryPlanError",
+    "RecoveryPlanQueue",
     "build_automation_plan",
     "build_task_automation_plan",
     "build_dry_run_boundary_request",

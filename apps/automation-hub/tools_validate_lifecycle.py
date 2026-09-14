@@ -13,6 +13,7 @@ sys.path.insert(0, str(REPO / "apps/operations-hub/src"))
 from automation_hub import (  # noqa: E402
     ApprovalSimulationStore,
     InMemoryAutomationAudit,
+    RecoveryPlanQueue,
     build_automation_plan,
     build_dry_run_boundary_request,
     build_recovery_plan,
@@ -100,7 +101,6 @@ def main() -> None:
         if plan["steps"][1]["name"] != "validate_task_governance":
             fail(f"{source} task automation plan lost governance validation")
 
-        # Prove the customer-reply lifecycle remains bounded at explicit operator decision.
         reply_draft = build_reply_draft_proposal(
             task_candidate,
             f"Simulation-only reply draft for {source}.",
@@ -149,7 +149,6 @@ def main() -> None:
             reply_packet_sources.add(source)
 
         store.register_plan(plan)
-
         if plan["approval_required"]:
             approval_required_sources.add(source)
             store.decide(plan["plan_id"], "approve", f"fixture-lifecycle-{source}-approval")
@@ -210,18 +209,43 @@ def main() -> None:
     ):
         fail("multi-channel audit event gained authority")
 
-    recovery = build_recovery_plan(
+    retry_plan = build_recovery_plan(
         requests["whatsapp"],
         error_code="synthetic_timeout",
         retryable=True,
         attempt=1,
     )
-    if recovery["retry_planned"] is not True or recovery["automatic_retry"] is not False or recovery["retry_authorized"] is not False:
+    if retry_plan["retry_planned"] is not True or retry_plan["automatic_retry"] is not False or retry_plan["retry_authorized"] is not False:
         fail("retry plan gained automatic authority")
-    if recovery["rollback_required"] is not False or recovery["automatic_rollback"] is not False or recovery["rollback_authorized"] is not False:
+    if retry_plan["rollback_required"] is not False or retry_plan["automatic_rollback"] is not False or retry_plan["rollback_authorized"] is not False:
         fail("dry-run recovery unexpectedly requires/authorizes rollback")
-    if recovery["authority_effect"] != "none":
+    if retry_plan["authority_effect"] != "none":
         fail("recovery plan authority effect changed")
+
+    review_plan = build_recovery_plan(
+        requests["facebook"],
+        error_code="synthetic_permanent_failure",
+        retryable=False,
+        attempt=1,
+    )
+    recovery_queue = RecoveryPlanQueue()
+    recovery_queue.ingest(retry_plan)
+    recovery_queue.ingest(review_plan)
+    recovery_model = recovery_queue.read_model()
+    if recovery_model["status"] != "read_only" or recovery_model["authority_effect"] != "none":
+        fail("recovery queue read model boundary changed")
+    if recovery_model["plan_count"] != 2 or recovery_model["retry_simulation_count"] != 1 or recovery_model["stop_for_review_count"] != 1:
+        fail("recovery queue counts invalid")
+    for field in (
+        "automatic_retry",
+        "retry_authorized",
+        "automatic_rollback",
+        "rollback_authorized",
+        "execution_authorized",
+        "mutation_authorized",
+    ):
+        if recovery_model[field] is not False:
+            fail(f"recovery queue gained {field}")
 
     print(
         "PHIL_AI_OS_SPRINT_6_TASK_AUTOMATION_BRIDGE_GREEN "
@@ -240,6 +264,11 @@ def main() -> None:
         "dispatch=false network_call=false execution=false reply=false mutation=false authority_effect=none"
     )
     print("PHIL_AI_OS_SPRINT_6_RECOVERY_PLAN_GREEN retry=planned_only rollback=dry_run_no_side_effect")
+    print(
+        "PHIL_AI_OS_SPRINT_6_RECOVERY_QUEUE_GREEN "
+        f"plans={recovery_model['plan_count']} retry_simulation={recovery_model['retry_simulation_count']} "
+        f"stop_for_review={recovery_model['stop_for_review_count']} execution=false retry_authorized=false authority_effect=none"
+    )
 
 
 if __name__ == "__main__":
