@@ -52,7 +52,23 @@ def build_recovery_plan(
     }
 
 
+def _expected_request_id(request: dict[str, Any]) -> str:
+    material = f"{request['plan_id']}|{request['lifecycle_correlation_id']}|dry-run".encode("utf-8")
+    return "dry-run:" + hashlib.sha256(material).hexdigest()[:24]
+
+
 def _validate_request(request: dict[str, Any]) -> None:
+    if not isinstance(request, dict):
+        raise RecoveryPlanError("request must be an object")
+    for field in ("request_id", "plan_id", "lifecycle_correlation_id"):
+        if not isinstance(request.get(field), str) or not request[field]:
+            raise RecoveryPlanError(f"{field} is required")
+    if request.get("request_id") != _expected_request_id(request):
+        raise RecoveryPlanError("request_id does not match canonical boundary request")
+    if request.get("target") != "execution_boundary" or request.get("operation") != "preview_request":
+        raise RecoveryPlanError("request boundary target or operation is invalid")
+    if request.get("task_class") != "general" or request.get("assigned_agent") != "hermes":
+        raise RecoveryPlanError("request routing is outside bounded baseline")
     if request.get("mode") != "dry_run" or request.get("dry_run") is not True:
         raise RecoveryPlanError("recovery planner accepts dry-run requests only")
     if request.get("dispatch") is not False or request.get("network_call") is not False:
@@ -62,6 +78,3 @@ def _validate_request(request: dict[str, Any]) -> None:
     for field in ("automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized"):
         if request.get(field) is not False:
             raise RecoveryPlanError(f"request {field} must remain false")
-    for field in ("request_id", "lifecycle_correlation_id"):
-        if not isinstance(request.get(field), str) or not request[field]:
-            raise RecoveryPlanError(f"{field} is required")
