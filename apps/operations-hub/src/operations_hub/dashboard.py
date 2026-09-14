@@ -24,6 +24,23 @@ def _read_only(model: Any, label: str) -> dict[str, Any]:
     return model
 
 
+def _validated_count(value: Any, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise OperationsDashboardError(f"{label} must be a non-negative integer")
+    return value
+
+
+def _validated_count_map(value: Any, label: str) -> dict[str, int]:
+    if not isinstance(value, dict):
+        raise OperationsDashboardError(f"{label} must be an object")
+    result: dict[str, int] = {}
+    for key, count in value.items():
+        if not isinstance(key, str) or not key:
+            raise OperationsDashboardError(f"{label} keys must be non-empty strings")
+        result[key] = _validated_count(count, f"{label}.{key}")
+    return dict(sorted(result.items()))
+
+
 def build_operations_dashboard(
     channel_queue: OperationsQueue,
     order_review_queue: OrderReviewQueue,
@@ -70,16 +87,29 @@ def build_operations_dashboard(
         }
     )
 
+    channel_total_events = _validated_count(channels.get("total_events", 0), "channel total_events")
+    channel_duplicate_events = _validated_count(channels.get("duplicate_events", 0), "channel duplicate_events")
+    channel_review_required = _validated_count(channels.get("review_required", 0), "channel review_required")
+    channel_standard_queue = _validated_count(channels.get("standard_queue", 0), "channel standard_queue")
+    channel_source_counts = _validated_count_map(channels.get("source_counts", {}), "channel source_counts")
+    channel_intent_counts = _validated_count_map(channels.get("intent_counts", {}), "channel intent_counts")
+    if channel_review_required + channel_standard_queue != channel_total_events:
+        raise OperationsDashboardError("channel queue counts must match channel total_events")
+    if sum(channel_source_counts.values()) != channel_total_events:
+        raise OperationsDashboardError("channel source_counts must match channel total_events")
+    if sum(channel_intent_counts.values()) != channel_total_events:
+        raise OperationsDashboardError("channel intent_counts must match channel total_events")
+
     return {
         "status": "read_only",
         "dashboard": "operations_hub_workload",
         "channels": {
-            "total_events": channels.get("total_events", 0),
-            "duplicate_events": channels.get("duplicate_events", 0),
-            "review_required": channels.get("review_required", 0),
-            "standard_queue": channels.get("standard_queue", 0),
-            "source_counts": dict(channels.get("source_counts", {})),
-            "intent_counts": dict(channels.get("intent_counts", {})),
+            "total_events": channel_total_events,
+            "duplicate_events": channel_duplicate_events,
+            "review_required": channel_review_required,
+            "standard_queue": channel_standard_queue,
+            "source_counts": channel_source_counts,
+            "intent_counts": channel_intent_counts,
         },
         "tasks": {
             "task_count": tasks.get("task_count", 0),
