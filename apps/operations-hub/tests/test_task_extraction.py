@@ -77,6 +77,35 @@ class TaskExtractionTests(unittest.TestCase):
         self.assertFalse(model["channel_reply_authorized"])
         self.assertFalse(model["mutation_authorized"])
 
+    def test_queue_rejects_conflicting_content_for_existing_task_id(self):
+        queue = TaskCandidateQueue()
+        task = candidate("facebook")
+        queue.ingest(task)
+        conflicting = copy.deepcopy(task)
+        conflicting["customer_context"]["text"] = "different customer text"
+        with self.assertRaisesRegex(TaskExtractionError, "ID conflicts"):
+            queue.ingest(conflicting)
+        self.assertEqual(0, queue.read_model()["duplicate_tasks"])
+
+    def test_queue_copies_ingested_candidate_and_detail_state(self):
+        queue = TaskCandidateQueue()
+        task = candidate("instagram")
+        original_text = task["customer_context"]["text"]
+        task_id = task["task_candidate_id"]
+        queue.ingest(task)
+
+        task["customer_context"]["text"] = "caller mutated input"
+        task["authority"]["mutation_authorized"] = True
+        detail = queue.task_detail(task_id)
+        self.assertEqual(original_text, detail["customer_context"]["text"])
+        self.assertFalse(detail["authority"]["mutation_authorized"])
+
+        detail["customer_context"]["text"] = "caller mutated detail"
+        detail["authority"]["mutation_authorized"] = True
+        reread = queue.task_detail(task_id)
+        self.assertEqual(original_text, reread["customer_context"]["text"])
+        self.assertFalse(reread["authority"]["mutation_authorized"])
+
     def test_queue_summarizes_five_channel_task_workload(self):
         queue = TaskCandidateQueue()
         for source in ("facebook", "instagram", "telegram", "whatsapp", "google_business"):
