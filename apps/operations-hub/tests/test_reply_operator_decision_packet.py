@@ -56,6 +56,27 @@ class ReplyOperatorDecisionPacketTests(unittest.TestCase):
         second = build_reply_operator_decision_packet(draft, proposal)
         self.assertEqual(first["operator_decision_packet_id"], second["operator_decision_packet_id"])
 
+    def test_packet_identity_binds_operator_visible_draft_text(self):
+        draft, proposal = draft_and_proposal("facebook")
+        first = build_reply_operator_decision_packet(draft, proposal)
+
+        tampered_draft = copy.deepcopy(draft)
+        tampered_draft["draft_text"] = "Altered operator-visible reply text."
+        second = build_reply_operator_decision_packet(tampered_draft, proposal)
+
+        self.assertNotEqual(first["operator_decision_packet_id"], second["operator_decision_packet_id"])
+        self.assertEqual("Altered operator-visible reply text.", second["draft_text"])
+
+    def test_packet_identity_binds_operator_visible_locale(self):
+        draft, proposal = draft_and_proposal("facebook")
+        first = build_reply_operator_decision_packet(draft, proposal)
+
+        tampered_draft = copy.deepcopy(draft)
+        tampered_draft["locale"] = "ja" if draft["locale"] != "ja" else "en"
+        second = build_reply_operator_decision_packet(tampered_draft, proposal)
+
+        self.assertNotEqual(first["operator_decision_packet_id"], second["operator_decision_packet_id"])
+
     def test_all_supported_recommendations_can_be_presented_for_explicit_decision(self):
         for recommendation in (
             "recommend_future_dispatch",
