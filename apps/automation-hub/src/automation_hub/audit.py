@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 from typing import Any
 
 
@@ -36,25 +38,30 @@ class AutomationAuditEvent:
 class InMemoryAutomationAudit:
     def __init__(self) -> None:
         self._events: list[AutomationAuditEvent] = []
+        self._plan_fingerprints: dict[str, str] = {}
 
     def record_plan(self, plan: dict[str, Any]) -> dict[str, Any]:
         _validate_plan(plan)
+        self._bind_plan(plan)
         outcome = "approval_required" if plan.get("approval_required") is True else "simulation_ready"
         return self._append(plan, "plan_created", outcome)
 
     def record_approval(self, plan: dict[str, Any], approval_state: str) -> dict[str, Any]:
         _validate_plan(plan)
+        self._bind_plan(plan)
         if approval_state not in {"approved", "denied", "not_required"}:
             raise AutomationAuditError("unsupported approval state")
         return self._append(plan, "approval_evaluated", approval_state)
 
     def record_boundary_request(self, plan: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
         _validate_plan(plan)
+        self._bind_plan(plan)
         _validate_request(plan, request)
         return self._append(plan, "boundary_preview", "dry_run_created", request_id=request["request_id"])
 
     def record_simulated_result(self, plan: dict[str, Any], request: dict[str, Any], outcome: str = "simulated_success") -> dict[str, Any]:
         _validate_plan(plan)
+        self._bind_plan(plan)
         _validate_request(plan, request)
         if outcome not in {"simulated_success", "simulated_failure"}:
             raise AutomationAuditError("unsupported simulated outcome")
@@ -70,8 +77,19 @@ class InMemoryAutomationAudit:
             "by_stage": by_stage,
             "items": items,
             "read_only": True,
+            "plan_fingerprints_exposed": False,
             "authority_effect": "none",
         }
+
+    def _bind_plan(self, plan: dict[str, Any]) -> None:
+        plan_id = plan["plan_id"]
+        fingerprint = _plan_fingerprint(plan)
+        existing = self._plan_fingerprints.get(plan_id)
+        if existing is None:
+            self._plan_fingerprints[plan_id] = fingerprint
+            return
+        if existing != fingerprint:
+            raise AutomationAuditError("plan content changed during audited lifecycle")
 
     def _append(self, plan: dict[str, Any], stage: str, outcome: str, request_id: str | None = None) -> dict[str, Any]:
         event = AutomationAuditEvent(
@@ -86,7 +104,17 @@ class InMemoryAutomationAudit:
         return event.to_dict()
 
 
+def _plan_fingerprint(plan: dict[str, Any]) -> str:
+    try:
+        encoded = json.dumps(plan, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise AutomationAuditError("plan must be JSON-serializable") from exc
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _validate_plan(plan: dict[str, Any]) -> None:
+    if not isinstance(plan, dict):
+        raise AutomationAuditError("plan must be an object")
     if plan.get("authority_effect") != "none":
         raise AutomationAuditError("plan authority_effect must remain none")
     for field in ("automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized"):
