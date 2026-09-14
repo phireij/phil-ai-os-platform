@@ -73,6 +73,7 @@ class ApprovalSimulationStore:
             raise ApprovalSimulationError("invalid approval state")
         return {
             "plan_id": plan_id,
+            "plan_content_binding": record.plan_fingerprint,
             "approval_state": record.state,
             "simulation_release": True,
             "automatic_execution": False,
