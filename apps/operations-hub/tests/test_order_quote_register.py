@@ -86,6 +86,36 @@ class OrderQuoteDraftRegisterTests(unittest.TestCase):
         self.assertTrue(duplicate["duplicate"])
         self.assertEqual(register.read_model()["duplicate_drafts"], 1)
 
+    def test_rejects_conflicting_content_for_existing_draft_id(self):
+        register = OrderQuoteDraftRegister()
+        register.register(draft())
+        conflicting = copy.deepcopy(draft())
+        conflicting["note"] = "Changed note under same ID"
+        with self.assertRaisesRegex(OrderQuoteDraftError, "conflicts with existing draft content"):
+            register.register(conflicting)
+        self.assertEqual(register.read_model()["duplicate_drafts"], 0)
+
+    def test_register_and_detail_isolate_nested_draft_state(self):
+        register = OrderQuoteDraftRegister()
+        payload = draft()
+        register.register(payload)
+        payload["request_context"]["customization"]["custom_notes"] = "caller mutated input"
+        payload["pricing"]["quote_amount"] = 9999
+        payload["authority"]["quote_authorized"] = True
+
+        detail = register.draft_detail("quote-draft:0123456789abcdefghijklmn")
+        self.assertEqual(detail["request_context"]["customization"]["custom_notes"], "Soft pink flowers")
+        self.assertEqual(detail["pricing"]["quote_amount"], 5000)
+        self.assertFalse(detail["authority"]["quote_authorized"])
+
+        detail["request_context"]["customization"]["custom_notes"] = "caller mutated detail"
+        detail["pricing"]["quote_amount"] = 8888
+        detail["authority"]["quote_authorized"] = True
+        reread = register.draft_detail("quote-draft:0123456789abcdefghijklmn")
+        self.assertEqual(reread["request_context"]["customization"]["custom_notes"], "Soft pink flowers")
+        self.assertEqual(reread["pricing"]["quote_amount"], 5000)
+        self.assertFalse(reread["authority"]["quote_authorized"])
+
     def test_rejects_authority_expansion(self):
         payload = copy.deepcopy(draft())
         payload["authority"]["quote_authorized"] = True
