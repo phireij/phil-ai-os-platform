@@ -66,20 +66,29 @@ def _project_recovery(recovery_read_model: dict[str, Any] | None) -> dict[str, A
         ),
         "recovery",
     )
+    plan_count = _validated_count(recovery_read_model.get("plan_count", 0), "recovery plan_count")
+    duplicate_plans = _validated_count(
+        recovery_read_model.get("duplicate_plans", 0), "recovery duplicate_plans"
+    )
+    retry_simulation_count = _validated_count(
+        recovery_read_model.get("retry_simulation_count", 0), "recovery retry_simulation_count"
+    )
+    stop_for_review_count = _validated_count(
+        recovery_read_model.get("stop_for_review_count", 0), "recovery stop_for_review_count"
+    )
+    error_code_counts = _validated_count_map(
+        recovery_read_model.get("error_code_counts", {}), "recovery error_code_counts"
+    )
+    if retry_simulation_count + stop_for_review_count != plan_count:
+        raise MissionControlProjectionError("recovery action counts must match recovery plan_count")
+    if sum(error_code_counts.values()) != plan_count:
+        raise MissionControlProjectionError("recovery error_code_counts must match recovery plan_count")
     return {
-        "plan_count": _validated_count(recovery_read_model.get("plan_count", 0), "recovery plan_count"),
-        "duplicate_plans": _validated_count(
-            recovery_read_model.get("duplicate_plans", 0), "recovery duplicate_plans"
-        ),
-        "retry_simulation_count": _validated_count(
-            recovery_read_model.get("retry_simulation_count", 0), "recovery retry_simulation_count"
-        ),
-        "stop_for_review_count": _validated_count(
-            recovery_read_model.get("stop_for_review_count", 0), "recovery stop_for_review_count"
-        ),
-        "error_code_counts": _validated_count_map(
-            recovery_read_model.get("error_code_counts", {}), "recovery error_code_counts"
-        ),
+        "plan_count": plan_count,
+        "duplicate_plans": duplicate_plans,
+        "retry_simulation_count": retry_simulation_count,
+        "stop_for_review_count": stop_for_review_count,
+        "error_code_counts": error_code_counts,
         "read_only": True,
         "automatic_retry": False,
         "retry_authorized": False,
@@ -339,6 +348,12 @@ def build_mission_control_lifecycle_projection(
         "customer_payloads_exposed": False,
         "normalized_intent_exposed": False,
     }
+    if operations["tasks_awaiting_approval"] + operations["tasks_ready_for_operator_review"] != operations["tasks"]:
+        raise MissionControlProjectionError("operations task state counts must match operations tasks")
+    if sum(task_composition["by_source"].values()) != operations["tasks"]:
+        raise MissionControlProjectionError("tasks source_counts must match operations tasks")
+    if sum(task_composition["by_type"].values()) != operations["tasks"]:
+        raise MissionControlProjectionError("tasks task_type_counts must match operations tasks")
     recovery = _project_recovery(recovery_read_model)
     approval = _project_approval(approval_read_model)
     attention = _attention_items(operations, lifecycles, recovery, approval)
