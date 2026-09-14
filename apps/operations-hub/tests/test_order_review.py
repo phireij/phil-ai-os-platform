@@ -91,6 +91,20 @@ class OrderReviewQueueTests(unittest.TestCase):
         self.assertIs(detail["authority"]["mutation_authorized"], False)
         self.assertIs(detail["authority"]["order_creation_authorized"], False)
 
+    def test_detail_mutation_does_not_change_stored_review_state(self):
+        queue = OrderReviewQueue()
+        accepted = queue.ingest_handoff(handoff())
+        detail = queue.review_detail(accepted["lifecycle_correlation_id"])
+        detail["entities"]["customization"]["custom_notes"] = "mutated"
+        detail["entities"]["customization"]["reference_images"][0]["name"] = "mutated.jpg"
+        detail["authority"]["mutation_authorized"] = True
+
+        reread = queue.review_detail(accepted["lifecycle_correlation_id"])
+        self.assertEqual(reread["entities"]["customization"]["custom_notes"], "Soft pink flowers")
+        self.assertEqual(reread["entities"]["customization"]["reference_images"][0]["name"], "reference.jpg")
+        self.assertIs(reread["authority"]["mutation_authorized"], False)
+        self.assertIs(queue.read_model()["mutation_authorized"], False)
+
     def test_invalid_authorizing_handoff_fails_before_queueing(self):
         queue = OrderReviewQueue()
         payload = handoff()

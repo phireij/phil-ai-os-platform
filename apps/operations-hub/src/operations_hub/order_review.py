@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from .order_intake import OrderIntakeHandoffError, normalize_order_intake_handoff
@@ -73,7 +74,7 @@ class OrderReviewQueue:
                     "lifecycle_correlation_id": lifecycle_correlation_id,
                     "review_state": record["review_state"],
                     "review_reason": record["review_reason"],
-                    "entities": record["entities"],
-                    "authority": dict(record["authority"]),
+                    "entities": copy.deepcopy(record["entities"]),
+                    "authority": copy.deepcopy(record["authority"]),
                 }
         return None
