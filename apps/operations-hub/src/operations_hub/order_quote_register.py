@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from .order_quote_draft import OrderQuoteDraftError
@@ -58,6 +59,8 @@ class OrderQuoteDraftRegister:
             raise OrderQuoteDraftError("quote draft customer_accepted must remain false")
 
         if draft_id in self._drafts:
+            if draft != self._drafts[draft_id]:
+                raise OrderQuoteDraftError("quote draft_id conflicts with existing draft content")
             self._duplicates += 1
             return {
                 "accepted": False,
@@ -67,7 +70,7 @@ class OrderQuoteDraftRegister:
                 "mutation_authorized": False,
             }
 
-        self._drafts[draft_id] = dict(draft)
+        self._drafts[draft_id] = copy.deepcopy(draft)
         return {
             "accepted": True,
             "duplicate": False,
@@ -118,8 +121,8 @@ class OrderQuoteDraftRegister:
             "lifecycle_correlation_id": draft["lifecycle_correlation_id"],
             "state": draft["state"],
             "source_preparation_id": draft.get("source_preparation_id"),
-            "request_context": draft.get("request_context"),
-            "pricing": dict(draft["pricing"]),
-            "authority": dict(draft["authority"]),
+            "request_context": copy.deepcopy(draft.get("request_context")),
+            "pricing": copy.deepcopy(draft["pricing"]),
+            "authority": copy.deepcopy(draft["authority"]),
             "note": draft.get("note", ""),
         }
