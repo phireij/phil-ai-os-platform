@@ -1,6 +1,6 @@
 {
   "schema": "phil-ai-os-mission-control-lifecycle-projection",
-  "version": 2,
+  "version": 3,
   "status": "read_only",
   "mission_control_mode": "read_only",
   "control_plane": {
@@ -16,9 +16,26 @@
     "channel_events": 5,
     "tasks": 5,
     "tasks_awaiting_approval": 2,
+    "tasks_ready_for_operator_review": 3,
     "orders_pending_staff_review": 1,
     "quotes_pending_approval": 1,
     "owner_review_pending_packets": 2
+  },
+  "task_composition": {
+    "duplicate_tasks": 1,
+    "by_source": {
+      "facebook": 2,
+      "instagram": 1,
+      "telegram": 1,
+      "whatsapp": 1
+    },
+    "by_type": {
+      "customer_message_review": 2,
+      "order_intent_review": 3
+    },
+    "read_only": true,
+    "customer_payloads_exposed": false,
+    "normalized_intent_exposed": false
   },
   "attention": {
     "count": 6,
@@ -53,8 +70,8 @@
   "automation": {
     "total_audit_events": 8,
     "stage_counts": {
-      "normalized": 2,
       "governance": 2,
+      "normalized": 2,
       "planned": 2,
       "simulated": 2
     },
