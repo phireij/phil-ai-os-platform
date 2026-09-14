@@ -193,7 +193,7 @@ class MissionControlProjectionTests(unittest.TestCase):
         self.assertFalse(approval["decision_ids_exposed"])
         self.assertFalse(projection["privacy"]["approval_decision_ids_exposed"])
         serialized = json.dumps(projection, ensure_ascii=False)
-        self.assertNotIn("decision_id", serialized)
+        self.assertNotIn('"decision_id":', serialized)
         for field in ("automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized"):
             self.assertFalse(approval[field])
         attention = {item["kind"]: item for item in projection["attention"]["items"]}
