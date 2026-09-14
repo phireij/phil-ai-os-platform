@@ -73,6 +73,36 @@ class ApprovalSimulationTests(unittest.TestCase):
         with self.assertRaises(ApprovalSimulationError):
             store.register_plan(plan)
 
+    def test_reregister_rejects_same_plan_id_with_changed_content(self):
+        store = ApprovalSimulationStore()
+        plan = build_plan("whatsapp")
+        store.register_plan(plan)
+        changed = json.loads(json.dumps(plan))
+        changed["risk_level"] = "low" if plan["risk_level"] != "low" else "high"
+        self.assertEqual(plan["plan_id"], changed["plan_id"])
+        with self.assertRaisesRegex(ApprovalSimulationError, "plan content changed after registration"):
+            store.register_plan(changed)
+
+    def test_approved_plan_cannot_release_changed_content_under_same_plan_id(self):
+        store = ApprovalSimulationStore()
+        plan = build_plan("whatsapp")
+        store.register_plan(plan)
+        store.decide(plan["plan_id"], "approve", "decision-integrity-001")
+        changed = json.loads(json.dumps(plan))
+        changed["source"] = "tampered-source"
+        self.assertEqual(plan["plan_id"], changed["plan_id"])
+        with self.assertRaisesRegex(ApprovalSimulationError, "plan content changed after registration"):
+            store.release_for_simulation(changed)
+
+    def test_plan_fingerprint_is_not_exposed_in_read_surfaces(self):
+        store = ApprovalSimulationStore()
+        plan = build_plan("instagram")
+        state = store.register_plan(plan)
+        model = store.read_model()
+        self.assertNotIn("plan_fingerprint", state)
+        self.assertFalse(model["plan_fingerprints_exposed"])
+        self.assertNotIn("plan_fingerprint", json.dumps(model, ensure_ascii=False))
+
     def test_read_model_projects_aggregate_approval_posture_without_decision_ids(self):
         store = ApprovalSimulationStore()
         whatsapp = build_plan("whatsapp")
@@ -95,9 +125,11 @@ class ApprovalSimulationTests(unittest.TestCase):
             model["by_state"],
         )
         self.assertFalse(model["decision_ids_exposed"])
+        self.assertFalse(model["plan_fingerprints_exposed"])
         serialized = json.dumps(model, ensure_ascii=False)
         self.assertNotIn("secret-decision-001", serialized)
         self.assertNotIn("secret-decision-002", serialized)
+        self.assertNotIn("plan_fingerprint", serialized)
         self.assertFalse(model["automatic_execution"])
         self.assertFalse(model["execution_authorized"])
         self.assertFalse(model["channel_reply_authorized"])
