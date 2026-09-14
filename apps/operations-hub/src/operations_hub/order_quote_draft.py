@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from typing import Any
@@ -114,7 +115,7 @@ def build_order_quote_draft(
         "source_fingerprint": source_fingerprint,
         "prepared_by": staff_ref,
         "note": staff_note,
-        "request_context": request_context,
+        "request_context": copy.deepcopy(request_context),
         "pricing": {
             "quote_amount": amount,
             "shipping_amount": shipping,
