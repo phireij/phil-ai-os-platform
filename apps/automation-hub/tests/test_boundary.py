@@ -58,6 +58,20 @@ class DryRunBoundaryTests(unittest.TestCase):
         with self.assertRaises(BoundaryRequestError):
             build_dry_run_boundary_request(plan, release)
 
+    def test_plan_mutation_after_release_fails_closed(self):
+        plan, release = plan_and_release("instagram")
+        original_plan_id = plan["plan_id"]
+        plan["source"] = "tampered-source"
+        self.assertEqual(original_plan_id, plan["plan_id"])
+        with self.assertRaisesRegex(BoundaryRequestError, "content mismatch"):
+            build_dry_run_boundary_request(plan, release)
+
+    def test_missing_plan_content_binding_fails_closed(self):
+        plan, release = plan_and_release("instagram")
+        release.pop("plan_content_binding")
+        with self.assertRaisesRegex(BoundaryRequestError, "content binding"):
+            build_dry_run_boundary_request(plan, release)
+
     def test_authorizing_release_fails_closed(self):
         plan, release = plan_and_release("instagram")
         release["execution_authorized"] = True

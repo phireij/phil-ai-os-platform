@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import Any
 
 
@@ -13,6 +14,14 @@ def _request_id(plan_id: str, correlation_id: str) -> str:
     return "dry-run:" + hashlib.sha256(material).hexdigest()[:24]
 
 
+def _plan_content_binding(plan: dict[str, Any]) -> str:
+    try:
+        encoded = json.dumps(plan, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise BoundaryRequestError("plan must be JSON-serializable") from exc
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def build_dry_run_boundary_request(plan: dict[str, Any], release: dict[str, Any]) -> dict[str, Any]:
     _validate_plan(plan)
     _validate_release(release)
@@ -21,6 +30,11 @@ def build_dry_run_boundary_request(plan: dict[str, Any], release: dict[str, Any]
     correlation_id = plan.get("lifecycle_correlation_id")
     if release.get("plan_id") != plan_id:
         raise BoundaryRequestError("release/plan identity mismatch")
+    binding = release.get("plan_content_binding")
+    if not isinstance(binding, str) or not binding:
+        raise BoundaryRequestError("release plan content binding is required")
+    if binding != _plan_content_binding(plan):
+        raise BoundaryRequestError("release/plan content mismatch")
     if not isinstance(correlation_id, str) or not correlation_id:
         raise BoundaryRequestError("lifecycle_correlation_id is required")
 
