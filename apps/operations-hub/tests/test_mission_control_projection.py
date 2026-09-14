@@ -18,7 +18,14 @@ def operations_dashboard():
         "status": "read_only",
         "dashboard": "operations_hub_workload",
         "channels": {"total_events": 5},
-        "tasks": {"task_count": 5, "awaiting_approval": 2},
+        "tasks": {
+            "task_count": 5,
+            "duplicate_tasks": 1,
+            "awaiting_approval": 2,
+            "ready_for_operator_review": 3,
+            "source_counts": {"facebook": 2, "telegram": 1, "whatsapp": 2},
+            "task_type_counts": {"customer_message_review": 2, "order_intent_review": 3},
+        },
         "orders": {"pending_staff_review": 1},
         "quotes": {"pending_approval": 1},
         "owner_review": {"pending_packets": 1},
@@ -84,11 +91,12 @@ def audit_model():
 class MissionControlProjectionTests(unittest.TestCase):
     def test_projects_lifecycle_and_result_status_without_customer_payloads(self):
         projection = build_mission_control_lifecycle_projection(operations_dashboard(), audit_model())
-        self.assertEqual(2, projection["version"])
+        self.assertEqual(3, projection["version"])
         self.assertEqual("read_only", projection["status"])
         self.assertEqual("read_only", projection["mission_control_mode"])
         self.assertEqual(5, projection["operations"]["channel_events"])
         self.assertEqual(5, projection["operations"]["tasks"])
+        self.assertEqual(3, projection["operations"]["tasks_ready_for_operator_review"])
         self.assertEqual(2, projection["automation"]["lifecycle_count"])
         self.assertEqual(8, projection["automation"]["total_audit_events"])
         latest = {item["lifecycle_correlation_id"]: item for item in projection["automation"]["lifecycles"]}
@@ -97,9 +105,20 @@ class MissionControlProjectionTests(unittest.TestCase):
         serialized = json.dumps(projection, ensure_ascii=False)
         self.assertNotIn("customer_context", serialized)
         self.assertNotIn('"draft_text":', serialized)
+        self.assertNotIn('"normalized_intent":', serialized)
         self.assertFalse(projection["channel_reply_authorized"])
         self.assertFalse(projection["mutation_authorized"])
         self.assertEqual("none", projection["authority_effect"])
+
+    def test_projects_privacy_safe_task_composition(self):
+        projection = build_mission_control_lifecycle_projection(operations_dashboard(), audit_model())
+        tasks = projection["task_composition"]
+        self.assertEqual(1, tasks["duplicate_tasks"])
+        self.assertEqual({"facebook": 2, "telegram": 1, "whatsapp": 2}, tasks["by_source"])
+        self.assertEqual({"customer_message_review": 2, "order_intent_review": 3}, tasks["by_type"])
+        self.assertTrue(tasks["read_only"])
+        self.assertFalse(tasks["customer_payloads_exposed"])
+        self.assertFalse(tasks["normalized_intent_exposed"])
 
     def test_projects_control_plane_posture_without_granting_authority(self):
         projection = build_mission_control_lifecycle_projection(operations_dashboard(), audit_model())
@@ -149,6 +168,12 @@ class MissionControlProjectionTests(unittest.TestCase):
         dashboard = operations_dashboard()
         dashboard["tasks"]["awaiting_approval"] = -1
         with self.assertRaisesRegex(MissionControlProjectionError, "tasks_awaiting_approval"):
+            build_mission_control_lifecycle_projection(dashboard, audit_model())
+
+    def test_rejects_invalid_task_composition_counts(self):
+        dashboard = operations_dashboard()
+        dashboard["tasks"]["source_counts"]["facebook"] = -1
+        with self.assertRaisesRegex(MissionControlProjectionError, "tasks source_counts.facebook"):
             build_mission_control_lifecycle_projection(dashboard, audit_model())
 
     def test_projection_is_deterministic_for_same_inputs(self):

@@ -20,8 +20,8 @@ def main() -> None:
 
     if fixture.get("schema") != "phil-ai-os-mission-control-lifecycle-projection":
         fail("projection schema drift")
-    if fixture.get("version") != 2:
-        fail("Mission Control projection version must be 2")
+    if fixture.get("version") != 3:
+        fail("Mission Control projection version must be 3")
     if fixture.get("status") != "read_only" or fixture.get("mission_control_mode") != "read_only":
         fail("Mission Control must remain read_only")
     if fixture.get("authority_effect") != "none":
@@ -30,6 +30,20 @@ def main() -> None:
         fail("automation must remain simulated-only")
     if fixture.get("attention", {}).get("read_only") is not True:
         fail("operator attention projection must remain read-only")
+
+    task_composition = fixture.get("task_composition", {})
+    if task_composition.get("read_only") is not True:
+        fail("task composition must remain read-only")
+    if task_composition.get("customer_payloads_exposed") is not False:
+        fail("task composition must not expose customer payloads")
+    if task_composition.get("normalized_intent_exposed") is not False:
+        fail("task composition must not expose normalized intent")
+    for group in ("by_source", "by_type"):
+        values = task_composition.get(group)
+        if not isinstance(values, dict):
+            fail(f"task composition {group} must be an object")
+        if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in values.values()):
+            fail(f"task composition {group} contains invalid counts")
 
     control = fixture.get("control_plane", {})
     if control.get("autonomy_level") != "A0":
@@ -97,8 +111,8 @@ def main() -> None:
 
     print(
         "PHIL_AI_OS_MISSION_CONTROL_PREVIEW_GREEN "
-        "mode=read_only version=2 autonomy=A0 hermes=idle attention=read_only simulated_only=true "
-        "writes=false replies=false network_dispatch=false authority_effect=none"
+        "mode=read_only version=3 autonomy=A0 hermes=idle attention=read_only task_composition=read_only "
+        "simulated_only=true writes=false replies=false network_dispatch=false authority_effect=none"
     )
 
 
