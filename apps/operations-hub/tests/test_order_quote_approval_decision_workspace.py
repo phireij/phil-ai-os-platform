@@ -165,6 +165,23 @@ class OrderQuoteApprovalDecisionWorkspaceTests(unittest.TestCase):
                 self.approvals, self.proposals
             )
 
+    def test_rejects_proposal_source_draft_mismatch(self) -> None:
+        proposal = build_order_quote_approval_decision_proposal(
+            self.request,
+            recommendation="recommend_quote_approval",
+            reviewer_ref="reviewer-1",
+        )
+        proposal["source_draft_id"] = "quote-draft:different"
+        self.proposals.register(proposal)
+
+        with self.assertRaisesRegex(
+            OrderQuoteApprovalDecisionWorkspaceError,
+            "source_draft_id does not match",
+        ):
+            build_order_quote_approval_decision_workspace(
+                self.approvals, self.proposals
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
