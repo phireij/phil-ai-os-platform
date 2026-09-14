@@ -73,6 +73,47 @@ class ApprovalSimulationTests(unittest.TestCase):
         with self.assertRaises(ApprovalSimulationError):
             store.register_plan(plan)
 
+    def test_read_model_projects_aggregate_approval_posture_without_decision_ids(self):
+        store = ApprovalSimulationStore()
+        whatsapp = build_plan("whatsapp")
+        google = build_plan("google_business")
+        instagram = build_plan("instagram")
+        store.register_plan(whatsapp)
+        store.register_plan(google)
+        store.register_plan(instagram)
+        store.decide(whatsapp["plan_id"], "approve", "secret-decision-001")
+        store.decide(google["plan_id"], "deny", "secret-decision-002")
+
+        model = store.read_model()
+        self.assertEqual("read_only", model["status"])
+        self.assertEqual(3, model["plan_count"])
+        self.assertEqual(2, model["decision_count"])
+        self.assertEqual(0, model["awaiting_decision"])
+        self.assertEqual(2, model["simulation_releasable"])
+        self.assertEqual(
+            {"required": 0, "approved": 1, "denied": 1, "not_required": 1},
+            model["by_state"],
+        )
+        self.assertFalse(model["decision_ids_exposed"])
+        serialized = json.dumps(model, ensure_ascii=False)
+        self.assertNotIn("secret-decision-001", serialized)
+        self.assertNotIn("secret-decision-002", serialized)
+        self.assertFalse(model["automatic_execution"])
+        self.assertFalse(model["execution_authorized"])
+        self.assertFalse(model["channel_reply_authorized"])
+        self.assertFalse(model["mutation_authorized"])
+        self.assertEqual("none", model["authority_effect"])
+
+    def test_read_model_tracks_pending_approval(self):
+        store = ApprovalSimulationStore()
+        store.register_plan(build_plan("whatsapp"))
+        store.register_plan(build_plan("facebook"))
+        model = store.read_model()
+        self.assertEqual(1, model["awaiting_decision"])
+        self.assertEqual(1, model["simulation_releasable"])
+        self.assertEqual(1, model["by_state"]["required"])
+        self.assertEqual(1, model["by_state"]["not_required"])
+
 
 if __name__ == "__main__":
     unittest.main()
