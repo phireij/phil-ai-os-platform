@@ -17,6 +17,7 @@ on:
       - ".github/workflows/sprint-7-integrated-readiness-ci.yml"
   push:
     branches:
+      - "main"
       - "sprint7/**"
     paths:
       - "commerce/woocommerce/**"
