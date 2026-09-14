@@ -84,6 +84,7 @@ def audit_model():
 class MissionControlProjectionTests(unittest.TestCase):
     def test_projects_lifecycle_and_result_status_without_customer_payloads(self):
         projection = build_mission_control_lifecycle_projection(operations_dashboard(), audit_model())
+        self.assertEqual(2, projection["version"])
         self.assertEqual("read_only", projection["status"])
         self.assertEqual("read_only", projection["mission_control_mode"])
         self.assertEqual(5, projection["operations"]["channel_events"])
@@ -99,6 +100,28 @@ class MissionControlProjectionTests(unittest.TestCase):
         self.assertFalse(projection["channel_reply_authorized"])
         self.assertFalse(projection["mutation_authorized"])
         self.assertEqual("none", projection["authority_effect"])
+
+    def test_projects_control_plane_posture_without_granting_authority(self):
+        projection = build_mission_control_lifecycle_projection(operations_dashboard(), audit_model())
+        control = projection["control_plane"]
+        self.assertEqual("A0", control["autonomy_level"])
+        self.assertEqual("general", control["execution_task_class"])
+        self.assertEqual("idle", control["hermes_state"])
+        self.assertFalse(control["specialists_enabled"])
+        self.assertFalse(control["mission_control_write_enabled"])
+        self.assertFalse(control["live_execution_enabled"])
+        self.assertTrue(control["operator_decision_required_for_sensitive_actions"])
+
+    def test_projects_operator_attention_counts_deterministically(self):
+        projection = build_mission_control_lifecycle_projection(operations_dashboard(), audit_model())
+        items = {item["kind"]: item for item in projection["attention"]["items"]}
+        self.assertEqual(6, projection["attention"]["count"])
+        self.assertEqual(2, items["tasks_awaiting_approval"]["count"])
+        self.assertEqual(1, items["orders_pending_staff_review"]["count"])
+        self.assertEqual(1, items["quotes_pending_approval"]["count"])
+        self.assertEqual(1, items["owner_review_pending_packets"]["count"])
+        self.assertEqual(1, items["simulated_lifecycle_failures"]["count"])
+        self.assertTrue(projection["attention"]["read_only"])
 
     def test_rejects_operations_authority_expansion(self):
         dashboard = operations_dashboard()
@@ -121,6 +144,12 @@ class MissionControlProjectionTests(unittest.TestCase):
         audit["read_only"] = False
         with self.assertRaisesRegex(MissionControlProjectionError, "automation audit must remain read_only"):
             build_mission_control_lifecycle_projection(operations_dashboard(), audit)
+
+    def test_rejects_invalid_attention_count_input(self):
+        dashboard = operations_dashboard()
+        dashboard["tasks"]["awaiting_approval"] = -1
+        with self.assertRaisesRegex(MissionControlProjectionError, "tasks_awaiting_approval"):
+            build_mission_control_lifecycle_projection(dashboard, audit_model())
 
     def test_projection_is_deterministic_for_same_inputs(self):
         dashboard = operations_dashboard()
