@@ -45,6 +45,31 @@ def _targets_main(ruleset: dict[str, Any]) -> bool:
     return any(item in {"refs/heads/main", "~DEFAULT_BRANCH"} for item in include)
 
 
+def _validate_pull_request_policy(name: str, pr_params: dict[str, Any], policy: dict[str, Any]) -> str | None:
+    expected_pr = policy.get("pull_request")
+    if not isinstance(expected_pr, dict):
+        return f"{name}: policy pull_request configuration is invalid"
+
+    minimum_approvals = expected_pr.get("minimum_approving_review_count", 0)
+    if not isinstance(minimum_approvals, int) or minimum_approvals < 0:
+        return f"{name}: policy minimum_approving_review_count is invalid"
+
+    actual_approvals = pr_params.get("required_approving_review_count")
+    if not isinstance(actual_approvals, int) or actual_approvals < minimum_approvals:
+        return f"{name}: fewer than {minimum_approvals} approving reviews required"
+
+    if expected_pr.get("require_code_owner_review") is True and pr_params.get("require_code_owner_review") is not True:
+        return f"{name}: code owner review is not required"
+
+    if expected_pr.get("require_last_push_approval") is True and pr_params.get("require_last_push_approval") is not True:
+        return f"{name}: last push approval is not required"
+
+    if expected_pr.get("required_review_thread_resolution") is True and pr_params.get("required_review_thread_resolution") is not True:
+        return f"{name}: review thread resolution is not required"
+
+    return None
+
+
 def validate_rulesets(rulesets: Any, policy: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(rulesets, list):
         raise RulesetValidationError("rulesets snapshot must be a list")
@@ -99,9 +124,9 @@ def validate_rulesets(rulesets: Any, policy: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(pr_params, dict):
             failures.append(f"{name}: pull_request parameters missing")
             continue
-        expected_pr = policy.get("pull_request", {})
-        if expected_pr.get("required_review_thread_resolution") is True and pr_params.get("required_review_thread_resolution") is not True:
-            failures.append(f"{name}: review thread resolution is not required")
+        pr_failure = _validate_pull_request_policy(name, pr_params, policy)
+        if pr_failure is not None:
+            failures.append(pr_failure)
             continue
 
         return {
@@ -116,7 +141,15 @@ def validate_rulesets(rulesets: Any, policy: dict[str, Any]) -> dict[str, Any]:
     raise RulesetValidationError("; ".join(failures) if failures else "no compliant main ruleset found")
 
 
-def _sample_ruleset(*, enforcement: str = "active", include_checks: bool = True) -> dict[str, Any]:
+def _sample_ruleset(
+    *,
+    enforcement: str = "active",
+    include_checks: bool = True,
+    approvals: int = 0,
+    code_owner_review: bool = False,
+    last_push_approval: bool = False,
+    review_thread_resolution: bool = True,
+) -> dict[str, Any]:
     checks = [
         {"context": "integrated-contract-regression"},
         {"context": "isolated-runtime-smoke"},
@@ -133,11 +166,11 @@ def _sample_ruleset(*, enforcement: str = "active", include_checks: bool = True)
             {
                 "type": "pull_request",
                 "parameters": {
-                    "required_approving_review_count": 0,
+                    "required_approving_review_count": approvals,
                     "dismiss_stale_reviews_on_push": False,
-                    "require_code_owner_review": False,
-                    "require_last_push_approval": False,
-                    "required_review_thread_resolution": True,
+                    "require_code_owner_review": code_owner_review,
+                    "require_last_push_approval": last_push_approval,
+                    "required_review_thread_resolution": review_thread_resolution,
                 },
             },
             {
@@ -152,21 +185,39 @@ def _sample_ruleset(*, enforcement: str = "active", include_checks: bool = True)
     }
 
 
+def _expect_failure(rulesets: Any, policy: dict[str, Any], expected: str) -> None:
+    try:
+        validate_rulesets(rulesets, policy)
+    except RulesetValidationError as exc:
+        if expected not in str(exc):
+            raise AssertionError(f"expected {expected!r}, got {exc!r}") from exc
+    else:
+        raise AssertionError(f"invalid ruleset unexpectedly passed: {expected}")
+
+
 def self_test(policy: dict[str, Any]) -> None:
     result = validate_rulesets([_sample_ruleset()], policy)
     assert result["status"] == "green"
-    for bad_snapshot, expected in (
-        ([], "no branch ruleset targets main"),
-        ([_sample_ruleset(enforcement="evaluate")], "enforcement is not active"),
-        ([_sample_ruleset(include_checks=False)], "fewer than 2 required status checks"),
-    ):
-        try:
-            validate_rulesets(bad_snapshot, policy)
-        except RulesetValidationError as exc:
-            if expected not in str(exc):
-                raise AssertionError(f"expected {expected!r}, got {exc!r}") from exc
-        else:
-            raise AssertionError(f"invalid ruleset unexpectedly passed: {expected}")
+    _expect_failure([], policy, "no branch ruleset targets main")
+    _expect_failure([_sample_ruleset(enforcement="evaluate")], policy, "enforcement is not active")
+    _expect_failure([_sample_ruleset(include_checks=False)], policy, "fewer than 2 required status checks")
+    _expect_failure([_sample_ruleset(review_thread_resolution=False)], policy, "review thread resolution is not required")
+
+    stricter_policy = json.loads(json.dumps(policy))
+    stricter_policy["pull_request"]["minimum_approving_review_count"] = 1
+    _expect_failure([_sample_ruleset(approvals=0)], stricter_policy, "fewer than 1 approving reviews required")
+    assert validate_rulesets([_sample_ruleset(approvals=1)], stricter_policy)["status"] == "green"
+
+    stricter_policy = json.loads(json.dumps(policy))
+    stricter_policy["pull_request"]["require_code_owner_review"] = True
+    _expect_failure([_sample_ruleset()], stricter_policy, "code owner review is not required")
+    assert validate_rulesets([_sample_ruleset(code_owner_review=True)], stricter_policy)["status"] == "green"
+
+    stricter_policy = json.loads(json.dumps(policy))
+    stricter_policy["pull_request"]["require_last_push_approval"] = True
+    _expect_failure([_sample_ruleset()], stricter_policy, "last push approval is not required")
+    assert validate_rulesets([_sample_ruleset(last_push_approval=True)], stricter_policy)["status"] == "green"
+
     print("PHIL_AI_OS_MAIN_BRANCH_RULESET_VALIDATOR_SELF_TEST_GREEN authority_effect=none")
 
 
