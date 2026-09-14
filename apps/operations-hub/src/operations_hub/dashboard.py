@@ -108,18 +108,27 @@ def build_operations_dashboard(
         }
     )
 
+    channel_items = _validated_items(channels.get("items"), "channel")
     channel_total_events = _validated_count(channels.get("total_events", 0), "channel total_events")
     channel_duplicate_events = _validated_count(channels.get("duplicate_events", 0), "channel duplicate_events")
     channel_review_required = _validated_count(channels.get("review_required", 0), "channel review_required")
     channel_standard_queue = _validated_count(channels.get("standard_queue", 0), "channel standard_queue")
     channel_source_counts = _validated_count_map(channels.get("source_counts", {}), "channel source_counts")
     channel_intent_counts = _validated_count_map(channels.get("intent_counts", {}), "channel intent_counts")
+    if channel_total_events != len(channel_items):
+        raise OperationsDashboardError("channel total_events must match channel items")
     if channel_review_required + channel_standard_queue != channel_total_events:
         raise OperationsDashboardError("channel queue counts must match channel total_events")
     if sum(channel_source_counts.values()) != channel_total_events:
         raise OperationsDashboardError("channel source_counts must match channel total_events")
     if sum(channel_intent_counts.values()) != channel_total_events:
         raise OperationsDashboardError("channel intent_counts must match channel total_events")
+
+    task_count = _validated_count(tasks.get("task_count", 0), "task task_count")
+    if task_queue is not None:
+        task_items = _validated_items(tasks.get("items"), "task")
+        if task_count != len(task_items):
+            raise OperationsDashboardError("task task_count must match task items")
 
     order_items = _validated_items(orders.get("items"), "order review")
     order_pending_review = _validated_count(orders.get("pending_review", 0), "order pending_review")
@@ -168,7 +177,7 @@ def build_operations_dashboard(
             "intent_counts": channel_intent_counts,
         },
         "tasks": {
-            "task_count": tasks.get("task_count", 0),
+            "task_count": task_count,
             "duplicate_tasks": tasks.get("duplicate_tasks", 0),
             "awaiting_approval": tasks.get("awaiting_approval", 0),
             "ready_for_operator_review": tasks.get("ready_for_operator_review", 0),
