@@ -7,6 +7,7 @@ on:
       - 'apps/operations-hub/tools_generate_mission_control_preview_fixture.py'
       - 'apps/operations-hub/tools_validate_mission_control_preview.py'
       - 'apps/operations-hub/src/operations_hub/mission_control_projection.py'
+      - 'contracts/operations/mission-control-lifecycle-projection.schema.json'
       - '.github/workflows/sprint5-mission-control-readonly-preview-ci.yml'
   workflow_dispatch:
 
@@ -25,7 +26,7 @@ jobs:
           python-version: '3.12'
       - name: Verify fixture is generated from Mission Control projection
         run: python apps/operations-hub/tools_generate_mission_control_preview_fixture.py --check
-      - name: Validate Mission Control preview boundary
+      - name: Validate Mission Control preview boundary and v5 contract alignment
         run: python apps/operations-hub/tools_validate_mission_control_preview.py
       - name: Serve preview locally
         run: |

@@ -9,7 +9,12 @@
     "version",
     "status",
     "mission_control_mode",
+    "control_plane",
     "operations",
+    "task_composition",
+    "approval",
+    "recovery",
+    "attention",
     "automation",
     "privacy",
     "execution_authorized",
@@ -26,20 +31,172 @@
   ],
   "properties": {
     "schema": {"const": "phil-ai-os-mission-control-lifecycle-projection"},
-    "version": {"const": 1},
+    "version": {"const": 5},
     "status": {"const": "read_only"},
     "mission_control_mode": {"const": "read_only"},
+    "control_plane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "autonomy_level",
+        "execution_task_class",
+        "hermes_state",
+        "specialists_enabled",
+        "mission_control_write_enabled",
+        "live_execution_enabled",
+        "operator_decision_required_for_sensitive_actions"
+      ],
+      "properties": {
+        "autonomy_level": {"const": "A0"},
+        "execution_task_class": {"const": "general"},
+        "hermes_state": {"const": "idle"},
+        "specialists_enabled": {"const": false},
+        "mission_control_write_enabled": {"const": false},
+        "live_execution_enabled": {"const": false},
+        "operator_decision_required_for_sensitive_actions": {"const": true}
+      }
+    },
     "operations": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel_events", "tasks", "tasks_awaiting_approval", "orders_pending_staff_review", "quotes_pending_approval", "owner_review_pending_packets"],
+      "required": [
+        "channel_events",
+        "tasks",
+        "tasks_awaiting_approval",
+        "tasks_ready_for_operator_review",
+        "orders_pending_staff_review",
+        "quotes_pending_approval",
+        "owner_review_pending_packets"
+      ],
       "properties": {
         "channel_events": {"type": "integer", "minimum": 0},
         "tasks": {"type": "integer", "minimum": 0},
         "tasks_awaiting_approval": {"type": "integer", "minimum": 0},
+        "tasks_ready_for_operator_review": {"type": "integer", "minimum": 0},
         "orders_pending_staff_review": {"type": "integer", "minimum": 0},
         "quotes_pending_approval": {"type": "integer", "minimum": 0},
         "owner_review_pending_packets": {"type": "integer", "minimum": 0}
+      }
+    },
+    "task_composition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "duplicate_tasks",
+        "by_source",
+        "by_type",
+        "read_only",
+        "customer_payloads_exposed",
+        "normalized_intent_exposed"
+      ],
+      "properties": {
+        "duplicate_tasks": {"type": "integer", "minimum": 0},
+        "by_source": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "by_type": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "read_only": {"const": true},
+        "customer_payloads_exposed": {"const": false},
+        "normalized_intent_exposed": {"const": false}
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan_count",
+        "decision_count",
+        "awaiting_decision",
+        "simulation_releasable",
+        "by_state",
+        "read_only",
+        "decision_ids_exposed",
+        "automatic_execution",
+        "execution_authorized",
+        "channel_reply_authorized",
+        "mutation_authorized",
+        "authority_effect"
+      ],
+      "properties": {
+        "plan_count": {"type": "integer", "minimum": 0},
+        "decision_count": {"type": "integer", "minimum": 0},
+        "awaiting_decision": {"type": "integer", "minimum": 0},
+        "simulation_releasable": {"type": "integer", "minimum": 0},
+        "by_state": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "read_only": {"const": true},
+        "decision_ids_exposed": {"const": false},
+        "automatic_execution": {"const": false},
+        "execution_authorized": {"const": false},
+        "channel_reply_authorized": {"const": false},
+        "mutation_authorized": {"const": false},
+        "authority_effect": {"const": "none"}
+      }
+    },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan_count",
+        "duplicate_plans",
+        "retry_simulation_count",
+        "stop_for_review_count",
+        "error_code_counts",
+        "read_only",
+        "automatic_retry",
+        "retry_authorized",
+        "automatic_rollback",
+        "rollback_authorized",
+        "execution_authorized",
+        "mutation_authorized",
+        "authority_effect"
+      ],
+      "properties": {
+        "plan_count": {"type": "integer", "minimum": 0},
+        "duplicate_plans": {"type": "integer", "minimum": 0},
+        "retry_simulation_count": {"type": "integer", "minimum": 0},
+        "stop_for_review_count": {"type": "integer", "minimum": 0},
+        "error_code_counts": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "read_only": {"const": true},
+        "automatic_retry": {"const": false},
+        "retry_authorized": {"const": false},
+        "automatic_rollback": {"const": false},
+        "rollback_authorized": {"const": false},
+        "execution_authorized": {"const": false},
+        "mutation_authorized": {"const": false},
+        "authority_effect": {"const": "none"}
+      }
+    },
+    "attention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "items", "read_only"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "read_only": {"const": true},
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "label", "count", "priority"],
+            "properties": {
+              "kind": {"type": "string", "minLength": 1},
+              "label": {"type": "string", "minLength": 1},
+              "count": {"type": "integer", "minimum": 1},
+              "priority": {"enum": ["high", "medium", "low"]}
+            }
+          }
+        }
       }
     },
     "automation": {
@@ -72,12 +229,19 @@
     "privacy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["raw_customer_text_exposed", "custom_notes_exposed", "reference_image_names_exposed", "reply_draft_text_exposed"],
+      "required": [
+        "raw_customer_text_exposed",
+        "custom_notes_exposed",
+        "reference_image_names_exposed",
+        "reply_draft_text_exposed",
+        "approval_decision_ids_exposed"
+      ],
       "properties": {
         "raw_customer_text_exposed": {"const": false},
         "custom_notes_exposed": {"const": false},
         "reference_image_names_exposed": {"const": false},
-        "reply_draft_text_exposed": {"const": false}
+        "reply_draft_text_exposed": {"const": false},
+        "approval_decision_ids_exposed": {"const": false}
       }
     },
     "execution_authorized": {"const": false},
