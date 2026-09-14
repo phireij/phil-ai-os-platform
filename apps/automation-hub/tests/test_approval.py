@@ -101,7 +101,7 @@ class ApprovalSimulationTests(unittest.TestCase):
         model = store.read_model()
         self.assertNotIn("plan_fingerprint", state)
         self.assertFalse(model["plan_fingerprints_exposed"])
-        self.assertNotIn("plan_fingerprint", json.dumps(model, ensure_ascii=False))
+        self.assertNotIn('"plan_fingerprint":', json.dumps(model, ensure_ascii=False))
 
     def test_read_model_projects_aggregate_approval_posture_without_decision_ids(self):
         store = ApprovalSimulationStore()
@@ -129,7 +129,7 @@ class ApprovalSimulationTests(unittest.TestCase):
         serialized = json.dumps(model, ensure_ascii=False)
         self.assertNotIn("secret-decision-001", serialized)
         self.assertNotIn("secret-decision-002", serialized)
-        self.assertNotIn("plan_fingerprint", serialized)
+        self.assertNotIn('"plan_fingerprint":', serialized)
         self.assertFalse(model["automatic_execution"])
         self.assertFalse(model["execution_authorized"])
         self.assertFalse(model["channel_reply_authorized"])
