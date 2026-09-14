@@ -20,8 +20,8 @@ def main() -> None:
 
     if fixture.get("schema") != "phil-ai-os-mission-control-lifecycle-projection":
         fail("projection schema drift")
-    if fixture.get("version") != 4:
-        fail("Mission Control projection version must be 4")
+    if fixture.get("version") != 5:
+        fail("Mission Control projection version must be 5")
     if fixture.get("status") != "read_only" or fixture.get("mission_control_mode") != "read_only":
         fail("Mission Control must remain read_only")
     if fixture.get("authority_effect") != "none":
@@ -45,15 +45,28 @@ def main() -> None:
         if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in values.values()):
             fail(f"task composition {group} contains invalid counts")
 
+    approval = fixture.get("approval", {})
+    if approval.get("read_only") is not True or approval.get("authority_effect") != "none":
+        fail("approval posture must remain read-only with no authority effect")
+    if approval.get("decision_ids_exposed") is not False:
+        fail("approval decision identifiers must remain hidden")
+    for field in ("plan_count", "decision_count", "awaiting_decision", "simulation_releasable"):
+        value = approval.get(field)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            fail(f"approval {field} must be a non-negative integer")
+    state_counts = approval.get("by_state")
+    if not isinstance(state_counts, dict) or any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in state_counts.values()
+    ):
+        fail("approval by_state invalid")
+    for field in ("automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized"):
+        if approval.get(field) is not False:
+            fail(f"approval authority expanded: {field}")
+
     recovery = fixture.get("recovery", {})
     if recovery.get("read_only") is not True or recovery.get("authority_effect") != "none":
         fail("recovery posture must remain read-only with no authority effect")
-    for field in (
-        "plan_count",
-        "duplicate_plans",
-        "retry_simulation_count",
-        "stop_for_review_count",
-    ):
+    for field in ("plan_count", "duplicate_plans", "retry_simulation_count", "stop_for_review_count"):
         value = recovery.get(field)
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             fail(f"recovery {field} must be a non-negative integer")
@@ -139,9 +152,9 @@ def main() -> None:
 
     print(
         "PHIL_AI_OS_MISSION_CONTROL_PREVIEW_GREEN "
-        "mode=read_only version=4 autonomy=A0 hermes=idle attention=read_only task_composition=read_only "
-        "recovery=read_only retry_authorized=false rollback_authorized=false simulated_only=true "
-        "writes=false replies=false network_dispatch=false authority_effect=none"
+        "mode=read_only version=5 autonomy=A0 hermes=idle attention=read_only task_composition=read_only "
+        "approval=read_only decision_ids=false recovery=read_only retry_authorized=false rollback_authorized=false "
+        "simulated_only=true writes=false replies=false network_dispatch=false authority_effect=none"
     )
 
 
