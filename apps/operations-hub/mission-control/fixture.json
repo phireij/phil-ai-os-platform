@@ -1,8 +1,17 @@
 {
   "schema": "phil-ai-os-mission-control-lifecycle-projection",
-  "version": 1,
+  "version": 2,
   "status": "read_only",
   "mission_control_mode": "read_only",
+  "control_plane": {
+    "autonomy_level": "A0",
+    "execution_task_class": "general",
+    "hermes_state": "idle",
+    "specialists_enabled": false,
+    "mission_control_write_enabled": false,
+    "live_execution_enabled": false,
+    "operator_decision_required_for_sensitive_actions": true
+  },
   "operations": {
     "channel_events": 5,
     "tasks": 5,
@@ -10,6 +19,36 @@
     "orders_pending_staff_review": 1,
     "quotes_pending_approval": 1,
     "owner_review_pending_packets": 2
+  },
+  "attention": {
+    "count": 6,
+    "items": [
+      {
+        "kind": "tasks_awaiting_approval",
+        "label": "Tasks awaiting approval",
+        "count": 2,
+        "priority": "high"
+      },
+      {
+        "kind": "orders_pending_staff_review",
+        "label": "Orders pending staff review",
+        "count": 1,
+        "priority": "high"
+      },
+      {
+        "kind": "quotes_pending_approval",
+        "label": "Quotes pending approval",
+        "count": 1,
+        "priority": "medium"
+      },
+      {
+        "kind": "owner_review_pending_packets",
+        "label": "Owner review packets",
+        "count": 2,
+        "priority": "medium"
+      }
+    ],
+    "read_only": true
   },
   "automation": {
     "total_audit_events": 8,

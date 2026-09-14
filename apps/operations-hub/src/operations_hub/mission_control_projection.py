@@ -14,6 +14,38 @@ def _require_false(model: dict[str, Any], fields: tuple[str, ...], label: str) -
             raise MissionControlProjectionError(f"{label} {field} must remain false")
 
 
+def _attention_items(operations: dict[str, int], lifecycles: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for key, label, priority in (
+        ("tasks_awaiting_approval", "Tasks awaiting approval", "high"),
+        ("orders_pending_staff_review", "Orders pending staff review", "high"),
+        ("quotes_pending_approval", "Quotes pending approval", "medium"),
+        ("owner_review_pending_packets", "Owner review packets", "medium"),
+    ):
+        count = operations.get(key, 0)
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise MissionControlProjectionError(f"operations {key} must be a non-negative integer")
+        if count:
+            items.append({"kind": key, "label": label, "count": count, "priority": priority})
+
+    failure_count = sum(
+        1
+        for lifecycle in lifecycles
+        if "failure" in str(lifecycle.get("latest_outcome", "")).lower()
+        or "error" in str(lifecycle.get("latest_outcome", "")).lower()
+    )
+    if failure_count:
+        items.append(
+            {
+                "kind": "simulated_lifecycle_failures",
+                "label": "Simulated lifecycle failures",
+                "count": failure_count,
+                "priority": "high",
+            }
+        )
+    return items
+
+
 def build_mission_control_lifecycle_projection(
     operations_dashboard: dict[str, Any],
     automation_audit: dict[str, Any],
@@ -83,18 +115,35 @@ def build_mission_control_lifecycle_projection(
             }
         )
 
+    operations = {
+        "channel_events": operations_dashboard.get("channels", {}).get("total_events", 0),
+        "tasks": operations_dashboard.get("tasks", {}).get("task_count", 0),
+        "tasks_awaiting_approval": operations_dashboard.get("tasks", {}).get("awaiting_approval", 0),
+        "orders_pending_staff_review": operations_dashboard.get("orders", {}).get("pending_staff_review", 0),
+        "quotes_pending_approval": operations_dashboard.get("quotes", {}).get("pending_approval", 0),
+        "owner_review_pending_packets": operations_dashboard.get("owner_review", {}).get("pending_packets", 0),
+    }
+    attention = _attention_items(operations, lifecycles)
+
     return {
         "schema": "phil-ai-os-mission-control-lifecycle-projection",
-        "version": 1,
+        "version": 2,
         "status": "read_only",
         "mission_control_mode": "read_only",
-        "operations": {
-            "channel_events": operations_dashboard.get("channels", {}).get("total_events", 0),
-            "tasks": operations_dashboard.get("tasks", {}).get("task_count", 0),
-            "tasks_awaiting_approval": operations_dashboard.get("tasks", {}).get("awaiting_approval", 0),
-            "orders_pending_staff_review": operations_dashboard.get("orders", {}).get("pending_staff_review", 0),
-            "quotes_pending_approval": operations_dashboard.get("quotes", {}).get("pending_approval", 0),
-            "owner_review_pending_packets": operations_dashboard.get("owner_review", {}).get("pending_packets", 0),
+        "control_plane": {
+            "autonomy_level": "A0",
+            "execution_task_class": "general",
+            "hermes_state": "idle",
+            "specialists_enabled": False,
+            "mission_control_write_enabled": False,
+            "live_execution_enabled": False,
+            "operator_decision_required_for_sensitive_actions": True,
+        },
+        "operations": operations,
+        "attention": {
+            "count": sum(item["count"] for item in attention),
+            "items": attention,
+            "read_only": True,
         },
         "automation": {
             "total_audit_events": automation_audit.get("total_events", 0),
