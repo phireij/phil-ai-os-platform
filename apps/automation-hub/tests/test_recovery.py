@@ -65,6 +65,29 @@ class RecoveryPlanTests(unittest.TestCase):
         with self.assertRaises(RecoveryPlanError):
             build_recovery_plan(request, error_code="synthetic_failure", retryable=False, attempt=1)
 
+    def test_forged_request_id_fails_closed(self):
+        request = build_request("telegram")
+        request["request_id"] = "dry-run:forged"
+        with self.assertRaises(RecoveryPlanError):
+            build_recovery_plan(request, error_code="synthetic_failure", retryable=False, attempt=1)
+
+    def test_altered_boundary_semantics_fail_closed(self):
+        request = build_request("facebook")
+        request["target"] = "external_api"
+        with self.assertRaises(RecoveryPlanError):
+            build_recovery_plan(request, error_code="synthetic_failure", retryable=False, attempt=1)
+
+        request = build_request("facebook")
+        request["operation"] = "execute_request"
+        with self.assertRaises(RecoveryPlanError):
+            build_recovery_plan(request, error_code="synthetic_failure", retryable=False, attempt=1)
+
+    def test_altered_routing_fails_closed(self):
+        request = build_request("instagram")
+        request["assigned_agent"] = "specialist"
+        with self.assertRaises(RecoveryPlanError):
+            build_recovery_plan(request, error_code="synthetic_failure", retryable=False, attempt=1)
+
     def test_recovery_id_is_deterministic(self):
         request = build_request("facebook")
         first = build_recovery_plan(request, error_code="synthetic_timeout", retryable=True, attempt=1)
