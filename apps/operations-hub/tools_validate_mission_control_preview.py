@@ -20,12 +20,29 @@ def main() -> None:
 
     if fixture.get("schema") != "phil-ai-os-mission-control-lifecycle-projection":
         fail("projection schema drift")
+    if fixture.get("version") != 2:
+        fail("Mission Control projection version must be 2")
     if fixture.get("status") != "read_only" or fixture.get("mission_control_mode") != "read_only":
         fail("Mission Control must remain read_only")
     if fixture.get("authority_effect") != "none":
         fail("authority_effect must remain none")
     if fixture.get("automation", {}).get("simulated_only") is not True:
         fail("automation must remain simulated-only")
+    if fixture.get("attention", {}).get("read_only") is not True:
+        fail("operator attention projection must remain read-only")
+
+    control = fixture.get("control_plane", {})
+    if control.get("autonomy_level") != "A0":
+        fail("autonomy level must remain A0")
+    if control.get("execution_task_class") != "general":
+        fail("execution task class must remain general")
+    if control.get("hermes_state") != "idle":
+        fail("Hermes must remain idle")
+    if control.get("operator_decision_required_for_sensitive_actions") is not True:
+        fail("sensitive actions must remain operator-gated")
+    for field in ("specialists_enabled", "mission_control_write_enabled", "live_execution_enabled"):
+        if control.get(field) is not False:
+            fail(f"control-plane authority expanded: {field}")
 
     authority_flags = (
         "execution_authorized",
@@ -80,7 +97,8 @@ def main() -> None:
 
     print(
         "PHIL_AI_OS_MISSION_CONTROL_PREVIEW_GREEN "
-        "mode=read_only simulated_only=true writes=false replies=false network_dispatch=false authority_effect=none"
+        "mode=read_only version=2 autonomy=A0 hermes=idle attention=read_only simulated_only=true "
+        "writes=false replies=false network_dispatch=false authority_effect=none"
     )
 
 
