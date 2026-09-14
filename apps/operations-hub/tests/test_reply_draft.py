@@ -66,6 +66,35 @@ class ReplyDraftTests(unittest.TestCase):
         self.assertFalse(model["mutation_authorized"])
         self.assertEqual(proposal["draft_text"], register.detail(proposal["reply_draft_id"])["draft_text"])
 
+    def test_conflicting_content_for_existing_reply_draft_id_fails_closed(self):
+        proposal = build_reply_draft_proposal(task("telegram"), "Thank you. We will check pickup availability.")
+        register = ReplyDraftRegister()
+        register.register(proposal)
+        conflicting = copy.deepcopy(proposal)
+        conflicting["draft_text"] = "Changed content under the same reply draft ID"
+        with self.assertRaisesRegex(ReplyDraftError, "conflicts with existing draft content"):
+            register.register(conflicting)
+        self.assertEqual(0, register.read_model()["duplicate_drafts"])
+
+    def test_register_and_detail_isolate_nested_reply_draft_state(self):
+        proposal = build_reply_draft_proposal(task("facebook"), "Thank you for your order inquiry.")
+        reply_draft_id = proposal["reply_draft_id"]
+        original_text = proposal["draft_text"]
+        register = ReplyDraftRegister()
+        register.register(proposal)
+
+        proposal["draft_text"] = "caller mutated input"
+        proposal["authority"]["channel_reply_authorized"] = True
+        stored = register.detail(reply_draft_id)
+        self.assertEqual(original_text, stored["draft_text"])
+        self.assertFalse(stored["authority"]["channel_reply_authorized"])
+
+        stored["draft_text"] = "caller mutated detail"
+        stored["authority"]["channel_reply_authorized"] = True
+        reread = register.detail(reply_draft_id)
+        self.assertEqual(original_text, reread["draft_text"])
+        self.assertFalse(reread["authority"]["channel_reply_authorized"])
+
     def test_register_summarizes_five_channel_drafts(self):
         register = ReplyDraftRegister()
         for source in ("facebook", "instagram", "telegram", "whatsapp", "google_business"):
