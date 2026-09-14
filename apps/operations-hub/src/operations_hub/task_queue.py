@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from collections import Counter
 from typing import Any
 
@@ -17,6 +18,8 @@ class TaskCandidateQueue:
         _validate_candidate(candidate)
         task_id = candidate["task_candidate_id"]
         if task_id in self._tasks:
+            if candidate != self._tasks[task_id]:
+                raise TaskExtractionError("task candidate ID conflicts with existing content")
             self._duplicates += 1
             return {
                 "accepted": False,
@@ -24,7 +27,7 @@ class TaskCandidateQueue:
                 "task_candidate_id": task_id,
                 "mutation_authorized": False,
             }
-        self._tasks[task_id] = dict(candidate)
+        self._tasks[task_id] = copy.deepcopy(candidate)
         return {
             "accepted": True,
             "duplicate": False,
@@ -84,8 +87,8 @@ class TaskCandidateQueue:
             "approval_required": task["approval_required"],
             "approval_state": task["approval_state"],
             "approval_reason": task.get("approval_reason"),
-            "customer_context": dict(task["customer_context"]),
-            "authority": dict(task["authority"]),
+            "customer_context": copy.deepcopy(task["customer_context"]),
+            "authority": copy.deepcopy(task["authority"]),
         }
 
 
