@@ -65,6 +65,28 @@ class ReplyDraftWorkspaceTests(unittest.TestCase):
         with self.assertRaisesRegex(ReplyDraftWorkspaceError, "correlation mismatch"):
             build_reply_draft_workspace(queue, register)
 
+    def test_workspace_fails_closed_on_task_type_drift(self):
+        queue = TaskCandidateQueue()
+        register = ReplyDraftRegister()
+        candidate = task("facebook")
+        queue.ingest(candidate)
+        draft = build_reply_draft_proposal(candidate, "Draft reply.")
+        draft["task_type"] = "product_inquiry_task"
+        register.register(draft)
+        with self.assertRaisesRegex(ReplyDraftWorkspaceError, "task_type mismatch"):
+            build_reply_draft_workspace(queue, register)
+
+    def test_workspace_fails_closed_on_normalized_intent_drift(self):
+        queue = TaskCandidateQueue()
+        register = ReplyDraftRegister()
+        candidate = task("facebook")
+        queue.ingest(candidate)
+        draft = build_reply_draft_proposal(candidate, "Draft reply.")
+        draft["normalized_intent"] = "product_inquiry"
+        register.register(draft)
+        with self.assertRaisesRegex(ReplyDraftWorkspaceError, "normalized_intent mismatch"):
+            build_reply_draft_workspace(queue, register)
+
 
 if __name__ == "__main__":
     unittest.main()
