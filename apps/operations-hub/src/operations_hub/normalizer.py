@@ -109,11 +109,15 @@ class DeduplicationResult:
 
 class InMemoryDeduplicator:
     def __init__(self) -> None:
-        self._seen: set[str] = set()
+        self._seen: dict[str, str] = {}
 
     def accept(self, event: dict[str, Any]) -> DeduplicationResult:
         key = _require_text(event, "idempotency_key")
-        if key in self._seen:
+        fingerprint = _require_text(event, "raw_event_fingerprint")
+        existing = self._seen.get(key)
+        if existing is not None:
+            if fingerprint != existing:
+                raise NormalizationError("idempotency key conflicts with different event content")
             return DeduplicationResult(False, True, key)
-        self._seen.add(key)
+        self._seen[key] = fingerprint
         return DeduplicationResult(True, False, key)

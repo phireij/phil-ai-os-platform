@@ -78,6 +78,18 @@ class OperationsNormalizationTests(unittest.TestCase):
         self.assertTrue(second.duplicate)
         self.assertEqual(first.idempotency_key, second.idempotency_key)
 
+    def test_same_idempotency_key_with_different_content_fails_closed(self):
+        payload = load_fixture("facebook")
+        first = normalize_channel_event(payload)
+        payload["text"] = "Different customer message"
+        second = normalize_channel_event(payload)
+        self.assertEqual(first["idempotency_key"], second["idempotency_key"])
+        self.assertNotEqual(first["raw_event_fingerprint"], second["raw_event_fingerprint"])
+        dedupe = InMemoryDeduplicator()
+        dedupe.accept(first)
+        with self.assertRaisesRegex(NormalizationError, "conflicts with different event content"):
+            dedupe.accept(second)
+
     def test_same_event_normalizes_to_same_fingerprint(self):
         payload = load_fixture("instagram")
         first = normalize_channel_event(payload)
