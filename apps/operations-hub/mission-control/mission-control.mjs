@@ -80,6 +80,35 @@ function renderTaskComposition(data) {
   document.querySelector("#task-duplicate-chip").textContent = `${composition.duplicate_tasks ?? 0} duplicate${composition.duplicate_tasks === 1 ? "" : "s"}`;
 }
 
+function renderApproval(data) {
+  const approval = data.approval ?? {};
+  const rows = [
+    ["Tracked plans", approval.plan_count],
+    ["Recorded decisions", approval.decision_count],
+    ["Awaiting decision", approval.awaiting_decision],
+    ["Simulation releasable", approval.simulation_releasable],
+  ];
+  document.querySelector("#approval-list").replaceChildren(...rows.map(([label, value]) => {
+    const row = document.createElement("div");
+    row.className = "safety-row";
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.className = "off";
+    dd.textContent = text(value ?? 0);
+    row.append(dt, dd);
+    return row;
+  }));
+  renderCountList(
+    document.querySelector("#approval-state-list"),
+    approval.by_state,
+    "No approval-state counts in this projection."
+  );
+  document.querySelector("#approval-chip").textContent = approval.awaiting_decision
+    ? `${approval.awaiting_decision} awaiting decision`
+    : "clear";
+}
+
 function renderRecovery(data) {
   const recovery = data.recovery ?? {};
   const list = document.querySelector("#recovery-list");
@@ -225,6 +254,7 @@ function renderPrivacy(data) {
     custom_notes_exposed: "Custom notes",
     reference_image_names_exposed: "Reference image names",
     reply_draft_text_exposed: "Reply draft text",
+    approval_decision_ids_exposed: "Approval decision IDs",
   };
   grid.replaceChildren(...Object.entries(labels).map(([key, label]) => {
     const item = document.createElement("div");
@@ -240,7 +270,7 @@ function renderPrivacy(data) {
 
 function assertReadOnly(data) {
   if (data.schema !== "phil-ai-os-mission-control-lifecycle-projection") throw new Error("Unexpected projection schema");
-  if (data.version !== 4) throw new Error("Unsupported Mission Control projection version");
+  if (data.version !== 5) throw new Error("Unsupported Mission Control projection version");
   if (data.status !== "read_only" || data.mission_control_mode !== "read_only") throw new Error("Mission Control is not read-only");
   if (data.authority_effect !== "none") throw new Error("Unexpected authority effect");
   for (const [key] of safetyFields) if (data[key] !== false) throw new Error(`Unsafe authority flag: ${key}`);
@@ -250,6 +280,13 @@ function assertReadOnly(data) {
   const tasks = data.task_composition ?? {};
   if (tasks.read_only !== true || tasks.customer_payloads_exposed !== false || tasks.normalized_intent_exposed !== false) {
     throw new Error("Task composition privacy/read-only boundary invalid");
+  }
+  const approval = data.approval ?? {};
+  if (approval.read_only !== true || approval.authority_effect !== "none" || approval.decision_ids_exposed !== false) {
+    throw new Error("Approval projection must remain privacy-safe and read-only");
+  }
+  for (const key of ["automatic_execution", "execution_authorized", "channel_reply_authorized", "mutation_authorized"]) {
+    if (approval[key] !== false) throw new Error(`Unsafe approval flag: ${key}`);
   }
   const recovery = data.recovery ?? {};
   if (recovery.read_only !== true || recovery.authority_effect !== "none") throw new Error("Recovery projection must remain read-only");
@@ -274,6 +311,7 @@ async function boot() {
     assertReadOnly(data);
     renderMetrics(data);
     renderTaskComposition(data);
+    renderApproval(data);
     renderRecovery(data);
     renderAttention(data);
     renderControlPlane(data);
@@ -285,7 +323,7 @@ async function boot() {
     state.textContent = `${data.operations.tasks} tasks · ${data.operations.tasks_awaiting_approval} awaiting approval · ${data.operations.tasks_ready_for_operator_review} ready for review`;
   } catch (error) {
     state.textContent = `Fail-closed: ${error.message}`;
-    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#recovery-list", "#recovery-error-list", "#attention-list", "#control-plane-list", "#lifecycle-list", "#safety-list", "#privacy-grid"]) {
+    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#approval-list", "#approval-state-list", "#recovery-list", "#recovery-error-list", "#attention-list", "#control-plane-list", "#lifecycle-list", "#safety-list", "#privacy-grid"]) {
       document.querySelector(selector)?.replaceChildren();
     }
   }

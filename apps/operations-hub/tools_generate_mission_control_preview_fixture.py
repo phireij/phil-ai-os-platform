@@ -14,7 +14,7 @@ from operations_hub import build_mission_control_lifecycle_projection  # noqa: E
 OUT = ROOT / "mission-control" / "fixture.json"
 
 
-def build_source_models() -> tuple[dict, dict, dict]:
+def build_source_models() -> tuple[dict, dict, dict, dict]:
     operations_dashboard = {
         "status": "read_only",
         "channels": {"total_events": 5},
@@ -92,12 +92,27 @@ def build_source_models() -> tuple[dict, dict, dict]:
         "mutation_authorized": False,
         "authority_effect": "none",
     }
-    return operations_dashboard, automation_audit, recovery_read_model
+    approval_read_model = {
+        "status": "read_only",
+        "store": "automation_approval_simulation",
+        "plan_count": 5,
+        "decision_count": 2,
+        "awaiting_decision": 1,
+        "simulation_releasable": 3,
+        "by_state": {"required": 1, "approved": 1, "denied": 1, "not_required": 2},
+        "decision_ids_exposed": False,
+        "automatic_execution": False,
+        "execution_authorized": False,
+        "channel_reply_authorized": False,
+        "mutation_authorized": False,
+        "authority_effect": "none",
+    }
+    return operations_dashboard, automation_audit, recovery_read_model, approval_read_model
 
 
 def render() -> str:
-    dashboard, audit, recovery = build_source_models()
-    projection = build_mission_control_lifecycle_projection(dashboard, audit, recovery)
+    dashboard, audit, recovery, approval = build_source_models()
+    projection = build_mission_control_lifecycle_projection(dashboard, audit, recovery, approval)
     return json.dumps(projection, indent=2, ensure_ascii=False) + "\n"
 
 
@@ -113,7 +128,7 @@ def main() -> None:
             raise SystemExit("PHIL_AI_OS_MISSION_CONTROL_FIXTURE_DRIFT: regenerate fixture before merging")
         print(
             "PHIL_AI_OS_MISSION_CONTROL_FIXTURE_GREEN generated_from_projection=true "
-            "task_composition=read_only recovery=read_only authority_effect=none"
+            "task_composition=read_only approval=read_only recovery=read_only authority_effect=none"
         )
         return
 

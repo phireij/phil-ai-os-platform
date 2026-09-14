@@ -91,10 +91,65 @@ def _project_recovery(recovery_read_model: dict[str, Any] | None) -> dict[str, A
     }
 
 
+def _project_approval(approval_read_model: dict[str, Any] | None) -> dict[str, Any]:
+    if approval_read_model is None:
+        return {
+            "plan_count": 0,
+            "decision_count": 0,
+            "awaiting_decision": 0,
+            "simulation_releasable": 0,
+            "by_state": {},
+            "read_only": True,
+            "decision_ids_exposed": False,
+            "automatic_execution": False,
+            "execution_authorized": False,
+            "channel_reply_authorized": False,
+            "mutation_authorized": False,
+            "authority_effect": "none",
+        }
+    if not isinstance(approval_read_model, dict) or approval_read_model.get("status") != "read_only":
+        raise MissionControlProjectionError("approval read model must remain read_only")
+    if approval_read_model.get("authority_effect") != "none":
+        raise MissionControlProjectionError("approval authority_effect must remain none")
+    if approval_read_model.get("decision_ids_exposed") is not False:
+        raise MissionControlProjectionError("approval decision identifiers must remain hidden")
+    _require_false(
+        approval_read_model,
+        (
+            "automatic_execution",
+            "execution_authorized",
+            "channel_reply_authorized",
+            "mutation_authorized",
+        ),
+        "approval",
+    )
+    return {
+        "plan_count": _validated_count(approval_read_model.get("plan_count", 0), "approval plan_count"),
+        "decision_count": _validated_count(
+            approval_read_model.get("decision_count", 0), "approval decision_count"
+        ),
+        "awaiting_decision": _validated_count(
+            approval_read_model.get("awaiting_decision", 0), "approval awaiting_decision"
+        ),
+        "simulation_releasable": _validated_count(
+            approval_read_model.get("simulation_releasable", 0), "approval simulation_releasable"
+        ),
+        "by_state": _validated_count_map(approval_read_model.get("by_state", {}), "approval by_state"),
+        "read_only": True,
+        "decision_ids_exposed": False,
+        "automatic_execution": False,
+        "execution_authorized": False,
+        "channel_reply_authorized": False,
+        "mutation_authorized": False,
+        "authority_effect": "none",
+    }
+
+
 def _attention_items(
     operations: dict[str, int],
     lifecycles: list[dict[str, Any]],
     recovery: dict[str, Any],
+    approval: dict[str, Any],
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     for key, label, priority in (
@@ -106,6 +161,17 @@ def _attention_items(
         count = _validated_count(operations.get(key, 0), f"operations {key}")
         if count:
             items.append({"kind": key, "label": label, "count": count, "priority": priority})
+
+    awaiting_decision = approval["awaiting_decision"]
+    if awaiting_decision:
+        items.append(
+            {
+                "kind": "automation_approval_awaiting_decision",
+                "label": "Automation approvals awaiting decision",
+                "count": awaiting_decision,
+                "priority": "high",
+            }
+        )
 
     stop_for_review = recovery["stop_for_review_count"]
     if stop_for_review:
@@ -140,8 +206,9 @@ def build_mission_control_lifecycle_projection(
     operations_dashboard: dict[str, Any],
     automation_audit: dict[str, Any],
     recovery_read_model: dict[str, Any] | None = None,
+    approval_read_model: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Project bounded lifecycle/result/recovery status for read-only Mission Control consumption."""
+    """Project bounded lifecycle/result/recovery/approval status for read-only Mission Control consumption."""
     if not isinstance(operations_dashboard, dict) or operations_dashboard.get("status") != "read_only":
         raise MissionControlProjectionError("operations dashboard must remain read_only")
     _require_false(
@@ -243,11 +310,12 @@ def build_mission_control_lifecycle_projection(
         "normalized_intent_exposed": False,
     }
     recovery = _project_recovery(recovery_read_model)
-    attention = _attention_items(operations, lifecycles, recovery)
+    approval = _project_approval(approval_read_model)
+    attention = _attention_items(operations, lifecycles, recovery, approval)
 
     return {
         "schema": "phil-ai-os-mission-control-lifecycle-projection",
-        "version": 4,
+        "version": 5,
         "status": "read_only",
         "mission_control_mode": "read_only",
         "control_plane": {
@@ -261,6 +329,7 @@ def build_mission_control_lifecycle_projection(
         },
         "operations": operations,
         "task_composition": task_composition,
+        "approval": approval,
         "recovery": recovery,
         "attention": {
             "count": sum(item["count"] for item in attention),
@@ -279,6 +348,7 @@ def build_mission_control_lifecycle_projection(
             "custom_notes_exposed": False,
             "reference_image_names_exposed": False,
             "reply_draft_text_exposed": False,
+            "approval_decision_ids_exposed": False,
         },
         "execution_authorized": False,
         "channel_reply_authorized": False,
