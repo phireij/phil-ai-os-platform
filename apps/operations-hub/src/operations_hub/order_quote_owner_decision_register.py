@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from .order_quote_owner_decision_packet import OrderQuoteOwnerDecisionPacketError
@@ -71,7 +72,10 @@ class OrderQuoteOwnerDecisionPacketRegister:
             elif value is not False:
                 raise OrderQuoteOwnerDecisionPacketError(f"owner decision packet authority {field} must remain false")
 
-        if request_id in self._packets:
+        existing = self._packets.get(request_id)
+        if existing is not None:
+            if existing != packet:
+                raise OrderQuoteOwnerDecisionPacketError("owner decision packet content changed for existing approval_request_id")
             self._duplicates += 1
             return {
                 "accepted": False,
@@ -80,7 +84,7 @@ class OrderQuoteOwnerDecisionPacketRegister:
                 "mutation_authorized": False,
             }
 
-        self._packets[request_id] = dict(packet)
+        self._packets[request_id] = copy.deepcopy(packet)
         return {
             "accepted": True,
             "duplicate": False,
@@ -123,4 +127,4 @@ class OrderQuoteOwnerDecisionPacketRegister:
         packet = self._packets.get(approval_request_id)
         if packet is None:
             return None
-        return dict(packet)
+        return copy.deepcopy(packet)

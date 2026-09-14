@@ -1,3 +1,4 @@
+import copy
 import unittest
 
 from operations_hub.order_quote_owner_decision_packet import OrderQuoteOwnerDecisionPacketError
@@ -63,20 +64,53 @@ class OrderQuoteOwnerDecisionPacketRegisterTests(unittest.TestCase):
         self.assertTrue(result["duplicate"])
         self.assertEqual(register.read_model()["duplicate_packets"], 1)
 
-    def test_rejects_injected_owner_decision(self):
+    def test_conflicting_duplicate_packet_fails_closed(self):
+        register = OrderQuoteOwnerDecisionPacketRegister()
+        register.register(packet())
+        changed = packet()
+        changed["recommendation"] = "request_quote_revision"
+        with self.assertRaisesRegex(OrderQuoteOwnerDecisionPacketError, "content changed"):
+            register.register(changed)
+        self.assertEqual(register.read_model()["duplicate_packets"], 0)
+
+    def test_registration_deep_copies_nested_packet_state(self):
+        register = OrderQuoteOwnerDecisionPacketRegister()
         value = packet()
+        register.register(value)
+        value["pricing"]["total_amount"] = 999999
+        value["authority"]["quote_authorized"] = True
+        value["decision_proposal_ids"].append("quote-approval-proposal:tampered")
+        detail = register.packet_detail(value["approval_request_id"])
+        self.assertEqual(detail["pricing"]["total_amount"], 1300)
+        self.assertFalse(detail["authority"]["quote_authorized"])
+        self.assertEqual(detail["decision_proposal_ids"], ["quote-approval-proposal:abc123"])
+
+    def test_detail_mutation_does_not_change_register(self):
+        register = OrderQuoteOwnerDecisionPacketRegister()
+        register.register(packet())
+        detail = register.packet_detail("quote-approval:abc123")
+        detail["pricing"]["total_amount"] = 1
+        detail["owner_decision"]["decision"] = "approve"
+        detail["authority"]["quote_authorized"] = True
+        fresh = register.packet_detail("quote-approval:abc123")
+        self.assertEqual(fresh["pricing"]["total_amount"], 1300)
+        self.assertIsNone(fresh["owner_decision"]["decision"])
+        self.assertFalse(fresh["authority"]["quote_authorized"])
+
+    def test_rejects_injected_owner_decision(self):
+        value = copy.deepcopy(packet())
         value["owner_decision"]["decision"] = "approve"
         with self.assertRaises(OrderQuoteOwnerDecisionPacketError):
             OrderQuoteOwnerDecisionPacketRegister().register(value)
 
     def test_rejects_authority_expansion(self):
-        value = packet()
+        value = copy.deepcopy(packet())
         value["authority"]["quote_authorized"] = True
         with self.assertRaises(OrderQuoteOwnerDecisionPacketError):
             OrderQuoteOwnerDecisionPacketRegister().register(value)
 
     def test_rejects_pricing_mismatch(self):
-        value = packet()
+        value = copy.deepcopy(packet())
         value["pricing"]["total_amount"] = 1400
         with self.assertRaises(OrderQuoteOwnerDecisionPacketError):
             OrderQuoteOwnerDecisionPacketRegister().register(value)
