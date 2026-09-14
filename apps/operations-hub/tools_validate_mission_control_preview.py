@@ -7,16 +7,61 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 PREVIEW = ROOT / "mission-control"
+CONTRACT = ROOT.parents[1] / "contracts" / "operations" / "mission-control-lifecycle-projection.schema.json"
 
 
 def fail(message: str) -> None:
     raise SystemExit(f"PHIL_AI_OS_MISSION_CONTROL_PREVIEW_VALIDATION_FAILED: {message}")
 
 
+def _validate_contract_alignment(schema: dict, fixture: dict) -> None:
+    if schema.get("properties", {}).get("version", {}).get("const") != 5:
+        fail("Mission Control contract version must be 5")
+    required = schema.get("required")
+    if not isinstance(required, list) or set(required) != set(fixture):
+        fail("Mission Control contract top-level required fields drifted from projection")
+
+    for section in (
+        "control_plane",
+        "operations",
+        "task_composition",
+        "approval",
+        "recovery",
+        "attention",
+        "automation",
+        "privacy",
+    ):
+        section_schema = schema.get("properties", {}).get(section, {})
+        section_value = fixture.get(section)
+        required_fields = section_schema.get("required")
+        if not isinstance(section_value, dict) or not isinstance(required_fields, list):
+            fail(f"Mission Control contract section invalid: {section}")
+        if set(required_fields) != set(section_value):
+            fail(f"Mission Control contract required-field drift: {section}")
+
+    def check_consts(node: dict, value, path: str) -> None:
+        if "const" in node and node["const"] != value:
+            fail(f"Mission Control contract const mismatch: {path}")
+        properties = node.get("properties")
+        if isinstance(properties, dict) and isinstance(value, dict):
+            for key, child in properties.items():
+                if key in value and isinstance(child, dict):
+                    check_consts(child, value[key], f"{path}.{key}")
+        items = node.get("items")
+        if isinstance(items, dict) and isinstance(value, list):
+            for index, item in enumerate(value):
+                check_consts(items, item, f"{path}[{index}]")
+
+    check_consts(schema, fixture, "projection")
+
+
 def main() -> None:
     html = (PREVIEW / "index.html").read_text(encoding="utf-8")
     js = (PREVIEW / "mission-control.mjs").read_text(encoding="utf-8")
     fixture = json.loads((PREVIEW / "fixture.json").read_text(encoding="utf-8"))
+    contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+
+    _validate_contract_alignment(contract, fixture)
 
     if fixture.get("schema") != "phil-ai-os-mission-control-lifecycle-projection":
         fail("projection schema drift")
@@ -152,7 +197,7 @@ def main() -> None:
 
     print(
         "PHIL_AI_OS_MISSION_CONTROL_PREVIEW_GREEN "
-        "mode=read_only version=5 autonomy=A0 hermes=idle attention=read_only task_composition=read_only "
+        "mode=read_only version=5 contract=v5 autonomy=A0 hermes=idle attention=read_only task_composition=read_only "
         "approval=read_only decision_ids=false recovery=read_only retry_authorized=false rollback_authorized=false "
         "simulated_only=true writes=false replies=false network_dispatch=false authority_effect=none"
     )
