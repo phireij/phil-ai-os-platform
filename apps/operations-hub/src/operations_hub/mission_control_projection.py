@@ -9,8 +9,8 @@ class MissionControlProjectionError(ValueError):
 
 
 def _require_false(model: dict[str, Any], fields: tuple[str, ...], label: str) -> None:
-    for field in fields:
-        if model.get(field) is not False:
+    for field, value in model.items():
+        if field.endswith("_authorized") and value is not False:
             raise MissionControlProjectionError(f"{label} {field} must remain false")
 
 
@@ -259,6 +259,8 @@ def build_mission_control_lifecycle_projection(
         raise MissionControlProjectionError("automation audit must remain read_only")
     if automation_audit.get("authority_effect") != "none":
         raise MissionControlProjectionError("automation audit authority_effect must remain none")
+    if automation_audit.get("plan_fingerprints_exposed") is not False:
+        raise MissionControlProjectionError("automation plan fingerprints must remain hidden")
     items = automation_audit.get("items")
     if not isinstance(items, list):
         raise MissionControlProjectionError("automation audit items must be a list")
