@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
 
 from .order_quote_approval_decision_register import OrderQuoteApprovalDecisionProposalRegister
@@ -60,6 +61,16 @@ def _validated_items(value: Any, label: str) -> list[dict[str, Any]]:
     if any(not isinstance(item, dict) for item in value):
         raise OperationsDashboardError(f"{label} items must contain objects")
     return value
+
+
+def _item_string_counts(items: list[dict[str, Any]], field: str, label: str) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for index, item in enumerate(items):
+        value = item.get(field)
+        if not isinstance(value, str) or not value:
+            raise OperationsDashboardError(f"{label} item[{index}] {field} must be a non-empty string")
+        counts[value] += 1
+    return dict(sorted(counts.items()))
 
 
 def build_operations_dashboard(
@@ -123,6 +134,23 @@ def build_operations_dashboard(
         raise OperationsDashboardError("channel source_counts must match channel total_events")
     if sum(channel_intent_counts.values()) != channel_total_events:
         raise OperationsDashboardError("channel intent_counts must match channel total_events")
+    computed_channel_sources = _item_string_counts(channel_items, "source", "channel")
+    computed_channel_intents = _item_string_counts(channel_items, "normalized_intent", "channel")
+    computed_review_required = 0
+    for index, item in enumerate(channel_items):
+        review_required = item.get("review_required")
+        if not isinstance(review_required, bool):
+            raise OperationsDashboardError(f"channel item[{index}] review_required must be boolean")
+        if review_required:
+            computed_review_required += 1
+    if channel_source_counts != computed_channel_sources:
+        raise OperationsDashboardError("channel source_counts must match channel items")
+    if channel_intent_counts != computed_channel_intents:
+        raise OperationsDashboardError("channel intent_counts must match channel items")
+    if channel_review_required != computed_review_required:
+        raise OperationsDashboardError("channel review_required must match channel items")
+    if channel_standard_queue != len(channel_items) - computed_review_required:
+        raise OperationsDashboardError("channel standard_queue must match channel items")
 
     task_count = _validated_count(tasks.get("task_count", 0), "task task_count")
     task_duplicate_tasks = _validated_count(tasks.get("duplicate_tasks", 0), "task duplicate_tasks")
@@ -136,6 +164,19 @@ def build_operations_dashboard(
         task_items = _validated_items(tasks.get("items"), "task")
         if task_count != len(task_items):
             raise OperationsDashboardError("task task_count must match task items")
+        computed_task_sources = _item_string_counts(task_items, "source", "task")
+        computed_task_types = _item_string_counts(task_items, "task_type", "task")
+        computed_task_states = _item_string_counts(task_items, "state", "task")
+        if set(computed_task_states) - {"awaiting_approval", "ready_for_operator_review"}:
+            raise OperationsDashboardError("task items contain unsupported states")
+        if task_source_counts != computed_task_sources:
+            raise OperationsDashboardError("task source_counts must match task items")
+        if task_type_counts != computed_task_types:
+            raise OperationsDashboardError("task task_type_counts must match task items")
+        if task_awaiting_approval != computed_task_states.get("awaiting_approval", 0):
+            raise OperationsDashboardError("task awaiting_approval must match task items")
+        if task_ready_for_operator_review != computed_task_states.get("ready_for_operator_review", 0):
+            raise OperationsDashboardError("task ready_for_operator_review must match task items")
     if task_awaiting_approval + task_ready_for_operator_review != task_count:
         raise OperationsDashboardError("task state counts must match task task_count")
     if sum(task_type_counts.values()) != task_count:
