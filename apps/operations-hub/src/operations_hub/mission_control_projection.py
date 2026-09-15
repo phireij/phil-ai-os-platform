@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import hashlib
 from typing import Any
 
 
@@ -31,6 +32,11 @@ def _validated_count_map(value: Any, label: str) -> dict[str, int]:
             raise MissionControlProjectionError(f"{label} keys must be non-empty strings")
         result[key] = _validated_count(count, f"{label}.{key}")
     return dict(sorted(result.items()))
+
+
+def _canonical_request_id(plan_id: str, lifecycle_id: str) -> str:
+    material = f"{plan_id}|{lifecycle_id}|dry-run".encode("utf-8")
+    return "dry-run:" + hashlib.sha256(material).hexdigest()[:24]
 
 
 def _project_recovery(recovery_read_model: dict[str, Any] | None) -> dict[str, Any]:
@@ -294,6 +300,10 @@ def build_mission_control_lifecycle_projection(
             if not isinstance(request_id, str) or not request_id:
                 raise MissionControlProjectionError(
                     "automation boundary/result request_id is required"
+                )
+            if request_id != _canonical_request_id(plan_id, lifecycle_id):
+                raise MissionControlProjectionError(
+                    "automation boundary/result request_id must match canonical dry-run request"
                 )
         elif request_id is not None:
             raise MissionControlProjectionError(
