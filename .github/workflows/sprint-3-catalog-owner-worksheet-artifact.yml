@@ -7,7 +7,9 @@ on:
       - "commerce/woocommerce/fixtures/working-catalog-subset-*.json"
       - "commerce/woocommerce/src/phil_ai_os_woocommerce/working_catalog_*.py"
       - "commerce/woocommerce/tools_working_catalog_owner_worksheet.py"
+      - "commerce/woocommerce/tools_working_catalog_owner_action_checklist.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_worksheet.py"
+      - "commerce/woocommerce/tests/test_working_catalog_owner_action_checklist*.py"
       - ".github/workflows/sprint-3-catalog-owner-worksheet-artifact.yml"
   push:
     branches:
@@ -16,7 +18,9 @@ on:
       - "commerce/woocommerce/fixtures/working-catalog-subset-*.json"
       - "commerce/woocommerce/src/phil_ai_os_woocommerce/working_catalog_*.py"
       - "commerce/woocommerce/tools_working_catalog_owner_worksheet.py"
+      - "commerce/woocommerce/tools_working_catalog_owner_action_checklist.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_worksheet.py"
+      - "commerce/woocommerce/tests/test_working_catalog_owner_action_checklist*.py"
       - ".github/workflows/sprint-3-catalog-owner-worksheet-artifact.yml"
 
 permissions:
@@ -33,12 +37,17 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Run owner worksheet regression tests
+      - name: Run owner handoff regression tests
         env:
           PYTHONPATH: commerce/woocommerce/src
-        run: python -m unittest commerce.woocommerce.tests.test_working_catalog_owner_worksheet -v
+        run: |
+          python -m unittest \
+            commerce.woocommerce.tests.test_working_catalog_owner_worksheet \
+            commerce.woocommerce.tests.test_working_catalog_owner_action_checklist \
+            commerce.woocommerce.tests.test_working_catalog_owner_action_checklist_cli \
+            -v
 
-      - name: Build source-backed owner worksheet
+      - name: Build source-backed owner handoff
         shell: bash
         run: |
           set -euo pipefail
@@ -47,6 +56,9 @@ jobs:
             --input commerce/woocommerce/fixtures/working-catalog-subset-2026-09-11.json \
             --output /tmp/philaios-catalog-owner-worksheet/ruby-working-catalog-owner-worksheet.csv \
             --requirements-output /tmp/philaios-catalog-owner-worksheet/ruby-working-catalog-owner-requirements.json
+          python commerce/woocommerce/tools_working_catalog_owner_action_checklist.py \
+            --input commerce/woocommerce/fixtures/working-catalog-subset-2026-09-11.json \
+            --output /tmp/philaios-catalog-owner-worksheet/ruby-working-catalog-owner-checklist.md
 
       - name: Validate artifact boundary and source-backed structure
         shell: bash
@@ -60,8 +72,10 @@ jobs:
           root = Path('/tmp/philaios-catalog-owner-worksheet')
           csv_path = root / 'ruby-working-catalog-owner-worksheet.csv'
           req_path = root / 'ruby-working-catalog-owner-requirements.json'
+          checklist_path = root / 'ruby-working-catalog-owner-checklist.md'
           assert csv_path.is_file()
           assert req_path.is_file()
+          assert checklist_path.is_file()
           raw = csv_path.read_bytes()
           assert raw.startswith(b'\xef\xbb\xbf'), 'worksheet must remain UTF-8 BOM for spreadsheet compatibility'
           with csv_path.open('r', encoding='utf-8-sig', newline='') as handle:
@@ -85,7 +99,14 @@ jobs:
           assert requirements['network_call_performed'] is False
           assert requirements['mutation_authorized'] is False
           assert requirements['production_publish_authorized'] is False
-          print('PHIL_AI_OS_CATALOG_OWNER_WORKSHEET_ARTIFACT_BOUNDARY_GREEN rows=5 network_call=false mutation_authorized=false production_publish_authorized=false')
+          checklist = checklist_path.read_text(encoding='utf-8')
+          assert '# Working Catalog Owner Checklist' in checklist
+          assert 'Owner worksheet row: `variable_parent` / `RCD-MCH-RD`' in checklist
+          assert '`RCD-MCH-RD-15`, `RCD-MCH-RD-21`' in checklist
+          assert 'Network calls performed: **No**' in checklist
+          assert 'WooCommerce mutation authorized: **No**' in checklist
+          assert 'Production publication authorized: **No**' in checklist
+          print('PHIL_AI_OS_CATALOG_OWNER_WORKSHEET_ARTIFACT_BOUNDARY_GREEN rows=5 checklist=true network_call=false mutation_authorized=false production_publish_authorized=false')
           PY
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
