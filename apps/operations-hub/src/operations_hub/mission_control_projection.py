@@ -274,11 +274,14 @@ def build_mission_control_lifecycle_projection(
         if item.get("simulated") is not True or item.get("authority_effect") != "none":
             raise MissionControlProjectionError("automation audit item must remain simulated with no authority effect")
         lifecycle_id = item.get("lifecycle_correlation_id")
+        plan_id = item.get("plan_id")
         sequence = item.get("sequence")
         stage = item.get("stage")
         outcome = item.get("outcome")
         if not isinstance(lifecycle_id, str) or not lifecycle_id:
             raise MissionControlProjectionError("automation lifecycle_correlation_id is required")
+        if not isinstance(plan_id, str) or not plan_id:
+            raise MissionControlProjectionError("automation plan_id is required")
         if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 1:
             raise MissionControlProjectionError("automation sequence must be a positive integer")
         if not isinstance(stage, str) or not stage or not isinstance(outcome, str) or not outcome:
@@ -303,6 +306,11 @@ def build_mission_control_lifecycle_projection(
         if len(set(sequences)) != len(sequences):
             raise MissionControlProjectionError(
                 "automation sequence must be unique within each lifecycle"
+            )
+        plan_ids = {event["plan_id"] for event in events}
+        if len(plan_ids) != 1:
+            raise MissionControlProjectionError(
+                "automation lifecycle must reference exactly one plan_id"
             )
         ordered = sorted(events, key=lambda event: event["sequence"])
         latest = ordered[-1]
