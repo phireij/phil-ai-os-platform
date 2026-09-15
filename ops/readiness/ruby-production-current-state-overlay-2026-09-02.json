@@ -1,6 +1,6 @@
 {
-  "version": "ruby-production-current-state-overlay-v6",
-  "date": "2026-09-04",
+  "version": "ruby-production-current-state-overlay-v7",
+  "date": "2026-09-15",
   "purpose": "Current operational reconciliation layer for production-readiness decisions.",
   "governance": {
     "autonomy": "A0",
@@ -13,6 +13,7 @@
     "woocommerce_production_activation": true,
     "komoju_live_mode": true,
     "production_sms_sending": true,
+    "customer_channel_activation_and_replies": true,
     "public_domain_dns_cutover": true,
     "final_launch_signoff_process": true,
     "scope_approval_overrides_readiness": false
@@ -33,7 +34,7 @@
     "final_production_catalog_ready": false,
     "japan_tax_and_qualified_invoice_evidence_ready": true,
     "japan_tax_evidence_ref": "ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json",
-    "air_mobile_order_quick_pickup_production_url_ready": false
+    "first_party_quick_pickup_production_ready": false
   },
   "komoju": {
     "test_mode_green": true,
