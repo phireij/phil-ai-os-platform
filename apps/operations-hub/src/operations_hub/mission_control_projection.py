@@ -9,8 +9,8 @@ class MissionControlProjectionError(ValueError):
 
 
 def _require_false(model: dict[str, Any], fields: tuple[str, ...], label: str) -> None:
-    for field, value in model.items():
-        if field.endswith("_authorized") and value is not False:
+    for field in fields:
+        if model.get(field) is not False:
             raise MissionControlProjectionError(f"{label} {field} must remain false")
 
 
