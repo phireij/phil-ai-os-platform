@@ -1,3 +1,4 @@
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -40,11 +41,11 @@ def operations_dashboard():
     }
 
 
-def audit_item(lifecycle_id, sequence, stage="plan_created", outcome="simulation_ready"):
+def audit_item(lifecycle_id, plan_id, sequence, stage="plan_created", outcome="simulation_ready"):
     return {
         "sequence": sequence,
         "lifecycle_correlation_id": lifecycle_id,
-        "plan_id": f"plan:{lifecycle_id}",
+        "plan_id": plan_id,
         "stage": stage,
         "outcome": outcome,
         "simulated": True,
@@ -68,32 +69,42 @@ def audit_model(items):
     }
 
 
-class MissionControlLifecycleSequenceIntegrityTests(unittest.TestCase):
-    def test_rejects_duplicate_sequence_within_one_lifecycle(self):
+class MissionControlLifecyclePlanIntegrityTests(unittest.TestCase):
+    def test_rejects_missing_plan_id(self):
+        item = audit_item("lifecycle:one", "plan:one", 1)
+        del item["plan_id"]
+        with self.assertRaisesRegex(MissionControlProjectionError, "plan_id is required"):
+            build_mission_control_lifecycle_projection(
+                operations_dashboard(),
+                audit_model([item]),
+            )
+
+    def test_rejects_multiple_plan_ids_within_one_lifecycle(self):
         audit = audit_model(
             [
-                audit_item("lifecycle:one", 1),
-                audit_item("lifecycle:one", 1, "result_preview", "simulated_success"),
+                audit_item("lifecycle:one", "plan:one", 1),
+                audit_item("lifecycle:one", "plan:two", 2, "result_preview", "simulated_success"),
             ]
         )
         with self.assertRaisesRegex(
             MissionControlProjectionError,
-            "sequence must be unique within each lifecycle",
+            "lifecycle must reference exactly one plan_id",
         ):
             build_mission_control_lifecycle_projection(operations_dashboard(), audit)
 
-    def test_allows_sequence_restart_across_distinct_lifecycles(self):
+    def test_preserves_valid_lifecycle_without_exposing_plan_id(self):
         audit = audit_model(
             [
-                audit_item("lifecycle:one", 1),
-                audit_item("lifecycle:two", 1),
+                audit_item("lifecycle:one", "plan:one", 1),
+                audit_item("lifecycle:one", "plan:one", 2, "result_preview", "simulated_success"),
             ]
         )
         projection = build_mission_control_lifecycle_projection(operations_dashboard(), audit)
-        lifecycles = projection["automation"]["lifecycles"]
-        self.assertEqual(2, projection["automation"]["lifecycle_count"])
-        self.assertEqual([1, 1], [item["latest_sequence"] for item in lifecycles])
-        self.assertTrue(projection["automation"]["simulated_only"])
+        lifecycle = projection["automation"]["lifecycles"][0]
+        self.assertEqual(1, projection["automation"]["lifecycle_count"])
+        self.assertEqual(2, lifecycle["latest_sequence"])
+        self.assertEqual("simulated_success", lifecycle["latest_outcome"])
+        self.assertNotIn('"plan_id"', json.dumps(projection, ensure_ascii=False))
         self.assertFalse(projection["mutation_authorized"])
 
 
