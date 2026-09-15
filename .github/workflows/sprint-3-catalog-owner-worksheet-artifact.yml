@@ -10,10 +10,12 @@ on:
       - "commerce/woocommerce/tools_working_catalog_owner_worksheet.py"
       - "commerce/woocommerce/tools_working_catalog_owner_action_checklist.py"
       - "commerce/woocommerce/tools_working_catalog_owner_draft_assistance.py"
+      - "commerce/woocommerce/tools_working_catalog_owner_decision_brief.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_worksheet.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_action_packet.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_action_checklist*.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_draft_assistance.py"
+      - "commerce/woocommerce/tests/test_working_catalog_owner_decision_brief.py"
       - ".github/workflows/sprint-3-catalog-owner-worksheet-artifact.yml"
   push:
     branches:
@@ -25,10 +27,12 @@ on:
       - "commerce/woocommerce/tools_working_catalog_owner_worksheet.py"
       - "commerce/woocommerce/tools_working_catalog_owner_action_checklist.py"
       - "commerce/woocommerce/tools_working_catalog_owner_draft_assistance.py"
+      - "commerce/woocommerce/tools_working_catalog_owner_decision_brief.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_worksheet.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_action_packet.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_action_checklist*.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_draft_assistance.py"
+      - "commerce/woocommerce/tests/test_working_catalog_owner_decision_brief.py"
       - ".github/workflows/sprint-3-catalog-owner-worksheet-artifact.yml"
 
 permissions:
@@ -55,6 +59,7 @@ jobs:
             commerce.woocommerce.tests.test_working_catalog_owner_action_checklist \
             commerce.woocommerce.tests.test_working_catalog_owner_action_checklist_cli \
             commerce.woocommerce.tests.test_working_catalog_owner_draft_assistance \
+            commerce.woocommerce.tests.test_working_catalog_owner_decision_brief \
             -v
 
       - name: Build source-backed owner handoff
@@ -73,6 +78,10 @@ jobs:
             --input commerce/woocommerce/fixtures/working-catalog-subset-2026-09-11.json \
             --proposals commerce/woocommerce/fixtures/working-catalog-owner-draft-assistance-2026-09-15.json \
             --output /tmp/philaios-catalog-owner-worksheet/ruby-working-catalog-japanese-copy-draft-assistance.md
+          python commerce/woocommerce/tools_working_catalog_owner_decision_brief.py \
+            --input commerce/woocommerce/fixtures/working-catalog-subset-2026-09-11.json \
+            --proposals commerce/woocommerce/fixtures/working-catalog-owner-draft-assistance-2026-09-15.json \
+            --output /tmp/philaios-catalog-owner-worksheet/ruby-working-catalog-ceo-decision-brief.md
 
       - name: Validate artifact boundary and source-backed structure
         shell: bash
@@ -88,10 +97,12 @@ jobs:
           req_path = root / 'ruby-working-catalog-owner-requirements.json'
           checklist_path = root / 'ruby-working-catalog-owner-checklist.md'
           assistance_path = root / 'ruby-working-catalog-japanese-copy-draft-assistance.md'
+          decision_path = root / 'ruby-working-catalog-ceo-decision-brief.md'
           assert csv_path.is_file()
           assert req_path.is_file()
           assert checklist_path.is_file()
           assert assistance_path.is_file()
+          assert decision_path.is_file()
           raw = csv_path.read_bytes()
           assert raw.startswith(b'\xef\xbb\xbf'), 'worksheet must remain UTF-8 BOM for spreadsheet compatibility'
           with csv_path.open('r', encoding='utf-8-sig', newline='') as handle:
@@ -132,7 +143,19 @@ jobs:
           assert 'Owner approved: **No**' in assistance
           assert 'Canonical apply authorized: **No**' in assistance
           assert 'Production publication authorized: **No**' in assistance
-          print('PHIL_AI_OS_CATALOG_OWNER_WORKSHEET_ARTIFACT_BOUNDARY_GREEN rows=5 checklist=true draft_assistance=true owner_approved=false network_call=false mutation_authorized=false production_publish_authorized=false')
+          decision = decision_path.read_text(encoding='utf-8')
+          assert '# Initial Launch Catalog V1 — CEO Decision Brief' in decision
+          assert 'Canonical unresolved actions accounted for: **22**' in decision
+          assert 'CEO-controlled decisions: **14**' in decision
+          assert 'Japanese copy decisions with draft assistance: **6**' in decision
+          assert 'Post-decision/system records: **1**' in decision
+          assert 'Operational/evidence items: **5**' in decision
+          assert 'Deferred authority gates: **2**' in decision
+          assert 'Needs classification/review: **0**' in decision
+          assert 'Deferred authority gates — no approval requested now' in decision
+          assert 'WooCommerce mutation authorized: **No**' in decision
+          assert 'Production publication authorized: **No**' in decision
+          print('PHIL_AI_OS_CATALOG_OWNER_WORKSHEET_ARTIFACT_BOUNDARY_GREEN rows=5 checklist=true draft_assistance=true ceo_decision_brief=true owner_decisions=14 draft_assisted=6 operational_evidence=5 deferred_authority=2 needs_review=0 owner_approved=false network_call=false mutation_authorized=false production_publish_authorized=false')
           PY
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
