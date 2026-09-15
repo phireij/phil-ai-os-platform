@@ -93,6 +93,19 @@ class MissionControlLifecyclePlanIntegrityTests(unittest.TestCase):
         ):
             build_mission_control_lifecycle_projection(operations_dashboard(), audit)
 
+    def test_rejects_one_plan_id_across_multiple_lifecycles(self):
+        audit = audit_model(
+            [
+                audit_item("lifecycle:one", "plan:shared", 1),
+                audit_item("lifecycle:two", "plan:shared", 1),
+            ]
+        )
+        with self.assertRaisesRegex(
+            MissionControlProjectionError,
+            "plan_id must reference exactly one lifecycle",
+        ):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit)
+
     def test_preserves_valid_lifecycle_without_exposing_plan_id(self):
         audit = audit_model(
             [
