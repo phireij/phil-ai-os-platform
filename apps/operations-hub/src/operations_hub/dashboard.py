@@ -160,6 +160,12 @@ def build_operations_dashboard(
     )
     task_type_counts = _validated_count_map(tasks.get("task_type_counts", {}), "task task_type_counts")
     task_source_counts = _validated_count_map(tasks.get("source_counts", {}), "task source_counts")
+    if task_awaiting_approval + task_ready_for_operator_review != task_count:
+        raise OperationsDashboardError("task state counts must match task task_count")
+    if sum(task_type_counts.values()) != task_count:
+        raise OperationsDashboardError("task task_type_counts must match task task_count")
+    if sum(task_source_counts.values()) != task_count:
+        raise OperationsDashboardError("task source_counts must match task task_count")
     if task_queue is not None:
         task_items = _validated_items(tasks.get("items"), "task")
         if task_count != len(task_items):
@@ -177,12 +183,6 @@ def build_operations_dashboard(
             raise OperationsDashboardError("task awaiting_approval must match task items")
         if task_ready_for_operator_review != computed_task_states.get("ready_for_operator_review", 0):
             raise OperationsDashboardError("task ready_for_operator_review must match task items")
-    if task_awaiting_approval + task_ready_for_operator_review != task_count:
-        raise OperationsDashboardError("task state counts must match task task_count")
-    if sum(task_type_counts.values()) != task_count:
-        raise OperationsDashboardError("task task_type_counts must match task task_count")
-    if sum(task_source_counts.values()) != task_count:
-        raise OperationsDashboardError("task source_counts must match task task_count")
 
     order_items = _validated_items(orders.get("items"), "order review")
     order_pending_review = _validated_count(orders.get("pending_review", 0), "order pending_review")
