@@ -27,7 +27,7 @@ class WorkingCatalogOwnerDecisionBriefTests(unittest.TestCase):
         self.assertEqual(len(brief.owner_decisions), 14)
         self.assertEqual(len(brief.post_decision_records), 1)
         self.assertEqual(len(brief.operational_evidence), 5)
-        self.assertEqual(len(brief.deferred_authority_gates), 2)
+        self.assertEqual(len(brief.deferred_authority_gates), 0)
         self.assertEqual(len(brief.needs_review), 0)
         self.assertEqual(
             sum(
@@ -40,7 +40,7 @@ class WorkingCatalogOwnerDecisionBriefTests(unittest.TestCase):
                     brief.needs_review,
                 )
             ),
-            22,
+            20,
         )
         self.assertFalse(brief.production_ready)
 
@@ -77,7 +77,7 @@ class WorkingCatalogOwnerDecisionBriefTests(unittest.TestCase):
             requirements,
         )
 
-    def test_approval_reference_is_post_decision_record_and_authority_stays_deferred(self):
+    def test_approval_reference_is_post_decision_record_and_runtime_authority_is_external(self):
         catalog, proposals = self.load()
         brief = build_working_catalog_owner_decision_brief(catalog, proposals)
 
@@ -85,30 +85,24 @@ class WorkingCatalogOwnerDecisionBriefTests(unittest.TestCase):
             tuple(item.requirement for item in brief.post_decision_records),
             ("catalog approval reference is missing",),
         )
-        self.assertEqual(
-            {item.requirement for item in brief.deferred_authority_gates},
-            {
-                "production mutation authority is not granted",
-                "production publication authority is not granted",
-            },
-        )
+        self.assertEqual(brief.deferred_authority_gates, ())
         self.assertFalse(brief.network_call_performed)
         self.assertFalse(brief.mutation_authorized)
         self.assertFalse(brief.production_publish_authorized)
 
-    def test_rendered_brief_explains_what_needs_ceo_attention_without_granting_authority(self):
+    def test_rendered_brief_explains_ceo_attention_without_granting_runtime_authority(self):
         catalog, proposals = self.load()
         rendered = render_working_catalog_owner_decision_brief(
             build_working_catalog_owner_decision_brief(catalog, proposals)
         )
 
         self.assertIn("# Initial Launch Catalog V1 — CEO Decision Brief", rendered)
+        self.assertIn("Canonical unresolved actions accounted for: **20**", rendered)
         self.assertIn("CEO-controlled decisions: **14**", rendered)
         self.assertIn("Japanese copy decisions with draft assistance: **6**", rendered)
         self.assertIn("Operational/evidence items: **5**", rendered)
-        self.assertIn("Deferred authority gates: **2**", rendered)
+        self.assertIn("Deferred authority gates: **0**", rendered)
         self.assertIn("Needs classification/review: **0**", rendered)
-        self.assertIn("Deferred authority gates — no approval requested now", rendered)
         self.assertIn("WooCommerce mutation authorized: **No**", rendered)
         self.assertIn("Production publication authorized: **No**", rendered)
 

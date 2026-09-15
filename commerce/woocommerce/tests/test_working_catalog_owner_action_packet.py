@@ -24,7 +24,7 @@ class WorkingCatalogOwnerActionPacketTests(unittest.TestCase):
         self.assertTrue(packet.actions)
         self.assertTrue(all(action.decision_value is None for action in packet.actions))
 
-    def test_current_owner_gates_are_present_without_decision_invention(self):
+    def test_current_owner_gates_are_present_without_runtime_authority_gates(self):
         packet = build_working_catalog_owner_action_packet(self.load())
         by_requirement = {action.requirement: action for action in packet.actions}
         self.assertEqual(
@@ -35,10 +35,8 @@ class WorkingCatalogOwnerActionPacketTests(unittest.TestCase):
             by_requirement["catalog approval is missing"].category,
             "owner_approval",
         )
-        self.assertEqual(
-            by_requirement["production mutation authority is not granted"].category,
-            "authority_gate",
-        )
+        self.assertNotIn("production mutation authority is not granted", by_requirement)
+        self.assertNotIn("production publication authority is not granted", by_requirement)
 
     def test_product_actions_preserve_exact_catalog_and_fulfillment_gaps(self):
         packet = build_working_catalog_owner_action_packet(self.load())

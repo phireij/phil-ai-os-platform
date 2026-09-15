@@ -27,24 +27,27 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
             report.global_gaps,
         )
 
+    def test_runtime_authority_is_not_a_catalog_completeness_gap(self):
+        report = build_working_catalog_gap_report(self.load())
+        self.assertNotIn("production mutation authority is not granted", report.global_gaps)
+        self.assertNotIn("production publication authority is not granted", report.global_gaps)
+
+        payload = self.load()
+        payload["mutation_authorized"] = True
+        payload["production_publish_authorized"] = True
+        authorized = build_working_catalog_gap_report(payload)
+        self.assertEqual(report.global_gaps, authorized.global_gaps)
+        self.assertEqual(report.product_gaps, authorized.product_gaps)
+
     def test_current_product_gaps_are_reported_without_invention(self):
         report = build_working_catalog_gap_report(self.load())
         by_key = {item.key: item.missing for item in report.product_gaps}
 
         self.assertIn("Japanese product name", by_key["RCD-MCH-RD"])
         self.assertIn("Japanese description", by_key["RCD-MCH-RD"])
-        self.assertIn(
-            "Fulfillment: final shipping/package class is missing",
-            by_key["RCD-MCH-RD"],
-        )
-        self.assertIn(
-            "Category: category source label is missing",
-            by_key["RCD-MCH-RD"],
-        )
-        self.assertIn(
-            "Media: media source state is missing",
-            by_key["RCD-MCH-RD"],
-        )
+        self.assertIn("Fulfillment: final shipping/package class is missing", by_key["RCD-MCH-RD"])
+        self.assertIn("Category: category source label is missing", by_key["RCD-MCH-RD"])
+        self.assertIn("Media: media source state is missing", by_key["RCD-MCH-RD"])
 
         self.assertIn("Japanese product name", by_key["RCD-BAR-FMB"])
         self.assertIn(
@@ -59,10 +62,7 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
             "Fulfillment: ambient package candidate lacks physical-fit confirmation",
             by_key["RCD-BAR-FMB"],
         )
-        self.assertIn(
-            "Media: verified media ingestion reference is unresolved",
-            by_key["RCD-BAR-FMB"],
-        )
+        self.assertIn("Media: verified media ingestion reference is unresolved", by_key["RCD-BAR-FMB"])
 
         self.assertNotIn("JPY price", by_key["RCD-BRD-ENS-1"])
         self.assertIn("Japanese product name", by_key["RCD-BRD-ENS-1"])
@@ -70,10 +70,7 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
             "Fulfillment: quantity-dependent package rule requires final package policy",
             by_key["RCD-BRD-ENS-1"],
         )
-        self.assertIn(
-            "Media: verified media ingestion reference is unresolved",
-            by_key["RCD-BRD-ENS-1"],
-        )
+        self.assertIn("Media: verified media ingestion reference is unresolved", by_key["RCD-BRD-ENS-1"])
 
     def test_temperature_ambiguity_survives_even_if_package_rule_is_resolved(self):
         payload = self.load()
@@ -109,19 +106,6 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
         by_key = {item.key: item.missing for item in report.product_gaps}
         self.assertIn("Media: media source state is missing", by_key["RCD-MCH-RD"])
 
-    def test_report_does_not_grant_authority_when_catalog_fields_are_filled(self):
-        payload = self.load()
-        for product in payload["working_products"]:
-            product["japanese_name"] = "仮"
-            product["japanese_description"] = "仮"
-            product["source_package_rule"] = "resolved"
-            if product.get("price_jpy") is None and product.get("product_type") == "simple":
-                product["price_jpy"] = 1
-        report = build_working_catalog_gap_report(payload)
-        self.assertFalse(report.production_ready)
-        self.assertIn("production mutation authority is not granted", report.global_gaps)
-        self.assertIn("production publication authority is not granted", report.global_gaps)
-
     def test_missing_owner_evidence_is_a_global_readiness_gap(self):
         payload = self.load()
         payload["source_snapshot"]["field_evidence"] = [
@@ -156,8 +140,6 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
         payload["catalog_approved"] = True
         payload["catalog_scope"]["scope_complete_for_intended_initial_launch"] = True
         payload["catalog_approval_ref"] = "owner-approval:test"
-        payload["mutation_authorized"] = True
-        payload["production_publish_authorized"] = True
         payload["source_snapshot"]["field_evidence"] = []
         report = build_working_catalog_gap_report(payload)
         self.assertFalse(report.production_ready)
@@ -177,20 +159,14 @@ class WorkingCatalogGapReportTests(unittest.TestCase):
         payload["source_snapshot"].pop("drive_file_id", None)
         report = build_working_catalog_gap_report(payload)
         self.assertFalse(report.production_ready)
-        self.assertIn(
-            "catalog source provenance is missing Drive file id",
-            report.global_gaps,
-        )
+        self.assertIn("catalog source provenance is missing Drive file id", report.global_gaps)
 
     def test_missing_source_modified_timestamp_blocks_production_readiness(self):
         payload = self.load()
         payload["source_snapshot"].pop("observed_modified_at", None)
         report = build_working_catalog_gap_report(payload)
         self.assertFalse(report.production_ready)
-        self.assertIn(
-            "catalog source provenance is missing observed modified timestamp",
-            report.global_gaps,
-        )
+        self.assertIn("catalog source provenance is missing observed modified timestamp", report.global_gaps)
 
 
 if __name__ == "__main__":

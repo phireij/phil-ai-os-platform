@@ -67,6 +67,13 @@ def _partition_supplemental_blockers(
 
 
 def build_working_catalog_gap_report(payload: dict[str, Any]) -> WorkingCatalogGapReport:
+    """Report catalog-completeness gaps without conflating live execution authority.
+
+    Mutation/publication authority is intentionally enforced by the production execution
+    preflights, not by this owner-facing catalog completeness report. This keeps catalog
+    decisions independently closable while preserving fail-closed live side-effect controls.
+    """
+
     global_gaps: list[str] = []
 
     if payload.get("catalog_approved") is not True:
@@ -76,10 +83,6 @@ def build_working_catalog_gap_report(payload: dict[str, Any]) -> WorkingCatalogG
         global_gaps.append("initial launch subset is not owner-confirmed complete")
     if not payload.get("catalog_approval_ref"):
         global_gaps.append("catalog approval reference is missing")
-    if payload.get("mutation_authorized") is not True:
-        global_gaps.append("production mutation authority is not granted")
-    if payload.get("production_publish_authorized") is not True:
-        global_gaps.append("production publication authority is not granted")
 
     source_snapshot = payload.get("source_snapshot") or {}
     if not source_snapshot.get("drive_file_id"):
