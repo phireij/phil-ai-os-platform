@@ -38,7 +38,7 @@ def main() -> None:
     require(governance["automatic_production_execution_authorized"] is False, "automatic production execution drift")
 
     scope = overlay["ceo_activation_scope"]
-    for key in ("woocommerce_production_activation", "komoju_live_mode", "production_sms_sending", "public_domain_dns_cutover", "final_launch_signoff_process"):
+    for key in ("woocommerce_production_activation", "komoju_live_mode", "production_sms_sending", "customer_channel_activation_and_replies", "public_domain_dns_cutover", "final_launch_signoff_process"):
         require(scope[key] is True, f"CEO scope approval drift: {key}")
     require(scope["scope_approval_overrides_readiness"] is False, "scope approval incorrectly overrides readiness")
 
@@ -53,7 +53,7 @@ def main() -> None:
     inputs = overlay["business_inputs"]
     require(inputs["final_production_catalog_ready"] is False, "final catalog changed without reconciliation")
     require(inputs["japan_tax_and_qualified_invoice_evidence_ready"] is True, "Japan tax evidence should remain GREEN")
-    require(inputs["air_mobile_order_quick_pickup_production_url_ready"] is False, "Air Mobile URL changed without reconciliation")
+    require(inputs["first_party_quick_pickup_production_ready"] is False, "first-party Quick Pickup changed without reconciliation")
 
     require(tax["decision"]["consumption_tax_status"] == "exempt", "tax status drift")
     require(tax["decision"]["qualified_invoice_status"] == "not_registered", "qualified invoice status drift")
