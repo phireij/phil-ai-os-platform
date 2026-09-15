@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "proposal_state": "draft_assistance_only",
+  "proposal_origin": "cto_assistant_2026-09-15",
+  "owner_approved": false,
+  "canonical_apply_authorized": false,
+  "network_call_performed": false,
+  "mutation_authorized": false,
+  "production_publish_authorized": false,
+  "products": [
+    {
+      "product_key": "RCD-MCH-RD",
+      "source_english_name": "Moist Chocolate Round Cake",
+      "source_english_description": "Deep, decadent, and incredibly moist chocolate cake covered in rich chocolate frosting—a true favorite for chocolate lovers of all ages.",
+      "proposed_japanese_name": "モイストチョコレート・ラウンドケーキ",
+      "proposed_japanese_description": "濃厚で贅沢な味わいと、しっとりとした食感が魅力のチョコレートケーキ。リッチなチョコレートフロスティングで仕上げた、世代を問わずチョコレート好きにおすすめの一品です。"
+    },
+    {
+      "product_key": "RCD-BAR-FMB",
+      "source_english_name": "Fudgy Milky Bar",
+      "source_english_description": "Indulge in our delicious Fudgy Milky Bar! Featuring a rich, dense, and ultra-fudgy texture that melts in your mouth, this treat boasts a luscious flavor reminiscent of a classic caramel bar. Topped with crunchy nuts for the perfect contrast, it's an irresistible sweet snack that pairs wonderfully with your favorite coffee or tea.",
+      "proposed_japanese_name": "ファッジー・ミルキーバー",
+      "proposed_japanese_description": "濃厚でぎゅっと詰まった、口どけなめらかなファッジー食感のミルキーバー。クラシックなキャラメル菓子を思わせるコクのある味わいに、香ばしいナッツをトッピングしました。コーヒーや紅茶のお供にもぴったりの、満足感のあるスイーツです。"
+    },
+    {
+      "product_key": "RCD-BRD-ENS-1",
+      "source_english_name": "Cheezy Ensaymada",
+      "source_english_description": "Indulge in our signature Cheezy Ensaymada! A beloved Filipino pastry favorite, this soft and fluffy bun is generously topped with rich butter, sweet sugar crystals, and a mountain of savory grated cheese. The irresistible combination of sweet and salty flavors makes it the perfect treat to enjoy with your favorite coffee or tea.",
+      "proposed_japanese_name": "チージー・エンサイマダ",
+      "proposed_japanese_description": "フィリピンで親しまれている、ふんわり柔らかなパン「エンサイマダ」。コクのあるバターと砂糖、たっぷりのチーズを重ね、甘さと塩気の絶妙なバランスに仕上げました。コーヒーや紅茶と一緒に楽しみたい、Ruby’s Cake Delightsのシグネチャースイーツです。"
+    }
+  ]
+}
