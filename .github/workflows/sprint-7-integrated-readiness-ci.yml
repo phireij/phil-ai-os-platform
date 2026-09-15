@@ -128,8 +128,8 @@ jobs:
           node --check scripts/capture_ruby_preproduction_final_screen.mjs
           python scripts/validate_sprint7_preproduction_final_screen_capture_workflow.py
 
-      - name: Validate Air Mobile Quick Pickup handoff
-        run: python scripts/validate_sprint7_air_mobile_quick_pickup_handoff.py
+      - name: Validate first-party Quick Pickup readiness
+        run: python scripts/validate_sprint7_first_party_quick_pickup_readiness.py
 
       - name: Validate pickup hours recheck handoff
         run: python scripts/validate_sprint7_pickup_hours_recheck_handoff.py
