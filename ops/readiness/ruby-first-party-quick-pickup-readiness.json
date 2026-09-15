@@ -1,0 +1,35 @@
+{
+  "version": "ruby-first-party-quick-pickup-readiness-v1",
+  "date": "2026-09-15",
+  "owner": "Ruby's Cake Delights",
+  "decision": "FIRST_PARTY_QUICK_PICKUP_REPLACES_AIR_MOBILE_AS_V1_DEPENDENCY",
+  "air_mobile_order_required_for_v1": false,
+  "airregi_inventory": {
+    "independently_required_for_v1": false,
+    "api_verified": false,
+    "csv_fallback_documented": true,
+    "authority": "not_assumed"
+  },
+  "ceo_scope_authorization": {
+    "controlled_production_activation_authorized": true,
+    "overrides_readiness": false,
+    "automatic_execution_authorized": false
+  },
+  "production_readiness": {
+    "first_party_pickup_route_implemented": false,
+    "eligible_catalog_confirmed": false,
+    "inventory_freshness_control_green": false,
+    "capacity_and_cutoff_control_green": false,
+    "checkout_and_payment_contract_green": false,
+    "bilingual_customer_copy_green": false,
+    "controlled_handset_and_operator_acceptance_green": false,
+    "rollback_disable_path_green": false,
+    "production_activation_ready": false
+  },
+  "authority": {
+    "customer_order_creation_authorized": false,
+    "inventory_mutation_authorized": false,
+    "automatic_production_execution_authorized": false,
+    "production_publish_authorized_by_readiness": false
+  }
+}

@@ -30,7 +30,7 @@ def main() -> None:
     branch_policy = json.loads(BRANCH_POLICY.read_text(encoding="utf-8"))
     mc_schema = json.loads(MC_PROJECTION_SCHEMA.read_text(encoding="utf-8"))
 
-    require(data.get("version") == "sprint7-launch-acceptance-v4", "launch acceptance schema drift")
+    require(data.get("version") == "sprint7-launch-acceptance-v5", "launch acceptance schema drift")
 
     engineering = data["bounded_engineering_readiness"]
     for key in (
@@ -127,7 +127,7 @@ def main() -> None:
     require(TIMING_DOC.is_file(), "payment timing reconciliation document missing")
 
     scope = data["scope_approvals"]
-    for key in ("woocommerce_production_activation_scope_approved", "komoju_live_mode_scope_approved", "production_sms_sending_scope_approved", "public_domain_dns_cutover_scope_approved", "final_launch_signoff_process_scope_approved"):
+    for key in ("woocommerce_production_activation_scope_approved", "komoju_live_mode_scope_approved", "production_sms_sending_scope_approved", "customer_channel_activation_and_replies_scope_approved", "public_domain_dns_cutover_scope_approved", "final_launch_signoff_process_scope_approved"):
         require(scope.get(key) is True, f"scope approval drift: {key}")
     require(scope["scope_approval_overrides_readiness"] is False, "scope approval incorrectly overrides readiness")
 
