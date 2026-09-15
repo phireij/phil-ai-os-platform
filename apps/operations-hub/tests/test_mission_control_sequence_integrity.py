@@ -64,6 +64,7 @@ def audit_model(items):
         "total_events": len(items),
         "by_stage": by_stage,
         "items": items,
+        "plan_fingerprints_exposed": False,
         "authority_effect": "none",
     }
 
