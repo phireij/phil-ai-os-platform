@@ -266,6 +266,7 @@ def build_mission_control_lifecycle_projection(
         raise MissionControlProjectionError("automation audit items must be a list")
 
     lifecycle_events: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    plan_lifecycles: dict[str, set[str]] = defaultdict(set)
     computed_stage_counts: dict[str, int] = defaultdict(int)
     for item in items:
         if not isinstance(item, dict):
@@ -289,6 +290,7 @@ def build_mission_control_lifecycle_projection(
         if not isinstance(stage, str) or not stage or not isinstance(outcome, str) or not outcome:
             raise MissionControlProjectionError("automation stage and outcome are required")
         lifecycle_events[lifecycle_id].append(item)
+        plan_lifecycles[plan_id].add(lifecycle_id)
         computed_stage_counts[stage] += 1
 
     declared_total_events = _validated_count(
@@ -301,6 +303,10 @@ def build_mission_control_lifecycle_projection(
     )
     if declared_stage_counts != dict(sorted(computed_stage_counts.items())):
         raise MissionControlProjectionError("automation by_stage must match automation audit items")
+    if any(len(lifecycle_ids) != 1 for lifecycle_ids in plan_lifecycles.values()):
+        raise MissionControlProjectionError(
+            "automation plan_id must reference exactly one lifecycle"
+        )
 
     lifecycles = []
     for lifecycle_id, events in sorted(lifecycle_events.items()):
