@@ -48,6 +48,8 @@ _PRODUCT_CATEGORY = {
     "verified media source": "operational_evidence",
 }
 
+_SUPPLEMENTAL_PREFIXES = ("Category: ", "Media: ")
+
 
 def _slug(value: str) -> str:
     return "-".join(
@@ -71,6 +73,13 @@ def _category_for_product(blocker: str) -> str:
     if blocker.lower().startswith("fulfillment:"):
         return "fulfillment_decision_or_evidence"
     return "owner_or_operational_review"
+
+
+def _semantic_requirement(requirement: str) -> str:
+    for prefix in _SUPPLEMENTAL_PREFIXES:
+        if requirement.startswith(prefix):
+            return requirement[len(prefix) :]
+    return requirement
 
 
 def _product_keys(payload: dict[str, Any]) -> set[str]:
@@ -103,7 +112,7 @@ def _append_action(
     requirement: str,
     source_blocker: str,
 ) -> None:
-    identity = (scope, product_key, source_blocker)
+    identity = (scope, product_key, _semantic_requirement(requirement))
     if identity in seen:
         return
     seen.add(identity)
@@ -125,8 +134,10 @@ def build_working_catalog_owner_action_packet(payload: dict[str, Any]) -> Workin
 
     The packet combines the canonical readiness report with the category-candidate and media-
     evidence packets so material Sprint 3 blockers cannot disappear merely because they live
-    outside the core gap report. It never supplies a decision value, resolves a blocker, or
-    grants WooCommerce mutation or publication authority.
+    outside the core gap report. Specialized category/media blockers are registered before the
+    core report so semantically duplicated wrapper blockers collapse to the richer source while
+    preserving every distinct requirement. The packet never supplies a decision value, resolves
+    a blocker, or grants WooCommerce mutation or publication authority.
     """
 
     report = build_working_catalog_gap_report(payload)
@@ -136,29 +147,8 @@ def build_working_catalog_owner_action_packet(payload: dict[str, Any]) -> Workin
     actions: list[CatalogOwnerAction] = []
     seen: set[tuple[str, str | None, str]] = set()
 
-    for blocker in report.global_gaps:
-        _append_action(
-            actions,
-            seen,
-            scope="global",
-            product_key=None,
-            category=_category_for_global(blocker),
-            requirement=blocker,
-            source_blocker=blocker,
-        )
-
-    for product in report.product_gaps:
-        for blocker in product.missing:
-            _append_action(
-                actions,
-                seen,
-                scope="product",
-                product_key=product.key,
-                category=_category_for_product(blocker),
-                requirement=blocker,
-                source_blocker=blocker,
-            )
-
+    # Register specialized evidence first so a semantically equivalent core wrapper such as
+    # "Category: ..." or "Media: ..." cannot create a second owner-facing action.
     for blocker in category_packet.blockers:
         product_key, requirement = _split_product_blocker(blocker, product_keys)
         _append_action(
@@ -182,6 +172,29 @@ def build_working_catalog_owner_action_packet(payload: dict[str, Any]) -> Workin
             requirement=requirement,
             source_blocker=blocker,
         )
+
+    for blocker in report.global_gaps:
+        _append_action(
+            actions,
+            seen,
+            scope="global",
+            product_key=None,
+            category=_category_for_global(blocker),
+            requirement=blocker,
+            source_blocker=blocker,
+        )
+
+    for product in report.product_gaps:
+        for blocker in product.missing:
+            _append_action(
+                actions,
+                seen,
+                scope="product",
+                product_key=product.key,
+                category=_category_for_product(blocker),
+                requirement=blocker,
+                source_blocker=blocker,
+            )
 
     actions.sort(key=lambda item: (item.scope, item.product_key or "", item.category, item.action_key))
     supplemental_blockers_present = bool(category_packet.blockers or media_packet.blockers)
