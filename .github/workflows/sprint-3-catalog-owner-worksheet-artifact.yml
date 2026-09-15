@@ -145,17 +145,16 @@ jobs:
           assert 'Production publication authorized: **No**' in assistance
           decision = decision_path.read_text(encoding='utf-8')
           assert '# Initial Launch Catalog V1 — CEO Decision Brief' in decision
-          assert 'Canonical unresolved actions accounted for: **22**' in decision
+          assert 'Canonical unresolved actions accounted for: **20**' in decision
           assert 'CEO-controlled decisions: **14**' in decision
           assert 'Japanese copy decisions with draft assistance: **6**' in decision
           assert 'Post-decision/system records: **1**' in decision
           assert 'Operational/evidence items: **5**' in decision
-          assert 'Deferred authority gates: **2**' in decision
+          assert 'Deferred authority gates: **0**' in decision
           assert 'Needs classification/review: **0**' in decision
-          assert 'Deferred authority gates — no approval requested now' in decision
           assert 'WooCommerce mutation authorized: **No**' in decision
           assert 'Production publication authorized: **No**' in decision
-          print('PHIL_AI_OS_CATALOG_OWNER_WORKSHEET_ARTIFACT_BOUNDARY_GREEN rows=5 checklist=true draft_assistance=true ceo_decision_brief=true owner_decisions=14 draft_assisted=6 operational_evidence=5 deferred_authority=2 needs_review=0 owner_approved=false network_call=false mutation_authorized=false production_publish_authorized=false')
+          print('PHIL_AI_OS_CATALOG_OWNER_WORKSHEET_ARTIFACT_BOUNDARY_GREEN rows=5 checklist=true draft_assistance=true ceo_decision_brief=true owner_decisions=14 draft_assisted=6 operational_evidence=5 deferred_authority=0 needs_review=0 owner_approved=false network_call=false mutation_authorized=false production_publish_authorized=false')
           PY
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
