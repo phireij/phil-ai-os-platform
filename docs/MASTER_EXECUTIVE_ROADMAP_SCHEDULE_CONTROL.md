@@ -3,7 +3,7 @@
 # Master Executive Roadmap & Schedule Control
 
 **Original 8-Sprint Plan • Accelerated Multi-Agent Delivery • V1 Launch Control**  
-**Last reconciled:** 15 September 2026 — Sprint 3 remains primary and owner/external-gated; catalog owner handoff is now human-readable and deduplicated; no production authority expansion
+**Last reconciled:** 15 September 2026 — Sprint 3 remains primary and owner/external-gated; controlled production scope is authorized but every subsystem remains fail-closed until its own evidence is GREEN
 
 | FIRST ISSUED | OWNER | LAST RECONCILED | CANONICAL SOURCE |
 | --- | --- | --- | --- |
@@ -19,7 +19,7 @@
 | --- | --- |
 | Overall schedule health | **AHEAD OF ORIGINAL 2-MONTH PLAN.** The current schedule constraint is owner/external evidence rather than missing core engineering. |
 | Executive roadmap position | **Sprint 3 — WooCommerce Foundation remains the CURRENT PRIMARY SPRINT. Sprint 4 — Customer Experience continues bounded parallel acceleration. Sprint 5–7 capabilities are pre-built only where non-authorizing and safe; formal sprint advancement has not been claimed.** |
-| Current engineering gate | **Finalize and approve Initial Launch Catalog V1.** The catalog engineering path supports simple products, variable parents, multiple sellable variation SKUs, owner worksheet generation, human-readable owner checklist generation, artifact publication and fail-closed edited-worksheet intake review. Twilio provider-side/handset validation remains externally blocked. Production catalog mutation/publication and live SMS remain blocked. |
+| Current engineering gate | **Finalize and approve Initial Launch Catalog V1.** The catalog engineering path supports simple products, variable parents, multiple sellable variation SKUs, owner worksheet generation, human-readable owner checklist generation, artifact publication and fail-closed edited-worksheet intake review. Controlled production scope is authorized; production catalog mutation/publication, live payment, live SMS and customer-channel execution remain blocked until their documented subsystem preflights and evidence are GREEN. |
 | Last completed checkpoint | **PR #385 merged GREEN** — Sprint 3 owner-handoff blockers are semantically deduplicated while specialized source-backed category/media actions remain canonical. PR #384 added the deterministic human-readable Markdown checklist beside the existing worksheet/requirements artifacts. The generated checklist now contains 22 distinct unresolved actions instead of 28 duplicated entries. Current `main`: `20b84abbcd0b1e8ecd288b7d8be23429650532f2`. |
 | Sprint 3 catalog readiness | Working source-backed subset is prepared for owner completion. The handoff now publishes the owner worksheet, unresolved-requirements JSON and a human-readable Markdown checklist. Moist Chocolate Round Cake is modeled as one variable product with parent `RCD-MCH-RD` and sellable variations `RCD-MCH-RD-15` / `RCD-MCH-RD-21`. Fudgy Milky Bar and Cheezy Ensaymada remain simple products. Final catalog completeness/approval is still pending. |
 | WooCommerce / tax | Pre-production foundation and production read-only identity/connectivity are GREEN. 2026 consumption-tax posture remains exempt / not Qualified-Invoice registered; WooCommerce tax remains disabled. |
@@ -27,9 +27,9 @@
 | Sprint 5 / Operations Hub | Five-channel normalization, task extraction, read-only workload/task views, reply proposal/review/decision layers, Mission Control projection v5, packaged read-only preview artifact and deterministic five-channel activation-readiness view are GREEN in bounded scope. No live channel connectivity or reply authority is enabled. |
 | Sprint 6 / Automation | Task-derived automation planning, multichannel simulation, bounded approval simulation/read model, recovery review posture, dry-run boundary requests and audit proof are GREEN. Mission Control can observe aggregate approval/recovery posture without identifiers or authority. No automatic/live execution authority is enabled. |
 | Sprint 7 / launch readiness | Integrated readiness CI remains GREEN on current bounded work. Customer-to-owner lifecycle branch matrix, Mission Control v5 contract alignment, packaged read-only preview, launch-acceptance synchronization and branch-protection readiness checks exist. Live cutover remains NO-GO until all final gates are satisfied. |
-| KOMOJU | Live dashboard/configuration evidence, approved initial payment subset, matching WooCommerce checkout configuration and Live Konbini 3-day expiry are GREEN readiness facts. **No real-payment execution authority is implied.** |
-| Twilio | Ruby-owned paid account, `Ruby Transactional SMS` Messaging Service and `RUBYSCAKE` sender are recorded. Restricted API-key outbound boundary and signed webhook boundary are GREEN. Provider-side/handset validation remains externally blocked; no live SMS authority is granted. |
-| Air Mobile / AirREGI | Air Mobile Quick Pickup production URL remains external input. Direct AirREGI inventory API remains unproven; CSV fallback is the safe documented path. No production inventory bridge is authorized. |
+| KOMOJU | Live dashboard/configuration evidence, approved initial payment subset, matching WooCommerce checkout configuration and Live Konbini 3-day expiry are GREEN readiness facts. CEO scope authorization permits controlled live acceptance once the payment subsystem's remaining preflight/evidence is GREEN; it does not authorize automatic or unverified payment execution. |
+| Twilio | Ruby-owned paid account, `Ruby Transactional SMS` Messaging Service and `RUBYSCAKE` sender are recorded. Restricted API-key outbound boundary and signed webhook boundary are GREEN. Controlled live SMS is in CEO-approved scope, but provider-side/real-handset validation remains an external gate and sending stays fail-closed. |
+| Quick Pickup / AirREGI | Ruby will implement a first-party Quick Pickup solution. Air Mobile Quick Pickup is **not** a V1 launch dependency. Direct AirREGI inventory API remains unproven and is not assumed; the documented CSV fallback remains a conservative option pending separate verification. |
 | Mission Control | Read-only lifecycle/result, workload, task-composition, approval, recovery, control-plane and five-channel activation-readiness projections are prepared and packaged as a bounded static artifact. Mission Control write authority remains disabled and Hermes remains intentionally idle for live execution. |
 | Repository protection | Launch-gate validator correctly reports the actual GitHub `main` ruleset/protection requirement as unresolved. Current connected GitHub app lacks administration permission to activate it. |
 | Current autonomy ceiling | **A0 — no autonomous production side-effect/execution expansion** |
@@ -51,7 +51,7 @@ The Sprint 3 catalog owner handoff was improved without changing catalog facts o
 - The generated owner checklist was reduced from 28 entries to 22 distinct unresolved actions without removing any distinct owner decision, operational evidence item or authority gate.
 - Exact-head PR validation remained GREEN across Sprint 3 Foundation, owner-artifact, WooCommerce contract, workflow supply-chain and Integrated Readiness CI. Post-merge `main` owner-artifact, contract, supply-chain and Integrated Readiness paths are GREEN on `20b84abbcd0b1e8ecd288b7d8be23429650532f2`.
 
-This work improves deterministic owner handoff only. It does **not** approve Initial Launch Catalog V1, grant WooCommerce mutation/publication authority, enable live payments/SMS/routing, close Sprint 3 or formally enter Sprint 4–7.
+This work improves deterministic owner handoff only. It does **not** approve Initial Launch Catalog V1, satisfy any subsystem production preflight, close Sprint 3 or formally enter Sprint 4–7.
 
 ## 14 SEP 2026 MISSION CONTROL / OPERATIONS / AUTOMATION RECONCILIATION
 
@@ -80,7 +80,7 @@ The catalog path now supports the owner workflow end-to-end without granting pro
 8. changes to source-backed values such as price require fresh evidence;
 9. no worksheet edit is automatically applied to the canonical catalog or WooCommerce.
 
-The durable Sprint 3 owner-input closure gate remains the **final owner-approved production catalog** for the intended Initial Launch Catalog V1 scope. Air Mobile and other later launch inputs do not replace or broaden that Sprint 3 gate.
+The durable Sprint 3 owner-input closure gate remains the **final owner-approved production catalog** for the intended Initial Launch Catalog V1 scope. First-party Quick Pickup and other later launch inputs do not replace or broaden that Sprint 3 gate.
 
 ## 12 SEP 2026 OPERATIONS / AUTOMATION / SPRINT 7 RECONCILIATION
 
@@ -97,11 +97,11 @@ These capabilities are **preparation/readiness only**. They do not convert Sprin
 
 **6 SEP 2026 ROUTING / CX RECONCILIATION —** The CEO-approved Ruby car delivery policy is canonical for Chiba/Tokyo/Kanagawa/Saitama eligibility, one-way road-distance pricing, >75-minute review, toll/parking handling and >80 km fail-closed behavior. A disabled-by-default routing adapter and network-inert Google Routes contract exist; no live route call is authorized.
 
-**6 SEP 2026 TWILIO BOUNDARY RECONCILIATION —** Outbound Twilio REST access is separated from webhook validation: restricted API key SID/secret are used for outbound API authentication, while the account Auth Token is reserved for signed webhook validation. No live SMS has been authorized by readiness work.
+**6 SEP 2026 TWILIO BOUNDARY RECONCILIATION —** Outbound Twilio REST access is separated from webhook validation: restricted API key SID/secret are used for outbound API authentication, while the account Auth Token is reserved for signed webhook validation. Controlled live SMS remains fail-closed until provider-side and real-handset acceptance evidence is GREEN.
 
 **4 SEP 2026 TOKUSHOHO CEO TEXT-APPROVAL RECONCILIATION —** The CEO approved the final Tokushoho publication-candidate text. Approval scope is candidate text only; publication execution, payment execution, DNS/public cutover and automatic execution remain separately gated.
 
-**4 SEP 2026 PAYMENT RECONCILIATION —** KOMOJU merchant Live dashboard evidence, the CEO-approved initial payment subset, matching WooCommerce checkout configuration, Live Konbini expiry at 3 days, payment wording and static final-screen checklist are GREEN readiness/configuration evidence only.
+**4 SEP 2026 PAYMENT RECONCILIATION —** KOMOJU merchant Live dashboard evidence, the CEO-approved initial payment subset, matching WooCommerce checkout configuration, Live Konbini expiry at 3 days, payment wording and static final-screen checklist are GREEN readiness/configuration evidence. Controlled live acceptance still requires its remaining preflight, recovery and auditable execution evidence.
 
 **3 SEP 2026 TAX RECONCILIATION —** Ruby’s Cake Delights is treated as consumption-tax exempt for 2026 under the reviewed evidence, is not registered for Qualified Invoices and has made no voluntary taxable-business election. WooCommerce tax remains disabled.
 
@@ -368,11 +368,10 @@ Do **not** activate historical working examples unless the owner explicitly conf
 
 ## Parallel external / later launch dependencies
 
-- Air Mobile Order Quick Pickup exact production URL.
 - Twilio provider/account authorization resolution plus controlled handset validation.
 - Public HTTPS Twilio delivery-status route/callback verification when separately authorized.
 - Safe actual WooCommerce final confirmation-screen evidence and owner acceptance.
-- KOMOJU final live acceptance / real-money gate; no real payment before explicit authorization.
+- KOMOJU final live acceptance / real-money gate; execution only after payment-specific readiness and audit evidence are GREEN.
 - Tokushoho publication execution only when independent readiness prerequisites are GREEN.
 - Near-cutover backup/restore freshness check performed close to actual cutover, not prematurely.
 - Actual GitHub `main` protection/ruleset coverage before final public launch.
@@ -384,8 +383,8 @@ Do **not** activate historical working examples unless the owner explicitly conf
 - Maintain A0 autonomy, general-only execution and Hermes-only bounded routing; specialists remain disabled for normal live execution.
 - Keep Mission Control read-only until separately governed write/mutation authority is approved.
 - Keep external Operations channels disconnected until each channel's activation prerequisites and separate write/reply gates are satisfied.
-- Keep real KOMOJU payment execution, live SMS sending, live routing-provider calls, production catalog mutation/publication, public-domain/DNS cutover and automatic production execution fail-closed.
-- Preserve CEO approvals already recorded for narrow readiness/candidate-text scopes; never reinterpret them as unrestricted authority.
+- Keep each production subsystem fail-closed until its documented preflight, evidence, rollback/recovery and audit gates are GREEN; automatic production execution remains disabled.
+- Apply the CEO's controlled production authorization only to the individually ready WooCommerce, KOMOJU, Twilio and approved-customer-channel boundaries; never reinterpret it as unrestricted autonomy.
 - Continue only work that materially improves preparation, evidence quality, deterministic handoff, testing, training or launch safety.
 - Do not create cosmetic micro-hardening PRs merely to keep activity moving.
 
@@ -424,5 +423,6 @@ These targets remain materially ahead of the original approximately two-month ob
 - **14 Sep 2026** — PR #335 added deterministic five-channel activation-readiness visibility in Mission Control from canonical readiness state. Facebook, Instagram, Telegram, WhatsApp and Google Business remain disconnected and non-authorizing. Current merged `main` at this reconciliation: `ffd5f02511dc1e9cbf00602d0363d471b6a35384`.
 - **15 Sep 2026** — PR #384 added the deterministic human-readable catalog owner checklist to the existing Sprint 3 handoff artifact while preserving the current worksheet/JSON contracts and all no-network/no-mutation/no-publication boundaries.
 - **15 Sep 2026** — PR #385 semantically deduplicated Category/Media wrapper blockers, reducing the generated owner checklist from 28 to 22 distinct actions while retaining every specialized source-backed blocker and authority gate. Current merged `main` at this reconciliation: `20b84abbcd0b1e8ecd288b7d8be23429650532f2`.
+- **15 Sep 2026** — Reconciled CEO authorization for controlled WooCommerce publication, live KOMOJU, live Twilio SMS and approved customer-channel activation/replies. Each capability remains fail-closed until its own readiness, recovery and audit evidence is GREEN; A0/general/Hermes-only governance and read-only Mission Control remain unchanged. Air Mobile Quick Pickup was removed as a V1 dependency and Ruby-owned Quick Pickup readiness was recorded separately; AirREGI API assumptions remain unverified.
 
 > **DOCUMENT CONTROL RULE:** Do not create a replacement master timeline for ordinary schedule updates. Review and update this canonical roadmap, refresh the status dashboard at the top, and record material changes in the Change Log.
