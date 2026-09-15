@@ -34,9 +34,24 @@ def valid_channel_model():
         "source_counts": {"facebook": 2, "telegram": 1},
         "intent_counts": {"order": 2, "question": 1},
         "items": [
-            {"mutation_authorized": False},
-            {"mutation_authorized": False},
-            {"mutation_authorized": False},
+            {
+                "source": "facebook",
+                "normalized_intent": "order",
+                "review_required": True,
+                "mutation_authorized": False,
+            },
+            {
+                "source": "facebook",
+                "normalized_intent": "order",
+                "review_required": False,
+                "mutation_authorized": False,
+            },
+            {
+                "source": "telegram",
+                "normalized_intent": "question",
+                "review_required": False,
+                "mutation_authorized": False,
+            },
         ],
         "mutation_authorized": False,
     }
