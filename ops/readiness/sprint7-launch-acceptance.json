@@ -1,6 +1,6 @@
 {
-  "version": "sprint7-launch-acceptance-v4",
-  "date": "2026-09-12",
+  "version": "sprint7-launch-acceptance-v5",
+  "date": "2026-09-15",
   "bounded_engineering_readiness": {
     "current_head_integrated_regression_required": true,
     "isolated_runtime_smoke_required": true,
@@ -38,6 +38,7 @@
     "woocommerce_production_activation_scope_approved": true,
     "komoju_live_mode_scope_approved": true,
     "production_sms_sending_scope_approved": true,
+    "customer_channel_activation_and_replies_scope_approved": true,
     "public_domain_dns_cutover_scope_approved": true,
     "final_launch_signoff_process_scope_approved": true,
     "scope_approval_overrides_readiness": false
@@ -48,7 +49,7 @@
     "fresh_launch_time_backup_restore_check_green": false,
     "woocommerce_production_mutation_ready": false,
     "komoju_live_acceptance_green": false,
-    "air_mobile_order_quick_pickup_url_ready": false,
+    "first_party_quick_pickup_production_ready": false,
     "sms_production_readiness_if_in_launch_scope_green": false,
     "external_channel_live_activation_ready_if_in_scope": false,
     "main_branch_protection_or_ruleset_green": false,
@@ -84,6 +85,7 @@
     "ops/readiness/ruby-komoju-live-acceptance-gate-2026-09-02.json",
     "ops/readiness/ruby-woocommerce-production-readonly-connectivity-2026-09-03.json",
     "ops/readiness/ruby-japan-consumption-tax-status-2026-09-03.json",
+    "ops/readiness/ruby-first-party-quick-pickup-readiness.json",
     "ops/readiness/ruby-final-go-no-go-gate-2026-09-02.json",
     "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md",
     "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md",
