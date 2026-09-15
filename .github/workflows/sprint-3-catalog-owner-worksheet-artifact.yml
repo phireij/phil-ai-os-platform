@@ -5,24 +5,30 @@ on:
   pull_request:
     paths:
       - "commerce/woocommerce/fixtures/working-catalog-subset-*.json"
+      - "commerce/woocommerce/fixtures/working-catalog-owner-draft-assistance-*.json"
       - "commerce/woocommerce/src/phil_ai_os_woocommerce/working_catalog_*.py"
       - "commerce/woocommerce/tools_working_catalog_owner_worksheet.py"
       - "commerce/woocommerce/tools_working_catalog_owner_action_checklist.py"
+      - "commerce/woocommerce/tools_working_catalog_owner_draft_assistance.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_worksheet.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_action_packet.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_action_checklist*.py"
+      - "commerce/woocommerce/tests/test_working_catalog_owner_draft_assistance.py"
       - ".github/workflows/sprint-3-catalog-owner-worksheet-artifact.yml"
   push:
     branches:
       - main
     paths:
       - "commerce/woocommerce/fixtures/working-catalog-subset-*.json"
+      - "commerce/woocommerce/fixtures/working-catalog-owner-draft-assistance-*.json"
       - "commerce/woocommerce/src/phil_ai_os_woocommerce/working_catalog_*.py"
       - "commerce/woocommerce/tools_working_catalog_owner_worksheet.py"
       - "commerce/woocommerce/tools_working_catalog_owner_action_checklist.py"
+      - "commerce/woocommerce/tools_working_catalog_owner_draft_assistance.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_worksheet.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_action_packet.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_action_checklist*.py"
+      - "commerce/woocommerce/tests/test_working_catalog_owner_draft_assistance.py"
       - ".github/workflows/sprint-3-catalog-owner-worksheet-artifact.yml"
 
 permissions:
@@ -48,6 +54,7 @@ jobs:
             commerce.woocommerce.tests.test_working_catalog_owner_action_packet \
             commerce.woocommerce.tests.test_working_catalog_owner_action_checklist \
             commerce.woocommerce.tests.test_working_catalog_owner_action_checklist_cli \
+            commerce.woocommerce.tests.test_working_catalog_owner_draft_assistance \
             -v
 
       - name: Build source-backed owner handoff
@@ -62,6 +69,10 @@ jobs:
           python commerce/woocommerce/tools_working_catalog_owner_action_checklist.py \
             --input commerce/woocommerce/fixtures/working-catalog-subset-2026-09-11.json \
             --output /tmp/philaios-catalog-owner-worksheet/ruby-working-catalog-owner-checklist.md
+          python commerce/woocommerce/tools_working_catalog_owner_draft_assistance.py \
+            --input commerce/woocommerce/fixtures/working-catalog-subset-2026-09-11.json \
+            --proposals commerce/woocommerce/fixtures/working-catalog-owner-draft-assistance-2026-09-15.json \
+            --output /tmp/philaios-catalog-owner-worksheet/ruby-working-catalog-japanese-copy-draft-assistance.md
 
       - name: Validate artifact boundary and source-backed structure
         shell: bash
@@ -76,9 +87,11 @@ jobs:
           csv_path = root / 'ruby-working-catalog-owner-worksheet.csv'
           req_path = root / 'ruby-working-catalog-owner-requirements.json'
           checklist_path = root / 'ruby-working-catalog-owner-checklist.md'
+          assistance_path = root / 'ruby-working-catalog-japanese-copy-draft-assistance.md'
           assert csv_path.is_file()
           assert req_path.is_file()
           assert checklist_path.is_file()
+          assert assistance_path.is_file()
           raw = csv_path.read_bytes()
           assert raw.startswith(b'\xef\xbb\xbf'), 'worksheet must remain UTF-8 BOM for spreadsheet compatibility'
           with csv_path.open('r', encoding='utf-8-sig', newline='') as handle:
@@ -95,6 +108,7 @@ jobs:
           assert by_sku['RCD-BRD-ENS-1']['price_jpy'] == '300'
           for sku in ('RCD-MCH-RD', 'RCD-BAR-FMB', 'RCD-BRD-ENS-1'):
               assert by_sku[sku]['japanese_name'] == ''
+              assert by_sku[sku]['japanese_description'] == ''
               assert by_sku[sku]['primary_media_ref'] == ''
               assert by_sku[sku]['shipping_class'] == ''
           requirements = json.loads(req_path.read_text(encoding='utf-8'))
@@ -109,7 +123,16 @@ jobs:
           assert 'Network calls performed: **No**' in checklist
           assert 'WooCommerce mutation authorized: **No**' in checklist
           assert 'Production publication authorized: **No**' in checklist
-          print('PHIL_AI_OS_CATALOG_OWNER_WORKSHEET_ARTIFACT_BOUNDARY_GREEN rows=5 checklist=true network_call=false mutation_authorized=false production_publish_authorized=false')
+          assistance = assistance_path.read_text(encoding='utf-8')
+          assert '# Working Catalog Japanese Copy — Draft Assistance' in assistance
+          assert '**Proposal only.**' in assistance
+          assert 'モイストチョコレート・ラウンドケーキ' in assistance
+          assert 'ファッジー・ミルキーバー' in assistance
+          assert 'チージー・エンサイマダ' in assistance
+          assert 'Owner approved: **No**' in assistance
+          assert 'Canonical apply authorized: **No**' in assistance
+          assert 'Production publication authorized: **No**' in assistance
+          print('PHIL_AI_OS_CATALOG_OWNER_WORKSHEET_ARTIFACT_BOUNDARY_GREEN rows=5 checklist=true draft_assistance=true owner_approved=false network_call=false mutation_authorized=false production_publish_authorized=false')
           PY
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
