@@ -29,6 +29,11 @@ def build_source_models() -> tuple[dict, dict, dict, dict]:
         "orders": {"pending_staff_review": 1},
         "quotes": {"pending_approval": 1},
         "owner_review": {"pending_packets": 2},
+        "privacy": {
+            "raw_customer_text_exposed": False,
+            "custom_notes_exposed": False,
+            "reference_image_names_exposed": False,
+        },
         "execution_authorized": False,
         "channel_reply_authorized": False,
         "quote_authorized": False,

@@ -15,6 +15,21 @@ def _require_false(model: dict[str, Any], fields: tuple[str, ...], label: str) -
             raise MissionControlProjectionError(f"{label} {field} must remain false")
 
 
+def _require_operations_privacy_hidden(operations_dashboard: dict[str, Any]) -> None:
+    privacy = operations_dashboard.get("privacy")
+    if not isinstance(privacy, dict):
+        raise MissionControlProjectionError("operations dashboard privacy must be an object")
+    for field in (
+        "raw_customer_text_exposed",
+        "custom_notes_exposed",
+        "reference_image_names_exposed",
+    ):
+        if privacy.get(field) is not False:
+            raise MissionControlProjectionError(
+                f"operations dashboard privacy {field} must remain false"
+            )
+
+
 def _validated_count(value: Any, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise MissionControlProjectionError(f"{label} must be a non-negative integer")
@@ -243,6 +258,7 @@ def build_mission_control_lifecycle_projection(
     """Project bounded lifecycle/result/recovery/approval status for read-only Mission Control consumption."""
     if not isinstance(operations_dashboard, dict) or operations_dashboard.get("status") != "read_only":
         raise MissionControlProjectionError("operations dashboard must remain read_only")
+    _require_operations_privacy_hidden(operations_dashboard)
     _require_false(
         operations_dashboard,
         (
