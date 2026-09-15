@@ -278,6 +278,7 @@ def build_mission_control_lifecycle_projection(
             raise MissionControlProjectionError("automation audit item must remain simulated with no authority effect")
         lifecycle_id = item.get("lifecycle_correlation_id")
         plan_id = item.get("plan_id")
+        request_id = item.get("request_id")
         sequence = item.get("sequence")
         stage = item.get("stage")
         outcome = item.get("outcome")
@@ -289,6 +290,15 @@ def build_mission_control_lifecycle_projection(
             raise MissionControlProjectionError("automation sequence must be a positive integer")
         if not isinstance(stage, str) or not stage or not isinstance(outcome, str) or not outcome:
             raise MissionControlProjectionError("automation stage and outcome are required")
+        if stage in {"boundary_preview", "result_preview"}:
+            if not isinstance(request_id, str) or not request_id:
+                raise MissionControlProjectionError(
+                    "automation boundary/result request_id is required"
+                )
+        elif request_id is not None:
+            raise MissionControlProjectionError(
+                "automation request_id must remain unset outside boundary/result stages"
+            )
         lifecycle_events[lifecycle_id].append(item)
         plan_lifecycles[plan_id].add(lifecycle_id)
         computed_stage_counts[stage] += 1
@@ -319,6 +329,15 @@ def build_mission_control_lifecycle_projection(
         if len(plan_ids) != 1:
             raise MissionControlProjectionError(
                 "automation lifecycle must reference exactly one plan_id"
+            )
+        request_ids = {
+            event.get("request_id")
+            for event in events
+            if event.get("request_id") is not None
+        }
+        if len(request_ids) > 1:
+            raise MissionControlProjectionError(
+                "automation lifecycle must reference exactly one request_id"
             )
         ordered = sorted(events, key=lambda event: event["sequence"])
         latest = ordered[-1]

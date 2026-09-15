@@ -41,12 +41,12 @@ def operations_dashboard():
     }
 
 
-def audit_item(lifecycle_id, plan_id, sequence, stage="plan_created", outcome="simulation_ready"):
+def audit_item(sequence, stage, outcome, request_id=None):
     return {
         "sequence": sequence,
-        "lifecycle_correlation_id": lifecycle_id,
-        "plan_id": plan_id,
-        "request_id": f"dry-run:{lifecycle_id}" if stage in {"boundary_preview", "result_preview"} else None,
+        "lifecycle_correlation_id": "lifecycle:one",
+        "plan_id": "plan:one",
+        "request_id": request_id,
         "stage": stage,
         "outcome": outcome,
         "simulated": True,
@@ -71,56 +71,53 @@ def audit_model(items):
     }
 
 
-class MissionControlLifecyclePlanIntegrityTests(unittest.TestCase):
-    def test_rejects_missing_plan_id(self):
-        item = audit_item("lifecycle:one", "plan:one", 1)
-        del item["plan_id"]
-        with self.assertRaisesRegex(MissionControlProjectionError, "plan_id is required"):
-            build_mission_control_lifecycle_projection(
-                operations_dashboard(),
-                audit_model([item]),
-            )
-
-    def test_rejects_multiple_plan_ids_within_one_lifecycle(self):
+class MissionControlRequestIntegrityTests(unittest.TestCase):
+    def test_allows_later_stage_only_with_request_id_without_exposing_it(self):
         audit = audit_model(
-            [
-                audit_item("lifecycle:one", "plan:one", 1),
-                audit_item("lifecycle:one", "plan:two", 2, "result_preview", "simulated_success"),
-            ]
-        )
-        with self.assertRaisesRegex(
-            MissionControlProjectionError,
-            "lifecycle must reference exactly one plan_id",
-        ):
-            build_mission_control_lifecycle_projection(operations_dashboard(), audit)
-
-    def test_rejects_one_plan_id_across_multiple_lifecycles(self):
-        audit = audit_model(
-            [
-                audit_item("lifecycle:one", "plan:shared", 1),
-                audit_item("lifecycle:two", "plan:shared", 1),
-            ]
-        )
-        with self.assertRaisesRegex(
-            MissionControlProjectionError,
-            "plan_id must reference exactly one lifecycle",
-        ):
-            build_mission_control_lifecycle_projection(operations_dashboard(), audit)
-
-    def test_preserves_valid_lifecycle_without_exposing_plan_id(self):
-        audit = audit_model(
-            [
-                audit_item("lifecycle:one", "plan:one", 1),
-                audit_item("lifecycle:one", "plan:one", 2, "result_preview", "simulated_success"),
-            ]
+            [audit_item(1, "result_preview", "simulated_failure", "dry-run:one")]
         )
         projection = build_mission_control_lifecycle_projection(operations_dashboard(), audit)
         lifecycle = projection["automation"]["lifecycles"][0]
-        self.assertEqual(1, projection["automation"]["lifecycle_count"])
-        self.assertEqual(2, lifecycle["latest_sequence"])
-        self.assertEqual("simulated_success", lifecycle["latest_outcome"])
-        self.assertNotIn('"plan_id"', json.dumps(projection, ensure_ascii=False))
+        self.assertEqual("result_preview", lifecycle["latest_stage"])
+        self.assertEqual("simulated_failure", lifecycle["latest_outcome"])
+        self.assertNotIn('"request_id"', json.dumps(projection, ensure_ascii=False))
         self.assertFalse(projection["mutation_authorized"])
+
+    def test_rejects_missing_request_id_for_boundary_or_result(self):
+        for stage, outcome in (
+            ("boundary_preview", "dry_run_created"),
+            ("result_preview", "simulated_success"),
+        ):
+            with self.subTest(stage=stage):
+                audit = audit_model([audit_item(1, stage, outcome)])
+                with self.assertRaisesRegex(
+                    MissionControlProjectionError,
+                    "boundary/result request_id is required",
+                ):
+                    build_mission_control_lifecycle_projection(operations_dashboard(), audit)
+
+    def test_rejects_request_id_outside_boundary_or_result_stage(self):
+        audit = audit_model(
+            [audit_item(1, "plan_created", "simulation_ready", "dry-run:unexpected")]
+        )
+        with self.assertRaisesRegex(
+            MissionControlProjectionError,
+            "request_id must remain unset outside boundary/result stages",
+        ):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit)
+
+    def test_rejects_conflicting_request_ids_within_one_lifecycle(self):
+        audit = audit_model(
+            [
+                audit_item(1, "boundary_preview", "dry_run_created", "dry-run:one"),
+                audit_item(2, "result_preview", "simulated_success", "dry-run:two"),
+            ]
+        )
+        with self.assertRaisesRegex(
+            MissionControlProjectionError,
+            "lifecycle must reference exactly one request_id",
+        ):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit)
 
 
 if __name__ == "__main__":

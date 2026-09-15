@@ -64,7 +64,7 @@ def audit_model():
                     "sequence": sequence,
                     "lifecycle_correlation_id": lifecycle_id,
                     "plan_id": f"plan:{lifecycle_id}",
-                    "request_id": None,
+                    "request_id": f"dry-run:{lifecycle_id}" if stage in {"boundary_preview", "result_preview"} else None,
                     "stage": stage,
                     "outcome": stage_outcome,
                     "simulated": True,
