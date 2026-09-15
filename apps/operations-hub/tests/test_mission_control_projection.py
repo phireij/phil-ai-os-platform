@@ -84,6 +84,7 @@ def audit_model():
         },
         "items": items,
         "read_only": True,
+        "plan_fingerprints_exposed": False,
         "authority_effect": "none",
     }
 
@@ -244,6 +245,16 @@ class MissionControlProjectionTests(unittest.TestCase):
         audit = audit_model()
         audit["items"][0]["channel_reply_authorized"] = True
         with self.assertRaisesRegex(MissionControlProjectionError, "channel_reply_authorized"):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit)
+
+    def test_rejects_automation_audit_fingerprint_exposure(self):
+        audit = audit_model()
+        audit["plan_fingerprints_exposed"] = True
+        with self.assertRaisesRegex(MissionControlProjectionError, "automation plan fingerprints"):
+            build_mission_control_lifecycle_projection(operations_dashboard(), audit)
+        audit = audit_model()
+        del audit["plan_fingerprints_exposed"]
+        with self.assertRaisesRegex(MissionControlProjectionError, "automation plan fingerprints"):
             build_mission_control_lifecycle_projection(operations_dashboard(), audit)
 
     def test_rejects_automation_audit_total_that_does_not_match_items(self):

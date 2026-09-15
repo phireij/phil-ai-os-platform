@@ -75,6 +75,7 @@ def build_source_models() -> tuple[dict, dict, dict, dict]:
         "total_events": len(items),
         "by_stage": {"normalized": 2, "governance": 2, "planned": 2, "simulated": 2},
         "items": items,
+        "plan_fingerprints_exposed": False,
         "authority_effect": "none",
     }
     recovery_read_model = {
