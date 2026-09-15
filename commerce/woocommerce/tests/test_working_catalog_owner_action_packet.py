@@ -88,6 +88,43 @@ class WorkingCatalogOwnerActionPacketTests(unittest.TestCase):
         )
         self.assertTrue(all(action.decision_value is None for action in media_actions))
 
+    def test_semantically_duplicate_category_and_media_wrappers_are_collapsed(self):
+        packet = build_working_catalog_owner_action_packet(self.load())
+
+        semantic_identities = []
+        for action in packet.actions:
+            requirement = action.requirement
+            for prefix in ("Category: ", "Media: "):
+                if requirement.startswith(prefix):
+                    requirement = requirement[len(prefix) :]
+                    break
+            semantic_identities.append((action.scope, action.product_key, requirement))
+
+        self.assertEqual(len(semantic_identities), len(set(semantic_identities)))
+        self.assertFalse(
+            any(
+                action.category == "owner_or_operational_review"
+                and action.requirement.startswith(("Category: ", "Media: "))
+                for action in packet.actions
+            )
+        )
+        self.assertTrue(
+            any(
+                action.category == "category_mapping"
+                and action.product_key == "RCD-MCH-RD"
+                and action.requirement == "category source label is missing"
+                for action in packet.actions
+            )
+        )
+        self.assertTrue(
+            any(
+                action.category == "media_ingestion_evidence"
+                and action.product_key == "RCD-BAR-FMB"
+                and action.requirement == "verified media ingestion reference is unresolved"
+                for action in packet.actions
+            )
+        )
+
     def test_supplemental_category_or_media_blockers_keep_packet_fail_closed(self):
         payload = self.load()
         payload["catalog_approved"] = True

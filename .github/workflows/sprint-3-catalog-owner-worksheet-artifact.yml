@@ -9,6 +9,7 @@ on:
       - "commerce/woocommerce/tools_working_catalog_owner_worksheet.py"
       - "commerce/woocommerce/tools_working_catalog_owner_action_checklist.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_worksheet.py"
+      - "commerce/woocommerce/tests/test_working_catalog_owner_action_packet.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_action_checklist*.py"
       - ".github/workflows/sprint-3-catalog-owner-worksheet-artifact.yml"
   push:
@@ -20,6 +21,7 @@ on:
       - "commerce/woocommerce/tools_working_catalog_owner_worksheet.py"
       - "commerce/woocommerce/tools_working_catalog_owner_action_checklist.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_worksheet.py"
+      - "commerce/woocommerce/tests/test_working_catalog_owner_action_packet.py"
       - "commerce/woocommerce/tests/test_working_catalog_owner_action_checklist*.py"
       - ".github/workflows/sprint-3-catalog-owner-worksheet-artifact.yml"
 
@@ -43,6 +45,7 @@ jobs:
         run: |
           python -m unittest \
             commerce.woocommerce.tests.test_working_catalog_owner_worksheet \
+            commerce.woocommerce.tests.test_working_catalog_owner_action_packet \
             commerce.woocommerce.tests.test_working_catalog_owner_action_checklist \
             commerce.woocommerce.tests.test_working_catalog_owner_action_checklist_cli \
             -v
