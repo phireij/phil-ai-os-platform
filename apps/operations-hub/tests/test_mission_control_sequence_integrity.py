@@ -1,3 +1,4 @@
+import hashlib
 import sys
 import unittest
 from pathlib import Path
@@ -40,12 +41,18 @@ def operations_dashboard():
     }
 
 
+def canonical_request_id(lifecycle_id):
+    plan_id = f"plan:{lifecycle_id}"
+    material = f"{plan_id}|{lifecycle_id}|dry-run".encode("utf-8")
+    return "dry-run:" + hashlib.sha256(material).hexdigest()[:24]
+
+
 def audit_item(lifecycle_id, sequence, stage="plan_created", outcome="simulation_ready"):
     return {
         "sequence": sequence,
         "lifecycle_correlation_id": lifecycle_id,
         "plan_id": f"plan:{lifecycle_id}",
-        "request_id": f"dry-run:{lifecycle_id}" if stage in {"boundary_preview", "result_preview"} else None,
+        "request_id": canonical_request_id(lifecycle_id) if stage in {"boundary_preview", "result_preview"} else None,
         "stage": stage,
         "outcome": outcome,
         "simulated": True,
