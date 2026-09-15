@@ -3,11 +3,11 @@
 # Master Executive Roadmap & Schedule Control
 
 **Original 8-Sprint Plan • Accelerated Multi-Agent Delivery • V1 Launch Control**  
-**Last reconciled:** 14 September 2026 — Sprint 3 remains primary and owner/external-gated; Sprint 4 remains bounded parallel; Mission Control / Operations / Automation readiness has advanced materially without production authority expansion
+**Last reconciled:** 15 September 2026 — Sprint 3 remains primary and owner/external-gated; catalog owner handoff is now human-readable and deduplicated; no production authority expansion
 
 | FIRST ISSUED | OWNER | LAST RECONCILED | CANONICAL SOURCE |
 | --- | --- | --- | --- |
-| 28 Aug 2026 | CEO / CTO Office | 14 Sep 2026 | GitHub master roadmap |
+| 28 Aug 2026 | CEO / CTO Office | 15 Sep 2026 | GitHub master roadmap |
 
 # CURRENT EXECUTIVE STATUS
 
@@ -19,9 +19,9 @@
 | --- | --- |
 | Overall schedule health | **AHEAD OF ORIGINAL 2-MONTH PLAN.** The current schedule constraint is owner/external evidence rather than missing core engineering. |
 | Executive roadmap position | **Sprint 3 — WooCommerce Foundation remains the CURRENT PRIMARY SPRINT. Sprint 4 — Customer Experience continues bounded parallel acceleration. Sprint 5–7 capabilities are pre-built only where non-authorizing and safe; formal sprint advancement has not been claimed.** |
-| Current engineering gate | **Finalize and approve Initial Launch Catalog V1.** The catalog engineering path supports simple products, variable parents, multiple sellable variation SKUs, owner worksheet generation, artifact publication and fail-closed edited-worksheet intake review. Twilio provider-side/handset validation remains externally blocked. Production catalog mutation/publication and live SMS remain blocked. |
-| Last completed checkpoint | **PR #335 merged GREEN** — Mission Control now surfaces deterministic read-only activation posture for Facebook, Instagram, Telegram, WhatsApp and Google Business from canonical readiness state, with live connectivity, inbound activation and outbound replies remaining fail-closed. Current `main`: `ffd5f02511dc1e9cbf00602d0363d471b6a35384`. |
-| Sprint 3 catalog readiness | Working source-backed subset is prepared for owner completion. Moist Chocolate Round Cake is modeled as one variable product with parent `RCD-MCH-RD` and sellable variations `RCD-MCH-RD-15` / `RCD-MCH-RD-21`. Fudgy Milky Bar and Cheezy Ensaymada remain simple products. Final catalog completeness/approval is still pending. |
+| Current engineering gate | **Finalize and approve Initial Launch Catalog V1.** The catalog engineering path supports simple products, variable parents, multiple sellable variation SKUs, owner worksheet generation, human-readable owner checklist generation, artifact publication and fail-closed edited-worksheet intake review. Twilio provider-side/handset validation remains externally blocked. Production catalog mutation/publication and live SMS remain blocked. |
+| Last completed checkpoint | **PR #385 merged GREEN** — Sprint 3 owner-handoff blockers are semantically deduplicated while specialized source-backed category/media actions remain canonical. PR #384 added the deterministic human-readable Markdown checklist beside the existing worksheet/requirements artifacts. The generated checklist now contains 22 distinct unresolved actions instead of 28 duplicated entries. Current `main`: `20b84abbcd0b1e8ecd288b7d8be23429650532f2`. |
+| Sprint 3 catalog readiness | Working source-backed subset is prepared for owner completion. The handoff now publishes the owner worksheet, unresolved-requirements JSON and a human-readable Markdown checklist. Moist Chocolate Round Cake is modeled as one variable product with parent `RCD-MCH-RD` and sellable variations `RCD-MCH-RD-15` / `RCD-MCH-RD-21`. Fudgy Milky Bar and Cheezy Ensaymada remain simple products. Final catalog completeness/approval is still pending. |
 | WooCommerce / tax | Pre-production foundation and production read-only identity/connectivity are GREEN. 2026 consumption-tax posture remains exempt / not Qualified-Invoice registered; WooCommerce tax remains disabled. |
 | Sprint 4 / CX | Mobile-first PWA/catalog/product/cart/checkout/pickup/custom-cake foundations are materially GREEN in isolated/non-production scope. Storefront visual hierarchy was further polished in bounded preview source. Hostinger preview publication remains manual and non-production. |
 | Sprint 5 / Operations Hub | Five-channel normalization, task extraction, read-only workload/task views, reply proposal/review/decision layers, Mission Control projection v5, packaged read-only preview artifact and deterministic five-channel activation-readiness view are GREEN in bounded scope. No live channel connectivity or reply authority is enabled. |
@@ -39,6 +39,19 @@
 | Original 2-month target | Approximately **19 October 2026** from the 19 August start |
 | Schedule variance | Materially ahead of the original sequence because later-sprint foundations have been safely prepared early. Owner/external gates now dominate the remaining critical path. |
 | Immediate next action | Continue only material non-authorizing preparation while awaiting final catalog facts/approval, Twilio/provider evidence and other external launch inputs. Do not manufacture filler work or cross production gates. |
+
+## 15 SEP 2026 SPRINT 3 OWNER HANDOFF RECONCILIATION
+
+The Sprint 3 catalog owner handoff was improved without changing catalog facts or production authority:
+
+- PR #384 added a deterministic human-readable Markdown owner checklist derived from the existing source-backed action packet and owner worksheet, including variable-parent and sellable variation SKU context.
+- The existing CSV worksheet and JSON requirements/action contracts remain backward-compatible and non-authorizing.
+- The Sprint 3 owner artifact now packages the CSV worksheet, unresolved-requirements JSON and Markdown checklist together.
+- PR #385 removed semantically duplicate Category/Media wrapper actions while preserving the specialized `category_mapping` and `media_ingestion_evidence` blockers as canonical.
+- The generated owner checklist was reduced from 28 entries to 22 distinct unresolved actions without removing any distinct owner decision, operational evidence item or authority gate.
+- Exact-head PR validation remained GREEN across Sprint 3 Foundation, owner-artifact, WooCommerce contract, workflow supply-chain and Integrated Readiness CI. Post-merge `main` owner-artifact, contract, supply-chain and Integrated Readiness paths are GREEN on `20b84abbcd0b1e8ecd288b7d8be23429650532f2`.
+
+This work improves deterministic owner handoff only. It does **not** approve Initial Launch Catalog V1, grant WooCommerce mutation/publication authority, enable live payments/SMS/routing, close Sprint 3 or formally enter Sprint 4–7.
 
 ## 14 SEP 2026 MISSION CONTROL / OPERATIONS / AUTOMATION RECONCILIATION
 
@@ -176,7 +189,7 @@ V1 must preserve these properties:
 - Variable products and multiple variation SKUs
 - Owner worksheet generation and intake review
 
-**Control note:** Core WooCommerce contracts, isolated runtime, catalog/category/media/inventory/localization boundaries, tax posture, variable-product/multi-SKU support, read-only reconciliation, owner worksheet artifact generation and fail-closed intake review are GREEN. The principal remaining Sprint 3 closure gate is the **final owner-approved Initial Launch Catalog V1** plus associated bilingual/media/fulfillment evidence. Production catalog mutation/publication, real payment, live routing and live SMS remain fail-closed.
+**Control note:** Core WooCommerce contracts, isolated runtime, catalog/category/media/inventory/localization boundaries, tax posture, variable-product/multi-SKU support, read-only reconciliation, owner worksheet artifact generation, human-readable owner checklist generation and fail-closed intake review are GREEN. The principal remaining Sprint 3 closure gate is the **final owner-approved Initial Launch Catalog V1** plus associated bilingual/media/fulfillment evidence. Production catalog mutation/publication, real payment, live routing and live SMS remain fail-closed.
 
 ## Sprint 4 — Customer Experience
 
@@ -340,7 +353,7 @@ Complete or confirm before Sprint 3 formal closure:
 - Provide the explicit catalog approval reference required by launch readiness.
 - Keep all production WooCommerce catalog mutation/publication fail-closed until the final package is complete and separately revalidated.
 
-The owner-editable worksheet and fail-closed intake reviewer are now the preferred handoff path for catalog facts. The system must not invent missing owner values.
+The owner-editable worksheet, human-readable checklist and fail-closed intake reviewer are now the preferred handoff path for catalog facts. The system must not invent missing owner values.
 
 ### Catalog-associated reminder after owner submission
 
@@ -409,5 +422,7 @@ These targets remain materially ahead of the original approximately two-month ob
 - **14 Sep 2026** — PR #331/#332 added privacy-safe aggregate automation approval posture and surfaced it in Mission Control projection v5 without decision identifiers or execution authority.
 - **14 Sep 2026** — PR #333 aligned the Mission Control JSON contract with runtime projection v5; PR #334 added validated static preview artifact publication on relevant `main` changes.
 - **14 Sep 2026** — PR #335 added deterministic five-channel activation-readiness visibility in Mission Control from canonical readiness state. Facebook, Instagram, Telegram, WhatsApp and Google Business remain disconnected and non-authorizing. Current merged `main` at this reconciliation: `ffd5f02511dc1e9cbf00602d0363d471b6a35384`.
+- **15 Sep 2026** — PR #384 added the deterministic human-readable catalog owner checklist to the existing Sprint 3 handoff artifact while preserving the current worksheet/JSON contracts and all no-network/no-mutation/no-publication boundaries.
+- **15 Sep 2026** — PR #385 semantically deduplicated Category/Media wrapper blockers, reducing the generated owner checklist from 28 to 22 distinct actions while retaining every specialized source-backed blocker and authority gate. Current merged `main` at this reconciliation: `20b84abbcd0b1e8ecd288b7d8be23429650532f2`.
 
 > **DOCUMENT CONTROL RULE:** Do not create a replacement master timeline for ordinary schedule updates. Review and update this canonical roadmap, refresh the status dashboard at the top, and record material changes in the Change Log.
