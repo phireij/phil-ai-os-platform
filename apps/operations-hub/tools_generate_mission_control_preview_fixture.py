@@ -58,6 +58,7 @@ def build_source_models() -> tuple[dict, dict, dict, dict]:
             items.append(
                 {
                     "lifecycle_correlation_id": lifecycle_id,
+                    "plan_id": f"plan:{lifecycle_id}",
                     "sequence": sequence,
                     "stage": stage,
                     "outcome": outcome,
