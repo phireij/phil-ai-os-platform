@@ -27,6 +27,11 @@ def operations_dashboard():
         "orders": {"pending_staff_review": 0},
         "quotes": {"pending_approval": 0},
         "owner_review": {"pending_packets": 0},
+        "privacy": {
+            "raw_customer_text_exposed": False,
+            "custom_notes_exposed": False,
+            "reference_image_names_exposed": False,
+        },
         "execution_authorized": False,
         "channel_reply_authorized": False,
         "quote_authorized": False,
