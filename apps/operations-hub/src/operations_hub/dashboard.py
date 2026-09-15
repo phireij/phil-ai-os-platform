@@ -189,6 +189,11 @@ def build_operations_dashboard(
     order_duplicate_handoffs = _validated_count(orders.get("duplicate_handoffs", 0), "order duplicate_handoffs")
     if order_pending_review != len(order_items):
         raise OperationsDashboardError("order pending_review must match order review items")
+    for index, item in enumerate(order_items):
+        if item.get("review_state") != "pending_staff_review":
+            raise OperationsDashboardError(
+                f"order review item[{index}] review_state must remain pending_staff_review"
+            )
 
     approval_items = _validated_items(approvals.get("items"), "approval")
     pending_approval_count = _validated_count(
@@ -199,6 +204,15 @@ def build_operations_dashboard(
     )
     if pending_approval_count != len(approval_items):
         raise OperationsDashboardError("approval pending_approval_count must match approval items")
+    for index, item in enumerate(approval_items):
+        if item.get("state") != "approval_requested":
+            raise OperationsDashboardError(
+                f"approval item[{index}] state must remain approval_requested"
+            )
+        if item.get("decision") is not None:
+            raise OperationsDashboardError(
+                f"approval item[{index}] decision must remain unset"
+            )
 
     recommendation_items = _validated_items(recommendations.get("items"), "recommendation")
     recommendation_proposal_count = _validated_count(
@@ -209,6 +223,11 @@ def build_operations_dashboard(
     )
     if recommendation_proposal_count != len(recommendation_items):
         raise OperationsDashboardError("recommendation proposal_count must match recommendation items")
+    for index, item in enumerate(recommendation_items):
+        if item.get("approval_decided") is not False:
+            raise OperationsDashboardError(
+                f"recommendation item[{index}] approval_decided must remain false"
+            )
 
     owner_packet_items = _validated_items(owner_packets.get("items"), "owner packet")
     owner_packet_count = _validated_count(owner_packets.get("packet_count", 0), "owner packet_count")
@@ -218,6 +237,15 @@ def build_operations_dashboard(
     owner_decision_pending = owner_packets.get("owner_decision_pending")
     if owner_decision_pending is not bool(owner_packet_items):
         raise OperationsDashboardError("owner_decision_pending must match owner packet items")
+    for index, item in enumerate(owner_packet_items):
+        if item.get("owner_decision_required") is not True:
+            raise OperationsDashboardError(
+                f"owner packet item[{index}] owner_decision_required must remain true"
+            )
+        if item.get("owner_decision") is not None:
+            raise OperationsDashboardError(
+                f"owner packet item[{index}] owner_decision must remain unset"
+            )
 
     return {
         "status": "read_only",
