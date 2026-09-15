@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sys
 import unittest
@@ -41,6 +42,11 @@ def operations_dashboard():
     }
 
 
+def canonical_request_id():
+    material = "plan:one|lifecycle:one|dry-run".encode("utf-8")
+    return "dry-run:" + hashlib.sha256(material).hexdigest()[:24]
+
+
 def audit_item(sequence, stage, outcome, request_id=None):
     return {
         "sequence": sequence,
@@ -74,7 +80,7 @@ def audit_model(items):
 class MissionControlRequestIntegrityTests(unittest.TestCase):
     def test_allows_later_stage_only_with_request_id_without_exposing_it(self):
         audit = audit_model(
-            [audit_item(1, "result_preview", "simulated_failure", "dry-run:one")]
+            [audit_item(1, "result_preview", "simulated_failure", canonical_request_id())]
         )
         projection = build_mission_control_lifecycle_projection(operations_dashboard(), audit)
         lifecycle = projection["automation"]["lifecycles"][0]
@@ -106,18 +112,18 @@ class MissionControlRequestIntegrityTests(unittest.TestCase):
         ):
             build_mission_control_lifecycle_projection(operations_dashboard(), audit)
 
-    def test_rejects_conflicting_request_ids_within_one_lifecycle(self):
-        audit = audit_model(
-            [
-                audit_item(1, "boundary_preview", "dry_run_created", "dry-run:one"),
-                audit_item(2, "result_preview", "simulated_success", "dry-run:two"),
-            ]
-        )
-        with self.assertRaisesRegex(
-            MissionControlProjectionError,
-            "lifecycle must reference exactly one request_id",
+    def test_rejects_noncanonical_boundary_or_result_request_id(self):
+        for stage, outcome in (
+            ("boundary_preview", "dry_run_created"),
+            ("result_preview", "simulated_success"),
         ):
-            build_mission_control_lifecycle_projection(operations_dashboard(), audit)
+            with self.subTest(stage=stage):
+                audit = audit_model([audit_item(1, stage, outcome, "dry-run:tampered")])
+                with self.assertRaisesRegex(
+                    MissionControlProjectionError,
+                    "request_id must match canonical dry-run request",
+                ):
+                    build_mission_control_lifecycle_projection(operations_dashboard(), audit)
 
 
 if __name__ == "__main__":
