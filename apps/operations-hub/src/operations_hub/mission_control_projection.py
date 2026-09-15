@@ -299,6 +299,11 @@ def build_mission_control_lifecycle_projection(
 
     lifecycles = []
     for lifecycle_id, events in sorted(lifecycle_events.items()):
+        sequences = [event["sequence"] for event in events]
+        if len(set(sequences)) != len(sequences):
+            raise MissionControlProjectionError(
+                "automation sequence must be unique within each lifecycle"
+            )
         ordered = sorted(events, key=lambda event: event["sequence"])
         latest = ordered[-1]
         lifecycles.append(
