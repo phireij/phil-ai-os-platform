@@ -44,6 +44,7 @@ def audit_item(lifecycle_id, sequence, stage="plan_created", outcome="simulation
     return {
         "sequence": sequence,
         "lifecycle_correlation_id": lifecycle_id,
+        "plan_id": f"plan:{lifecycle_id}",
         "stage": stage,
         "outcome": outcome,
         "simulated": True,
