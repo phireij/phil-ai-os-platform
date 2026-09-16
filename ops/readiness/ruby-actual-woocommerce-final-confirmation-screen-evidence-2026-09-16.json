@@ -73,6 +73,29 @@
       "correction_gate": "Add only direct checkout access to the existing approved routes under bounded preproduction change authority; do not alter the approved legal text."
     }
   },
+  "post_capture_bounded_correction": {
+    "corrected_at": "2026-09-16",
+    "order_created": false,
+    "payment_executed": false,
+    "komoju": {
+      "account_mode": "test_account",
+      "provider_enabled": true,
+      "enabled_methods": ["credit_card", "konbini", "merpay", "paidy"],
+      "actual_checkout_methods_exposed": false,
+      "remaining_cause": "The active WooCommerce Order Approval gateway intentionally remains the sole customer checkout method and defers payment until owner approval.",
+      "next_authority_gate": "Any temporary or permanent disabling of Order Approval changes the order/payment flow and requires separate action-time authorization."
+    },
+    "legal_routes": {
+      "cancellation_refund_link_visible_on_checkout": true,
+      "tokushoho_link_visible_on_checkout": true,
+      "approved_page_text_changed": false
+    },
+    "shipping": {
+      "corrected": false,
+      "remaining_gate": "verified Fudgy Milky Bar package/shipping class or separately approved preproduction fallback"
+    },
+    "acceptance_state": "RED_FAIL_CLOSED"
+  },
   "review_notes": [
     "Actual coming-soon WooCommerce preproduction checkout was reviewed with synthetic QA data.",
     "The final action was visible and was not invoked; no order or payment was created.",
@@ -82,6 +105,8 @@
     "A follow-up read-only diagnosis found that the legal pages already exist and are published; their absence is a checkout-link-placement gap, not missing-page publication.",
     "The same diagnosis found KOMOJU connected as a test account with Credit Card, Konbini, Merpay and Paidy selected, but the provider is globally inactive.",
     "The Free shipping display is caused by the review product having no assigned source-backed shipping class while the zone base cost is zero and the no-class cost is blank.",
+    "A bounded follow-up enabled the connected KOMOJU test-account provider and added checkout links to the existing approved legal pages; no order or payment was executed.",
+    "The legal-link gap is corrected, but the active Order Approval gateway still intentionally replaces KOMOJU methods on the customer checkout. Changing that flow requires separate authorization.",
     "Evidence remains incomplete and the actual-screen acceptance gate remains RED fail-closed."
   ],
   "evidence_complete": false,
