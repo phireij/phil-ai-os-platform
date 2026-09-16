@@ -1,6 +1,6 @@
 {
   "version": "ruby-production-current-state-overlay-v7",
-  "date": "2026-09-15",
+  "date": "2026-09-17",
   "purpose": "Current operational reconciliation layer for production-readiness decisions.",
   "governance": {
     "autonomy": "A0",
@@ -50,8 +50,8 @@
     "konbini_live_expiry_days": 3,
     "payment_timing_wording_reconciled": true,
     "tokushoho_payment_timing_match_checkout": true,
-    "final_confirmation_screen_reviewed": false,
-    "checkout_legal_timing_sync_complete": false,
+    "final_confirmation_screen_reviewed": true,
+    "checkout_legal_timing_sync_complete": true,
     "live_acceptance_green": false,
     "real_payment_execution_ready": false
   },
