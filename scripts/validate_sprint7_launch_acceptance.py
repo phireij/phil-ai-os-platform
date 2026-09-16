@@ -117,6 +117,7 @@ def main() -> None:
         "tokushoho_payment_timing_match_checkout",
         "production_payment_methods_verified",
         "production_shipping_configuration_verified",
+        "actual_woocommerce_final_confirmation_screen_green",
         "japan_2026_tax_decision_green",
     ):
         require(verified.get(key) is True, f"verified readiness regressed: {key}")
@@ -132,7 +133,13 @@ def main() -> None:
     require(scope["scope_approval_overrides_readiness"] is False, "scope approval incorrectly overrides readiness")
 
     remaining = data["remaining_launch_gates"]
+    require(
+        remaining.get("final_checkout_tokushoho_payment_shipping_sync_green") is True,
+        "actual final-screen acceptance must advance only the checkout/legal synchronization gate",
+    )
     for key, value in remaining.items():
+        if key == "final_checkout_tokushoho_payment_shipping_sync_green":
+            continue
         require(value is False, f"launch gate changed without explicit reconciliation: {key}")
     require(
         remaining.get("main_branch_protection_or_ruleset_green") is False,
@@ -173,8 +180,12 @@ def main() -> None:
     require(komoju.get("production_checkout_verification_run_id") == 33776964709 and komoju.get("production_checkout_verification_attempt") == 2, "KOMOJU checkout verification evidence drift")
     require(komoju.get("konbini_live_expiry_setting_verified") is True and komoju.get("konbini_live_expiry_days") == 3, "KOMOJU Live Konbini expiry evidence drift")
     require(komoju.get("live_mode_authorized") is False and komoju.get("payment_execution_authorized") is False, "KOMOJU live/payment authority must remain false")
-    require(staging["legal_checkout_sync"].get("tokushoho_payment_timing_match_checkout") is True, "staging payment timing sync regressed")
-    require(staging["legal_checkout_sync"].get("final_confirmation_screen_reviewed") is False, "final confirmation screen changed without evidence")
+    legal = staging["legal_checkout_sync"]
+    require(legal.get("tokushoho_payment_timing_match_checkout") is True, "staging payment timing sync regressed")
+    require(legal.get("final_confirmation_screen_reviewed") is True, "actual final confirmation screen GREEN evidence not projected")
+    require(legal.get("actual_final_screen_evidence_green") is True, "actual final-screen evidence must remain GREEN")
+    require(legal.get("checkout_legal_sync_complete") is True, "checkout/legal synchronization must reflect accepted final screen")
+    require(legal.get("tokushoho_publication_execution_approved") is False, "checkout acceptance must not authorize Tokushoho publication")
     require(staging.get("production_publish_authorized") is False, "preproduction readiness gained publication authority")
 
     baseline = data["authority_baseline"]
@@ -211,7 +222,7 @@ def main() -> None:
     print("PHIL_AI_OS_SPRINT_7_BRANCH_POLICY_READINESS_GREEN policy=true live_ruleset_gate=false authority_effect=none")
     print("PHIL_AI_OS_SPRINT_7_MISSION_CONTROL_PROJECTION_GREEN mode=read_only live_wiring=false authority_effect=none")
     print("PHIL_AI_OS_SPRINT_7_KOMOJU_PAYMENT_TIMING_GREEN checkout_config_verified=true konbini_expiry_days=3 payment_timing=true payment_execution=false")
-    print("PHIL_AI_OS_SPRINT_7_SIGNOFF_BOUNDARY_GREEN final_screen=false recovery_fresh=false ceo_go_no_go=false cto=false cutover=false")
+    print("PHIL_AI_OS_SPRINT_7_SIGNOFF_BOUNDARY_GREEN final_screen=true recovery_fresh=false ceo_go_no_go=false cto=false cutover=false")
     print("PHIL_AI_OS_SPRINT_7_CUTOVER_RUNBOOK_CONTROL_GREEN tax_disabled=true branch_protection_gate=true rollback_matrix=true")
 
 
