@@ -78,7 +78,7 @@ def main() -> None:
     require(screen["isolated_preview_satisfies_actual_screen_gate"] is False, "candidate incorrectly treats isolated preview as actual evidence")
     require(screen["actual_final_screen_reviewed"] is True, "candidate lost the later actual-screen review")
     require(screen["actual_final_screen_evidence_captured"] is True, "candidate lost later sanitized evidence")
-    require(screen["actual_final_screen_green"] is False, "isolated preview cannot make the RED actual screen GREEN")
+    require(screen["actual_final_screen_green"] is True, "candidate lost the later independent actual-screen GREEN acceptance")
     require(screen["latest_capture_attempted"] is True, "candidate must retain the latest actual-screen capture attempt")
     require(screen["latest_capture_blocked_before_checkout"] is False, "candidate incorrectly claims checkout remained unreachable")
     require(candidate["sprint3"]["ceo_provisional_catalog_scope_approved"] is True, "CEO provisional catalog scope approval missing")
@@ -124,6 +124,7 @@ def main() -> None:
     require(candidate["decision"] in {
         "TOKUSHOHO_CANDIDATE_GREEN_ACTUAL_SCREEN_CAPTURE_BLOCKED_BY_PREPRODUCTION_CATALOG_FAIL_CLOSED",
         "TOKUSHOHO_CANDIDATE_TEXT_APPROVED_ACTUAL_SCREEN_CAPTURE_BLOCKED_PUBLICATION_EXECUTION_FAIL_CLOSED",
+        "TOKUSHOHO_CANDIDATE_TEXT_APPROVED_ACTUAL_SCREEN_GREEN_PUBLICATION_EXECUTION_FAIL_CLOSED",
     }, "candidate decision drift")
 
     print("PHIL_AI_OS_ISOLATED_CONFIRMATION_PREVIEW_GREEN actual_woocommerce_screen=false order_creation=false payment_execution=false")

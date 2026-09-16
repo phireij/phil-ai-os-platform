@@ -3,7 +3,7 @@
 # Master Executive Roadmap & Schedule Control
 
 **Original 8-Sprint Plan • Accelerated Multi-Agent Delivery • V1 Launch Control**  
-**Last reconciled:** 16 September 2026 — CEO approved the current provisional Initial Launch Catalog V1 scope; Sprint 4 is primary while publication content remains separately fail-closed
+**Last reconciled:** 16 September 2026 — against merged `main` `1d5b5fab8bc89ddc55bb2bae36f92c6082cee95f`; Sprint 4 is primary and actual preproduction final-screen acceptance is GREEN while production authority remains fail-closed
 
 | FIRST ISSUED | OWNER | LAST RECONCILED | CANONICAL SOURCE |
 | --- | --- | --- | --- |
@@ -20,14 +20,14 @@
 | Overall schedule health | **AHEAD OF ORIGINAL 2-MONTH PLAN.** The current schedule constraint is owner/external evidence rather than missing core engineering. |
 | Executive roadmap position | **Sprint 4 — Customer Experience is the CURRENT PRIMARY SPRINT. Sprint 3 — WooCommerce Foundation is formally closed by CEO-approved provisional Initial Launch Catalog V1 scope. Sprint 5–7 capabilities remain bounded and non-authorizing until their individual gates are GREEN.** |
 | Current engineering gate | **Complete controlled production acceptance and final catalog publication content.** The CEO-approved provisional catalog scope allows schedule progress; it does not authorize WooCommerce catalog mutation/publication, live payment, live SMS or customer-channel execution before documented subsystem preflights and evidence are GREEN. |
-| Last completed checkpoint | **Owner-authorized temporary acceptance window completed; one CX gap remains RED.** Fudgy Milky Bar used temporary Yamato Cool 60, producing the verified Tokyo rate ¥1,215; Credit Card, Konbini, Merpay and Paidy plus both legal links were visible in test mode. Konbini's approved three-day deadline was absent. Order Approval was restored; no order or payment was executed. |
+| Last completed checkpoint | **Actual WooCommerce preproduction final-confirmation-screen acceptance is GREEN.** With synthetic QA data, one Fudgy Milky Bar used temporary Yamato Cool 60: subtotal ¥250, Tokyo shipping ¥1,215 and total ¥1,465. Credit Card, Konbini, Merpay and Paidy, test-mode notice, the bilingual Konbini three-day deadline and both legal links were visible. The final action was not invoked, no order or payment was created, and Order Approval was restored. |
 | Sprint 3 catalog readiness | CEO approved the current three-product source as the provisional Initial Launch Catalog V1 scope: Moist Chocolate Round Cake (variable parent `RCD-MCH-RD`; `RCD-MCH-RD-15` / `RCD-MCH-RD-21`), Fudgy Milky Bar and Cheezy Ensaymada. Missing bilingual copy, verified media and package/shipping data no longer block Sprint 3/Sprint 4 schedule progress, but remain publication-content requirements and cannot be invented. |
 | WooCommerce / tax | Pre-production foundation and production read-only identity/connectivity are GREEN. 2026 consumption-tax posture remains exempt / not Qualified-Invoice registered; WooCommerce tax remains disabled. |
 | Sprint 4 / CX | Mobile-first PWA/catalog/product/cart/checkout/pickup/custom-cake foundations are materially GREEN in isolated/non-production scope. Storefront visual hierarchy was further polished in bounded preview source. Hostinger preview publication remains manual and non-production. |
 | Sprint 5 / Operations Hub | Five-channel normalization, task extraction, read-only workload/task views, reply proposal/review/decision layers, Mission Control projection v5, packaged read-only preview artifact and deterministic five-channel activation-readiness view are GREEN in bounded scope. No live channel connectivity or reply authority is enabled. |
 | Sprint 6 / Automation | Task-derived automation planning, multichannel simulation, bounded approval simulation/read model, recovery review posture, dry-run boundary requests and audit proof are GREEN. Mission Control can observe aggregate approval/recovery posture without identifiers or authority. No automatic/live execution authority is enabled. |
 | Sprint 7 / launch readiness | Integrated readiness CI remains GREEN on current bounded work. Customer-to-owner lifecycle branch matrix, Mission Control v5 contract alignment, packaged read-only preview, launch-acceptance synchronization and branch-protection readiness checks exist. Live cutover remains NO-GO until all final gates are satisfied. |
-| KOMOJU | Live dashboard/configuration evidence, the approved initial payment subset and Live Konbini 3-day expiry remain GREEN readiness facts. The preproduction test-account provider and Credit Card, Konbini, Merpay and Paidy gateways are enabled. Customer checkout still exposes only Order Approval because that active gateway intentionally defers payment; no live or test payment execution is authorized. |
+| KOMOJU | Live dashboard/configuration evidence, the approved initial payment subset and Live Konbini 3-day expiry remain GREEN readiness facts. The four approved methods and bilingual three-day deadline were verified through the preproduction test-account acceptance window. Normal checkout is restored to Order Approval and continues to defer payment; no live or test payment execution is authorized. |
 | Twilio | Ruby-owned paid account, `Ruby Transactional SMS` Messaging Service and `RUBYSCAKE` sender are recorded. Restricted API-key outbound boundary and signed webhook boundary are GREEN. Because provider-side/real-handset validation remains unresolved after support follow-ups, Twilio SMS is **deferred and non-blocking for V1**; sending stays fail-closed and requires separate acceptance before later activation. |
 | Quick Pickup / AirREGI | Ruby will implement a first-party Quick Pickup solution. Air Mobile Quick Pickup is **not** a V1 launch dependency. Direct AirREGI inventory API remains unproven and is not assumed; the documented CSV fallback remains a conservative option pending separate verification. |
 | Mission Control | Read-only lifecycle/result, workload, task-composition, approval, recovery, control-plane and five-channel activation-readiness projections are prepared and packaged as a bounded static artifact. Mission Control write authority remains disabled and Hermes remains intentionally idle for live execution. |
@@ -38,7 +38,7 @@
 | Safety target | **2 October 2026** |
 | Original 2-month target | Approximately **19 October 2026** from the 19 August start |
 | Schedule variance | Materially ahead of the original sequence because later-sprint foundations have been safely prepared early. Owner/external gates now dominate the remaining critical path. |
-| Immediate next action | Add the already-approved bilingual Konbini three-day deadline to the test checkout presentation under action-time publication approval, then repeat the temporary non-submitted review and restore Order Approval. Do not execute payment or place an order. |
+| Immediate next action | Retain Order Approval and continue the separate catalog-publication, production-payment, recovery and final Go/No-Go gates. Keep missing catalog facts explicit, Quick Pickup fail-closed, Twilio deferred and public DNS/automatic production execution disabled. |
 
 ## 15 SEP 2026 SPRINT 3 OWNER HANDOFF RECONCILIATION
 
@@ -49,7 +49,7 @@ The Sprint 3 catalog owner handoff was improved without changing catalog facts o
 - The Sprint 3 owner artifact now packages the CSV worksheet, unresolved-requirements JSON and Markdown checklist together.
 - PR #385 removed semantically duplicate Category/Media wrapper actions while preserving the specialized `category_mapping` and `media_ingestion_evidence` blockers as canonical.
 - The generated owner checklist was reduced from 28 entries to 22 distinct unresolved actions without removing any distinct owner decision, operational evidence item or authority gate.
-- Exact-head PR validation remained GREEN across Sprint 3 Foundation, owner-artifact, WooCommerce contract, workflow supply-chain and Integrated Readiness CI. Post-merge `main` owner-artifact, contract, supply-chain and Integrated Readiness paths are GREEN on `20b84abbcd0b1e8ecd288b7d8be23429650532f2`.
+- Exact-head PR validation remained GREEN across Sprint 3 Foundation, owner-artifact, WooCommerce contract, workflow supply-chain and Integrated Readiness CI. That PR #385 checkpoint is historical; the roadmap is now reconciled against merged `main` `1d5b5fab8bc89ddc55bb2bae36f92c6082cee95f` and Sprint 4-primary state.
 
 This historical checkpoint improved deterministic owner handoff only. The CEO subsequently approved the provisional Initial Launch Catalog V1 scope, formally closing Sprint 3 and making Sprint 4 primary. That later approval still does **not** satisfy subsystem production preflights or authorize catalog publication, payment, SMS, DNS cutover or automatic execution.
 
@@ -204,7 +204,7 @@ V1 must preserve these properties:
 - Pickup
 - Bilingual customer experience
 
-**Control note:** Mobile/PWA, branded catalog/detail/cart, checkout/pickup, custom-cake intake, private reference-image selection and KOMOJU handoff foundations are materially GREEN in isolated non-production scope. Sprint 4 is formally primary. On 16 Sep, one source-backed product enabled a guarded synthetic cart and actual final-screen review. The screen remains RED because shipping displayed Free, the approved KOMOJU subset/Konbini deadline was not exposed, and Tokushoho/cancellation-return routes were absent. `Place Order` was visible but not invoked; no order or payment was created.
+**Control note:** Mobile/PWA, branded catalog/detail/cart, checkout/pickup, custom-cake intake, private reference-image selection and KOMOJU handoff foundations are materially GREEN in isolated non-production scope. Sprint 4 is formally primary. On 16 Sep, the guarded actual WooCommerce preproduction final-screen review became GREEN after bounded corrections: verified Cool 60 shipping, the approved four-method KOMOJU test subset, bilingual Konbini deadline and both legal routes were visible. The final action was not invoked; no order or payment was created, and Order Approval was restored. This acceptance does not close Sprint 4 or authorize production execution.
 
 ## Sprint 5 — Operations Hub
 
@@ -253,7 +253,7 @@ V1 must preserve these properties:
 | 19–28 Aug | Architecture + core infrastructure + advanced AI infrastructure | **COMPLETED / AHEAD** |
 | 28–31 Aug | Sprint 2 closure; Phase 2.3 P1–P5 GREEN; Architecture Spec v1.0 frozen; Supabase deferred | **COMPLETED / CLOSED GREEN** |
 | 1–7 Sep | Sprint 3 — WooCommerce Foundation + production-preparation inputs | **FORMALLY CLOSED FOR CEO-APPROVED PROVISIONAL V1 SCOPE** |
-| 8–14 Sep | Sprint 4 — Customer Experience | **CURRENT PRIMARY / ACTUAL CHECKOUT REVIEW RED FAIL-CLOSED PENDING BOUNDED CORRECTIONS** |
+| 8–14 Sep | Sprint 4 — Customer Experience | **CURRENT PRIMARY / ACTUAL PREPRODUCTION FINAL-SCREEN ACCEPTANCE GREEN; SEPARATE PRODUCTION GATES FAIL-CLOSED** |
 | 15–20 Sep | Sprint 5 — Operations Hub | **FORMAL ENTRY PENDING / SUBSTANTIAL FOUNDATION PRE-COMPLETED** |
 | 21–25 Sep | Sprint 6 — Full Automation | **FORMAL ENTRY PENDING / SUBSTANTIAL SIMULATION READINESS PRE-COMPLETED** |
 | 25–30 Sep | Sprint 7 — final testing, production, security, docs, training, launch | **FUTURE FORMAL SPRINT / INTEGRATED READINESS ADVANCED** |
@@ -339,15 +339,15 @@ Update/review when:
 
 ## Immediate — Sprint 4 actual checkout acceptance gate
 
-**Status: CURRENT / temporary payment-method and shipping acceptance completed; RED only for missing Konbini three-day deadline.**
+**Status: GREEN / actual WooCommerce preproduction final-confirmation-screen acceptance completed without a transaction. Sprint 4 remains primary pending its separate closure and launch gates.**
 
-Complete or confirm before Sprint 4 actual final-confirmation-screen acceptance:
+Completed acceptance controls and continuing boundaries:
 
 - Fudgy Milky Bar is owner-authorized for cool or ambient fulfillment. For this bounded acceptance it retains temporary `Yamato Cool 60`; do not choose an ambient class until the smallest ambient-box configuration is verified.
 - KOMOJU **test-account** provider plus Credit Card, Konbini, Merpay and Paidy were verified in an owner-authorized temporary window. Order Approval was restored immediately afterward and remains the normal fail-closed customer flow.
 - Direct checkout links to the already-published cancellation/refund and Tokushoho pages are now visible. Their approved text was not changed.
-- Add the already-approved bilingual Konbini three-day deadline to the checkout presentation under separate action-time publication authority, then repeat the temporary acceptance window.
-- Repeat the disposable-cart review with synthetic QA data and retain only sanitized evidence with the final action uninvoked.
+- The approved bilingual Konbini three-day deadline is visible when Konbini is selected.
+- The disposable-cart review used synthetic QA data; only sanitized evidence was retained and the final action remained uninvoked.
 - Keep order creation, payment execution, catalog publication, DNS cutover and automatic production execution false.
 - Keep missing bilingual, media, packaging and fulfillment facts explicitly pending rather than manufacturing them.
 
@@ -427,5 +427,6 @@ These targets remain materially ahead of the original approximately two-month ob
 - **16 Sep 2026** — Read-only root-cause inspection found the product has no shipping class against a zero-base-cost Frozen rate, KOMOJU is connected in test-account mode with the approved four-method subset selected but globally inactive, and both approved legal pages already exist in published preproduction state but are not linked from checkout. No site mutation, order or payment occurred; all corrective actions remain fail-closed pending the required fact or action-time authority.
 - **16 Sep 2026** — With action-time approval, enabled the connected KOMOJU test-account provider and added checkout links to the existing approved cancellation/refund and Tokushoho pages. All four approved test gateways are enabled, but the active Order Approval gateway intentionally remains the only customer-facing checkout method and defers payment until owner approval. No order or payment was executed; shipping remains unresolved pending a verified product class.
 - **16 Sep 2026** — Owner confirmed Fudgy Milky Bar may be cool or ambient and authorized temporary Cool 60. A synthetic one-item checkout showed Tokyo Yamato Cool 60 at ¥1,215, all four approved KOMOJU test methods and both legal links. Konbini's approved three-day deadline was absent. Order Approval was restored after the review; no final action, order or payment was executed.
+- **16 Sep 2026** — Added the owner-approved bilingual Konbini three-day deadline and repeated the bounded actual checkout review. One-item subtotal ¥250, Tokyo Cool 60 shipping ¥1,215, total ¥1,465, all four approved test methods, test-mode notice, legal links and the deadline were visible. The final action was not invoked; no order or payment was created. Order Approval was restored and the actual final-screen acceptance is GREEN. Sprint 4 remains primary; production launch authority remains fail-closed.
 
 > **DOCUMENT CONTROL RULE:** Do not create a replacement master timeline for ordinary schedule updates. Review and update this canonical roadmap, refresh the status dashboard at the top, and record material changes in the Change Log.

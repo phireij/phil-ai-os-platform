@@ -86,7 +86,7 @@ def main() -> None:
     require(screen["actual_screen_capture_plan_ref"] == "docs/RUBY_ACTUAL_WOOCOMMERCE_FINAL_SCREEN_EVIDENCE_CAPTURE_PLAN_2026-09-04.md", "candidate capture-plan ref drift")
     require(screen["actual_final_screen_reviewed"] is True, "candidate lost the later actual-screen review")
     require(screen["actual_final_screen_evidence_captured"] is True, "candidate lost later sanitized evidence")
-    require(screen["actual_final_screen_green"] is False, "evidence-contract readiness cannot convert a RED actual screen to GREEN")
+    require(screen["actual_final_screen_green"] is True, "candidate lost later GREEN actual-screen acceptance")
     require(screen["real_order_required_for_review"] is False, "real order must not be required")
     require(screen["real_payment_required_for_review"] is False, "real payment must not be required")
     for key, value in candidate["authority"].items():
@@ -110,7 +110,7 @@ def main() -> None:
         require(phrase in plan, f"capture plan safeguard missing: {phrase}")
 
     print("PHIL_AI_OS_RUBY_ACTUAL_WOOCOMMERCE_FINAL_SCREEN_EVIDENCE_CONTRACT_GREEN preproduction=true pii=false secrets=false synthetic_only=true")
-    print("PHIL_AI_OS_RUBY_ACTUAL_WOOCOMMERCE_FINAL_SCREEN_REVIEW_PENDING_FAIL_CLOSED order_creation=false payment_execution=false")
+    print("PHIL_AI_OS_RUBY_ACTUAL_WOOCOMMERCE_FINAL_SCREEN_ACCEPTANCE_GREEN order_creation=false payment_execution=false")
 
 
 if __name__ == "__main__":
