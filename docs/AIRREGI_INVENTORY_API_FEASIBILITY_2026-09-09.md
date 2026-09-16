@@ -178,3 +178,6 @@ This investigation is read-only and non-authorizing. It does not enable producti
 The Customer Experience fixture suite now has a deliberately synthetic Quick Pickup inventory-snapshot contract. It validates SKU identity, capture time, a maximum freshness age, conservative safety stock, active reservations, and an unavailable result when the snapshot is stale, unknown, or insufficient. Every returned decision remains non-authorizing: it cannot contact AirREGI, import a CSV, reserve inventory, mutate stock, or create an order.
 
 This is implementation preparation only. It is not evidence of an AirREGI API, an accepted AirREGI CSV schema, current stock, a SKU mapping, or a production synchronization path. The production requirements above remain mandatory before the corresponding readiness gate can turn GREEN.
+
+
+The same fixture boundary now separately models pickup-slot capacity and order cutoffs in Japan time. It returns only read-only availability decisions and fails closed for unknown slots, passed cutoffs, and exhausted capacity. It is not a published customer schedule, operator booking calendar, or evidence that capacity/cutoff control is ready for production.

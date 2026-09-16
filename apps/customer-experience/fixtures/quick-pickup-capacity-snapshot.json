@@ -1,0 +1,19 @@
+{
+  "fixture_only": true,
+  "source_type": "synthetic_operator_capacity_snapshot",
+  "snapshot_id": "fixture:quick-pickup-capacity-v1",
+  "timezone": "Asia/Tokyo",
+  "network_authorized": false,
+  "capacity_mutation_authorized": false,
+  "order_creation_authorized": false,
+  "slots": [
+    {
+      "slot_id": "fixture-2026-09-16-1400",
+      "pickup_starts_at": "2026-09-16T05:00:00.000Z",
+      "pickup_ends_at": "2026-09-16T06:00:00.000Z",
+      "order_cutoff_at": "2026-09-16T04:00:00.000Z",
+      "capacity": 8,
+      "booked": 5
+    }
+  ]
+}
