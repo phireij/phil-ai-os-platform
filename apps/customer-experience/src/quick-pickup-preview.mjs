@@ -173,17 +173,20 @@ function render() {
   output.append(details);
 }
 
-async function fetchFixture(path, label) {
-  const response = await fetch(path, { cache: "no-store" });
-  if (!response.ok) throw new Error(`${label} fixture failed: ${response.status}`);
-  return response.json();
-}
-
 async function boot() {
+  const [configResponse, inventoryResponse, capacityResponse] = await Promise.all([
+    fetch("./fixtures/first-party-quick-pickup.json", { cache: "no-store" }),
+    fetch("./fixtures/quick-pickup-inventory-snapshot.json", { cache: "no-store" }),
+    fetch("./fixtures/quick-pickup-capacity-snapshot.json", { cache: "no-store" }),
+  ]);
+  if (!configResponse.ok) throw new Error(`quick pickup readiness fixture failed: ${configResponse.status}`);
+  if (!inventoryResponse.ok) throw new Error(`quick pickup inventory fixture failed: ${inventoryResponse.status}`);
+  if (!capacityResponse.ok) throw new Error(`quick pickup capacity fixture failed: ${capacityResponse.status}`);
+
   [config, inventorySnapshot, capacitySnapshot] = await Promise.all([
-    fetchFixture("./fixtures/first-party-quick-pickup.json", "quick pickup readiness"),
-    fetchFixture("./fixtures/quick-pickup-inventory-snapshot.json", "quick pickup inventory"),
-    fetchFixture("./fixtures/quick-pickup-capacity-snapshot.json", "quick pickup capacity"),
+    configResponse.json(),
+    inventoryResponse.json(),
+    capacityResponse.json(),
   ]);
   validateFirstPartyQuickPickupConfig(config);
   decisionRequest = buildDeterministicQuickPickupFixtureRequest(inventorySnapshot, capacitySnapshot);
