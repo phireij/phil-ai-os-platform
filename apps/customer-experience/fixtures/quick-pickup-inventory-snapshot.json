@@ -1,0 +1,18 @@
+{
+  "fixture_only": true,
+  "source_type": "synthetic_operator_csv_snapshot",
+  "snapshot_id": "fixture:quick-pickup-inventory-v1",
+  "captured_at": "2026-09-16T00:00:00.000Z",
+  "max_age_minutes": 30,
+  "airregi_api_verified": false,
+  "airregi_csv_format_verified": false,
+  "network_authorized": false,
+  "inventory_mutation_authorized": false,
+  "reservation_authorized": false,
+  "order_creation_authorized": false,
+  "items": [
+    { "sku": "SAMPLE-CHOCO-001", "on_hand": 12, "safety_stock": 2, "active_reservations": 0 },
+    { "sku": "SAMPLE-CARROT-001", "on_hand": 0, "safety_stock": 0, "active_reservations": 0 },
+    { "sku": "SAMPLE-UBE-001", "on_hand": 6, "safety_stock": 1, "active_reservations": 2 }
+  ]
+}
