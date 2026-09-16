@@ -53,8 +53,9 @@
     "checkout_legal_sync_complete": false
   },
   "sprint3": {
-    "final_owner_approved_production_catalog_ready": false,
-    "formal_sprint3_closure": false
+    "ceo_provisional_catalog_scope_approved": true,
+    "publication_catalog_content_complete": false,
+    "formal_sprint3_closure": true
   },
   "authority": {
     "mutation_authorized": false,
