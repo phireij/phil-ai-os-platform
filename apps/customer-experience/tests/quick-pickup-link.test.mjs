@@ -3,74 +3,80 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
-  externalQuickPickupUiState,
-  validateExternalQuickPickupConfig,
+  firstPartyQuickPickupUiState,
+  validateFirstPartyQuickPickupConfig,
 } from "../src/pickup.mjs";
 
-const fixtureUrl = new URL("../fixtures/air-mobile-quick-pickup.json", import.meta.url);
+const fixtureUrl = new URL("../fixtures/first-party-quick-pickup.json", import.meta.url);
 
 async function fixture() {
   return JSON.parse(await readFile(fixtureUrl, "utf8"));
 }
 
-test("current Air Mobile fixture remains unavailable while production URL is pending", async () => {
+test("first-party Quick Pickup remains unavailable until implemented", async () => {
   const config = await fixture();
-  assert.equal(validateExternalQuickPickupConfig(config), config);
-  assert.deepEqual(externalQuickPickupUiState(config), {
+  assert.equal(validateFirstPartyQuickPickupConfig(config), config);
+  assert.deepEqual(firstPartyQuickPickupUiState(config), {
     available: false,
     href: null,
-    reason: "production_url_pending",
+    reason: "implementation_pending",
   });
 });
 
-test("an owner-confirmed URL remains unavailable until validation and activation are separately authorized", async () => {
+test("implemented route remains unavailable until every readiness gate is green", async () => {
   const config = {
     ...(await fixture()),
-    production_url: "https://example.invalid/quick-pickup",
-    owner_confirmed: true,
+    route_implemented: true,
+    customer_route: "/quick-pickup",
   };
-  assert.deepEqual(externalQuickPickupUiState(config), {
+  assert.deepEqual(firstPartyQuickPickupUiState(config), {
     available: false,
     href: null,
-    reason: "activation_pending",
+    reason: "readiness_pending",
   });
 });
 
-test("controlled activation requires owner confirmation and completed validation", async () => {
+test("controlled activation requires all first-party readiness gates", async () => {
   const config = {
     ...(await fixture()),
-    production_url: "https://example.invalid/quick-pickup",
-    owner_confirmed: true,
-    validation_complete: true,
+    route_implemented: true,
+    customer_route: "/quick-pickup",
+    eligible_catalog_confirmed: true,
+    inventory_freshness_control_green: true,
+    capacity_and_cutoff_control_green: true,
+    checkout_and_payment_contract_green: true,
+    bilingual_customer_copy_green: true,
+    controlled_handset_and_operator_acceptance_green: true,
+    rollback_disable_path_green: true,
     activation_authorized: true,
   };
-  assert.deepEqual(externalQuickPickupUiState(config), {
+  assert.deepEqual(firstPartyQuickPickupUiState(config), {
     available: true,
-    href: "https://example.invalid/quick-pickup",
+    href: "/quick-pickup",
     reason: "controlled_activation_ready",
   });
 });
 
-test("unsafe URL forms and automatic publication fail closed", async () => {
+test("Air Mobile and automatic execution fail closed", async () => {
   const base = await fixture();
   assert.throws(
-    () => validateExternalQuickPickupConfig({ ...base, production_url: "http://example.invalid/pickup", owner_confirmed: true }),
-    /must use https/,
+    () => validateFirstPartyQuickPickupConfig({ ...base, air_mobile_order_required_for_v1: true }),
+    /must not be a V1 Quick Pickup dependency/,
   );
   assert.throws(
-    () => validateExternalQuickPickupConfig({ ...base, production_url: "https://user:pass@example.invalid/pickup", owner_confirmed: true }),
-    /must not embed credentials/,
-  );
-  assert.throws(
-    () => validateExternalQuickPickupConfig({ ...base, automatic_publication_authorized: true }),
+    () => validateFirstPartyQuickPickupConfig({ ...base, automatic_production_execution_authorized: true }),
     /must remain disabled/,
+  );
+  assert.throws(
+    () => validateFirstPartyQuickPickupConfig({ ...base, customer_route: "https://example.invalid/pickup" }),
+    /site-relative path/,
   );
 });
 
-test("activation cannot outrun owner confirmation or validation", async () => {
+test("activation cannot outrun the first-party readiness gates", async () => {
   const base = await fixture();
   assert.throws(
-    () => validateExternalQuickPickupConfig({ ...base, production_url: "https://example.invalid/pickup", activation_authorized: true }),
-    /requires validated owner-confirmed production_url/,
+    () => validateFirstPartyQuickPickupConfig({ ...base, activation_authorized: true }),
+    /requires every first-party readiness gate/,
   );
 });
