@@ -1,6 +1,6 @@
 {
   "version": "ruby-final-go-no-go-gate-v3",
-  "date": "2026-09-16",
+  "date": "2026-09-17",
   "technical_baseline": {
     "current_head_ci_green": true,
     "woocommerce_readonly_identity_green": true,
@@ -13,7 +13,7 @@
   "required_launch_gates": {
     "final_production_catalog_ready": false,
     "japan_tax_and_qualified_invoice_evidence_ready": true,
-    "final_checkout_tokushoho_payment_shipping_sync_green": false,
+    "final_checkout_tokushoho_payment_shipping_sync_green": true,
     "komoju_live_acceptance_green": false,
     "first_party_quick_pickup_production_ready": false,
     "near_cutover_recovery_freshness_green": false,
