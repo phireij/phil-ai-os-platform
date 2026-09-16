@@ -1,6 +1,11 @@
 {
-  "version": "sprint7-channel-activation-readiness-v1",
-  "date": "2026-08-28",
+  "version": "sprint7-channel-activation-readiness-v2",
+  "date": "2026-09-16",
+  "ceo_controlled_scope": {
+    "customer_channel_activation_and_replies_authorized": true,
+    "overrides_channel_preflight_or_evidence": false,
+    "automatic_execution_authorized": false
+  },
   "authority_baseline": {
     "autonomy": "A0",
     "task_class_allowlist": ["general"],
@@ -15,6 +20,7 @@
       "channel": "facebook",
       "identity_state": "not_configured_for_operations",
       "credential_introduced": false,
+      "controlled_scope_authorized": true,
       "live_connectivity_authorized": false,
       "inbound_activation_authorized": false,
       "outbound_reply_authorized": false,
@@ -25,6 +31,7 @@
       "channel": "instagram",
       "identity_state": "not_configured_for_operations",
       "credential_introduced": false,
+      "controlled_scope_authorized": true,
       "live_connectivity_authorized": false,
       "inbound_activation_authorized": false,
       "outbound_reply_authorized": false,
@@ -35,6 +42,7 @@
       "channel": "telegram",
       "identity_state": "existing_control_plane_approval_channel_is_not_operations_authority",
       "credential_introduced": false,
+      "controlled_scope_authorized": true,
       "live_connectivity_authorized": false,
       "inbound_activation_authorized": false,
       "outbound_reply_authorized": false,
@@ -45,6 +53,7 @@
       "channel": "whatsapp",
       "identity_state": "not_configured_for_operations",
       "credential_introduced": false,
+      "controlled_scope_authorized": true,
       "live_connectivity_authorized": false,
       "inbound_activation_authorized": false,
       "outbound_reply_authorized": false,
@@ -55,6 +64,7 @@
       "channel": "google_business",
       "identity_state": "not_configured_for_operations",
       "credential_introduced": false,
+      "controlled_scope_authorized": true,
       "live_connectivity_authorized": false,
       "inbound_activation_authorized": false,
       "outbound_reply_authorized": false,
