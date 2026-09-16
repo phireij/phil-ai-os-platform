@@ -38,7 +38,7 @@ test("page chrome helper localizes visible preview boundary copy for each mobile
   assert.match(helper, /隔離プレビュー · KOMOJU未接続/);
   assert.match(helper, /Isolated synthetic preview · No order submission/);
   assert.match(helper, /隔離された合成プレビュー · 注文送信なし/);
-  assert.match(helper, /Isolated preview · No external activation/);
+  assert.match(helper, /Isolated preview · No production activation/);
   assert.match(helper, /隔離プレビュー · 外部有効化なし/);
   assert.match(helper, /\.status-pill/);
   assert.match(helper, /footer p/);
@@ -52,7 +52,7 @@ test("shared preview chrome localizes browser metadata without changing catalog 
   assert.match(helper, /Phil AI OS — クイックピックアップ準備状況プレビュー/);
   assert.match(helper, /isolated final order confirmation compliance preview/);
   assert.match(helper, /分離された注文最終確認コンプライアンスプレビュー/);
-  assert.match(helper, /isolated Air Mobile Quick Pickup readiness preview/);
+  assert.match(helper, /isolated Ruby first-party Quick Pickup readiness preview/);
   assert.match(helper, /Air モバイルオーダー・クイックピックアップ準備状況プレビュー/);
   assert.match(helper, /const metadata = localized\.metadata\?\.\[page\]/);
   assert.match(helper, /document\.title = metadata\.title/);
@@ -71,7 +71,7 @@ test("remaining cart confirmation and Quick Pickup semantic labels follow EN and
   assert.match(helper, /"送信前に確認"/);
   assert.match(helper, /"This is not the actual WooCommerce final screen"/);
   assert.match(helper, /"これは実際のWooCommerce最終画面ではありません"/);
-  assert.match(helper, /"External Quick Pickup"/);
+  assert.match(helper, /"First-party Quick Pickup"/);
   assert.match(helper, /"外部クイックピックアップ"/);
   assert.match(helper, /"Authority boundary"/);
   assert.match(helper, /"権限境界"/);

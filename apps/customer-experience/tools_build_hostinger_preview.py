@@ -13,7 +13,7 @@ ALLOWED_NESTED_SUFFIXES = {".mjs", ".json"}
 HOSTINGER_LANDING_SOURCE = ROOT / "ruby-storefront-progress.html"
 ENGINEERING_LANDING_SOURCE = ROOT / "index.html"
 ALLOWED_FETCH_TARGETS = {
-    "./fixtures/air-mobile-quick-pickup.json",
+    "./fixtures/first-party-quick-pickup.json",
     "./fixtures/catalog.json",
     "./fixtures/final-confirmation.json",
     "./fixtures/payment-provider.json",

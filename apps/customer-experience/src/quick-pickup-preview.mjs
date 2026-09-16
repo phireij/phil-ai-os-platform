@@ -1,4 +1,4 @@
-import { externalQuickPickupUiState, validateExternalQuickPickupConfig } from "./pickup.mjs";
+import { firstPartyQuickPickupUiState, validateFirstPartyQuickPickupConfig } from "./pickup.mjs";
 import { syncLocaleLinks } from "./locale-links.mjs";
 
 const copy = {
@@ -6,17 +6,17 @@ const copy = {
     skipToContent: "Skip to content",
     brand: "Customer Experience",
     languageLabel: "Language",
-    previewStatus: "Isolated preview · No external activation",
+    previewStatus: "Isolated preview · No production activation",
     footer: "Phil AI OS · Sprint 4 Customer Experience · fixture-only Quick Pickup readiness",
-    heroTitle: "Air Mobile Order Quick Pickup readiness",
-    heroCopy: "This preview reads fixture-only readiness state. It does not publish or activate an external order link.",
+    heroTitle: "Ruby first-party Quick Pickup readiness",
+    heroCopy: "This preview reads fixture-only readiness state. It does not create orders, reserve inventory, publish a route, or activate payment.",
     title: "Readiness status",
-    pending: "Quick Pickup production URL is pending. No external order link is available yet.",
-    activationPending: "Quick Pickup has an owner-confirmed URL, but validation or controlled activation is still pending.",
-    ready: "Quick Pickup has passed the configured readiness gates for controlled activation.",
+    pending: "Ruby's first-party Quick Pickup route is not implemented yet. No customer order path is available.",
+    activationPending: "The Quick Pickup route exists, but required readiness gates are still pending.",
+    ready: "Quick Pickup has passed its configured readiness gates for controlled activation.",
     open: "Open Quick Pickup",
-    safetyTitle: "No external link is activated automatically",
-    safetyCopy: "A production URL must be owner-confirmed, validated, and separately authorized before this preview may expose an active link. Automatic publication remains disabled.",
+    safetyTitle: "No customer route is activated automatically",
+    safetyCopy: "Implementation, eligible catalog, inventory freshness, capacity, payment, bilingual copy, operator acceptance, and rollback controls must all be GREEN before an approved route may be exposed. Automatic execution remains disabled.",
     technical: "Technical readiness details",
     shop: "Shop",
     cart: "Cart",
@@ -27,17 +27,17 @@ const copy = {
     skipToContent: "本文へ移動",
     brand: "カスタマーエクスペリエンス",
     languageLabel: "言語",
-    previewStatus: "分離プレビュー · 外部有効化なし",
+    previewStatus: "分離プレビュー · 本番有効化なし",
     footer: "Phil AI OS · Sprint 4 カスタマーエクスペリエンス · フィクスチャ専用クイックピックアップ準備状況",
-    heroTitle: "Air モバイルオーダー・クイックピックアップ準備状況",
-    heroCopy: "このプレビューはフィクスチャ専用の準備状況のみを読み取ります。外部注文リンクを公開・有効化しません。",
+    heroTitle: "Ruby独自クイックピックアップ準備状況",
+    heroCopy: "このプレビューはフィクスチャ専用の準備状況のみを読み取ります。注文作成、在庫確保、ルート公開、決済有効化は行いません。",
     title: "準備状況",
-    pending: "クイックピックアップの本番URLは未確定です。現在、外部注文リンクは利用できません。",
-    activationPending: "オーナー確認済みURLはありますが、検証または管理された有効化がまだ完了していません。",
+    pending: "Ruby独自のクイックピックアップ受取ルートはまだ実装されていません。現在、注文導線は利用できません。",
+    activationPending: "クイックピックアップのルートはありますが、必要な準備ゲートがまだ完了していません。",
     ready: "クイックピックアップは管理された有効化に必要な準備ゲートを通過しています。",
     open: "クイックピックアップを開く",
-    safetyTitle: "外部リンクは自動で有効化されません",
-    safetyCopy: "本番URLは、オーナー確認・検証・個別の有効化承認が完了した場合のみ表示できます。自動公開は無効のままです。",
+    safetyTitle: "注文導線は自動で有効化されません",
+    safetyCopy: "実装、対象カタログ、在庫鮮度、受取可能数、決済、日英コピー、運用者確認、ロールバック管理がすべてGREENになった場合のみ、承認済みルートを公開できます。自動実行は無効のままです。",
     technical: "技術的な準備状況",
     shop: "商品",
     cart: "カート",
@@ -89,10 +89,10 @@ function render() {
   document.querySelector("#safety-copy").textContent = copy[locale].safetyCopy;
   syncMobileNavigation();
 
-  const state = externalQuickPickupUiState(config);
+  const state = firstPartyQuickPickupUiState(config);
   const message = state.reason === "controlled_activation_ready"
     ? copy[locale].ready
-    : state.reason === "activation_pending"
+    : state.reason === "readiness_pending"
       ? copy[locale].activationPending
       : copy[locale].pending;
 
@@ -114,20 +114,27 @@ function render() {
     available: state.available,
     href_exposed: Boolean(state.href),
     reason: state.reason,
-    owner_confirmed: config.owner_confirmed,
-    validation_complete: config.validation_complete,
+    air_mobile_order_required_for_v1: config.air_mobile_order_required_for_v1,
+    route_implemented: config.route_implemented,
+    eligible_catalog_confirmed: config.eligible_catalog_confirmed,
+    inventory_freshness_control_green: config.inventory_freshness_control_green,
+    capacity_and_cutoff_control_green: config.capacity_and_cutoff_control_green,
+    checkout_and_payment_contract_green: config.checkout_and_payment_contract_green,
+    bilingual_customer_copy_green: config.bilingual_customer_copy_green,
+    controlled_handset_and_operator_acceptance_green: config.controlled_handset_and_operator_acceptance_green,
+    rollback_disable_path_green: config.rollback_disable_path_green,
     activation_authorized: config.activation_authorized,
-    automatic_publication_authorized: config.automatic_publication_authorized,
+    automatic_production_execution_authorized: config.automatic_production_execution_authorized,
   }, null, 2);
   details.append(summary, pre);
   output.append(details);
 }
 
 async function boot() {
-  const response = await fetch("./fixtures/air-mobile-quick-pickup.json", { cache: "no-store" });
+  const response = await fetch("./fixtures/first-party-quick-pickup.json", { cache: "no-store" });
   if (!response.ok) throw new Error(`quick pickup fixture failed: ${response.status}`);
   config = await response.json();
-  validateExternalQuickPickupConfig(config);
+  validateFirstPartyQuickPickupConfig(config);
   render();
 
   localeSelect.addEventListener("change", () => {
@@ -145,7 +152,7 @@ boot().catch(() => {
   syncSharedChrome();
   syncMobileNavigation();
   output.textContent = locale === "ja"
-    ? "準備状況を読み込めませんでした。外部リンクは有効化されていません。"
-    : "Readiness state could not be loaded. No external link has been activated.";
+    ? "準備状況を読み込めませんでした。注文導線は有効化されていません。"
+    : "Readiness state could not be loaded. No customer order path has been activated.";
   output.setAttribute("role", "alert");
 });

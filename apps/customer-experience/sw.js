@@ -66,7 +66,7 @@ const APP_SHELL = [
   "./fixtures/final-confirmation.json",
   "./fixtures/payment-provider.json",
   "./fixtures/pickup-policy.json",
-  "./fixtures/air-mobile-quick-pickup.json",
+  "./fixtures/first-party-quick-pickup.json",
 ];
 
 self.addEventListener("install", (event) => {

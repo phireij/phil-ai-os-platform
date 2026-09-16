@@ -6,7 +6,7 @@ const copy = Object.freeze({
       catalog: "Isolated preview · No live checkout",
       cart: "Isolated preview · KOMOJU not connected",
       confirmation: "Isolated synthetic preview · No order submission",
-      pickup: "Isolated preview · No external activation",
+      pickup: "Isolated preview · No production activation",
     }),
     footer: Object.freeze({
       catalog: "Phil AI OS · Sprint 4 Customer Experience · synthetic fixture environment",
@@ -25,7 +25,7 @@ const copy = Object.freeze({
       }),
       pickup: Object.freeze({
         title: "Phil AI OS — Quick Pickup Readiness Preview",
-        description: "Phil AI OS isolated Air Mobile Quick Pickup readiness preview",
+        description: "Phil AI OS isolated Ruby first-party Quick Pickup readiness preview",
       }),
     }),
     semantics: Object.freeze({
@@ -50,7 +50,7 @@ const copy = Object.freeze({
         '#safety-title': "This is not the actual WooCommerce final screen",
       }),
       pickup: Object.freeze({
-        'section[aria-labelledby="quick-pickup-title"] .eyebrow': "External Quick Pickup",
+        'section[aria-labelledby="quick-pickup-title"] .eyebrow': "First-party Quick Pickup",
         '.safety-panel .eyebrow': "Authority boundary",
       }),
     }),

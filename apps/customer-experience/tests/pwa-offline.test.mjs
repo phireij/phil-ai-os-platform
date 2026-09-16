@@ -27,5 +27,5 @@ test("PWA shell includes mobile UX, locale continuity and Quick Pickup dependenc
   assert.match(sw, /\.\/src\/checkout-confidence\.mjs/);
   assert.match(sw, /\.\/quick-pickup-preview\.html/);
   assert.match(sw, /\.\/src\/quick-pickup-preview\.mjs/);
-  assert.match(sw, /\.\/fixtures\/air-mobile-quick-pickup\.json/);
+  assert.match(sw, /\.\/fixtures\/first-party-quick-pickup\.json/);
 });

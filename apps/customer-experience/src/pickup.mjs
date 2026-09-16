@@ -30,64 +30,67 @@ export function evaluatePickupSelection(requestedPickupAt, nowIso, policy) {
   return Object.freeze({ valid: true, blocker: null, reason: "accepted_by_fixture_policy" });
 }
 
-export function validateExternalQuickPickupConfig(config) {
-  if (config?.fixture_only !== true) throw new Error("external quick pickup config must remain fixture_only");
-  if (config.provider !== "air_mobile_order_quick_pickup") {
-    throw new Error("external quick pickup provider must be air_mobile_order_quick_pickup");
+export function validateFirstPartyQuickPickupConfig(config) {
+  if (config?.fixture_only !== true) throw new Error("first-party quick pickup config must remain fixture_only");
+  if (config.provider !== "ruby_first_party_quick_pickup") {
+    throw new Error("quick pickup provider must be ruby_first_party_quick_pickup");
+  }
+  if (config.air_mobile_order_required_for_v1 !== false) {
+    throw new Error("Air Mobile Order must not be a V1 Quick Pickup dependency");
   }
 
   for (const key of [
-    "owner_confirmed",
-    "validation_complete",
+    "route_implemented",
+    "eligible_catalog_confirmed",
+    "inventory_freshness_control_green",
+    "capacity_and_cutoff_control_green",
+    "checkout_and_payment_contract_green",
+    "bilingual_customer_copy_green",
+    "controlled_handset_and_operator_acceptance_green",
+    "rollback_disable_path_green",
     "activation_authorized",
-    "automatic_publication_authorized",
+    "automatic_production_execution_authorized",
   ]) {
     if (typeof config[key] !== "boolean") throw new TypeError(`${key} must be boolean`);
   }
 
-  if (config.automatic_publication_authorized !== false) {
-    throw new Error("automatic quick pickup publication must remain disabled");
+  if (config.automatic_production_execution_authorized !== false) {
+    throw new Error("automatic Quick Pickup execution must remain disabled");
   }
 
-  if (config.production_url !== null) {
-    if (typeof config.production_url !== "string" || config.production_url.trim() !== config.production_url || !config.production_url) {
-      throw new TypeError("production_url must be null or a non-empty trimmed string");
-    }
-    const parsed = new URL(config.production_url);
-    if (parsed.protocol !== "https:") throw new Error("production_url must use https");
-    if (parsed.username || parsed.password) throw new Error("production_url must not embed credentials");
-    if (parsed.hash) throw new Error("production_url must not depend on a fragment");
+  if (config.customer_route !== null && (typeof config.customer_route !== "string" || !config.customer_route.startsWith("/"))) {
+    throw new TypeError("customer_route must be null or a site-relative path");
   }
-
-  if (config.production_url === null) {
-    if (config.owner_confirmed || config.validation_complete || config.activation_authorized) {
-      throw new Error("missing production_url must remain unconfirmed, unvalidated, and unauthorized");
-    }
+  if (!config.route_implemented && config.customer_route !== null) {
+    throw new Error("unimplemented Quick Pickup must not expose a customer route");
   }
-
-  if (config.validation_complete && (!config.production_url || !config.owner_confirmed)) {
-    throw new Error("validation_complete requires owner-confirmed production_url");
-  }
-
-  if (config.activation_authorized && (!config.production_url || !config.owner_confirmed || !config.validation_complete)) {
-    throw new Error("activation_authorized requires validated owner-confirmed production_url");
+  const readiness = [
+    "route_implemented",
+    "eligible_catalog_confirmed",
+    "inventory_freshness_control_green",
+    "capacity_and_cutoff_control_green",
+    "checkout_and_payment_contract_green",
+    "bilingual_customer_copy_green",
+    "controlled_handset_and_operator_acceptance_green",
+    "rollback_disable_path_green",
+  ];
+  if (config.activation_authorized && readiness.some((key) => config[key] !== true)) {
+    throw new Error("activation_authorized requires every first-party readiness gate");
   }
 
   return config;
 }
 
-export function externalQuickPickupUiState(config) {
-  validateExternalQuickPickupConfig(config);
-  const available = Boolean(
-    config.production_url && config.owner_confirmed && config.validation_complete && config.activation_authorized,
-  );
+export function firstPartyQuickPickupUiState(config) {
+  validateFirstPartyQuickPickupConfig(config);
+  const available = Boolean(config.route_implemented && config.customer_route && config.activation_authorized);
   return Object.freeze({
     available,
-    href: available ? config.production_url : null,
+    href: available ? config.customer_route : null,
     reason: available
       ? "controlled_activation_ready"
-      : config.production_url
-        ? "activation_pending"
-        : "production_url_pending",
+      : config.route_implemented
+        ? "readiness_pending"
+        : "implementation_pending",
   });
 }

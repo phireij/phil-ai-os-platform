@@ -1,0 +1,16 @@
+{
+  "fixture_only": true,
+  "provider": "ruby_first_party_quick_pickup",
+  "air_mobile_order_required_for_v1": false,
+  "route_implemented": false,
+  "customer_route": null,
+  "eligible_catalog_confirmed": false,
+  "inventory_freshness_control_green": false,
+  "capacity_and_cutoff_control_green": false,
+  "checkout_and_payment_contract_green": false,
+  "bilingual_customer_copy_green": false,
+  "controlled_handset_and_operator_acceptance_green": false,
+  "rollback_disable_path_green": false,
+  "activation_authorized": false,
+  "automatic_production_execution_authorized": false
+}
