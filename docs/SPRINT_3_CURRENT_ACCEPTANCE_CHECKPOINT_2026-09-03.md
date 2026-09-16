@@ -1,8 +1,10 @@
 # Sprint 3 — Current Acceptance Checkpoint
 
-**Date:** 2026-09-04  
-**Executive position:** **SPRINT 3 — CURRENT PRIMARY SPRINT**  
-**Parallel acceleration:** **Sprint 4 Customer Experience partially active ahead of schedule**
+**Date:** 2026-09-16
+**Executive position:** **PHIL_AI_OS_SPRINT_3_FORMALLY_CLOSED_BY_CEO_PROVISIONAL_SCOPE**
+**Current primary sprint:** **Sprint 4 Customer Experience**
+
+On 16 September 2026, the CEO approved the current three-product source as the provisional Initial Launch Catalog V1 scope. Missing bilingual copy, verified media and package/shipping details remain separate publication-content requirements; they do not authorize WooCommerce writes or publication.
 
 ## GREEN now
 
