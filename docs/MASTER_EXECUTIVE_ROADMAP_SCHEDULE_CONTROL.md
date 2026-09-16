@@ -3,7 +3,7 @@
 # Master Executive Roadmap & Schedule Control
 
 **Original 8-Sprint Plan • Accelerated Multi-Agent Delivery • V1 Launch Control**  
-**Last reconciled:** 15 September 2026 — Sprint 3 remains primary and owner/external-gated; controlled production scope is authorized but every subsystem remains fail-closed until its own evidence is GREEN
+**Last reconciled:** 16 September 2026 — CEO approved the current provisional Initial Launch Catalog V1 scope; Sprint 4 is primary while publication content remains separately fail-closed
 
 | FIRST ISSUED | OWNER | LAST RECONCILED | CANONICAL SOURCE |
 | --- | --- | --- | --- |
@@ -13,15 +13,15 @@
 
 | SCHEDULE HEALTH | CURRENT ROADMAP | STRETCH FINISH |
 | --- | --- | --- |
-| **AHEAD / OWNER-GATED** | **SPRINT 3 PRIMARY / SPRINT 4 PARALLEL / LATER-SPRINT READINESS ADVANCED** | **25 SEP 2026** |
+| **AHEAD / EXTERNAL-GATED** | **SPRINT 4 PRIMARY / SPRINT 3 FORMALLY CLOSED / LATER-SPRINT READINESS ADVANCED** | **25 SEP 2026** |
 
 | CONTROL ITEM | CURRENT STATUS |
 | --- | --- |
 | Overall schedule health | **AHEAD OF ORIGINAL 2-MONTH PLAN.** The current schedule constraint is owner/external evidence rather than missing core engineering. |
-| Executive roadmap position | **Sprint 3 — WooCommerce Foundation remains the CURRENT PRIMARY SPRINT. Sprint 4 — Customer Experience continues bounded parallel acceleration. Sprint 5–7 capabilities are pre-built only where non-authorizing and safe; formal sprint advancement has not been claimed.** |
-| Current engineering gate | **Finalize and approve Initial Launch Catalog V1.** The catalog engineering path supports simple products, variable parents, multiple sellable variation SKUs, owner worksheet generation, human-readable owner checklist generation, artifact publication and fail-closed edited-worksheet intake review. Controlled production scope is authorized; production catalog mutation/publication, live payment, live SMS and customer-channel execution remain blocked until their documented subsystem preflights and evidence are GREEN. |
+| Executive roadmap position | **Sprint 4 — Customer Experience is the CURRENT PRIMARY SPRINT. Sprint 3 — WooCommerce Foundation is formally closed by CEO-approved provisional Initial Launch Catalog V1 scope. Sprint 5–7 capabilities remain bounded and non-authorizing until their individual gates are GREEN.** |
+| Current engineering gate | **Complete controlled production acceptance and final catalog publication content.** The CEO-approved provisional catalog scope allows schedule progress; it does not authorize WooCommerce catalog mutation/publication, live payment, live SMS or customer-channel execution before documented subsystem preflights and evidence are GREEN. |
 | Last completed checkpoint | **PR #385 merged GREEN** — Sprint 3 owner-handoff blockers are semantically deduplicated while specialized source-backed category/media actions remain canonical. PR #384 added the deterministic human-readable Markdown checklist beside the existing worksheet/requirements artifacts. The generated checklist now contains 22 distinct unresolved actions instead of 28 duplicated entries. Current `main`: `20b84abbcd0b1e8ecd288b7d8be23429650532f2`. |
-| Sprint 3 catalog readiness | Working source-backed subset is prepared for owner completion. The handoff now publishes the owner worksheet, unresolved-requirements JSON and a human-readable Markdown checklist. Moist Chocolate Round Cake is modeled as one variable product with parent `RCD-MCH-RD` and sellable variations `RCD-MCH-RD-15` / `RCD-MCH-RD-21`. Fudgy Milky Bar and Cheezy Ensaymada remain simple products. Final catalog completeness/approval is still pending. |
+| Sprint 3 catalog readiness | CEO approved the current three-product source as the provisional Initial Launch Catalog V1 scope: Moist Chocolate Round Cake (variable parent `RCD-MCH-RD`; `RCD-MCH-RD-15` / `RCD-MCH-RD-21`), Fudgy Milky Bar and Cheezy Ensaymada. Missing bilingual copy, verified media and package/shipping data no longer block Sprint 3/Sprint 4 schedule progress, but remain publication-content requirements and cannot be invented. |
 | WooCommerce / tax | Pre-production foundation and production read-only identity/connectivity are GREEN. 2026 consumption-tax posture remains exempt / not Qualified-Invoice registered; WooCommerce tax remains disabled. |
 | Sprint 4 / CX | Mobile-first PWA/catalog/product/cart/checkout/pickup/custom-cake foundations are materially GREEN in isolated/non-production scope. Storefront visual hierarchy was further polished in bounded preview source. Hostinger preview publication remains manual and non-production. |
 | Sprint 5 / Operations Hub | Five-channel normalization, task extraction, read-only workload/task views, reply proposal/review/decision layers, Mission Control projection v5, packaged read-only preview artifact and deterministic five-channel activation-readiness view are GREEN in bounded scope. No live channel connectivity or reply authority is enabled. |
@@ -38,7 +38,7 @@
 | Safety target | **2 October 2026** |
 | Original 2-month target | Approximately **19 October 2026** from the 19 August start |
 | Schedule variance | Materially ahead of the original sequence because later-sprint foundations have been safely prepared early. Owner/external gates now dominate the remaining critical path. |
-| Immediate next action | Continue only material non-authorizing preparation while awaiting final catalog facts/approval, Twilio/provider evidence and other external launch inputs. Do not manufacture filler work or cross production gates. |
+| Immediate next action | Continue controlled production-acceptance preparation and resolve Twilio/provider evidence, branch protection and remaining later launch gates. Final catalog content can be completed in parallel; do not manufacture missing facts or cross production gates. |
 
 ## 15 SEP 2026 SPRINT 3 OWNER HANDOFF RECONCILIATION
 
