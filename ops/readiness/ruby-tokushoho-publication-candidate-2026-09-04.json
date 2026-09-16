@@ -2,10 +2,11 @@
   "version": "ruby-tokushoho-publication-candidate-v1",
   "date": "2026-09-04",
   "executive_roadmap": {
-    "current_primary_sprint": 3,
-    "current_primary_sprint_name": "WooCommerce Foundation",
+    "current_primary_sprint": 4,
+    "current_primary_sprint_name": "Customer Experience",
+    "sprint3_formally_closed_for_provisional_scope": true,
     "sprint4_parallel_acceleration": true,
-    "formal_sprint4_entry": false
+    "formal_sprint4_entry": true
   },
   "candidate": {
     "publication_candidate_ready": true,
@@ -33,8 +34,11 @@
     "actual_screen_evidence_schema_ref": "contracts/cx/final-confirmation-screen-evidence.schema.json",
     "actual_screen_evidence_template_ref": "ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence.template.json",
     "actual_screen_capture_plan_ref": "docs/RUBY_ACTUAL_WOOCOMMERCE_FINAL_SCREEN_EVIDENCE_CAPTURE_PLAN_2026-09-04.md",
-    "latest_capture_attempt_ref": "ops/readiness/ruby-preproduction-final-screen-capture-attempt-2026-09-04.json",
-    "latest_capture_attempt_run_id": 33826576950,
+    "latest_capture_attempt_ref": "ops/readiness/ruby-preproduction-final-screen-capture-attempt-2026-09-16.json",
+    "latest_capture_attempt_source_main_sha": "0e91c9b15a689d65a4c4c25e8db607b10adcbfd3",
+    "latest_capture_attempt_run_id": null,
+    "latest_store_api_get_http_status": 200,
+    "latest_products_returned": 0,
     "latest_capture_attempted": true,
     "latest_capture_blocked_before_checkout": true,
     "latest_capture_blocking_reason": "no_purchasable_preproduction_product_available_for_disposable_qa_cart",
@@ -68,7 +72,7 @@
   },
   "next_evidence_needed": [
     "separate publication-execution approval at the appropriate later gate",
-    "final owner-approved production catalog for Sprint 3 closure and a usable preproduction catalog item for the disposable QA cart",
+    "a source-backed provisional V1 product made purchasable in preproduction through an independently authorized catalog implementation path",
     "repeat the guarded non-transactional actual WooCommerce final-screen capture after preproduction catalog availability is revalidated",
     "fresh near-cutover recovery validation and final Go/No-Go at the appropriate later gate"
   ],

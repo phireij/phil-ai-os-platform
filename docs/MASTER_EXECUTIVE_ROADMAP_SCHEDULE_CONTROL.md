@@ -7,7 +7,7 @@
 
 | FIRST ISSUED | OWNER | LAST RECONCILED | CANONICAL SOURCE |
 | --- | --- | --- | --- |
-| 28 Aug 2026 | CEO / CTO Office | 15 Sep 2026 | GitHub master roadmap |
+| 28 Aug 2026 | CEO / CTO Office | 16 Sep 2026 | GitHub master roadmap |
 
 # CURRENT EXECUTIVE STATUS
 
@@ -20,7 +20,7 @@
 | Overall schedule health | **AHEAD OF ORIGINAL 2-MONTH PLAN.** The current schedule constraint is owner/external evidence rather than missing core engineering. |
 | Executive roadmap position | **Sprint 4 — Customer Experience is the CURRENT PRIMARY SPRINT. Sprint 3 — WooCommerce Foundation is formally closed by CEO-approved provisional Initial Launch Catalog V1 scope. Sprint 5–7 capabilities remain bounded and non-authorizing until their individual gates are GREEN.** |
 | Current engineering gate | **Complete controlled production acceptance and final catalog publication content.** The CEO-approved provisional catalog scope allows schedule progress; it does not authorize WooCommerce catalog mutation/publication, live payment, live SMS or customer-channel execution before documented subsystem preflights and evidence are GREEN. |
-| Last completed checkpoint | **PR #385 merged GREEN** — Sprint 3 owner-handoff blockers are semantically deduplicated while specialized source-backed category/media actions remain canonical. PR #384 added the deterministic human-readable Markdown checklist beside the existing worksheet/requirements artifacts. The generated checklist now contains 22 distinct unresolved actions instead of 28 duplicated entries. Current `main`: `20b84abbcd0b1e8ecd288b7d8be23429650532f2`. |
+| Last completed checkpoint | **Sprint 4-primary reconciliation is current on `main` `0e91c9b15a689d65a4c4c25e8db607b10adcbfd3`.** Sprint 3 is formally closed for the CEO-approved provisional Initial Launch Catalog V1 scope. Twilio SMS is deferred/non-blocking and remains disabled. The 16 Sep read-only WooCommerce Store API probe returned HTTP 200 with zero products, so the actual final-confirmation-screen acceptance remains fail-closed before checkout rather than being claimed GREEN. |
 | Sprint 3 catalog readiness | CEO approved the current three-product source as the provisional Initial Launch Catalog V1 scope: Moist Chocolate Round Cake (variable parent `RCD-MCH-RD`; `RCD-MCH-RD-15` / `RCD-MCH-RD-21`), Fudgy Milky Bar and Cheezy Ensaymada. Missing bilingual copy, verified media and package/shipping data no longer block Sprint 3/Sprint 4 schedule progress, but remain publication-content requirements and cannot be invented. |
 | WooCommerce / tax | Pre-production foundation and production read-only identity/connectivity are GREEN. 2026 consumption-tax posture remains exempt / not Qualified-Invoice registered; WooCommerce tax remains disabled. |
 | Sprint 4 / CX | Mobile-first PWA/catalog/product/cart/checkout/pickup/custom-cake foundations are materially GREEN in isolated/non-production scope. Storefront visual hierarchy was further polished in bounded preview source. Hostinger preview publication remains manual and non-production. |
@@ -38,7 +38,7 @@
 | Safety target | **2 October 2026** |
 | Original 2-month target | Approximately **19 October 2026** from the 19 August start |
 | Schedule variance | Materially ahead of the original sequence because later-sprint foundations have been safely prepared early. Owner/external gates now dominate the remaining critical path. |
-| Immediate next action | Continue controlled production-acceptance preparation, branch protection and remaining later launch gates. Twilio/provider evidence can resume as a separate post-launch activation track; final catalog content can be completed in parallel without manufacturing facts or crossing production gates. |
+| Immediate next action | Make a source-backed provisional V1 product purchasable in WooCommerce preproduction through an independently authorized catalog implementation path, then repeat the guarded non-submitted final-confirmation-screen review. Do not manufacture missing catalog facts. Continue branch-protection and later launch gates independently; Twilio remains a separate deferred post-launch track. |
 
 ## 15 SEP 2026 SPRINT 3 OWNER HANDOFF RECONCILIATION
 
@@ -51,7 +51,7 @@ The Sprint 3 catalog owner handoff was improved without changing catalog facts o
 - The generated owner checklist was reduced from 28 entries to 22 distinct unresolved actions without removing any distinct owner decision, operational evidence item or authority gate.
 - Exact-head PR validation remained GREEN across Sprint 3 Foundation, owner-artifact, WooCommerce contract, workflow supply-chain and Integrated Readiness CI. Post-merge `main` owner-artifact, contract, supply-chain and Integrated Readiness paths are GREEN on `20b84abbcd0b1e8ecd288b7d8be23429650532f2`.
 
-This work improves deterministic owner handoff only. It does **not** approve Initial Launch Catalog V1, satisfy any subsystem production preflight, close Sprint 3 or formally enter Sprint 4–7.
+This historical checkpoint improved deterministic owner handoff only. The CEO subsequently approved the provisional Initial Launch Catalog V1 scope, formally closing Sprint 3 and making Sprint 4 primary. That later approval still does **not** satisfy subsystem production preflights or authorize catalog publication, payment, SMS, DNS cutover or automatic execution.
 
 ## 14 SEP 2026 MISSION CONTROL / OPERATIONS / AUTOMATION RECONCILIATION
 
@@ -80,7 +80,7 @@ The catalog path now supports the owner workflow end-to-end without granting pro
 8. changes to source-backed values such as price require fresh evidence;
 9. no worksheet edit is automatically applied to the canonical catalog or WooCommerce.
 
-The durable Sprint 3 owner-input closure gate remains the **final owner-approved production catalog** for the intended Initial Launch Catalog V1 scope. First-party Quick Pickup and other later launch inputs do not replace or broaden that Sprint 3 gate.
+This was the durable Sprint 3 owner-input closure gate at the 12 Sep checkpoint. The CEO has since approved the current provisional Initial Launch Catalog V1 scope, so Sprint 3 is formally closed and Sprint 4 is primary. Missing publication facts and evidence remain fail-closed requirements; First-party Quick Pickup and other later inputs do not replace or broaden them.
 
 ## 12 SEP 2026 OPERATIONS / AUTOMATION / SPRINT 7 RECONCILIATION
 
@@ -174,8 +174,8 @@ V1 must preserve these properties:
 
 ## Sprint 3 — WooCommerce Foundation
 
-**Status: CURRENT PRIMARY SPRINT / ENGINEERING FOUNDATION GREEN / OWNER CLOSURE GATE OPEN**  
-**Window:** Original window 1–7 Sep 2026; formal closure delayed by owner catalog input while later bounded work proceeds in parallel
+**Status: FORMALLY CLOSED — CEO-APPROVED PROVISIONAL INITIAL LAUNCH CATALOG V1 SCOPE**
+**Window:** Original window 1–7 Sep 2026; formally closed 16 Sep 2026 for the approved provisional scope
 
 - Docker
 - Products
@@ -189,11 +189,11 @@ V1 must preserve these properties:
 - Variable products and multiple variation SKUs
 - Owner worksheet generation and intake review
 
-**Control note:** Core WooCommerce contracts, isolated runtime, catalog/category/media/inventory/localization boundaries, tax posture, variable-product/multi-SKU support, read-only reconciliation, owner worksheet artifact generation, human-readable owner checklist generation and fail-closed intake review are GREEN. The principal remaining Sprint 3 closure gate is the **final owner-approved Initial Launch Catalog V1** plus associated bilingual/media/fulfillment evidence. Production catalog mutation/publication, real payment, live routing and live SMS remain fail-closed.
+**Control note:** Core WooCommerce contracts, isolated runtime, catalog/category/media/inventory/localization boundaries, tax posture, variable-product/multi-SKU support, read-only reconciliation, owner worksheet artifact generation, human-readable owner checklist generation and fail-closed intake review are GREEN. The CEO-approved provisional Initial Launch Catalog V1 scope closes Sprint 3 for schedule control. Missing bilingual/media/fulfillment facts remain publication blockers and cannot be invented. Production catalog mutation/publication, real payment, live routing and live SMS remain fail-closed.
 
 ## Sprint 4 — Customer Experience
 
-**Status: BOUNDED PARALLEL ACCELERATION / FOUNDATION MATERIALLY GREEN / FORMAL ENTRY PENDING SPRINT 3 CLOSURE**  
+**Status: CURRENT PRIMARY SPRINT / FOUNDATION MATERIALLY GREEN / ACTUAL CHECKOUT ACCEPTANCE BLOCKED BEFORE CHECKOUT**
 **Window:** 8–14 Sep 2026
 
 - Mobile-first
@@ -204,7 +204,7 @@ V1 must preserve these properties:
 - Pickup
 - Bilingual customer experience
 
-**Control note:** Mobile/PWA, branded catalog/detail/cart, checkout/pickup, custom-cake intake, private reference-image selection and KOMOJU handoff foundations are materially GREEN in isolated non-production scope. Bounded storefront visual hierarchy/polish improvements are merged in source. Hostinger preview deployment remains a manually controlled non-production step. Formal Sprint 4 completion is not claimed while Sprint 3 remains formally open.
+**Control note:** Mobile/PWA, branded catalog/detail/cart, checkout/pickup, custom-cake intake, private reference-image selection and KOMOJU handoff foundations are materially GREEN in isolated non-production scope. Bounded storefront visual hierarchy/polish improvements are merged in source. Sprint 4 is formally primary. On 16 Sep, the actual WooCommerce preproduction Store API returned HTTP 200 with zero products; therefore a representative disposable cart and the final review screen could not be reached. No order or payment action was invoked, and the actual-screen gate remains fail-closed.
 
 ## Sprint 5 — Operations Hub
 
@@ -252,8 +252,8 @@ V1 must preserve these properties:
 | --- | --- | --- |
 | 19–28 Aug | Architecture + core infrastructure + advanced AI infrastructure | **COMPLETED / AHEAD** |
 | 28–31 Aug | Sprint 2 closure; Phase 2.3 P1–P5 GREEN; Architecture Spec v1.0 frozen; Supabase deferred | **COMPLETED / CLOSED GREEN** |
-| 1–7 Sep | Sprint 3 — WooCommerce Foundation + production-preparation inputs | **CURRENT PRIMARY / OWNER-GATED CLOSURE** |
-| 8–14 Sep | Sprint 4 — Customer Experience | **BOUNDED PARALLEL ACCELERATION / MATERIAL FOUNDATION GREEN** |
+| 1–7 Sep | Sprint 3 — WooCommerce Foundation + production-preparation inputs | **FORMALLY CLOSED FOR CEO-APPROVED PROVISIONAL V1 SCOPE** |
+| 8–14 Sep | Sprint 4 — Customer Experience | **CURRENT PRIMARY / ACTUAL CHECKOUT ACCEPTANCE FAIL-CLOSED PENDING PREPRODUCTION PRODUCT** |
 | 15–20 Sep | Sprint 5 — Operations Hub | **FORMAL ENTRY PENDING / SUBSTANTIAL FOUNDATION PRE-COMPLETED** |
 | 21–25 Sep | Sprint 6 — Full Automation | **FORMAL ENTRY PENDING / SUBSTANTIAL SIMULATION READINESS PRE-COMPLETED** |
 | 25–30 Sep | Sprint 7 — final testing, production, security, docs, training, launch | **FUTURE FORMAL SPRINT / INTEGRATED READINESS ADVANCED** |
@@ -337,27 +337,24 @@ Update/review when:
 
 # 8. Current Decision Queue
 
-## Immediate — Sprint 3 completion gate
+## Immediate — Sprint 4 actual checkout acceptance gate
 
-**Status: CURRENT / owner-input gated. Engineering foundation and deterministic intake path are GREEN.**
+**Status: CURRENT / blocked before checkout by zero purchasable preproduction products.**
 
-Complete or confirm before Sprint 3 formal closure:
+Complete or confirm before Sprint 4 actual final-confirmation-screen acceptance:
 
-- Finalize the intended **Initial Launch Catalog V1 subset**.
-- Complete/approve English and Japanese names/descriptions/slugs where required.
-- Confirm approved categories and bilingual category mapping/slugs.
-- Supply/confirm controlled primary media references and gallery decisions.
-- Confirm product fulfillment facts: temperature classification, pickup/delivery eligibility, package/shipping class, preparation time, advance-order window and stock policy.
-- Complete physical packaging evidence where required (fit/cushioning/stack/drop/thermal validation).
-- Confirm customer-facing shipping/handling/free-shipping policy.
-- Provide the explicit catalog approval reference required by launch readiness.
-- Keep all production WooCommerce catalog mutation/publication fail-closed until the final package is complete and separately revalidated.
+- Make at least one source-backed product from the CEO-approved provisional Initial Launch Catalog V1 scope purchasable in WooCommerce **preproduction** through an independently authorized implementation path.
+- Re-run the GET-only catalog probe and require at least one purchasable candidate.
+- Prepare a disposable cart with synthetic QA data and reach the actual final checkout/review screen.
+- Review the committed final-screen checklist and retain only sanitized evidence with the final action uninvoked.
+- Keep order creation, payment execution, catalog publication, DNS cutover and automatic production execution false.
+- Keep missing bilingual, media, packaging and fulfillment facts explicitly pending rather than manufacturing them.
 
 The owner-editable worksheet, human-readable checklist and fail-closed intake reviewer are now the preferred handoff path for catalog facts. The system must not invent missing owner values.
 
-### Catalog-associated reminder after owner submission
+### Catalog-associated publication reminder
 
-After the owner finalizes/submits the catalog, explicitly reconcile:
+Before later catalog publication, explicitly reconcile:
 
 - final add-on SKU list and prices;
 - add-on inventory behavior;
@@ -378,7 +375,7 @@ Do **not** activate historical working examples unless the owner explicitly conf
 - Public cutover/DNS confirmation.
 - Final CEO/CTO production Go/No-Go.
 
-## Parallel acceleration while Sprint 3 remains current
+## Parallel controlled work while Sprint 4 remains current
 
 - Maintain A0 autonomy, general-only execution and Hermes-only bounded routing; specialists remain disabled for normal live execution.
 - Keep Mission Control read-only until separately governed write/mutation authority is approved.
@@ -424,5 +421,6 @@ These targets remain materially ahead of the original approximately two-month ob
 - **15 Sep 2026** — PR #384 added the deterministic human-readable catalog owner checklist to the existing Sprint 3 handoff artifact while preserving the current worksheet/JSON contracts and all no-network/no-mutation/no-publication boundaries.
 - **15 Sep 2026** — PR #385 semantically deduplicated Category/Media wrapper blockers, reducing the generated owner checklist from 28 to 22 distinct actions while retaining every specialized source-backed blocker and authority gate. Current merged `main` at this reconciliation: `20b84abbcd0b1e8ecd288b7d8be23429650532f2`.
 - **15 Sep 2026** — Reconciled CEO authorization for controlled WooCommerce publication, live KOMOJU, live Twilio SMS and approved customer-channel activation/replies. Each capability remains fail-closed until its own readiness, recovery and audit evidence is GREEN; A0/general/Hermes-only governance and read-only Mission Control remain unchanged. Air Mobile Quick Pickup was removed as a V1 dependency and Ruby-owned Quick Pickup readiness was recorded separately; AirREGI API assumptions remain unverified.
+- **16 Sep 2026** — Reconciled `main` `0e91c9b15a689d65a4c4c25e8db607b10adcbfd3`: Sprint 3 is formally closed for the CEO-approved provisional Initial Launch Catalog V1 scope and Sprint 4 is primary. A guarded GET-only preproduction Store API probe returned HTTP 200 with zero products, so the actual final-confirmation-screen review remains fail-closed before checkout. No order, payment, catalog mutation, publication or cutover action was executed.
 
 > **DOCUMENT CONTROL RULE:** Do not create a replacement master timeline for ordinary schedule updates. Review and update this canonical roadmap, refresh the status dashboard at the top, and record material changes in the Change Log.

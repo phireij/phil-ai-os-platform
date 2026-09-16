@@ -119,9 +119,10 @@ def main() -> None:
     require_false_authority(sync["authority"], "checkout sync")
 
     require(candidate["version"] == "ruby-tokushoho-publication-candidate-v1", "candidate schema drift")
-    require(candidate["executive_roadmap"]["current_primary_sprint"] == 3, "candidate changed current sprint")
+    require(candidate["executive_roadmap"]["current_primary_sprint"] == 4, "candidate must keep Sprint 4 primary")
+    require(candidate["executive_roadmap"]["sprint3_formally_closed_for_provisional_scope"] is True, "candidate lost Sprint 3 provisional-scope closure")
     require(candidate["executive_roadmap"]["sprint4_parallel_acceleration"] is True, "candidate lost Sprint 4 parallel state")
-    require(candidate["executive_roadmap"]["formal_sprint4_entry"] is False, "candidate incorrectly entered Sprint 4")
+    require(candidate["executive_roadmap"]["formal_sprint4_entry"] is True, "candidate lost formal Sprint 4 entry")
     cand = candidate["candidate"]
     require(cand["publication_candidate_ready"] is True, "publication candidate not GREEN")
     require(cand["japan_2026_consumption_tax_status"] == "exempt", "candidate tax drift")
