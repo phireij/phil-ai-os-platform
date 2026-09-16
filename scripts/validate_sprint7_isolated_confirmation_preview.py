@@ -80,7 +80,9 @@ def main() -> None:
     require(screen["actual_final_screen_evidence_captured"] is False, "actual screen evidence unexpectedly captured")
     require(screen["latest_capture_attempted"] is True, "candidate must retain the latest actual-screen capture attempt")
     require(screen["latest_capture_blocked_before_checkout"] is True, "candidate must retain fail-closed capture blocker")
-    require(candidate["sprint3"]["formal_sprint3_closure"] is False, "Sprint 3 closed without final catalog")
+    require(candidate["sprint3"]["ceo_provisional_catalog_scope_approved"] is True, "CEO provisional catalog scope approval missing")
+    require(candidate["sprint3"]["publication_catalog_content_complete"] is False, "publication content unexpectedly marked complete")
+    require(candidate["sprint3"]["formal_sprint3_closure"] is True, "Sprint 3 closure must follow CEO scope approval")
     for key, value in candidate["authority"].items():
         require(value is False, f"candidate authority expanded unexpectedly: {key}")
 
