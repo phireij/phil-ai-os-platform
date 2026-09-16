@@ -9,6 +9,8 @@ READINESS = ROOT / "ops/readiness/ruby-woocommerce-komoju-staging-readiness.json
 EVIDENCE = ROOT / "ops/readiness/ruby-hostinger-preproduction-evidence.template.json"
 PROFILE = ROOT / "ops/readiness/verified-ruby-business-profile.template.json"
 APPROVAL = ROOT / "ops/readiness/ruby-tokushoho-owner-approval-2026-09-04.json"
+PUBLICATION_READINESS = ROOT / "ops/readiness/ruby-tokushoho-publication-candidate-2026-09-04.json"
+ACTUAL_SCREEN_EVIDENCE = ROOT / "ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence-2026-09-16.json"
 TOKUSHOHO = ROOT / "docs/RUBY_TOKUSHOHO_EXPANSION_DRAFT_2026-08-29.md"
 TIMING_DOC = ROOT / "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md"
 CANDIDATE_DOC = ROOT / "docs/RUBY_TOKUSHOHO_FINAL_PUBLICATION_CANDIDATE_2026-09-04.md"
@@ -24,6 +26,8 @@ def main() -> None:
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     profile = json.loads(PROFILE.read_text(encoding="utf-8"))
     approval = json.loads(APPROVAL.read_text(encoding="utf-8"))
+    publication = json.loads(PUBLICATION_READINESS.read_text(encoding="utf-8"))
+    actual_screen = json.loads(ACTUAL_SCREEN_EVIDENCE.read_text(encoding="utf-8"))
 
     if data.get("version") != "ruby-woocommerce-komoju-staging-readiness-v5":
         fail("staging readiness schema drift")
@@ -68,7 +72,8 @@ def main() -> None:
         if storefront.get(key) != value:
             fail(f"preproduction storefront state drift: {key}={storefront.get(key)!r}")
 
-    if data.get("next_gate") != "finalize_catalog_review_actual_confirmation_screen_then_separate_publication_execution_recovery_and_go_no_go_without_real_payment_execution":
+    expected_next_gate = "complete_catalog_publication_content_then_separately_satisfy_komoju_live_acceptance_recovery_branch_protection_cutover_and_final_go_no_go_without_real_payment_execution"
+    if data.get("next_gate") != expected_next_gate:
         fail("next executable gate drift")
     if data.get("production_publish_authorized") is not False:
         fail("preproduction readiness gained production publication authority")
@@ -111,7 +116,18 @@ def main() -> None:
             fail(f"KOMOJU execution authority must remain false: {key}")
 
     legal = data["legal_checkout_sync"]
-    for key in ("tokushoho_payment_methods_match_checkout", "tokushoho_payment_timing_match_checkout", "tokushoho_shipping_fees_match_checkout", "tokushoho_publication_candidate_ready", "tokushoho_candidate_text_approved", "static_confirmation_screen_checklist_ready", "privacy_terms_implementation_reviewed"):
+    for key in (
+        "tokushoho_payment_methods_match_checkout",
+        "tokushoho_payment_timing_match_checkout",
+        "tokushoho_shipping_fees_match_checkout",
+        "tokushoho_publication_candidate_ready",
+        "tokushoho_candidate_text_approved",
+        "static_confirmation_screen_checklist_ready",
+        "final_confirmation_screen_reviewed",
+        "actual_final_screen_evidence_green",
+        "checkout_legal_sync_complete",
+        "privacy_terms_implementation_reviewed",
+    ):
         if legal.get(key) is not True:
             fail(f"legal checkout readiness regressed: {key}")
     if legal.get("payment_timing_reconciliation_doc") != "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md" or not TIMING_DOC.is_file():
@@ -124,8 +140,46 @@ def main() -> None:
         fail("publication execution unexpectedly approved")
     if legal.get("static_confirmation_screen_checklist_ref") != "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md" or not SCREEN_CHECKLIST.is_file():
         fail("final confirmation-screen checklist evidence missing")
-    if legal.get("final_confirmation_screen_reviewed") is not False:
-        fail("actual final confirmation screen must remain pending")
+    if legal.get("actual_final_screen_evidence_ref") != "ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence-2026-09-16.json" or not ACTUAL_SCREEN_EVIDENCE.is_file():
+        fail("accepted actual final-screen evidence reference missing")
+
+    confirmation = publication["confirmation_screen"]
+    if publication.get("decision") != "TOKUSHOHO_CANDIDATE_TEXT_APPROVED_ACTUAL_SCREEN_GREEN_PUBLICATION_EXECUTION_FAIL_CLOSED":
+        fail("Tokushoho publication-candidate decision drift")
+    if confirmation.get("latest_actual_screen_evidence_ref") != "ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence-2026-09-16.json":
+        fail("publication readiness actual-screen evidence reference drift")
+    for key in ("actual_final_screen_reviewed", "actual_final_screen_evidence_captured", "actual_final_screen_green"):
+        if confirmation.get(key) is not True:
+            fail(f"publication readiness final-screen state regressed: {key}")
+    publication_approval = publication["approval_and_publication"]
+    if publication_approval.get("checkout_legal_sync_complete") is not True:
+        fail("publication readiness checkout/legal synchronization regressed")
+    if publication_approval.get("owner_publication_approval_recorded") is not False or publication_approval.get("tokushoho_publication_approved") is not False or publication_approval.get("published") is not False:
+        fail("screen acceptance leaked into publication approval")
+    for key, value in publication["authority"].items():
+        if value is not False:
+            fail(f"publication readiness expanded authority: {key}")
+
+    if actual_screen.get("environment") != "preproduction" or actual_screen.get("synthetic_customer_data_only") is not True:
+        fail("actual final-screen evidence environment/data boundary drift")
+    if actual_screen.get("contains_personal_data") is not False or actual_screen.get("contains_secret_material") is not False:
+        fail("actual final-screen evidence hygiene drift")
+    if actual_screen.get("evidence_complete") is not True or actual_screen.get("actual_final_confirmation_screen_reviewed") is not True:
+        fail("actual final-screen evidence is no longer complete/GREEN")
+    final_window = actual_screen.get("final_acceptance_window") or {}
+    if final_window.get("acceptance_state") != "GREEN":
+        fail("final acceptance window is not GREEN")
+    if final_window.get("order_created") is not False or final_window.get("payment_executed") is not False or final_window.get("final_action_invoked") is not False:
+        fail("actual final-screen acceptance crossed order/payment boundary")
+    if final_window.get("order_approval_restored_after_review") is not True:
+        fail("Order Approval was not restored after final-screen review")
+    if set(final_window.get("approved_komoju_test_methods_visible", [])) != {"credit_card", "konbini", "merpay", "paidy"}:
+        fail("accepted KOMOJU test-method set drift")
+    if final_window.get("konbini_three_day_deadline_visible") is not True or final_window.get("legal_routes_visible") is not True:
+        fail("accepted final-screen legal/payment evidence regressed")
+    for key, value in actual_screen["authority"].items():
+        if value is not False:
+            fail(f"actual final-screen evidence expanded authority: {key}")
 
     expected_historical_evidence = {
         "public_domain_unchanged": True,
@@ -152,19 +206,19 @@ def main() -> None:
             fail(f"Tokushoho safeguard missing: {phrase}")
 
     candidate = CANDIDATE_DOC.read_text(encoding="utf-8")
-    for phrase in ("PUBLICATION CANDIDATE READY", "tokushoho_publication_approved: false", "actual_final_confirmation_screen_reviewed: false", "production_publish_authorized: false", "payment_execution_authorized: false"):
+    for phrase in ("PUBLICATION CANDIDATE READY", "production_publish_authorized: false", "payment_execution_authorized: false"):
         if phrase not in candidate:
             fail(f"final Tokushoho candidate safeguard missing: {phrase}")
 
     checklist = SCREEN_CHECKLIST.read_text(encoding="utf-8")
-    for phrase in ("STATIC COMPLIANCE CHECKLIST READY", "actual_final_confirmation_screen_reviewed: false", "payment_execution_authorized: false", "production_publish_authorized: false"):
+    for phrase in ("STATIC COMPLIANCE CHECKLIST READY", "payment_execution_authorized: false", "production_publish_authorized: false"):
         if phrase not in checklist:
             fail(f"final-screen checklist safeguard missing: {phrase}")
 
     print("PHIL_AI_OS_RUBY_HOSTINGER_PREPRODUCTION_ENVIRONMENT_GREEN created=true wordpress=true woocommerce=true ssl=true checkout_qa=true shipping=true")
     print("PHIL_AI_OS_RUBY_TOKUSHOHO_TEXT_APPROVAL_GREEN candidate_text=true publication_execution=false publish=false")
-    print("PHIL_AI_OS_RUBY_CONFIRMATION_SCREEN_CHECKLIST_GREEN static=true actual=false payment_execution=false")
-    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=finalize_catalog_actual_confirmation_screen_then_separate_publication_execution_recovery_go_no_go")
+    print("PHIL_AI_OS_RUBY_CONFIRMATION_SCREEN_ACCEPTANCE_GREEN static=true actual=true synthetic=true order_created=false payment_execution=false order_approval_restored=true")
+    print("PHIL_AI_OS_RUBY_NEXT_GATE_GREEN action=complete_catalog_then_separate_komoju_recovery_branch_protection_cutover_go_no_go")
 
 
 if __name__ == "__main__":

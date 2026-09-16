@@ -87,9 +87,9 @@ def main() -> None:
     require(ok["konbini_live_expiry_setting_verified"] is True and ok["konbini_live_expiry_days"] == 3, "overlay Konbini expiry evidence drift")
     require(ok["payment_timing_wording_reconciled"] is True, "overlay payment-timing wording regressed")
     require(ok["tokushoho_payment_timing_match_checkout"] is True, "overlay Tokushoho payment timing regressed")
-    require(ok["final_confirmation_screen_reviewed"] is False, "overlay final screen changed without evidence")
-    require(ok["checkout_legal_timing_sync_complete"] is False, "overlay legal/timing sync unexpectedly complete")
-    require(ok["live_acceptance_green"] is False and ok["real_payment_execution_ready"] is False, "overlay KOMOJU acceptance expanded unexpectedly")
+    require(ok["final_confirmation_screen_reviewed"] is True, "overlay must project accepted final-screen evidence")
+    require(ok["checkout_legal_timing_sync_complete"] is True, "overlay must project completed checkout/legal synchronization")
+    require(ok["live_acceptance_green"] is False and ok["real_payment_execution_ready"] is False, "checkout acceptance must not expand KOMOJU live/payment readiness")
 
     require(sms["provider_selection"]["formally_selected"] is True, "SMS provider selection should be GREEN")
     require(sms["provider_selection"]["selected_provider"] == "twilio", "selected SMS provider must remain Twilio")
@@ -108,8 +108,14 @@ def main() -> None:
     require(go["technical_baseline"]["woocommerce_readonly_identity_green"] is True, "Go/No-Go lost Woo read-only GREEN")
     require(go["technical_baseline"]["japan_tax_decision_green"] is True, "Go/No-Go lost Japan tax GREEN")
     require(go["required_launch_gates"]["japan_tax_and_qualified_invoice_evidence_ready"] is True, "Go/No-Go tax gate should be GREEN")
+    require(go["required_launch_gates"]["final_checkout_tokushoho_payment_shipping_sync_green"] is True, "Go/No-Go final checkout/legal gate must reflect accepted screen")
+    green_gates = {
+        "japan_tax_and_qualified_invoice_evidence_ready",
+        "final_checkout_tokushoho_payment_shipping_sync_green",
+    }
     for key, value in go["required_launch_gates"].items():
-        if key == "japan_tax_and_qualified_invoice_evidence_ready":
+        if key in green_gates:
+            require(value is True, f"reconciled GREEN gate regressed: {key}")
             continue
         require(value is False, f"launch gate requires explicit reconciliation before GREEN: {key}")
     for key, value in go["execution"].items():
@@ -122,8 +128,8 @@ def main() -> None:
     require(overlay["launch"]["live_launch_authorized_by_readiness"] is False, "overlay unexpectedly authorizes live launch")
     require(overlay["decision"] == "CONTROL_POSTURE_GREEN_LAUNCH_PENDING_FAIL_CLOSED", "overlay decision drift")
 
-    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN tax=green twilio=selected komoju_subset=finalized checkout_config=true konbini_expiry_days=3 payment_timing=true")
-    print("PHIL_AI_OS_SPRINT_7_FINAL_GO_NO_GO_PENDING_FAIL_CLOSED final_screen=false payment_execution=false")
+    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN tax=green final_screen=true twilio=selected komoju_subset=finalized checkout_config=true konbini_expiry_days=3 payment_timing=true")
+    print("PHIL_AI_OS_SPRINT_7_FINAL_GO_NO_GO_PENDING_FAIL_CLOSED final_screen=true komoju_live=false payment_execution=false")
 
 
 if __name__ == "__main__":
