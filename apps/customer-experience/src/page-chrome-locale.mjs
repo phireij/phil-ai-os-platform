@@ -6,7 +6,7 @@ const copy = Object.freeze({
       catalog: "Isolated preview · No live checkout",
       cart: "Isolated preview · KOMOJU not connected",
       confirmation: "Isolated synthetic preview · No order submission",
-      pickup: "Isolated preview · No external activation",
+      pickup: "Isolated preview · No production activation",
     }),
     footer: Object.freeze({
       catalog: "Phil AI OS · Sprint 4 Customer Experience · synthetic fixture environment",
