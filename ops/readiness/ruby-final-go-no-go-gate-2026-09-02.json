@@ -1,6 +1,6 @@
 {
-  "version": "ruby-final-go-no-go-gate-v2",
-  "date": "2026-09-03",
+  "version": "ruby-final-go-no-go-gate-v3",
+  "date": "2026-09-16",
   "technical_baseline": {
     "current_head_ci_green": true,
     "woocommerce_readonly_identity_green": true,
@@ -15,12 +15,19 @@
     "japan_tax_and_qualified_invoice_evidence_ready": true,
     "final_checkout_tokushoho_payment_shipping_sync_green": false,
     "komoju_live_acceptance_green": false,
-    "air_mobile_order_quick_pickup_url_ready": false,
-    "sms_production_readiness_if_in_launch_scope_green": false,
+    "first_party_quick_pickup_production_ready": false,
     "near_cutover_recovery_freshness_green": false,
     "main_branch_protection_or_ruleset_green": false,
     "public_cutover_plan_confirmed": false,
     "final_ceo_go_no_go_accepted": false
+  },
+  "v1_non_blocking_deferred_capabilities": {
+    "twilio_sms": {
+      "required_for_v1_launch": false,
+      "production_sending_ready": false,
+      "live_sms_sent": false,
+      "provider_support_case_resolved": false
+    }
   },
   "execution": {
     "production_catalog_mutation_ready": false,
