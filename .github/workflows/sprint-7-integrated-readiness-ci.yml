@@ -70,6 +70,7 @@ jobs:
           node --check apps/customer-experience/src/payment.mjs
           node --check apps/customer-experience/src/pickup.mjs
           node --check apps/customer-experience/src/quick-pickup-availability.mjs
+          node --check apps/customer-experience/src/quick-pickup-capacity.mjs
           node --check apps/customer-experience/src/seo.mjs
           node --check apps/customer-experience/src/app.mjs
           node --check apps/customer-experience/sw.js
