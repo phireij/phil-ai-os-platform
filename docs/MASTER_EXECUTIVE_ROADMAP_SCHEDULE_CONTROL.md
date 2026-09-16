@@ -20,7 +20,7 @@
 | Overall schedule health | **AHEAD OF ORIGINAL 2-MONTH PLAN.** The current schedule constraint is owner/external evidence rather than missing core engineering. |
 | Executive roadmap position | **Sprint 4 — Customer Experience is the CURRENT PRIMARY SPRINT. Sprint 3 — WooCommerce Foundation is formally closed by CEO-approved provisional Initial Launch Catalog V1 scope. Sprint 5–7 capabilities remain bounded and non-authorizing until their individual gates are GREEN.** |
 | Current engineering gate | **Complete controlled production acceptance and final catalog publication content.** The CEO-approved provisional catalog scope allows schedule progress; it does not authorize WooCommerce catalog mutation/publication, live payment, live SMS or customer-channel execution before documented subsystem preflights and evidence are GREEN. |
-| Last completed checkpoint | **Sprint 4-primary reconciliation is current on `main` `0e91c9b15a689d65a4c4c25e8db607b10adcbfd3`.** Sprint 3 is formally closed for the CEO-approved provisional Initial Launch Catalog V1 scope. Twilio SMS is deferred/non-blocking and remains disabled. The 16 Sep read-only WooCommerce Store API probe returned HTTP 200 with zero products, so the actual final-confirmation-screen acceptance remains fail-closed before checkout rather than being claimed GREEN. |
+| Last completed checkpoint | **Actual WooCommerce preproduction final-screen review completed RED / fail-closed.** One source-backed provisional product was published only in the coming-soon preproduction store, the guarded checkout reached the uninvoked `Place Order` control, and sanitized evidence was captured. Shipping showed Free instead of the verified Yamato rate; the approved KOMOJU subset/Konbini deadline and Tokushoho/cancellation-return links were absent. No order or payment was executed. |
 | Sprint 3 catalog readiness | CEO approved the current three-product source as the provisional Initial Launch Catalog V1 scope: Moist Chocolate Round Cake (variable parent `RCD-MCH-RD`; `RCD-MCH-RD-15` / `RCD-MCH-RD-21`), Fudgy Milky Bar and Cheezy Ensaymada. Missing bilingual copy, verified media and package/shipping data no longer block Sprint 3/Sprint 4 schedule progress, but remain publication-content requirements and cannot be invented. |
 | WooCommerce / tax | Pre-production foundation and production read-only identity/connectivity are GREEN. 2026 consumption-tax posture remains exempt / not Qualified-Invoice registered; WooCommerce tax remains disabled. |
 | Sprint 4 / CX | Mobile-first PWA/catalog/product/cart/checkout/pickup/custom-cake foundations are materially GREEN in isolated/non-production scope. Storefront visual hierarchy was further polished in bounded preview source. Hostinger preview publication remains manual and non-production. |
@@ -38,7 +38,7 @@
 | Safety target | **2 October 2026** |
 | Original 2-month target | Approximately **19 October 2026** from the 19 August start |
 | Schedule variance | Materially ahead of the original sequence because later-sprint foundations have been safely prepared early. Owner/external gates now dominate the remaining critical path. |
-| Immediate next action | Make a source-backed provisional V1 product purchasable in WooCommerce preproduction through an independently authorized catalog implementation path, then repeat the guarded non-submitted final-confirmation-screen review. Do not manufacture missing catalog facts. Continue branch-protection and later launch gates independently; Twilio remains a separate deferred post-launch track. |
+| Immediate next action | Correct the source-backed preproduction shipping, payment-method and final-screen legal-disclosure gaps without enabling live payment or public publication, then repeat the guarded non-submitted review. Continue branch-protection and later launch gates independently; Twilio remains deferred. |
 
 ## 15 SEP 2026 SPRINT 3 OWNER HANDOFF RECONCILIATION
 
@@ -193,7 +193,7 @@ V1 must preserve these properties:
 
 ## Sprint 4 — Customer Experience
 
-**Status: CURRENT PRIMARY SPRINT / FOUNDATION MATERIALLY GREEN / ACTUAL CHECKOUT ACCEPTANCE BLOCKED BEFORE CHECKOUT**
+**Status: CURRENT PRIMARY SPRINT / FOUNDATION MATERIALLY GREEN / ACTUAL CHECKOUT REVIEW RED FAIL-CLOSED**
 **Window:** 8–14 Sep 2026
 
 - Mobile-first
@@ -204,7 +204,7 @@ V1 must preserve these properties:
 - Pickup
 - Bilingual customer experience
 
-**Control note:** Mobile/PWA, branded catalog/detail/cart, checkout/pickup, custom-cake intake, private reference-image selection and KOMOJU handoff foundations are materially GREEN in isolated non-production scope. Bounded storefront visual hierarchy/polish improvements are merged in source. Sprint 4 is formally primary. On 16 Sep, the actual WooCommerce preproduction Store API returned HTTP 200 with zero products; therefore a representative disposable cart and the final review screen could not be reached. No order or payment action was invoked, and the actual-screen gate remains fail-closed.
+**Control note:** Mobile/PWA, branded catalog/detail/cart, checkout/pickup, custom-cake intake, private reference-image selection and KOMOJU handoff foundations are materially GREEN in isolated non-production scope. Sprint 4 is formally primary. On 16 Sep, one source-backed product enabled a guarded synthetic cart and actual final-screen review. The screen remains RED because shipping displayed Free, the approved KOMOJU subset/Konbini deadline was not exposed, and Tokushoho/cancellation-return routes were absent. `Place Order` was visible but not invoked; no order or payment was created.
 
 ## Sprint 5 — Operations Hub
 
@@ -253,7 +253,7 @@ V1 must preserve these properties:
 | 19–28 Aug | Architecture + core infrastructure + advanced AI infrastructure | **COMPLETED / AHEAD** |
 | 28–31 Aug | Sprint 2 closure; Phase 2.3 P1–P5 GREEN; Architecture Spec v1.0 frozen; Supabase deferred | **COMPLETED / CLOSED GREEN** |
 | 1–7 Sep | Sprint 3 — WooCommerce Foundation + production-preparation inputs | **FORMALLY CLOSED FOR CEO-APPROVED PROVISIONAL V1 SCOPE** |
-| 8–14 Sep | Sprint 4 — Customer Experience | **CURRENT PRIMARY / ACTUAL CHECKOUT ACCEPTANCE FAIL-CLOSED PENDING PREPRODUCTION PRODUCT** |
+| 8–14 Sep | Sprint 4 — Customer Experience | **CURRENT PRIMARY / ACTUAL CHECKOUT REVIEW RED FAIL-CLOSED PENDING BOUNDED CORRECTIONS** |
 | 15–20 Sep | Sprint 5 — Operations Hub | **FORMAL ENTRY PENDING / SUBSTANTIAL FOUNDATION PRE-COMPLETED** |
 | 21–25 Sep | Sprint 6 — Full Automation | **FORMAL ENTRY PENDING / SUBSTANTIAL SIMULATION READINESS PRE-COMPLETED** |
 | 25–30 Sep | Sprint 7 — final testing, production, security, docs, training, launch | **FUTURE FORMAL SPRINT / INTEGRATED READINESS ADVANCED** |
@@ -339,14 +339,14 @@ Update/review when:
 
 ## Immediate — Sprint 4 actual checkout acceptance gate
 
-**Status: CURRENT / blocked before checkout by zero purchasable preproduction products.**
+**Status: CURRENT / actual checkout reviewed RED with bounded configuration and disclosure gaps.**
 
 Complete or confirm before Sprint 4 actual final-confirmation-screen acceptance:
 
-- Make at least one source-backed product from the CEO-approved provisional Initial Launch Catalog V1 scope purchasable in WooCommerce **preproduction** through an independently authorized implementation path.
-- Re-run the GET-only catalog probe and require at least one purchasable candidate.
-- Prepare a disposable cart with synthetic QA data and reach the actual final checkout/review screen.
-- Review the committed final-screen checklist and retain only sanitized evidence with the final action uninvoked.
+- Correct the preproduction Yamato shipping presentation so it no longer displays Free and matches the verified regional rate configuration.
+- Expose only the approved payment subset through an acceptance-safe, non-live configuration and verify Konbini's three-day deadline without executing payment.
+- Make cancellation/returns and Tokushoho disclosures directly accessible from the final screen only under their separately authorized publication controls.
+- Repeat the disposable-cart review with synthetic QA data and retain only sanitized evidence with the final action uninvoked.
 - Keep order creation, payment execution, catalog publication, DNS cutover and automatic production execution false.
 - Keep missing bilingual, media, packaging and fulfillment facts explicitly pending rather than manufacturing them.
 
@@ -422,5 +422,6 @@ These targets remain materially ahead of the original approximately two-month ob
 - **15 Sep 2026** — PR #385 semantically deduplicated Category/Media wrapper blockers, reducing the generated owner checklist from 28 to 22 distinct actions while retaining every specialized source-backed blocker and authority gate. Current merged `main` at this reconciliation: `20b84abbcd0b1e8ecd288b7d8be23429650532f2`.
 - **15 Sep 2026** — Reconciled CEO authorization for controlled WooCommerce publication, live KOMOJU, live Twilio SMS and approved customer-channel activation/replies. Each capability remains fail-closed until its own readiness, recovery and audit evidence is GREEN; A0/general/Hermes-only governance and read-only Mission Control remain unchanged. Air Mobile Quick Pickup was removed as a V1 dependency and Ruby-owned Quick Pickup readiness was recorded separately; AirREGI API assumptions remain unverified.
 - **16 Sep 2026** — Reconciled `main` `0e91c9b15a689d65a4c4c25e8db607b10adcbfd3`: Sprint 3 is formally closed for the CEO-approved provisional Initial Launch Catalog V1 scope and Sprint 4 is primary. A guarded GET-only preproduction Store API probe returned HTTP 200 with zero products, so the actual final-confirmation-screen review remains fail-closed before checkout. No order, payment, catalog mutation, publication or cutover action was executed.
+- **16 Sep 2026** — With explicit CEO approval, published one source-backed Fudgy Milky Bar only in the coming-soon preproduction catalog to unblock acceptance. The guarded synthetic checkout reached the uninvoked final action and produced sanitized evidence. Review remained RED: shipping displayed Free, only manual order confirmation was offered, and Tokushoho/cancellation-return routes were absent. No order, payment, live-payment enablement, DNS cutover or public launch occurred.
 
 > **DOCUMENT CONTROL RULE:** Do not create a replacement master timeline for ordinary schedule updates. Review and update this canonical roadmap, refresh the status dashboard at the top, and record material changes in the Change Log.

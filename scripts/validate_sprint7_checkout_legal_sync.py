@@ -132,8 +132,9 @@ def main() -> None:
 
     screen = candidate["confirmation_screen"]
     require(screen["static_compliance_checklist_ready"] is True, "candidate static checklist missing")
-    require(screen["actual_final_screen_reviewed"] is False, "actual final screen cannot be GREEN without evidence")
-    require(screen["actual_final_screen_evidence_captured"] is False, "actual-screen evidence unexpectedly claimed")
+    require(screen["actual_final_screen_reviewed"] is True, "actual final-screen review evidence missing")
+    require(screen["actual_final_screen_evidence_captured"] is True, "sanitized actual-screen evidence missing")
+    require(screen["actual_final_screen_green"] is False, "gap-bearing actual screen cannot be GREEN")
     require(screen["real_order_required_for_review"] is False, "real order incorrectly required")
     require(screen["real_payment_required_for_review"] is False, "real payment incorrectly required")
 

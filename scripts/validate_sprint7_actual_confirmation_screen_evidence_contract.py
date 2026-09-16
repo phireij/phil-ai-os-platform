@@ -84,8 +84,9 @@ def main() -> None:
     require(screen["actual_screen_evidence_schema_ref"] == "contracts/cx/final-confirmation-screen-evidence.schema.json", "candidate schema ref drift")
     require(screen["actual_screen_evidence_template_ref"] == "ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence.template.json", "candidate template ref drift")
     require(screen["actual_screen_capture_plan_ref"] == "docs/RUBY_ACTUAL_WOOCOMMERCE_FINAL_SCREEN_EVIDENCE_CAPTURE_PLAN_2026-09-04.md", "candidate capture-plan ref drift")
-    require(screen["actual_final_screen_reviewed"] is False, "contract readiness cannot close actual-screen gate")
-    require(screen["actual_final_screen_evidence_captured"] is False, "contract readiness cannot claim captured evidence")
+    require(screen["actual_final_screen_reviewed"] is True, "candidate lost the later actual-screen review")
+    require(screen["actual_final_screen_evidence_captured"] is True, "candidate lost later sanitized evidence")
+    require(screen["actual_final_screen_green"] is False, "evidence-contract readiness cannot convert a RED actual screen to GREEN")
     require(screen["real_order_required_for_review"] is False, "real order must not be required")
     require(screen["real_payment_required_for_review"] is False, "real payment must not be required")
     for key, value in candidate["authority"].items():
