@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RECORD = ROOT / "ops" / "readiness" / "ruby-sprint3-current-acceptance-2026-09-03.json"
+CEO_DECISION = ROOT / "ops" / "readiness" / "ruby-initial-launch-catalog-v1-ceo-decision-2026-09-16.json"
 ROADMAP = ROOT / "docs" / "MASTER_EXECUTIVE_ROADMAP_SCHEDULE_CONTROL.md"
 CHECKPOINT = ROOT / "docs" / "SPRINT_3_CURRENT_ACCEPTANCE_CHECKPOINT_2026-09-03.md"
 TAX = ROOT / "ops" / "readiness" / "ruby-japan-consumption-tax-status-2026-09-03.json"
@@ -19,14 +20,15 @@ def require(condition: bool, message: str) -> None:
 
 def main() -> int:
     record = json.loads(RECORD.read_text(encoding="utf-8"))
+    ceo_decision = json.loads(CEO_DECISION.read_text(encoding="utf-8"))
     tax = json.loads(TAX.read_text(encoding="utf-8"))
     roadmap = ROADMAP.read_text(encoding="utf-8")
     checkpoint = CHECKPOINT.read_text(encoding="utf-8")
 
     executive = record["executive_roadmap"]
-    require(executive["current_primary_sprint"] == 3, "Sprint 3 must remain current primary sprint")
+    require(executive["current_primary_sprint"] == 4, "Sprint 4 must be current after CEO closes Sprint 3")
     require(executive["sprint4_parallel_acceleration"] is True, "Sprint 4 parallel acceleration should remain recorded")
-    require(executive["formal_sprint4_entry"] is False, "formal Sprint 4 entry must remain false before Sprint 3 closure")
+    require(executive["formal_sprint4_entry"] is True, "formal Sprint 4 entry must follow Sprint 3 closure")
 
     technical = record["technical_acceptance"]
     for key in (
@@ -52,12 +54,14 @@ def main() -> int:
         require(tax["authority"][key] is False, f"tax evidence must remain non-authorizing: {key}")
 
     remaining = record["remaining_sprint3_exit_inputs"]
-    require(remaining["final_owner_approved_catalog"] is False, "checkpoint must not invent final catalog completion")
+    require(remaining["final_owner_approved_catalog"] is True, "CEO provisional catalog scope approval must be recorded")
+    require(remaining["ceo_provisional_catalog_scope_approval_ref"] == "ops/readiness/ruby-initial-launch-catalog-v1-ceo-decision-2026-09-16.json", "CEO catalog decision reference drift")
+    require(remaining["publication_catalog_content_complete"] is False, "publication content must remain independently fail-closed")
     require(remaining["japan_tax_evidence_and_decision"] is True, "tax evidence/decision should be GREEN")
 
     exit_state = record["exit_state"]
-    require(exit_state["sprint3_exit_inputs_complete"] is False, "Sprint 3 cannot close before final catalog")
-    require(exit_state["formal_sprint3_closure"] is False, "formal Sprint 3 closure must remain false")
+    require(exit_state["sprint3_exit_inputs_complete"] is True, "CEO-approved provisional scope must close Sprint 3 input gate")
+    require(exit_state["formal_sprint3_closure"] is True, "Sprint 3 closure must be recorded")
     require(exit_state["production_catalog_write_ready"] is False, "catalog write must remain fail-closed")
     require(exit_state["tax_decision_ready"] is True, "tax decision should remain ready")
     require(exit_state["tax_activation_required"] is False, "tax activation must not be required for exempt route")
@@ -68,17 +72,14 @@ def main() -> int:
     require(authority["production_publish_authorized"] is False, "publish authority must remain false")
     require(authority["automatic_production_execution"] is False, "automatic production execution must remain false")
 
-    sprint3_position_markers = (
-        "Sprint 3 — WooCommerce Foundation is the CURRENT PRIMARY SPRINT",
-        "Sprint 3 — WooCommerce Foundation remains the CURRENT PRIMARY SPRINT",
-    )
-    require(
-        any(marker in roadmap for marker in sprint3_position_markers),
-        "master roadmap Sprint 3 position missing",
-    )
-    require("PHIL_AI_OS_SPRINT_3_CURRENT_PRIMARY_PENDING_FINAL_CATALOG_ONLY" in checkpoint, "checkpoint marker missing")
+    require("Sprint 4 — Customer Experience is the CURRENT PRIMARY SPRINT" in roadmap, "master roadmap Sprint 4 position missing")
+    require("PHIL_AI_OS_SPRINT_3_FORMALLY_CLOSED_BY_CEO_PROVISIONAL_SCOPE" in checkpoint, "checkpoint marker missing")
+    require(ceo_decision["approved_scope"]["sprint3_scope_approval_green"] is True, "CEO catalog scope approval missing")
+    require(ceo_decision["approved_scope"]["publication_catalog_content_complete"] is False, "CEO scope decision must not invent publication content")
+    for value in ceo_decision["authority"].values():
+        require(value is False, "CEO scope approval must not expand production authority")
 
-    print("PHIL_AI_OS_SPRINT_3_CURRENT_ACCEPTANCE_GREEN status=pending_final_catalog_only tax_decision=green mutation_authorized=false")
+    print("PHIL_AI_OS_SPRINT_3_CLOSURE_GREEN scope=ceo_provisional publication_content=false mutation_authorized=false")
     return 0
 
 
