@@ -55,6 +55,7 @@
   "sprint3": {
     "ceo_provisional_catalog_scope_approved": true,
     "publication_catalog_content_complete": false,
+    "final_owner_approved_production_catalog_ready": false,
     "formal_sprint3_closure": true
   },
   "authority": {
