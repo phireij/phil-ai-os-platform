@@ -1,4 +1,8 @@
 import { firstPartyQuickPickupUiState, validateFirstPartyQuickPickupConfig } from "./pickup.mjs";
+import {
+  buildDeterministicQuickPickupFixtureRequest,
+  evaluateQuickPickupDecisionPreview,
+} from "./quick-pickup-decision-preview.mjs";
 import { syncLocaleLinks } from "./locale-links.mjs";
 
 const copy = {
@@ -15,6 +19,10 @@ const copy = {
     activationPending: "The Quick Pickup route exists, but required readiness gates are still pending.",
     ready: "Quick Pickup has passed its configured readiness gates for controlled activation.",
     open: "Open Quick Pickup",
+    fixtureTitle: "Fixture-only stock + pickup-slot demonstration",
+    fixtureAvailable: "The synthetic snapshot has enough sample stock and slot capacity for this demonstration request.",
+    fixtureBlocked: "The synthetic demonstration request is blocked by its fail-closed stock or slot checks.",
+    fixtureSafety: "Historical test data only — this is not live inventory, not a reservation, and not an order. No customer action is available from this check.",
     safetyTitle: "No customer route is activated automatically",
     safetyCopy: "Implementation, eligible catalog, inventory freshness, capacity, payment, bilingual copy, operator acceptance, and rollback controls must all be GREEN before an approved route may be exposed. Automatic execution remains disabled.",
     technical: "Technical readiness details",
@@ -36,6 +44,10 @@ const copy = {
     activationPending: "クイックピックアップのルートはありますが、必要な準備ゲートがまだ完了していません。",
     ready: "クイックピックアップは管理された有効化に必要な準備ゲートを通過しています。",
     open: "クイックピックアップを開く",
+    fixtureTitle: "フィクスチャ専用：在庫・受取枠デモ",
+    fixtureAvailable: "このデモ用リクエストでは、合成スナップショット上のサンプル在庫と受取枠に余裕があります。",
+    fixtureBlocked: "このデモ用リクエストは、在庫または受取枠のフェイルクローズ確認により停止されています。",
+    fixtureSafety: "過去のテストデータのみです。実在庫、予約、注文ではなく、この確認画面からお客様の操作はできません。",
     safetyTitle: "注文導線は自動で有効化されません",
     safetyCopy: "実装、対象カタログ、在庫鮮度、受取可能数、決済、日英コピー、運用者確認、ロールバック管理がすべてGREENになった場合のみ、承認済みルートを公開できます。自動実行は無効のままです。",
     technical: "技術的な準備状況",
@@ -49,6 +61,10 @@ const copy = {
 const localeSelect = document.querySelector("#locale-select");
 const output = document.querySelector("#quick-pickup-state");
 let config;
+let inventorySnapshot;
+let capacitySnapshot;
+let decisionRequest;
+let decision;
 let locale = new URLSearchParams(location.search).get("lang") === "ja" ? "ja" : "en";
 
 function escapeHtml(value) {
@@ -76,6 +92,21 @@ function syncSharedChrome() {
   document.querySelector(".locale-label").textContent = c.languageLabel;
   document.querySelector(".hero .status-pill").textContent = c.previewStatus;
   document.querySelector("footer p").textContent = c.footer;
+}
+
+function renderFixtureDecision() {
+  const section = document.createElement("section");
+  section.setAttribute("aria-label", copy[locale].fixtureTitle);
+
+  const heading = document.createElement("h3");
+  heading.textContent = copy[locale].fixtureTitle;
+  const result = document.createElement("strong");
+  result.textContent = decision.available ? copy[locale].fixtureAvailable : copy[locale].fixtureBlocked;
+  const safety = document.createElement("p");
+  safety.textContent = copy[locale].fixtureSafety;
+
+  section.append(heading, result, safety);
+  output.append(section);
 }
 
 function render() {
@@ -106,35 +137,60 @@ function render() {
     output.append(document.createElement("p")).append(link);
   }
 
+  renderFixtureDecision();
+
   const details = document.createElement("details");
   const summary = document.createElement("summary");
   summary.textContent = copy[locale].technical;
   const pre = document.createElement("pre");
   pre.textContent = JSON.stringify({
-    available: state.available,
-    href_exposed: Boolean(state.href),
-    reason: state.reason,
-    air_mobile_order_required_for_v1: config.air_mobile_order_required_for_v1,
-    route_implemented: config.route_implemented,
-    eligible_catalog_confirmed: config.eligible_catalog_confirmed,
-    inventory_freshness_control_green: config.inventory_freshness_control_green,
-    capacity_and_cutoff_control_green: config.capacity_and_cutoff_control_green,
-    checkout_and_payment_contract_green: config.checkout_and_payment_contract_green,
-    bilingual_customer_copy_green: config.bilingual_customer_copy_green,
-    controlled_handset_and_operator_acceptance_green: config.controlled_handset_and_operator_acceptance_green,
-    rollback_disable_path_green: config.rollback_disable_path_green,
-    activation_authorized: config.activation_authorized,
-    automatic_production_execution_authorized: config.automatic_production_execution_authorized,
+    route: {
+      available: state.available,
+      href_exposed: Boolean(state.href),
+      reason: state.reason,
+      air_mobile_order_required_for_v1: config.air_mobile_order_required_for_v1,
+      route_implemented: config.route_implemented,
+      eligible_catalog_confirmed: config.eligible_catalog_confirmed,
+      inventory_freshness_control_green: config.inventory_freshness_control_green,
+      capacity_and_cutoff_control_green: config.capacity_and_cutoff_control_green,
+      checkout_and_payment_contract_green: config.checkout_and_payment_contract_green,
+      bilingual_customer_copy_green: config.bilingual_customer_copy_green,
+      controlled_handset_and_operator_acceptance_green: config.controlled_handset_and_operator_acceptance_green,
+      rollback_disable_path_green: config.rollback_disable_path_green,
+      activation_authorized: config.activation_authorized,
+      automatic_production_execution_authorized: config.automatic_production_execution_authorized,
+    },
+    fixture_decision: decision,
+    fixture_request: decisionRequest,
+    fixture_sources: {
+      inventory_snapshot_id: inventorySnapshot.snapshot_id,
+      capacity_snapshot_id: capacitySnapshot.snapshot_id,
+      live_inventory_claimed: false,
+      live_capacity_claimed: false,
+    },
   }, null, 2);
   details.append(summary, pre);
   output.append(details);
 }
 
 async function boot() {
-  const response = await fetch("./fixtures/first-party-quick-pickup.json", { cache: "no-store" });
-  if (!response.ok) throw new Error(`quick pickup fixture failed: ${response.status}`);
-  config = await response.json();
+  const [configResponse, inventoryResponse, capacityResponse] = await Promise.all([
+    fetch("./fixtures/first-party-quick-pickup.json", { cache: "no-store" }),
+    fetch("./fixtures/quick-pickup-inventory-snapshot.json", { cache: "no-store" }),
+    fetch("./fixtures/quick-pickup-capacity-snapshot.json", { cache: "no-store" }),
+  ]);
+  if (!configResponse.ok) throw new Error(`quick pickup readiness fixture failed: ${configResponse.status}`);
+  if (!inventoryResponse.ok) throw new Error(`quick pickup inventory fixture failed: ${inventoryResponse.status}`);
+  if (!capacityResponse.ok) throw new Error(`quick pickup capacity fixture failed: ${capacityResponse.status}`);
+
+  [config, inventorySnapshot, capacitySnapshot] = await Promise.all([
+    configResponse.json(),
+    inventoryResponse.json(),
+    capacityResponse.json(),
+  ]);
   validateFirstPartyQuickPickupConfig(config);
+  decisionRequest = buildDeterministicQuickPickupFixtureRequest(inventorySnapshot, capacitySnapshot);
+  decision = evaluateQuickPickupDecisionPreview(decisionRequest, inventorySnapshot, capacitySnapshot);
   render();
 
   localeSelect.addEventListener("change", () => {

@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v29";
-// 2026-09-12: refresh the isolated shell and keep branded Ruby preview assets network-first so manual Hostinger uploads do not remain masked by an older service-worker cache.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v30";
+// 2026-09-17: cache the fixture-only Quick Pickup decision-preview layer while preserving network-first branded Ruby preview refresh behavior.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -51,6 +51,7 @@ const APP_SHELL = [
   "./src/pickup.mjs",
   "./src/quick-pickup-availability.mjs",
   "./src/quick-pickup-capacity.mjs",
+  "./src/quick-pickup-decision-preview.mjs",
   "./src/quick-pickup-preview.mjs",
   "./src/order-intake-preview.mjs",
   "./src/order-intake-draft-state.mjs",

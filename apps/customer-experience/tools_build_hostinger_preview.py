@@ -14,6 +14,8 @@ HOSTINGER_LANDING_SOURCE = ROOT / "ruby-storefront-progress.html"
 ENGINEERING_LANDING_SOURCE = ROOT / "index.html"
 ALLOWED_FETCH_TARGETS = {
     "./fixtures/first-party-quick-pickup.json",
+    "./fixtures/quick-pickup-inventory-snapshot.json",
+    "./fixtures/quick-pickup-capacity-snapshot.json",
     "./fixtures/catalog.json",
     "./fixtures/final-confirmation.json",
     "./fixtures/payment-provider.json",
