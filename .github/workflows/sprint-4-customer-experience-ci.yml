@@ -149,11 +149,11 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/payment-method-guidance.css | grep -F ".payment-method-guidance"
           curl --fail --silent http://127.0.0.1:8094/confirmation-preview.html | grep -F "No order submission"
           curl --fail --silent http://127.0.0.1:8094/confirmation-preview.html | grep -F "Place order (preview only — disabled)"
-          curl --fail --silent http://127.0.0.1:8094/quick-pickup-preview.html | grep -F "No external activation"
+          curl --fail --silent http://127.0.0.1:8094/quick-pickup-preview.html | grep -F "No production activation"
           curl --fail --silent http://127.0.0.1:8094/src/cart-preview.mjs | grep -F "buildPaymentHandoffIntent"
           curl --fail --silent http://127.0.0.1:8094/src/cart-selection-continuity.mjs | grep -F "explicitSelectionApplied"
           curl --fail --silent http://127.0.0.1:8094/src/confirmation-preview.mjs | grep -F "isolated preview cannot claim actual final-screen acceptance"
-          curl --fail --silent http://127.0.0.1:8094/src/quick-pickup-preview.mjs | grep -F "externalQuickPickupUiState"
+          curl --fail --silent http://127.0.0.1:8094/src/quick-pickup-preview.mjs | grep -F "firstPartyQuickPickupUiState"
           curl --fail --silent http://127.0.0.1:8094/src/readiness-feedback.mjs | grep -F "readiness feedback must remain non-authorizing"
           curl --fail --silent http://127.0.0.1:8094/src/ui-state.mjs | grep -F "mutation_authorized: false"
           curl --fail --silent http://127.0.0.1:8094/src/locale-links.mjs | grep -F "localizedRelativeHref"
@@ -169,9 +169,9 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/fixtures/final-confirmation.json | grep -F '"actual_final_confirmation_screen_reviewed": false'
           curl --fail --silent http://127.0.0.1:8094/fixtures/final-confirmation.json | grep -F '"expiry_days": 3'
           curl --fail --silent http://127.0.0.1:8094/fixtures/pickup-policy.json | grep -F '"fixture_only": true'
-          curl --fail --silent http://127.0.0.1:8094/fixtures/air-mobile-quick-pickup.json | grep -F '"production_url": null'
-          curl --fail --silent http://127.0.0.1:8094/fixtures/air-mobile-quick-pickup.json | grep -F '"activation_authorized": false'
-          curl --fail --silent http://127.0.0.1:8094/fixtures/air-mobile-quick-pickup.json | grep -F '"automatic_publication_authorized": false'
+          curl --fail --silent http://127.0.0.1:8094/fixtures/first-party-quick-pickup.json | grep -F '"air_mobile_order_required_for_v1": false'
+          curl --fail --silent http://127.0.0.1:8094/fixtures/first-party-quick-pickup.json | grep -F '"activation_authorized": false'
+          curl --fail --silent http://127.0.0.1:8094/fixtures/first-party-quick-pickup.json | grep -F '"automatic_production_execution_authorized": false'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"provider": "komoju"'
           curl --fail --silent http://127.0.0.1:8094/fixtures/payment-provider.json | grep -F '"connection_state": "not_configured"'
           curl --fail --silent http://127.0.0.1:8094/sw.js | grep -E 'phil-ai-os-cx-sprint4-v[0-9]+'
