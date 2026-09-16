@@ -1,6 +1,6 @@
 {
   "version": "ruby-woocommerce-komoju-staging-readiness-v5",
-  "date": "2026-09-04",
+  "date": "2026-09-17",
   "business_profile": {
     "verified_profile_complete": true,
     "resolved_fields": 15,
@@ -79,9 +79,12 @@
     "tokushoho_publication_execution_approved": false,
     "static_confirmation_screen_checklist_ready": true,
     "static_confirmation_screen_checklist_ref": "docs/RUBY_FINAL_CONFIRMATION_SCREEN_REVIEW_CHECKLIST_2026-09-04.md",
-    "final_confirmation_screen_reviewed": false,
+    "actual_final_screen_evidence_ref": "ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence-2026-09-16.json",
+    "final_confirmation_screen_reviewed": true,
+    "actual_final_screen_evidence_green": true,
+    "checkout_legal_sync_complete": true,
     "privacy_terms_implementation_reviewed": true
   },
-  "next_gate": "finalize_catalog_review_actual_confirmation_screen_then_separate_publication_execution_recovery_and_go_no_go_without_real_payment_execution",
+  "next_gate": "complete_catalog_publication_content_then_separately_satisfy_komoju_live_acceptance_recovery_branch_protection_cutover_and_final_go_no_go_without_real_payment_execution",
   "production_publish_authorized": false
 }
