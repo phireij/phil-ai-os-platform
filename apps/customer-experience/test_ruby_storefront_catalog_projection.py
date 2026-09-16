@@ -12,6 +12,8 @@ class RubyStorefrontCatalogProjectionTests(unittest.TestCase):
         self.assertTrue(generator.check_projection())
         self.assertTrue(projection["preview_only"])
         self.assertFalse(projection["catalog_approved"])
+        self.assertTrue(projection["provisional_v1_scope_approved"])
+        self.assertFalse(projection["publication_catalog_content_complete"])
         self.assertFalse(projection["mutation_authorized"])
         self.assertFalse(projection["production_publish_authorized"])
 
@@ -38,20 +40,26 @@ class RubyStorefrontCatalogProjectionTests(unittest.TestCase):
             self.assertNotIn(forbidden, rendered)
 
     def test_projection_rejects_authority_expansion(self):
-        source = generator.build_projection()
-        self.assertFalse(source["mutation_authorized"])
+        projection = generator.build_projection()
+        self.assertFalse(projection["mutation_authorized"])
 
         canonical = __import__("json").loads(generator.SOURCE.read_text(encoding="utf-8"))
+        decision = __import__("json").loads(generator.CEO_DECISION.read_text(encoding="utf-8"))
         for field in ("catalog_approved", "mutation_authorized", "production_publish_authorized"):
             expanded = copy.deepcopy(canonical)
             expanded[field] = True
             with self.assertRaises(ValueError):
-                generator.build_projection_from_source(expanded)
+                generator.build_projection_from_source(expanded, decision)
 
         expanded = copy.deepcopy(canonical)
         expanded["source_contract"]["production_write_authority_granted_by_handoff"] = True
         with self.assertRaises(ValueError):
-            generator.build_projection_from_source(expanded)
+            generator.build_projection_from_source(expanded, decision)
+
+        expanded_decision = copy.deepcopy(decision)
+        expanded_decision["authority"]["production_publish_authorized"] = True
+        with self.assertRaises(ValueError):
+            generator.build_projection_from_source(canonical, expanded_decision)
 
 
 if __name__ == "__main__":

@@ -6,17 +6,17 @@ const productGrid = document.querySelector("#ruby-working-products");
 
 const labels = {
   en: {
-    workingPreview: "Working preview",
+    workingPreview: "V1 scope approved · Preview",
     fromPrice: "From",
     workingPrice: "Working catalog price",
-    pendingCopy: "Japanese product name and description remain owner-gated. The approved English source copy is shown without inventing a translation.",
+    pendingCopy: "Japanese product name and description will be completed before publication. The approved English source copy is shown without inventing a translation.",
     details: "View working details",
   },
   ja: {
-    workingPreview: "作業中プレビュー",
+    workingPreview: "V1対象承認済み・プレビュー",
     fromPrice: "〜",
     workingPrice: "作業中カタログ価格",
-    pendingCopy: "日本語の商品名・商品説明はオーナー承認待ちです。未承認の翻訳は作成せず、承認済みの英語原文を表示しています。",
+    pendingCopy: "日本語の商品名・商品説明は公開前に完成します。未承認の翻訳は作成せず、承認済みの英語原文を表示しています。",
     details: "作業中の商品詳細を見る",
   },
 };

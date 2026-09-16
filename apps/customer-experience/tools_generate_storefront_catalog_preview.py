@@ -7,6 +7,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "commerce/woocommerce/fixtures/working-catalog-subset-2026-09-11.json"
+CEO_DECISION = ROOT / "ops/readiness/ruby-initial-launch-catalog-v1-ceo-decision-2026-09-16.json"
 OUTPUT = Path(__file__).resolve().parent / "src/ruby-working-catalog-preview.mjs"
 
 
@@ -15,7 +16,22 @@ def _require_false(source: dict[str, Any], field: str) -> None:
         raise ValueError(f"working catalog must keep {field}=false")
 
 
-def build_projection_from_source(source: dict[str, Any]) -> dict[str, Any]:
+def _validate_ceo_scope(decision: dict[str, Any]) -> None:
+    if decision.get("decision_reference") != "decision://ceo/ruby-initial-launch-catalog-v1/2026-09-16":
+        raise ValueError("CEO provisional catalog decision reference is invalid")
+    scope = decision.get("approved_scope") or {}
+    if scope.get("source_ref") != "commerce/woocommerce/fixtures/working-catalog-subset-2026-09-11.json":
+        raise ValueError("CEO provisional catalog decision source drift")
+    if scope.get("sprint3_scope_approval_green") is not True:
+        raise ValueError("CEO provisional catalog scope approval is required")
+    if scope.get("publication_catalog_content_complete") is not False:
+        raise ValueError("CEO provisional scope cannot claim publication content is complete")
+    if any(value is not False for value in (decision.get("authority") or {}).values()):
+        raise ValueError("CEO provisional scope cannot expand production authority")
+
+
+def build_projection_from_source(source: dict[str, Any], decision: dict[str, Any]) -> dict[str, Any]:
+    _validate_ceo_scope(decision)
     if source.get("environment") != "pre-production":
         raise ValueError("working catalog must remain pre-production")
     if source.get("package_state") != "draft":
@@ -91,20 +107,26 @@ def build_projection_from_source(source: dict[str, Any]) -> dict[str, Any]:
         "source_fixture": SOURCE.name,
         "preview_only": True,
         "catalog_approved": False,
+        "provisional_v1_scope_approved": True,
+        "publication_catalog_content_complete": False,
+        "ceo_decision_reference": decision["decision_reference"],
         "mutation_authorized": False,
         "production_publish_authorized": False,
         "products": products,
     }
 
 
-def build_projection(source_path: Path = SOURCE) -> dict[str, Any]:
-    return build_projection_from_source(json.loads(source_path.read_text(encoding="utf-8")))
+def build_projection(source_path: Path = SOURCE, decision_path: Path = CEO_DECISION) -> dict[str, Any]:
+    return build_projection_from_source(
+        json.loads(source_path.read_text(encoding="utf-8")),
+        json.loads(decision_path.read_text(encoding="utf-8")),
+    )
 
 
 def render_module(projection: dict[str, Any]) -> str:
     payload = json.dumps(projection, ensure_ascii=False, indent=2, sort_keys=True)
     return (
-        "// Generated from the bounded Sprint 3 working catalog. Do not edit by hand.\n"
+        "// Generated from the CEO-approved provisional Initial Launch Catalog V1 scope. Do not edit by hand.\n"
         "// Preview-only projection: no production write, publish, payment, SMS, or inventory authority.\n"
         f"export const workingCatalogPreview = Object.freeze({payload});\n"
         "export default workingCatalogPreview;\n"

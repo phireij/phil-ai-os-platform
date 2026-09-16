@@ -1,7 +1,8 @@
-// Generated from the bounded Sprint 3 working catalog. Do not edit by hand.
+// Generated from the CEO-approved provisional Initial Launch Catalog V1 scope. Do not edit by hand.
 // Preview-only projection: no production write, publish, payment, SMS, or inventory authority.
 export const workingCatalogPreview = Object.freeze({
   "catalog_approved": false,
+  "ceo_decision_reference": "decision://ceo/ruby-initial-launch-catalog-v1/2026-09-16",
   "mutation_authorized": false,
   "preview_only": true,
   "production_publish_authorized": false,
@@ -63,6 +64,8 @@ export const workingCatalogPreview = Object.freeze({
       "variants": []
     }
   ],
+  "provisional_v1_scope_approved": true,
+  "publication_catalog_content_complete": false,
   "schema_version": "1.0",
   "source_fixture": "working-catalog-subset-2026-09-11.json"
 });
