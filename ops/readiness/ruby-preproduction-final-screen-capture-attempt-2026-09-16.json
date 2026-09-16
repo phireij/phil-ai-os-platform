@@ -14,12 +14,14 @@
     "final_action_reached": true,
     "final_action_invoked": false,
     "screen_evidence_captured": true,
-    "sanitized_capture_ref": "ops/evidence/ruby-actual-woocommerce-final-screen-2026-09-16-sanitized.jpg",
-    "sanitized_capture_sha256": "e76cb899ca6e3d80df5329c78701a1eb83e9556c0860eb91db85fb6b67091d83",
+    "sanitized_capture_ref": "ops/evidence/ruby-actual-woocommerce-final-screen-green-methods-2026-09-16-sanitized.jpg",
+    "sanitized_capture_sha256": "f4eb0ddfd1dc8c14c42e8dce972c1e47ec90ffba98006bcd12d6e9d0507b2f48",
+    "secondary_sanitized_capture_ref": "ops/evidence/ruby-actual-woocommerce-final-screen-green-legal-2026-09-16-sanitized.jpg",
+    "secondary_sanitized_capture_sha256": "ef5546fe5c66bc5ab5f48ecdd7a6e8eb05a0a6989561454c524dbf5627faa915",
     "redaction_applied": true,
     "retained_personal_data": false,
     "retained_secret_material": false,
-    "blocking_reason": "actual_screen_review_found_shipping_payment_and_legal_disclosure_gaps"
+    "blocking_reason": null
   },
   "sprint_dependency": {
     "current_primary_sprint": 4,
@@ -39,8 +41,8 @@
   },
   "acceptance": {
     "actual_final_confirmation_screen_reviewed": true,
-    "actual_final_confirmation_screen_green": false,
-    "checkout_legal_sync_complete": false,
+    "actual_final_confirmation_screen_green": true,
+    "checkout_legal_sync_complete": true,
     "failure_is_fail_closed": true
   },
   "observations": {
@@ -49,12 +51,12 @@
     "final_action_label_unambiguous": true,
     "final_action_not_invoked": true,
     "preferred_delivery_date_visible": true,
-    "shipping_rate_matches_verified_yamato_configuration": false,
-    "approved_komoju_payment_subset_visible": false,
-    "konbini_three_day_deadline_visible_when_selected": false,
-    "cancellation_returns_terms_visible_or_linked": false,
-    "tokushoho_disclosure_visible_or_linked": false
+    "shipping_rate_matches_verified_yamato_configuration": true,
+    "approved_komoju_payment_subset_visible": true,
+    "konbini_three_day_deadline_visible_when_selected": true,
+    "cancellation_returns_terms_visible_or_linked": true,
+    "tokushoho_disclosure_visible_or_linked": true
   },
-  "next_gate": "correct_source_backed_preproduction_shipping_payment_and_legal_disclosure_configuration_without_enabling_live_payment_or_publication_then_repeat_non_transactional_review",
-  "decision": "PREPRODUCTION_FINAL_SCREEN_REVIEW_RED_GAPS_FOUND_FAIL_CLOSED"
+  "next_gate": "retain_order_approval_fail_closed_and_continue_separate_launch_readiness_gates_without_order_or_payment_execution",
+  "decision": "PREPRODUCTION_FINAL_SCREEN_ACCEPTANCE_GREEN_NO_TRANSACTION"
 }

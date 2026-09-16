@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ATTEMPT = ROOT / "ops/readiness/ruby-preproduction-final-screen-capture-attempt-2026-09-16.json"
 CANDIDATE = ROOT / "ops/readiness/ruby-tokushoho-publication-candidate-2026-09-04.json"
-GAP_EVIDENCE = ROOT / "ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence-2026-09-16.json"
+ACTUAL_EVIDENCE = ROOT / "ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence-2026-09-16.json"
 
 
 def require(condition: bool, message: str) -> None:
@@ -19,7 +19,7 @@ def require(condition: bool, message: str) -> None:
 def main() -> None:
     attempt = json.loads(ATTEMPT.read_text(encoding="utf-8"))
     candidate = json.loads(CANDIDATE.read_text(encoding="utf-8"))
-    evidence = json.loads(GAP_EVIDENCE.read_text(encoding="utf-8"))
+    evidence = json.loads(ACTUAL_EVIDENCE.read_text(encoding="utf-8"))
 
     result = attempt["capture_result"]
     dependency = attempt["sprint_dependency"]
@@ -43,9 +43,12 @@ def main() -> None:
     capture = ROOT / result["sanitized_capture_ref"]
     require(capture.is_file(), "sanitized capture artifact missing")
     require(hashlib.sha256(capture.read_bytes()).hexdigest() == result["sanitized_capture_sha256"], "sanitized capture digest drift")
+    secondary_capture = ROOT / result["secondary_sanitized_capture_ref"]
+    require(secondary_capture.is_file(), "secondary sanitized capture artifact missing")
+    require(hashlib.sha256(secondary_capture.read_bytes()).hexdigest() == result["secondary_sanitized_capture_sha256"], "secondary sanitized capture digest drift")
     require(result["retained_personal_data"] is False, "PII retention is forbidden")
     require(result["retained_secret_material"] is False, "secret retention is forbidden")
-    require(result["blocking_reason"] == "actual_screen_review_found_shipping_payment_and_legal_disclosure_gaps", "blocking reason drift")
+    require(result["blocking_reason"] is None, "GREEN capture cannot retain a blocking reason")
 
     require(dependency["current_primary_sprint"] == 4, "Sprint 4 must remain current primary")
     require(dependency["sprint3_formally_closed_for_provisional_scope"] is True, "Sprint 3 provisional-scope closure drift")
@@ -55,9 +58,9 @@ def main() -> None:
 
     require(all(value is False for value in authority.values()), "capture attempt expanded authority")
     require(acceptance["actual_final_confirmation_screen_reviewed"] is True, "actual screen review evidence missing")
-    require(acceptance["actual_final_confirmation_screen_green"] is False, "actual screen gate cannot be green")
-    require(acceptance["checkout_legal_sync_complete"] is False, "checkout legal sync cannot be complete")
-    require(acceptance["failure_is_fail_closed"] is True, "failed capture must remain classified fail-closed")
+    require(acceptance["actual_final_confirmation_screen_green"] is True, "actual screen gate must record GREEN")
+    require(acceptance["checkout_legal_sync_complete"] is True, "checkout legal sync must record completion")
+    require(acceptance["failure_is_fail_closed"] is True, "fail-closed safeguard drift")
 
     screen = candidate["confirmation_screen"]
     require(screen["latest_capture_attempt_ref"] == "ops/readiness/ruby-preproduction-final-screen-capture-attempt-2026-09-16.json", "candidate attempt ref drift")
@@ -69,15 +72,17 @@ def main() -> None:
     require(screen["latest_capture_blocked_before_checkout"] is False, "candidate incorrectly claims checkout remained unreachable")
     require(screen["actual_final_screen_reviewed"] is True, "candidate lost actual-screen review")
     require(screen["actual_final_screen_evidence_captured"] is True, "candidate lost sanitized screen evidence")
-    require(screen["actual_final_screen_green"] is False, "gap-bearing actual screen cannot be GREEN")
-    require(screen["latest_actual_screen_gap_evidence_ref"] == str(GAP_EVIDENCE.relative_to(ROOT)), "candidate gap-evidence ref drift")
+    require(screen["actual_final_screen_green"] is True, "actual screen GREEN state missing")
+    require(screen["latest_actual_screen_evidence_ref"] == str(ACTUAL_EVIDENCE.relative_to(ROOT)), "candidate actual-evidence ref drift")
 
-    require(evidence["evidence_complete"] is False, "gap evidence cannot be complete")
-    require(evidence["actual_final_confirmation_screen_reviewed"] is True, "gap evidence lost review state")
-    require(evidence["contains_personal_data"] is False and evidence["contains_secret_material"] is False, "gap evidence hygiene drift")
-    require(evidence["observations"]["final_action_not_invoked"] is True, "gap evidence invoked final action")
-    for field in ("cancellation_returns_terms_visible_or_linked", "tokushoho_disclosure_visible_or_linked", "konbini_three_day_deadline_reconciled_when_selected"):
-        require(evidence["observations"][field] is False, f"gap evidence unexpectedly GREEN: {field}")
+    require(evidence["evidence_complete"] is True, "actual evidence must be complete")
+    require(evidence["actual_final_confirmation_screen_reviewed"] is True, "actual evidence lost review state")
+    require(evidence["contains_personal_data"] is False and evidence["contains_secret_material"] is False, "actual evidence hygiene drift")
+    require(all(evidence["observations"].values()), "actual evidence observations must all be GREEN")
+    require(evidence["final_acceptance_window"]["acceptance_state"] == "GREEN", "final acceptance state drift")
+    require(evidence["final_acceptance_window"]["order_approval_restored_after_review"] is True, "Order Approval was not restored")
+    require(evidence["final_acceptance_window"]["order_created"] is False, "acceptance must not create an order")
+    require(evidence["final_acceptance_window"]["payment_executed"] is False, "acceptance must not execute payment")
     roadmap = candidate["executive_roadmap"]
     require(roadmap["current_primary_sprint"] == 4, "candidate roadmap must keep Sprint 4 primary")
     require(roadmap["sprint3_formally_closed_for_provisional_scope"] is True, "candidate lost Sprint 3 closure")
@@ -85,8 +90,7 @@ def main() -> None:
     require(candidate["sprint3"]["publication_catalog_content_complete"] is False, "publication content must remain pending")
     require(all(value is False for value in candidate["authority"].values()), "candidate authority expanded")
 
-    print("PHIL_AI_OS_RUBY_PREPRODUCTION_FINAL_SCREEN_CAPTURE_ATTEMPT_RECORDED_GREEN")
-    print("PHIL_AI_OS_RUBY_PREPRODUCTION_FINAL_SCREEN_REVIEW_RED_GAPS_FAIL_CLOSED")
+    print("PHIL_AI_OS_RUBY_PREPRODUCTION_FINAL_SCREEN_ACCEPTANCE_GREEN_NO_TRANSACTION")
 
 
 if __name__ == "__main__":

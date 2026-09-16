@@ -134,7 +134,7 @@ def main() -> None:
     require(screen["static_compliance_checklist_ready"] is True, "candidate static checklist missing")
     require(screen["actual_final_screen_reviewed"] is True, "actual final-screen review evidence missing")
     require(screen["actual_final_screen_evidence_captured"] is True, "sanitized actual-screen evidence missing")
-    require(screen["actual_final_screen_green"] is False, "gap-bearing actual screen cannot be GREEN")
+    require(screen["actual_final_screen_green"] is True, "actual final screen acceptance must be GREEN")
     require(screen["real_order_required_for_review"] is False, "real order incorrectly required")
     require(screen["real_payment_required_for_review"] is False, "real payment incorrectly required")
 
@@ -145,7 +145,7 @@ def main() -> None:
     require(approval["owner_publication_approval_recorded"] is False, "publication execution approval unexpectedly recorded")
     require(approval["tokushoho_publication_approved"] is False, "publication unexpectedly approved")
     require(approval["published"] is False, "candidate unexpectedly published")
-    require(approval["checkout_legal_sync_complete"] is False, "checkout sync closed prematurely")
+    require(approval["checkout_legal_sync_complete"] is True, "checkout legal sync completion missing")
     require_false_authority(candidate["authority"], "canonical candidate")
 
     require(approval_record["decision_scope"] == "candidate_text_approval_only", "CEO approval scope drift")
@@ -178,7 +178,7 @@ def main() -> None:
     require(sync["decision"] == "CHECKOUT_PAYMENT_TIMING_AND_TOKUSHOHO_TEXT_APPROVED_FINAL_SCREEN_AND_PUBLICATION_EXECUTION_PENDING_FAIL_CLOSED", "decision drift")
     print("PHIL_AI_OS_RUBY_TOKUSHOHO_TEXT_APPROVAL_GREEN candidate_text=true publication_execution=false published=false")
     print("PHIL_AI_OS_RUBY_CONFIRMATION_SCREEN_STATIC_CHECKLIST_GREEN actual_screen=false real_payment=false")
-    print("PHIL_AI_OS_RUBY_CHECKOUT_FINAL_SCREEN_AND_PUBLICATION_EXECUTION_PENDING_FAIL_CLOSED production_publish=false")
+    print("PHIL_AI_OS_RUBY_CHECKOUT_FINAL_SCREEN_GREEN_PUBLICATION_EXECUTION_PENDING_FAIL_CLOSED production_publish=false")
 
 
 if __name__ == "__main__":

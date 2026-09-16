@@ -1,17 +1,24 @@
 {
   "version": "ruby-woocommerce-final-confirmation-screen-evidence-v1",
-  "evidence_id": "ruby-preproduction-gap-review-2026-09-16",
+  "evidence_id": "ruby-preproduction-final-screen-green-2026-09-16",
   "environment": "preproduction",
   "capture_method": "browser_screenshot_and_dom_notes",
-  "captured_at": "2026-09-16T15:30:57Z",
+  "captured_at": "2026-09-16T17:52:06Z",
   "source_url_class": "sanitized_preproduction_checkout",
   "synthetic_customer_data_only": true,
   "contains_personal_data": false,
   "contains_secret_material": false,
   "screen_capture_refs": [
     {
-      "artifact_ref": "ops/evidence/ruby-actual-woocommerce-final-screen-2026-09-16-sanitized.jpg",
-      "sha256": "e76cb899ca6e3d80df5329c78701a1eb83e9556c0860eb91db85fb6b67091d83",
+      "artifact_ref": "ops/evidence/ruby-actual-woocommerce-final-screen-green-methods-2026-09-16-sanitized.jpg",
+      "sha256": "f4eb0ddfd1dc8c14c42e8dce972c1e47ec90ffba98006bcd12d6e9d0507b2f48",
+      "redaction_applied": true,
+      "contains_personal_data": false,
+      "contains_secret_material": false
+    },
+    {
+      "artifact_ref": "ops/evidence/ruby-actual-woocommerce-final-screen-green-legal-2026-09-16-sanitized.jpg",
+      "sha256": "ef5546fe5c66bc5ab5f48ecdd7a6e8eb05a0a6989561454c524dbf5627faa915",
       "redaction_applied": true,
       "contains_personal_data": false,
       "contains_secret_material": false
@@ -23,13 +30,13 @@
     "payment_method_visible": true,
     "payment_timing_or_deadline_visible": true,
     "fulfillment_timing_visible": true,
-    "cancellation_returns_terms_visible_or_linked": false,
+    "cancellation_returns_terms_visible_or_linked": true,
     "correction_path_available_before_submission": true,
     "final_action_label_unambiguous": true,
     "final_action_not_invoked": true,
-    "tokushoho_disclosure_visible_or_linked": false,
+    "tokushoho_disclosure_visible_or_linked": true,
     "tax_display_matches_exempt_posture": true,
-    "konbini_three_day_deadline_reconciled_when_selected": false
+    "konbini_three_day_deadline_reconciled_when_selected": true
   },
   "authority": {
     "order_creation_authorized": false,
@@ -128,6 +135,27 @@
     "remaining_gap": "The approved Konbini three-day payment deadline is not displayed when Konbini is selected.",
     "acceptance_state": "RED_FAIL_CLOSED"
   },
+  "final_acceptance_window": {
+    "performed_at": "2026-09-16T17:52:06Z",
+    "synthetic_customer_data_only": true,
+    "order_approval_temporarily_disabled": true,
+    "order_approval_restored_after_review": true,
+    "product_quantity": 1,
+    "product_subtotal_jpy": 250,
+    "shipping_method": "Yamato Cool 60",
+    "tokyo_shipping_jpy": 1215,
+    "total_jpy": 1465,
+    "approved_komoju_test_methods_visible": ["credit_card", "konbini", "merpay", "paidy"],
+    "test_mode_notice_visible": true,
+    "konbini_three_day_deadline_visible": true,
+    "legal_routes_visible": true,
+    "final_action_visible": true,
+    "final_action_invoked": false,
+    "order_created": false,
+    "payment_executed": false,
+    "restored_checkout_state": "order_approval_active_payment_deferred",
+    "acceptance_state": "GREEN"
+  },
   "review_notes": [
     "Actual coming-soon WooCommerce preproduction checkout was reviewed with synthetic QA data.",
     "The final action was visible and was not invoked; no order or payment was created.",
@@ -141,8 +169,9 @@
     "The legal-link gap is corrected, but the active Order Approval gateway still intentionally replaces KOMOJU methods on the customer checkout. Changing that flow requires separate authorization.",
     "During an owner-authorized temporary acceptance window, Order Approval was disabled, the four KOMOJU test methods and the Yamato Cool 60 rate were verified, and Order Approval was restored afterward.",
     "The only observed checklist gap in that window was the missing Konbini three-day deadline; the final action remained uninvoked.",
-    "Evidence remains incomplete and the actual-screen acceptance gate remains RED fail-closed."
+    "After the approved bilingual Konbini deadline was added, the guarded final review satisfied every committed checklist observation.",
+    "Order Approval was restored after the GREEN review; no order or payment was executed."
   ],
-  "evidence_complete": false,
+  "evidence_complete": true,
   "actual_final_confirmation_screen_reviewed": true
 }
