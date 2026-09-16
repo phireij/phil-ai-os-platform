@@ -1,4 +1,4 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v28";
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v29";
 // 2026-09-12: refresh the isolated shell and keep branded Ruby preview assets network-first so manual Hostinger uploads do not remain masked by an older service-worker cache.
 const APP_SHELL = [
   "./",
@@ -50,6 +50,7 @@ const APP_SHELL = [
   "./src/payment.mjs",
   "./src/pickup.mjs",
   "./src/quick-pickup-availability.mjs",
+  "./src/quick-pickup-capacity.mjs",
   "./src/quick-pickup-preview.mjs",
   "./src/order-intake-preview.mjs",
   "./src/order-intake-draft-state.mjs",
@@ -69,6 +70,7 @@ const APP_SHELL = [
   "./fixtures/pickup-policy.json",
   "./fixtures/first-party-quick-pickup.json",
   "./fixtures/quick-pickup-inventory-snapshot.json",
+  "./fixtures/quick-pickup-capacity-snapshot.json",
 ];
 
 self.addEventListener("install", (event) => {
