@@ -38,12 +38,50 @@
     "catalog_mutation_authorized": false,
     "dns_cutover_authorized": false
   },
+  "post_capture_read_only_diagnosis": {
+    "diagnosed_at": "2026-09-16",
+    "site_mutation_performed": false,
+    "shipping": {
+      "observed_zone": "Kanto excluding Chiba",
+      "method": "Frozen flat rate",
+      "base_cost_jpy": 0,
+      "no_shipping_class_cost_configured": false,
+      "configured_class_costs_jpy": {
+        "Yamato Cool 60": 1215,
+        "Yamato Cool 80": 1560,
+        "Yamato Cool 100": 1970,
+        "Yamato Cool 120": 2755
+      },
+      "review_product_shipping_class_assigned": false,
+      "root_cause": "The review product has no source-backed package/shipping class, so the configured zero base cost and blank no-class cost render as Free.",
+      "correction_gate": "Owner confirms the product package/shipping class, or separately approves a bounded preproduction fallback. Do not infer a class from price or product type."
+    },
+    "payment": {
+      "komoju_account_connected": true,
+      "woocommerce_provider_state": "inactive",
+      "account_mode_shown_by_woocommerce": "test_account",
+      "selected_methods": ["credit_card", "konbini", "merpay", "paidy"],
+      "unselected_methods_include": ["paypay", "rakuten_pay", "bank_transfer", "pay_easy"],
+      "root_cause": "The KOMOJU test-account provider is connected and its approved subset is selected, but the WooCommerce provider is globally inactive; the active manual order-approval gateway is therefore the only checkout method.",
+      "correction_gate": "Enablement is an external checkout mutation and requires action-time authorization; retain test-account mode and do not execute a payment."
+    },
+    "legal_routes": {
+      "cancellation_refund_page_published": true,
+      "tokushoho_page_published": true,
+      "directly_accessible_from_final_screen": false,
+      "root_cause": "The required pages already exist in published preproduction state, but the checkout final screen does not surface either route.",
+      "correction_gate": "Add only direct checkout access to the existing approved routes under bounded preproduction change authority; do not alter the approved legal text."
+    }
+  },
   "review_notes": [
     "Actual coming-soon WooCommerce preproduction checkout was reviewed with synthetic QA data.",
     "The final action was visible and was not invoked; no order or payment was created.",
     "Shipping displayed Free rather than the verified Yamato regional charge.",
     "Only manual order confirmation was exposed; the approved KOMOJU subset and Konbini three-day deadline were not reviewable.",
     "Cancellation and returns terms and the Tokushoho disclosure were not directly linked from the final screen.",
+    "A follow-up read-only diagnosis found that the legal pages already exist and are published; their absence is a checkout-link-placement gap, not missing-page publication.",
+    "The same diagnosis found KOMOJU connected as a test account with Credit Card, Konbini, Merpay and Paidy selected, but the provider is globally inactive.",
+    "The Free shipping display is caused by the review product having no assigned source-backed shipping class while the zone base cost is zero and the no-class cost is blank.",
     "Evidence remains incomplete and the actual-screen acceptance gate remains RED fail-closed."
   ],
   "evidence_complete": false,
