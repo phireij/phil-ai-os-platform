@@ -171,3 +171,10 @@ Accordingly:
 ## Governance
 
 This investigation is read-only and non-authorizing. It does not enable production AirREGI access, WooCommerce stock mutation, real payment execution, live SMS, publication, DNS changes, or higher autonomy.
+
+
+## 16 September 2026 — first-party availability foundation
+
+The Customer Experience fixture suite now has a deliberately synthetic Quick Pickup inventory-snapshot contract. It validates SKU identity, capture time, a maximum freshness age, conservative safety stock, active reservations, and an unavailable result when the snapshot is stale, unknown, or insufficient. Every returned decision remains non-authorizing: it cannot contact AirREGI, import a CSV, reserve inventory, mutate stock, or create an order.
+
+This is implementation preparation only. It is not evidence of an AirREGI API, an accepted AirREGI CSV schema, current stock, a SKU mapping, or a production synchronization path. The production requirements above remain mandatory before the corresponding readiness gate can turn GREEN.
