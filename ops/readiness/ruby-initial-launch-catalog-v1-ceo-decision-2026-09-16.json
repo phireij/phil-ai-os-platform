@@ -1,0 +1,21 @@
+{
+  "version": "ruby-initial-launch-catalog-v1-ceo-decision-v1",
+  "date": "2026-09-16",
+  "decision_reference": "decision://ceo/ruby-initial-launch-catalog-v1/2026-09-16",
+  "approved_by": "Philip Bombeo, CEO",
+  "decision": "Approve the current three-product owner source as the provisional Initial Launch Catalog V1 scope so catalog completion does not block Sprint 3 closure or Sprint 4 progress.",
+  "approved_scope": {
+    "source_ref": "commerce/woocommerce/fixtures/working-catalog-subset-2026-09-11.json",
+    "products": ["Moist Chocolate Round Cake", "Fudgy Milky Bar", "Cheezy Ensaymada"],
+    "sprint3_scope_approval_green": true,
+    "publication_catalog_content_complete": false
+  },
+  "authority": {
+    "woocommerce_catalog_write_authorized": false,
+    "production_publish_authorized": false,
+    "payment_execution_authorized": false,
+    "sms_execution_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "remaining_publication_requirements": ["final bilingual customer-facing copy", "verified product media references", "final fulfillment and package/shipping classifications", "separate subsystem preflight and controlled publication acceptance"]
+}
