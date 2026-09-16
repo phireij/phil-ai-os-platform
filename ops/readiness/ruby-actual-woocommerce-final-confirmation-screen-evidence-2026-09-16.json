@@ -11,7 +11,7 @@
   "screen_capture_refs": [
     {
       "artifact_ref": "ops/evidence/ruby-actual-woocommerce-final-screen-2026-09-16-sanitized.jpg",
-      "sha256": "5d9f140610ec09194c9dde2e4edda67cf4c67790e9b842c6d6cfcfb5598c7d09",
+      "sha256": "e76cb899ca6e3d80df5329c78701a1eb83e9556c0860eb91db85fb6b67091d83",
       "redaction_applied": true,
       "contains_personal_data": false,
       "contains_secret_material": false
