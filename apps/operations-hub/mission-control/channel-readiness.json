@@ -2,7 +2,9 @@
   "schema": "phil-ai-os-mission-control-channel-readiness",
   "version": 1,
   "status": "read_only",
-  "source_version": "sprint7-channel-activation-readiness-v1",
+  "source_version": "sprint7-channel-activation-readiness-v2",
+  "controlled_scope_authorized": true,
+  "controlled_scope_overrides_preflight": false,
   "autonomy_level": "A0",
   "execution_task_class": "general",
   "assigned_agent": "hermes",
@@ -16,6 +18,7 @@
       "live_connectivity_authorized": false,
       "inbound_activation_authorized": false,
       "outbound_reply_authorized": false,
+      "controlled_scope_authorized": true,
       "write_scope_separate_gate": true
     },
     {
@@ -25,6 +28,7 @@
       "live_connectivity_authorized": false,
       "inbound_activation_authorized": false,
       "outbound_reply_authorized": false,
+      "controlled_scope_authorized": true,
       "write_scope_separate_gate": true
     },
     {
@@ -34,6 +38,7 @@
       "live_connectivity_authorized": false,
       "inbound_activation_authorized": false,
       "outbound_reply_authorized": false,
+      "controlled_scope_authorized": true,
       "write_scope_separate_gate": true
     },
     {
@@ -43,6 +48,7 @@
       "live_connectivity_authorized": false,
       "inbound_activation_authorized": false,
       "outbound_reply_authorized": false,
+      "controlled_scope_authorized": true,
       "write_scope_separate_gate": true
     },
     {
@@ -52,6 +58,7 @@
       "live_connectivity_authorized": false,
       "inbound_activation_authorized": false,
       "outbound_reply_authorized": false,
+      "controlled_scope_authorized": true,
       "write_scope_separate_gate": true
     }
   ],
