@@ -1,6 +1,6 @@
 {
   "version": "ruby-komoju-live-acceptance-gate-v4",
-  "date": "2026-09-04",
+  "date": "2026-09-17",
   "provider": "komoju",
   "ceo_scope_approval": true,
   "current_mode": "live_dashboard_selected",
@@ -39,9 +39,10 @@
     "konbini_live_expiry_days": 3,
     "payment_timing_wording_reconciled": true,
     "payment_timing_reconciliation_ref": "docs/RUBY_PAYMENT_TIMING_TOKUSHOHO_RECONCILIATION_2026-09-04.md",
+    "actual_final_screen_evidence_ref": "ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence-2026-09-16.json",
+    "checkout_legal_sync_complete": true,
     "catalog_ready": false,
     "japan_tax_and_qualified_invoice_evidence_ready": true,
-    "checkout_legal_sync_complete": false,
     "near_cutover_recovery_recheck_green": false,
     "final_go_no_go_complete": false
   },
@@ -52,10 +53,9 @@
     "automatic_live_activation": false
   },
   "next_evidence_needed": [
-    "approved production catalog",
-    "final Tokushoho publication candidate and owner approval plus final checkout/confirmation-screen review",
+    "complete remaining production catalog publication content from owner-verified facts",
     "fresh near-cutover recovery validation",
     "final Go/No-Go acceptance"
   ],
-  "decision": "LIVE_DASHBOARD_PAYMENT_SUBSET_CHECKOUT_CONFIGURATION_KONBINI_EXPIRY_AND_PAYMENT_TIMING_GREEN_EXECUTION_PENDING_FAIL_CLOSED"
+  "decision": "LIVE_DASHBOARD_PAYMENT_SUBSET_CHECKOUT_CONFIGURATION_KONBINI_EXPIRY_PAYMENT_TIMING_AND_CHECKOUT_LEGAL_SYNC_GREEN_EXECUTION_PENDING_FAIL_CLOSED"
 }

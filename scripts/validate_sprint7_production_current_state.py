@@ -63,19 +63,27 @@ def main() -> None:
     approved = ["visa_mastercard", "jcb_amex_diners_discover", "konbini", "merpay", "paidy"]
     require(komoju["current_mode"] == "live_dashboard_selected", "KOMOJU Live dashboard selection evidence regressed")
     require(komoju["live_dashboard_evidence"]["owner_supplied_dashboard_reviewed"] is True, "KOMOJU owner dashboard evidence missing")
-    require(komoju["live_acceptance"]["merchant_live_mode_approval_verified"] is True, "KOMOJU merchant Live evidence regressed")
-    require(komoju["live_acceptance"]["merchant_available_payment_methods_verified"] is True, "KOMOJU method availability evidence regressed")
+    live = komoju["live_acceptance"]
+    require(live["merchant_live_mode_approval_verified"] is True, "KOMOJU merchant Live evidence regressed")
+    require(live["merchant_available_payment_methods_verified"] is True, "KOMOJU method availability evidence regressed")
     require(komoju["production_payment_subset"]["ceo_approved"] is True, "KOMOJU production subset lost CEO approval")
     require(komoju["production_payment_subset"]["enabled_for_initial_launch"] == approved, "KOMOJU approved subset drift")
-    require(komoju["live_acceptance"]["production_enabled_payment_methods_finalized"] is True, "KOMOJU payment subset should remain finalized")
-    require(komoju["live_acceptance"]["production_checkout_configuration_verified"] is True, "KOMOJU checkout verification regressed")
-    require(komoju["live_acceptance"]["production_checkout_verification_run_id"] == 33776964709 and komoju["live_acceptance"]["production_checkout_verification_attempt"] == 2, "KOMOJU checkout verification evidence drift")
-    require(komoju["live_acceptance"]["konbini_live_expiry_setting_verified"] is True, "KOMOJU Konbini expiry evidence missing")
-    require(komoju["live_acceptance"]["konbini_live_expiry_days"] == 3, "KOMOJU Konbini expiry must remain 3 days")
-    require(komoju["live_acceptance"]["payment_timing_wording_reconciled"] is True, "KOMOJU payment timing wording regressed")
-    require(komoju["live_acceptance"]["japan_tax_and_qualified_invoice_evidence_ready"] is True, "KOMOJU tax prerequisite regressed")
+    require(live["production_enabled_payment_methods_finalized"] is True, "KOMOJU payment subset should remain finalized")
+    require(live["production_checkout_configuration_verified"] is True, "KOMOJU checkout verification regressed")
+    require(live["production_checkout_verification_run_id"] == 33776964709 and live["production_checkout_verification_attempt"] == 2, "KOMOJU checkout verification evidence drift")
+    require(live["konbini_live_expiry_setting_verified"] is True, "KOMOJU Konbini expiry evidence missing")
+    require(live["konbini_live_expiry_days"] == 3, "KOMOJU Konbini expiry must remain 3 days")
+    require(live["payment_timing_wording_reconciled"] is True, "KOMOJU payment timing wording regressed")
+    require(live["japan_tax_and_qualified_invoice_evidence_ready"] is True, "KOMOJU tax prerequisite regressed")
+    require(live["actual_final_screen_evidence_ref"] == "ops/readiness/ruby-actual-woocommerce-final-confirmation-screen-evidence-2026-09-16.json", "KOMOJU actual final-screen evidence reference drift")
+    require(live["checkout_legal_sync_complete"] is True, "KOMOJU checkout/legal dependency must reflect accepted final screen")
+    require(live["catalog_ready"] is False, "KOMOJU catalog readiness changed without publication-content evidence")
+    require(live["near_cutover_recovery_recheck_green"] is False, "KOMOJU recovery prerequisite changed before launch-fresh validation")
+    require(live["final_go_no_go_complete"] is False, "KOMOJU final Go/No-Go prerequisite changed prematurely")
     require(komoju["execution"]["live_mode_authorized_by_readiness"] is False, "KOMOJU live execution authority expanded")
     require(komoju["execution"]["real_payment_execution_ready"] is False and komoju["execution"]["real_payment_executed"] is False, "KOMOJU real payment state expanded")
+    require(komoju["execution"]["automatic_live_activation"] is False, "KOMOJU automatic live activation unexpectedly enabled")
+    require(komoju["decision"] == "LIVE_DASHBOARD_PAYMENT_SUBSET_CHECKOUT_CONFIGURATION_KONBINI_EXPIRY_PAYMENT_TIMING_AND_CHECKOUT_LEGAL_SYNC_GREEN_EXECUTION_PENDING_FAIL_CLOSED", "KOMOJU decision drift")
 
     ok = overlay["komoju"]
     require(ok["live_dashboard_selected"] is True, "overlay lost KOMOJU Live dashboard evidence")
@@ -128,7 +136,8 @@ def main() -> None:
     require(overlay["launch"]["live_launch_authorized_by_readiness"] is False, "overlay unexpectedly authorizes live launch")
     require(overlay["decision"] == "CONTROL_POSTURE_GREEN_LAUNCH_PENDING_FAIL_CLOSED", "overlay decision drift")
 
-    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN tax=green final_screen=true twilio=selected komoju_subset=finalized checkout_config=true konbini_expiry_days=3 payment_timing=true")
+    print("PHIL_AI_OS_SPRINT_7_PRODUCTION_CURRENT_STATE_FAIL_CLOSED_GREEN tax=green final_screen=true checkout_legal=true twilio=selected komoju_subset=finalized checkout_config=true konbini_expiry_days=3 payment_timing=true")
+    print("PHIL_AI_OS_SPRINT_7_KOMOJU_DEPENDENCY_RECONCILIATION_GREEN checkout_legal=true catalog=false recovery_fresh=false final_go_no_go=false payment_execution=false")
     print("PHIL_AI_OS_SPRINT_7_FINAL_GO_NO_GO_PENDING_FAIL_CLOSED final_screen=true komoju_live=false payment_execution=false")
 
 
