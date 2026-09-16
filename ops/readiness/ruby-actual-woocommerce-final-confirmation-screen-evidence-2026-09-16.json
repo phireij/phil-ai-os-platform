@@ -96,6 +96,38 @@
     },
     "acceptance_state": "RED_FAIL_CLOSED"
   },
+  "temporary_acceptance_window": {
+    "performed_at": "2026-09-16",
+    "synthetic_customer_data_only": true,
+    "order_approval_temporarily_disabled": true,
+    "order_approval_restored_after_review": true,
+    "order_created": false,
+    "payment_executed": false,
+    "product_shipping_class": {
+      "assigned": "Yamato Cool 60",
+      "owner_authorization": "Fudgy Milky Bar may be cool or ambient; use Cool 60 temporarily for cool fulfillment.",
+      "temporary_fulfillment_class_retained": true
+    },
+    "actual_checkout_observations": {
+      "product_quantity": 1,
+      "product_subtotal_jpy": 250,
+      "tokyo_yamato_cool_60_rate_jpy": 1215,
+      "total_jpy": 1465,
+      "credit_card_visible": true,
+      "konbini_visible": true,
+      "merpay_visible": true,
+      "paidy_visible": true,
+      "test_mode_notice_visible": true,
+      "cancellation_refund_link_visible": true,
+      "tokushoho_link_visible": true,
+      "konbini_three_day_deadline_visible": false,
+      "final_action_visible": true,
+      "final_action_invoked": false
+    },
+    "restored_checkout_state": "order_approval_active_payment_deferred",
+    "remaining_gap": "The approved Konbini three-day payment deadline is not displayed when Konbini is selected.",
+    "acceptance_state": "RED_FAIL_CLOSED"
+  },
   "review_notes": [
     "Actual coming-soon WooCommerce preproduction checkout was reviewed with synthetic QA data.",
     "The final action was visible and was not invoked; no order or payment was created.",
@@ -107,6 +139,8 @@
     "The Free shipping display is caused by the review product having no assigned source-backed shipping class while the zone base cost is zero and the no-class cost is blank.",
     "A bounded follow-up enabled the connected KOMOJU test-account provider and added checkout links to the existing approved legal pages; no order or payment was executed.",
     "The legal-link gap is corrected, but the active Order Approval gateway still intentionally replaces KOMOJU methods on the customer checkout. Changing that flow requires separate authorization.",
+    "During an owner-authorized temporary acceptance window, Order Approval was disabled, the four KOMOJU test methods and the Yamato Cool 60 rate were verified, and Order Approval was restored afterward.",
+    "The only observed checklist gap in that window was the missing Konbini three-day deadline; the final action remained uninvoked.",
     "Evidence remains incomplete and the actual-screen acceptance gate remains RED fail-closed."
   ],
   "evidence_complete": false,
