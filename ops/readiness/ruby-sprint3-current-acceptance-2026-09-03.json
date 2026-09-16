@@ -1,11 +1,11 @@
 {
-  "version": "ruby-sprint3-current-acceptance-v2",
-  "date": "2026-09-03",
+  "version": "ruby-sprint3-current-acceptance-v3",
+  "date": "2026-09-16",
   "executive_roadmap": {
-    "current_primary_sprint": 3,
-    "current_primary_sprint_name": "WooCommerce Foundation",
+    "current_primary_sprint": 4,
+    "current_primary_sprint_name": "Customer Experience",
     "sprint4_parallel_acceleration": true,
-    "formal_sprint4_entry": false
+    "formal_sprint4_entry": true
   },
   "technical_acceptance": {
     "woocommerce_foundation_green": true,
@@ -23,12 +23,14 @@
     "production_mutation_enabled": false
   },
   "remaining_sprint3_exit_inputs": {
-    "final_owner_approved_catalog": false,
+    "final_owner_approved_catalog": true,
+    "ceo_provisional_catalog_scope_approval_ref": "ops/readiness/ruby-initial-launch-catalog-v1-ceo-decision-2026-09-16.json",
+    "publication_catalog_content_complete": false,
     "japan_tax_evidence_and_decision": true
   },
   "exit_state": {
-    "sprint3_exit_inputs_complete": false,
-    "formal_sprint3_closure": false,
+    "sprint3_exit_inputs_complete": true,
+    "formal_sprint3_closure": true,
     "production_catalog_write_ready": false,
     "tax_decision_ready": true,
     "tax_activation_required": false,
@@ -39,5 +41,5 @@
     "production_publish_authorized": false,
     "automatic_production_execution": false
   },
-  "decision": "SPRINT_3_CURRENT_PRIMARY_PENDING_FINAL_CATALOG_ONLY"
+  "decision": "SPRINT_3_FORMALLY_CLOSED_BY_CEO_PROVISIONAL_CATALOG_SCOPE_PUBLICATION_CONTENT_REMAINS_FAIL_CLOSED"
 }
