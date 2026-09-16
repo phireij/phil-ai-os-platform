@@ -69,6 +69,8 @@ def _validate_channel_readiness(data: dict) -> None:
         "live_channel_connectivity_authorized": False,
         "outbound_reply_authorized": False,
         "customer_account_mutation_authorized": False,
+        "controlled_scope_authorized": True,
+        "controlled_scope_overrides_preflight": False,
         "authority_effect": "none",
     }
     for key, value in expected.items():
@@ -91,6 +93,8 @@ def _validate_channel_readiness(data: dict) -> None:
                 fail(f"channel authority expanded: {name}.{flag}")
         if item.get("write_scope_separate_gate") is not True:
             fail(f"channel write scope must remain separately gated: {name}")
+        if item.get("controlled_scope_authorized") is not True:
+            fail(f"channel controlled scope missing: {name}")
     if by_name["telegram"].get("identity_state") != "existing_control_plane_approval_channel_is_not_operations_authority":
         fail("Telegram control-plane and Operations authority separation drift")
 
