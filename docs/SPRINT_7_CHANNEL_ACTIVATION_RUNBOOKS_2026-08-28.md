@@ -1,11 +1,11 @@
 # Sprint 7 — External Channel Activation Runbooks
 
 Date: 2026-08-28
-Status: PREPARATION ONLY / LIVE CHANNEL ACTIVATION NOT AUTHORIZED
+Status: CONTROLLED CEO SCOPE AUTHORIZED / CHANNEL PRE-FLIGHTS AND EVIDENCE STILL REQUIRED
 
 ## Baseline
 
-Sprint 5 proved synthetic normalization, idempotency, intent/confidence classification, governance routing and mock-only provider adapters for Facebook, Instagram, Telegram, WhatsApp and Google Business. It explicitly did **not** authorize live credentials, connectivity, production webhooks/polling, outbound replies or customer/account mutations.
+Sprint 5 proved synthetic normalization, idempotency, intent/confidence classification, governance routing and mock-only provider adapters for Facebook, Instagram, Telegram, WhatsApp and Google Business. The CEO now authorizes controlled activation and replies **only after each channel's documented pre-flight, evidence, rollback and audit gates are GREEN**. This authorization does not introduce credentials, connectivity, production webhooks/polling, outbound replies or customer/account mutations by itself.
 
 All five channels remain subject to the current platform baseline:
 
@@ -32,7 +32,7 @@ For each channel, use the following sequence and stop at the highest explicitly 
 8. **Governance proof** — complaint/public-review/low-confidence cases must route to review/approval according to policy.
 9. **Monitoring** — record event volume, error rate, auth failures and malformed/duplicate behavior.
 10. **Rollback proof** — confirm the webhook/app/token can be disabled/revoked to return the channel to disconnected/manual handling.
-11. **Separate write gate** — only after inbound/read evidence is GREEN may outbound reply/write be proposed for explicit approval.
+11. **Controlled write acceptance** — only after inbound/read evidence is GREEN may the CEO-authorized scope be used for a narrowly logged, operator-accepted reply/write canary. It must remain reversible and non-automatic.
 
 ## Facebook
 
@@ -65,7 +65,7 @@ Disable the integration if identity/scope is broader than approved, authenticity
 
 ### Outbound/write gate
 
-Replies/posts/writes remain a separate authority decision.
+Replies/posts/writes remain disabled until the channel-specific controlled acceptance evidence is GREEN.
 
 ### Abort
 
@@ -85,7 +85,7 @@ Phil AI OS already has historical Telegram usage for control-plane approval/noti
 
 ### Outbound/write gate
 
-Customer-facing replies or broader bot actions require a separate explicit gate even if the control-plane notifier is already operational.
+Customer-facing replies or broader bot actions remain disabled until channel-specific controlled acceptance evidence is GREEN, even if the control-plane notifier is already operational.
 
 ## WhatsApp
 
@@ -99,7 +99,7 @@ Customer-facing replies or broader bot actions require a separate explicit gate 
 
 ### Outbound/write gate
 
-Messages/templates/customer writes remain disabled until separately approved and validated.
+Messages/templates/customer writes remain disabled until channel-specific controlled acceptance evidence is GREEN.
 
 ### Abort
 
@@ -119,7 +119,7 @@ Google Business capabilities and APIs can change over time; the exact supported 
 
 ### Outbound/write gate
 
-Review replies or business-profile mutations remain separately gated and disabled by default.
+Review replies or business-profile mutations remain disabled until channel-specific controlled acceptance evidence is GREEN.
 
 ## Launch blockers for any channel
 
@@ -132,10 +132,10 @@ Do not activate the affected channel if:
 - replay/idempotency tests regress;
 - approval/review routing is not GREEN;
 - rollback/disable path is unclear;
-- outbound write/reply would be required before a separate write gate is approved.
+- outbound write/reply would be required before its channel-specific controlled acceptance evidence is GREEN.
 
 ## Explicit non-authorization
 
-This document does not authorize live credentials, API/webhook connectivity, polling, outbound replies, posts, review replies, customer/account changes, specialist execution, higher autonomy, new task classes or Mission Control mutation authority.
+This document does not itself authorize live credentials, API/webhook connectivity, polling, outbound replies, posts, review replies, customer/account changes, specialist execution, higher autonomy, new task classes, Mission Control mutation authority or automatic execution. The CEO-controlled scope is usable only after the corresponding channel's pre-flight and evidence gates are GREEN.
 
-`PHIL_AI_OS_SPRINT_7_CHANNEL_RUNBOOKS_READY_NOT_AUTHORIZED`
+`PHIL_AI_OS_SPRINT_7_CHANNEL_RUNBOOKS_READY_CONTROLLED_SCOPE_FAIL_CLOSED`

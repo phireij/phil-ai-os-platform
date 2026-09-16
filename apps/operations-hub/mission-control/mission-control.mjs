@@ -315,12 +315,14 @@ function assertChannelReadiness(data) {
   if (data.schema !== "phil-ai-os-mission-control-channel-readiness" || data.version !== 1 || data.status !== "read_only") throw new Error("Unexpected channel readiness projection");
   if (data.autonomy_level !== "A0" || data.execution_task_class !== "general" || data.assigned_agent !== "hermes") throw new Error("Channel readiness governance baseline drift");
   if (data.specialists_enabled !== false || data.live_channel_connectivity_authorized !== false || data.outbound_reply_authorized !== false || data.customer_account_mutation_authorized !== false || data.authority_effect !== "none") throw new Error("Unsafe channel readiness authority");
+  if (data.controlled_scope_authorized !== true || data.controlled_scope_overrides_preflight !== false) throw new Error("Unsafe controlled channel scope");
   if (data.channel_count !== 5 || !Array.isArray(data.channels) || data.channels.length !== 5) throw new Error("Channel readiness set drift");
   const expected = new Set(["facebook", "instagram", "telegram", "whatsapp", "google_business"]);
   for (const channel of data.channels) {
     if (!expected.delete(channel.channel)) throw new Error("Unexpected or duplicate operations channel");
     for (const key of ["credential_introduced", "live_connectivity_authorized", "inbound_activation_authorized", "outbound_reply_authorized"]) if (channel[key] !== false) throw new Error(`Unsafe channel flag: ${channel.channel}.${key}`);
     if (channel.write_scope_separate_gate !== true) throw new Error(`Channel write scope not separately gated: ${channel.channel}`);
+    if (channel.controlled_scope_authorized !== true) throw new Error(`Channel controlled scope missing: ${channel.channel}`);
   }
   if (expected.size) throw new Error("Missing operations channel readiness");
 }

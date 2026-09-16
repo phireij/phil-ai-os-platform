@@ -14,6 +14,15 @@ def fail(message: str) -> None:
 
 def main() -> None:
     data = json.loads(READINESS.read_text(encoding="utf-8"))
+    if data.get("version") != "sprint7-channel-activation-readiness-v2":
+        fail("channel readiness schema drift")
+    scope = data.get("ceo_controlled_scope")
+    if not isinstance(scope, dict):
+        fail("CEO controlled channel scope missing")
+    if scope.get("customer_channel_activation_and_replies_authorized") is not True:
+        fail("CEO controlled channel scope missing")
+    if scope.get("overrides_channel_preflight_or_evidence") is not False or scope.get("automatic_execution_authorized") is not False:
+        fail("CEO channel scope incorrectly overrides safeguards")
     baseline = data["authority_baseline"]
     expected = {
         "autonomy": "A0",
@@ -34,6 +43,8 @@ def main() -> None:
         fail(f"channel set drift: {sorted(channels)}")
 
     for name, channel in channels.items():
+        if channel.get("controlled_scope_authorized") is not True:
+            fail(f"{name} controlled CEO scope missing")
         for flag in (
             "credential_introduced",
             "live_connectivity_authorized",
@@ -74,12 +85,12 @@ def main() -> None:
             fail(f"Sprint 5 channel evidence missing: {phrase}")
 
     runbook = (ROOT / "docs/SPRINT_7_CHANNEL_ACTIVATION_RUNBOOKS_2026-08-28.md").read_text(encoding="utf-8")
-    if "PHIL_AI_OS_SPRINT_7_CHANNEL_RUNBOOKS_READY_NOT_AUTHORIZED" not in runbook:
+    if "PHIL_AI_OS_SPRINT_7_CHANNEL_RUNBOOKS_READY_CONTROLLED_SCOPE_FAIL_CLOSED" not in runbook:
         fail("channel runbook marker missing")
     if "does not grant Operations Hub Telegram channel authority" not in runbook:
         fail("Telegram authority separation statement missing")
 
-    print("PHIL_AI_OS_SPRINT_7_CHANNEL_READINESS_GREEN channels=5 live_connectivity=false outbound_reply=false")
+    print("PHIL_AI_OS_SPRINT_7_CHANNEL_READINESS_GREEN channels=5 controlled_scope=true live_connectivity=false outbound_reply=false")
     print("PHIL_AI_OS_SPRINT_7_CHANNEL_AUTHORITY_BOUNDARY_GREEN autonomy=A0 task_class=general assigned_agent=hermes")
 
 
