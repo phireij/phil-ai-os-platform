@@ -1,6 +1,6 @@
 {
-  "version": "sprint7-launch-acceptance-v5",
-  "date": "2026-09-15",
+  "version": "sprint7-launch-acceptance-v6",
+  "date": "2026-09-16",
   "bounded_engineering_readiness": {
     "current_head_integrated_regression_required": true,
     "isolated_runtime_smoke_required": true,
@@ -50,12 +50,19 @@
     "woocommerce_production_mutation_ready": false,
     "komoju_live_acceptance_green": false,
     "first_party_quick_pickup_production_ready": false,
-    "sms_production_readiness_if_in_launch_scope_green": false,
     "external_channel_live_activation_ready_if_in_scope": false,
     "main_branch_protection_or_ruleset_green": false,
     "public_cutover_plan_confirmed": false,
     "final_ceo_go_no_go_accepted": false,
     "cto_signoff_recorded": false
+  },
+  "v1_non_blocking_deferred_capabilities": {
+    "twilio_sms": {
+      "required_for_v1_launch": false,
+      "production_sending_ready": false,
+      "live_sms_sent": false,
+      "re_enable_requires_separate_readiness": true
+    }
   },
   "authority_baseline": {
     "autonomy": "A0",

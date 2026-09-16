@@ -93,6 +93,9 @@ def main() -> None:
 
     require(sms["provider_selection"]["formally_selected"] is True, "SMS provider selection should be GREEN")
     require(sms["provider_selection"]["selected_provider"] == "twilio", "selected SMS provider must remain Twilio")
+    sms_policy = sms["v1_launch_policy"]
+    require(sms_policy["required_for_v1_launch"] is False, "Twilio SMS must remain deferred and non-blocking for V1")
+    require(sms_policy["status"] == "deferred_non_blocking", "Twilio V1 deferral policy drift")
     require(sms["activation_acceptance"]["production_sending_ready"] is False, "SMS production sending unexpectedly ready")
     require(sms["execution"]["live_sms_authorized_by_readiness"] is False and sms["execution"]["live_sms_sent"] is False, "SMS authority expanded")
     require(overlay["sms"]["selected_provider"] == "twilio" and overlay["sms"]["formal_provider_selected"] is True, "overlay Twilio selection drift")
@@ -111,6 +114,9 @@ def main() -> None:
         require(value is False, f"launch gate requires explicit reconciliation before GREEN: {key}")
     for key, value in go["execution"].items():
         require(value is False, f"live execution readiness unexpectedly true: {key}")
+    deferred_sms = go["v1_non_blocking_deferred_capabilities"]["twilio_sms"]
+    require(deferred_sms["required_for_v1_launch"] is False, "Twilio must not block V1")
+    require(deferred_sms["production_sending_ready"] is False and deferred_sms["live_sms_sent"] is False, "Twilio execution must remain disabled")
     require(go["decision"] == "NO_GO_PENDING_REMAINING_REQUIRED_INPUTS_AND_LIVE_ACCEPTANCE", "Go/No-Go decision drift")
 
     require(overlay["launch"]["live_launch_authorized_by_readiness"] is False, "overlay unexpectedly authorizes live launch")

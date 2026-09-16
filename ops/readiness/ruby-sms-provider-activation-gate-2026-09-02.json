@@ -2,6 +2,17 @@
   "version": "ruby-sms-provider-activation-gate-v2",
   "date": "2026-09-03",
   "ceo_scope_approval_for_production_sms": true,
+  "v1_launch_policy": {
+    "required_for_v1_launch": false,
+    "status": "deferred_non_blocking",
+    "reason": "Twilio provider-side and real-handset acceptance remain unresolved after support follow-ups; V1 may proceed without SMS rather than bypassing provider or carrier controls.",
+    "re_enable_requires": [
+      "provider/account/sender/secret readiness",
+      "controlled opt-in handset acceptance",
+      "delivery-status webhook evidence",
+      "separate readiness reconciliation"
+    ]
+  },
   "provider_candidates": {
     "preferred_pilot_candidate": "twilio",
     "secondary_candidate": "aws_end_user_messaging_sms"
@@ -34,5 +45,5 @@
     "live_sms_sent": false,
     "automatic_retry": false
   },
-  "decision": "TWILIO_SELECTED_ACCOUNT_SENDER_CREDENTIALS_AND_TEST_PENDING_FAIL_CLOSED"
+  "decision": "TWILIO_SELECTED_DEFERRED_NON_BLOCKING_FOR_V1_SENDING_REMAINS_FAIL_CLOSED"
 }

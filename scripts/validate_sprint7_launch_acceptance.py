@@ -30,7 +30,7 @@ def main() -> None:
     branch_policy = json.loads(BRANCH_POLICY.read_text(encoding="utf-8"))
     mc_schema = json.loads(MC_PROJECTION_SCHEMA.read_text(encoding="utf-8"))
 
-    require(data.get("version") == "sprint7-launch-acceptance-v5", "launch acceptance schema drift")
+    require(data.get("version") == "sprint7-launch-acceptance-v6", "launch acceptance schema drift")
 
     engineering = data["bounded_engineering_readiness"]
     for key in (
@@ -138,6 +138,10 @@ def main() -> None:
         remaining.get("main_branch_protection_or_ruleset_green") is False,
         "engineering branch-protection readiness must not satisfy the live admin gate",
     )
+    deferred_sms = data["v1_non_blocking_deferred_capabilities"]["twilio_sms"]
+    require(deferred_sms["required_for_v1_launch"] is False, "Twilio SMS must be non-blocking for V1")
+    require(deferred_sms["production_sending_ready"] is False and deferred_sms["live_sms_sent"] is False, "Twilio execution must remain disabled")
+    require(deferred_sms["re_enable_requires_separate_readiness"] is True, "Twilio re-enable control drift")
 
     sfront = staging["storefront"]
     expected_front = {

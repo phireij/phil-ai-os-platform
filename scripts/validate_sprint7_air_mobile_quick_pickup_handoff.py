@@ -65,13 +65,12 @@ def main() -> None:
     for key, value in data["authority"].items():
         require(value is False, f"authority expanded unexpectedly: {key}")
 
-    # The roadmap may be editorially reconciled over time. Assert the durable
-    # semantics instead of pinning CI to one exact historical sentence.
-    require("## Parallel external / later launch dependencies" in roadmap, "roadmap later-launch dependency section missing")
-    require("Air Mobile Order Quick Pickup" in roadmap and "production URL" in roadmap, "roadmap Air Mobile production URL dependency missing")
-    require("final owner-approved production catalog" in roadmap, "roadmap Sprint 3 owner-input closure gate missing")
+    # Air Mobile's historical handoff remains inert; Ruby-owned first-party
+    # Quick Pickup replaces it as the active path and no production URL is a V1 gate.
+    require("first-party Quick Pickup" in roadmap, "roadmap first-party Quick Pickup reconciliation missing")
+    require("Air Mobile Quick Pickup production URL" not in roadmap, "roadmap retains Air Mobile V1 dependency")
 
-    print("PHIL_AI_OS_AIR_MOBILE_QUICK_PICKUP_HANDOFF_GREEN pending_owner_input=true sprint3_blocker=false authority=false")
+    print("PHIL_AI_OS_AIR_MOBILE_QUICK_PICKUP_HANDOFF_GREEN retired_from_v1=true authority=false")
 
 
 if __name__ == "__main__":
