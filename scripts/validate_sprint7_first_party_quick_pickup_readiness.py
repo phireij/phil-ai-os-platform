@@ -27,6 +27,19 @@ def main() -> None:
     scope = data.get("ceo_scope_authorization")
     require(isinstance(scope, dict) and scope.get("controlled_production_activation_authorized") is True, "CEO controlled-activation scope missing")
     require(scope.get("overrides_readiness") is False and scope.get("automatic_execution_authorized") is False, "scope authorization expanded")
+
+    preparation = data.get("bounded_engineering_preparation")
+    require(isinstance(preparation, dict), "bounded Quick Pickup engineering preparation missing")
+    for key in (
+        "fixture_inventory_decision_prepared",
+        "fixture_capacity_and_cutoff_decision_prepared",
+        "fixture_combined_decision_preview_prepared",
+        "fixture_operator_disable_control_prepared",
+    ):
+        require(preparation.get(key) is True, f"bounded Quick Pickup preparation regressed: {key}")
+    require(preparation.get("operator_disable_control_production_accepted") is False, "fixture disable control cannot satisfy production acceptance")
+    require(preparation.get("production_readiness_effect") == "none", "bounded engineering preparation changed production readiness")
+
     readiness = data.get("production_readiness")
     require(isinstance(readiness, dict), "production readiness missing")
     for key, value in readiness.items():
@@ -37,7 +50,7 @@ def main() -> None:
         require(value is False, f"quick-pickup authority expanded: {key}")
     require("first-party Quick Pickup" in roadmap, "roadmap first-party Quick Pickup reconciliation missing")
     require("Air Mobile Quick Pickup production URL" not in roadmap, "roadmap retains Air Mobile launch dependency")
-    print("PHIL_AI_OS_FIRST_PARTY_QUICK_PICKUP_READINESS_GREEN air_mobile_v1=false production_ready=false authority=false")
+    print("PHIL_AI_OS_FIRST_PARTY_QUICK_PICKUP_READINESS_GREEN air_mobile_v1=false production_ready=false rollback_foundation=prepared_not_accepted authority=false")
 
 
 if __name__ == "__main__":
