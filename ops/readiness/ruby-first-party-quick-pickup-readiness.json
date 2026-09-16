@@ -1,6 +1,6 @@
 {
   "version": "ruby-first-party-quick-pickup-readiness-v1",
-  "date": "2026-09-15",
+  "date": "2026-09-17",
   "owner": "Ruby's Cake Delights",
   "decision": "FIRST_PARTY_QUICK_PICKUP_REPLACES_AIR_MOBILE_AS_V1_DEPENDENCY",
   "air_mobile_order_required_for_v1": false,
@@ -14,6 +14,14 @@
     "controlled_production_activation_authorized": true,
     "overrides_readiness": false,
     "automatic_execution_authorized": false
+  },
+  "bounded_engineering_preparation": {
+    "fixture_inventory_decision_prepared": true,
+    "fixture_capacity_and_cutoff_decision_prepared": true,
+    "fixture_combined_decision_preview_prepared": true,
+    "fixture_operator_disable_control_prepared": true,
+    "operator_disable_control_production_accepted": false,
+    "production_readiness_effect": "none"
   },
   "production_readiness": {
     "first_party_pickup_route_implemented": false,
