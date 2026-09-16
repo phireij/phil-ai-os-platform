@@ -13,6 +13,11 @@ EXPECTED_CHANNELS = {"facebook", "instagram", "telegram", "whatsapp", "google_bu
 
 def build_projection() -> dict:
     source = json.loads(SOURCE.read_text(encoding="utf-8"))
+    scope = source.get("ceo_controlled_scope") or {}
+    if scope.get("customer_channel_activation_and_replies_authorized") is not True:
+        raise SystemExit("PHIL_AI_OS_MISSION_CONTROL_CHANNEL_READINESS_BLOCKED controlled_scope_missing=true")
+    if scope.get("overrides_channel_preflight_or_evidence") is not False or scope.get("automatic_execution_authorized") is not False:
+        raise SystemExit("PHIL_AI_OS_MISSION_CONTROL_CHANNEL_READINESS_BLOCKED controlled_scope_expanded=true")
     baseline = source.get("authority_baseline") or {}
     expected_baseline = {
         "autonomy": "A0",
@@ -45,6 +50,8 @@ def build_projection() -> dict:
                 raise SystemExit(f"PHIL_AI_OS_MISSION_CONTROL_CHANNEL_READINESS_BLOCKED {name}_{flag}=true")
         if item.get("write_scope_separate_gate") is not True:
             raise SystemExit(f"PHIL_AI_OS_MISSION_CONTROL_CHANNEL_READINESS_BLOCKED {name}_write_gate=false")
+        if item.get("controlled_scope_authorized") is not True:
+            raise SystemExit(f"PHIL_AI_OS_MISSION_CONTROL_CHANNEL_READINESS_BLOCKED {name}_controlled_scope_missing=true")
         projected.append(
             {
                 "channel": name,
@@ -53,6 +60,7 @@ def build_projection() -> dict:
                 "live_connectivity_authorized": False,
                 "inbound_activation_authorized": False,
                 "outbound_reply_authorized": False,
+                "controlled_scope_authorized": True,
                 "write_scope_separate_gate": True,
             }
         )
@@ -62,6 +70,8 @@ def build_projection() -> dict:
         "version": 1,
         "status": "read_only",
         "source_version": source.get("version"),
+        "controlled_scope_authorized": True,
+        "controlled_scope_overrides_preflight": False,
         "autonomy_level": "A0",
         "execution_task_class": "general",
         "assigned_agent": "hermes",
