@@ -1,0 +1,28 @@
+{
+  "version": "ruby-catalog-publication-evidence-v1",
+  "scope_ref": "ops/readiness/ruby-initial-launch-catalog-v1-ceo-decision-2026-09-16.json",
+  "source_ref": "commerce/woocommerce/fixtures/working-catalog-subset-2026-09-11.json",
+  "products": [
+    "Moist Chocolate Round Cake",
+    "Fudgy Milky Bar",
+    "Cheezy Ensaymada"
+  ],
+  "checks": {
+    "final_bilingual_customer_facing_copy_confirmed": false,
+    "verified_product_media_references_confirmed": false,
+    "final_fulfillment_package_shipping_classifications_confirmed": false,
+    "subsystem_preflight_green": false,
+    "controlled_publication_acceptance_green": false
+  },
+  "evidence_refs": [],
+  "contains_secret_material": false,
+  "authority": {
+    "woocommerce_catalog_write_authorized": false,
+    "production_publish_authorized": false,
+    "payment_execution_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "evidence_complete": false,
+  "acceptance_green": false,
+  "decision": "PENDING_CATALOG_PUBLICATION_CONTENT_FAIL_CLOSED"
+}
