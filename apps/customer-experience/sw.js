@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v32";
-// 2026-09-17: cache the isolated first-party Quick Pickup route foundation and fixture-only controls while preserving network-first branded Ruby preview refresh behavior.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v33";
+// 2026-09-17: cache the isolated first-party Quick Pickup route foundation and validated bilingual copy contract while preserving network-first branded Ruby preview refresh behavior.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -55,6 +55,7 @@ const APP_SHELL = [
   "./src/quick-pickup-decision-preview.mjs",
   "./src/quick-pickup-disable-control.mjs",
   "./src/quick-pickup-preview.mjs",
+  "./src/quick-pickup-route-copy.mjs",
   "./src/quick-pickup-route.mjs",
   "./src/order-intake-preview.mjs",
   "./src/order-intake-draft-state.mjs",
