@@ -1,0 +1,48 @@
+{
+  "version": "ruby-first-party-quick-pickup-actual-preproduction-acceptance-v1",
+  "date": "2026-09-17",
+  "environment": "preproduction",
+  "evidence_status": "BLOCKED_PENDING_ACTUAL_ROUTE_ACCESS",
+  "synthetic_only": true,
+  "attempt": {
+    "source_head": "9c79347e9b420330342586ca58788bfd7dd8fd9d",
+    "route_requested": "/quick-pickup.html",
+    "locales_requested": ["en", "ja"],
+    "scenarios_requested": ["ordering_disabled","inventory_fresh","inventory_stale","inventory_out_of_stock","slot_available","slot_full","slot_cutoff","operator_disable","operator_rollback"],
+    "actual_preproduction_surface_reachable": false,
+    "blocker": "No accessible authenticated browser/preproduction route was available in this acceptance session; fixture/static source inspection is not actual preproduction evidence."
+  },
+  "observations": {
+    "english_route_rendered": false,
+    "japanese_route_rendered": false,
+    "ordering_disabled_observed": false,
+    "inventory_fresh_observed": false,
+    "inventory_stale_blocked": false,
+    "inventory_out_of_stock_blocked": false,
+    "available_slot_observed": false,
+    "full_slot_blocked": false,
+    "cutoff_slot_blocked": false,
+    "operator_disable_observed": false,
+    "operator_rollback_observed": false
+  },
+  "readiness_effect": "none",
+  "safety": {
+    "no_order_created": true,
+    "no_payment_executed": true,
+    "no_inventory_mutation": true,
+    "no_capacity_mutation": true,
+    "no_reservation_created": true,
+    "no_production_publish": true,
+    "no_dns_cutover": true
+  },
+  "authority": {
+    "customer_order_creation_authorized": false,
+    "payment_execution_authorized": false,
+    "inventory_mutation_authorized": false,
+    "capacity_mutation_authorized": false,
+    "reservation_authorized": false,
+    "production_publish_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "next_required_evidence": ["reachable first-party Quick Pickup preproduction URL","controlled EN/JA route capture","sanitized inventory/capacity scenario observations","operator disable and recovery observations"]
+}
