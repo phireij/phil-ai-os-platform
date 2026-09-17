@@ -1,0 +1,27 @@
+{
+  "version": "ruby-final-go-no-go-signoff-evidence-v1",
+  "checks": {
+    "final_production_catalog_ready": false,
+    "final_checkout_tokushoho_payment_shipping_sync_green": true,
+    "komoju_live_acceptance_green": false,
+    "first_party_quick_pickup_production_ready": false,
+    "near_cutover_recovery_freshness_green": false,
+    "main_branch_protection_or_ruleset_green": false,
+    "public_cutover_plan_confirmed": false,
+    "current_head_ci_green": false
+  },
+  "evidence_refs": [],
+  "contains_secret_material": false,
+  "authority": {
+    "production_launch_authorized": false,
+    "dns_cutover_authorized": false,
+    "production_publish_authorized": false,
+    "payment_execution_authorized": false,
+    "order_creation_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "evidence_complete": false,
+  "ceo_go_no_go_accepted": false,
+  "cto_signoff_recorded": false,
+  "decision": "PENDING_FINAL_GO_NO_GO_SIGNOFF_FAIL_CLOSED"
+}
