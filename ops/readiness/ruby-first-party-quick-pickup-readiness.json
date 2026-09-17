@@ -20,11 +20,12 @@
     "fixture_capacity_and_cutoff_decision_prepared": true,
     "fixture_combined_decision_preview_prepared": true,
     "fixture_operator_disable_control_prepared": true,
+    "isolated_customer_route_foundation_prepared": true,
     "operator_disable_control_production_accepted": false,
-    "production_readiness_effect": "none"
+    "production_readiness_effect": "route_implementation_only"
   },
   "production_readiness": {
-    "first_party_pickup_route_implemented": false,
+    "first_party_pickup_route_implemented": true,
     "eligible_catalog_confirmed": false,
     "inventory_freshness_control_green": false,
     "capacity_and_cutoff_control_green": false,

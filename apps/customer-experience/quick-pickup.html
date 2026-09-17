@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#fff7f5">
+  <meta name="description" content="Ruby first-party Quick Pickup isolated route foundation">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./connectivity-status.css">
+  <title>Ruby Quick Pickup — Isolated Route Foundation</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">Ruby's Cake Delights · Quick Pickup</p>
+      <a class="brand" href="./">Customer Experience</a>
+    </div>
+    <div class="header-actions">
+      <label class="locale-label" for="locale-select">Language</label>
+      <select id="locale-select" aria-label="Language">
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+      </select>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="hero" aria-labelledby="hero-title">
+      <p id="route-status" class="status-pill">Isolated route · Ordering disabled</p>
+      <h1 id="hero-title">Quick Pickup route foundation</h1>
+      <p id="hero-copy">This route is implemented for controlled testing only. It cannot reserve stock, book a pickup slot, create an order, or execute payment.</p>
+    </section>
+
+    <section class="detail-panel" aria-labelledby="route-title">
+      <div class="detail-copy">
+        <p class="eyebrow">Fail-closed route state</p>
+        <h2 id="route-title">Customer ordering is not available</h2>
+        <div id="route-output" class="intent-output" role="status" aria-live="polite" aria-atomic="true"></div>
+      </div>
+    </section>
+
+    <section class="safety-panel" aria-labelledby="safety-title">
+      <p class="eyebrow">Synthetic readiness demonstration</p>
+      <h2 id="safety-title">No live inventory or reservation</h2>
+      <div id="fixture-output"></div>
+    </section>
+  </main>
+
+  <nav class="mobile-action-dock" aria-label="Quick Pickup route navigation">
+    <a href="./#catalog-section"><span aria-hidden="true">⌕</span><span id="dock-shop-label">Shop</span></a>
+    <a href="./cart-preview.html"><span aria-hidden="true">▣</span><span id="dock-cart-label">Cart</span></a>
+    <a href="./quick-pickup-preview.html"><span aria-hidden="true">◎</span><span id="dock-pickup-label">Pickup status</span></a>
+  </nav>
+
+  <footer><p id="footer-copy">Pre-production route foundation · No customer order action</p></footer>
+
+  <script type="module" src="./src/quick-pickup-route.mjs"></script>
+  <script type="module" src="./src/connectivity-status.mjs"></script>
+</body>
+</html>

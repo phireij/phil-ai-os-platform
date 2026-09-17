@@ -52,13 +52,14 @@ test("engaged operator disable vetoes an otherwise ready synthetic route", async
   });
 });
 
-test("disengaged fixture control does not make an unready route available", async () => {
+test("disengaged fixture control does not make a readiness-pending route available", async () => {
   const [base, control] = await Promise.all([fixture(configUrl), fixture(controlUrl)]);
   const upstream = firstPartyQuickPickupUiState(base);
   const result = applyQuickPickupDisableControl(upstream, { ...control, disable_engaged: false });
   assert.equal(result.available, false);
   assert.equal(result.href, null);
-  assert.equal(result.reason, "implementation_pending");
+  assert.equal(result.reason, "readiness_pending");
+  assert.equal(result.upstream_reason, "readiness_pending");
   assert.equal(result.route_activation_authorized, false);
 });
 

@@ -13,17 +13,17 @@ async function fixture() {
   return JSON.parse(await readFile(fixtureUrl, "utf8"));
 }
 
-test("first-party Quick Pickup remains unavailable until implemented", async () => {
+test("implemented first-party Quick Pickup remains unavailable while readiness is pending", async () => {
   const config = await fixture();
   assert.equal(validateFirstPartyQuickPickupConfig(config), config);
   assert.deepEqual(firstPartyQuickPickupUiState(config), {
     available: false,
     href: null,
-    reason: "implementation_pending",
+    reason: "readiness_pending",
   });
 });
 
-test("implemented route remains unavailable until every readiness gate is green", async () => {
+test("explicit implemented route remains unavailable until every readiness gate is green", async () => {
   const config = {
     ...(await fixture()),
     route_implemented: true,

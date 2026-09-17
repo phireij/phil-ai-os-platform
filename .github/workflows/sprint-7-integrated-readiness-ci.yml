@@ -71,6 +71,7 @@ jobs:
           node --check apps/customer-experience/src/pickup.mjs
           node --check apps/customer-experience/src/quick-pickup-availability.mjs
           node --check apps/customer-experience/src/quick-pickup-capacity.mjs
+          node --check apps/customer-experience/src/quick-pickup-route.mjs
           node --check apps/customer-experience/src/seo.mjs
           node --check apps/customer-experience/src/app.mjs
           node --check apps/customer-experience/sw.js
@@ -198,6 +199,8 @@ jobs:
           curl --fail --silent http://127.0.0.1:8094/ | grep -F 'Customer Experience'
           curl --fail --silent http://127.0.0.1:8094/cart-preview.html | grep -F 'KOMOJU not connected'
           curl --fail --silent http://127.0.0.1:8094/confirmation-preview.html | grep -F 'No order submission'
+          curl --fail --silent http://127.0.0.1:8094/quick-pickup.html | grep -F 'Ordering disabled'
+          curl --fail --silent http://127.0.0.1:8094/fixtures/first-party-quick-pickup.json | grep -F '"activation_authorized": false'
           curl --fail --silent http://127.0.0.1:8094/fixtures/final-confirmation.json | grep -F '"actual_final_confirmation_screen_reviewed": false'
           echo PHIL_AI_OS_SPRINT_7_ISOLATED_RUNTIME_SMOKE_GREEN
 
