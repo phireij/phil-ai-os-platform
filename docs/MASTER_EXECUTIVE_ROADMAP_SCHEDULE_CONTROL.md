@@ -3,11 +3,11 @@
 # Master Executive Roadmap & Schedule Control
 
 **Original 8-Sprint Plan • Accelerated Multi-Agent Delivery • V1 Launch Control**  
-**Last reconciled:** 16 September 2026 — against merged `main` `1d5b5fab8bc89ddc55bb2bae36f92c6082cee95f`; Sprint 4 is primary and actual preproduction final-screen acceptance is GREEN while production authority remains fail-closed
+**Last reconciled:** 17 September 2026 — against merged `main` `48a0fdd47b22c6bce9e05030d09dbd1b4f5bc974`; Sprint 4 is primary, actual preproduction final-screen acceptance is GREEN, and first-party Quick Pickup rollback/decision foundations are prepared only while production authority remains fail-closed
 
 | FIRST ISSUED | OWNER | LAST RECONCILED | CANONICAL SOURCE |
 | --- | --- | --- | --- |
-| 28 Aug 2026 | CEO / CTO Office | 16 Sep 2026 | GitHub master roadmap |
+| 28 Aug 2026 | CEO / CTO Office | 17 Sep 2026 | GitHub master roadmap |
 
 # CURRENT EXECUTIVE STATUS
 
@@ -29,7 +29,7 @@
 | Sprint 7 / launch readiness | Integrated readiness CI remains GREEN on current bounded work. Customer-to-owner lifecycle branch matrix, Mission Control v5 contract alignment, packaged read-only preview, launch-acceptance synchronization and branch-protection readiness checks exist. Live cutover remains NO-GO until all final gates are satisfied. |
 | KOMOJU | Live dashboard/configuration evidence, the approved initial payment subset and Live Konbini 3-day expiry remain GREEN readiness facts. The four approved methods and bilingual three-day deadline were verified through the preproduction test-account acceptance window. Normal checkout is restored to Order Approval and continues to defer payment; no live or test payment execution is authorized. |
 | Twilio | Ruby-owned paid account, `Ruby Transactional SMS` Messaging Service and `RUBYSCAKE` sender are recorded. Restricted API-key outbound boundary and signed webhook boundary are GREEN. Because provider-side/real-handset validation remains unresolved after support follow-ups, Twilio SMS is **deferred and non-blocking for V1**; sending stays fail-closed and requires separate acceptance before later activation. |
-| Quick Pickup / AirREGI | Ruby will implement a first-party Quick Pickup solution. Air Mobile Quick Pickup is **not** a V1 launch dependency. Direct AirREGI inventory API remains unproven and is not assumed; the documented CSV fallback remains a conservative option pending separate verification. |
+| Quick Pickup / AirREGI | Ruby will implement a first-party Quick Pickup solution. Air Mobile Quick Pickup is **not** a V1 launch dependency. Fixture-only inventory freshness/availability, pickup-slot capacity/cutoff, combined decision-preview and operator-disable foundations are prepared and tested, but they have **no production-readiness effect**. The production route is still unimplemented, `rollback_disable_path_green` remains false, activation remains false, and direct AirREGI inventory API capability remains unproven/not assumed; the documented CSV fallback remains a conservative option pending separate verification. |
 | Mission Control | Read-only lifecycle/result, workload, task-composition, approval, recovery, control-plane and five-channel activation-readiness projections are prepared and packaged as a bounded static artifact. Mission Control write authority remains disabled and Hermes remains intentionally idle for live execution. |
 | Repository protection | Launch-gate validator correctly reports the actual GitHub `main` ruleset/protection requirement as unresolved. Current connected GitHub app lacks administration permission to activate it. |
 | Current autonomy ceiling | **A0 — no autonomous production side-effect/execution expansion** |
@@ -38,7 +38,19 @@
 | Safety target | **2 October 2026** |
 | Original 2-month target | Approximately **19 October 2026** from the 19 August start |
 | Schedule variance | Materially ahead of the original sequence because later-sprint foundations have been safely prepared early. Owner/external gates now dominate the remaining critical path. |
-| Immediate next action | Retain Order Approval and continue the separate catalog-publication, production-payment, recovery and final Go/No-Go gates. Keep missing catalog facts explicit, Quick Pickup fail-closed, Twilio deferred and public DNS/automatic production execution disabled. |
+| Immediate next action | Retain Order Approval and continue the separate catalog-publication, production-payment, near-cutover recovery freshness and final Go/No-Go gates. Keep missing catalog facts explicit, Quick Pickup production activation fail-closed, Twilio deferred and public DNS/automatic production execution disabled. |
+
+## 17 SEP 2026 SPRINT 4 POST-ACCEPTANCE / QUICK PICKUP RECONCILIATION
+
+Sprint 4 moved forward after the actual WooCommerce preproduction final-confirmation-screen acceptance without broadening production authority:
+
+- PR #404 propagated the accepted final-screen result through the staging, checkout/legal, launch-acceptance and Go/No-Go projections while retaining catalog publication, payment execution, DNS and final launch as separate fail-closed gates.
+- PR #405 reconciled the KOMOJU checkout/legal prerequisite to the accepted-screen evidence without declaring live KOMOJU payment acceptance or executing a payment.
+- PR #406 connected fixture-only inventory freshness/availability and pickup-slot capacity/cutoff decisions into the bilingual first-party Quick Pickup preview. The preview explicitly labels the result as historical synthetic test data, not live inventory, a reservation or an order.
+- PR #407 added a fixture-only operator-disable control that vetoes route exposure even if an upstream synthetic route would otherwise be ready. This is engineering preparation only: production acceptance remains false, the production route remains unimplemented and `rollback_disable_path_green` remains false.
+- Exact-head Sprint 4 Customer Experience CI, Hostinger non-production preview-artifact checks, Integrated Readiness CI and isolated WooCommerce runtime smoke were GREEN before the bounded Quick Pickup changes were merged.
+
+These changes improve testability and rollback preparation only. They do **not** authorize customer order creation, inventory/capacity mutation, payment execution, WooCommerce publication, public DNS cutover or automatic production execution.
 
 ## 15 SEP 2026 SPRINT 3 OWNER HANDOFF RECONCILIATION
 
@@ -49,7 +61,7 @@ The Sprint 3 catalog owner handoff was improved without changing catalog facts o
 - The Sprint 3 owner artifact now packages the CSV worksheet, unresolved-requirements JSON and Markdown checklist together.
 - PR #385 removed semantically duplicate Category/Media wrapper actions while preserving the specialized `category_mapping` and `media_ingestion_evidence` blockers as canonical.
 - The generated owner checklist was reduced from 28 entries to 22 distinct unresolved actions without removing any distinct owner decision, operational evidence item or authority gate.
-- Exact-head PR validation remained GREEN across Sprint 3 Foundation, owner-artifact, WooCommerce contract, workflow supply-chain and Integrated Readiness CI. That PR #385 checkpoint is historical; the roadmap is now reconciled against merged `main` `1d5b5fab8bc89ddc55bb2bae36f92c6082cee95f` and Sprint 4-primary state.
+- Exact-head PR validation remained GREEN across Sprint 3 Foundation, owner-artifact, WooCommerce contract, workflow supply-chain and Integrated Readiness CI. That PR #385 checkpoint is historical; the current reconciliation checkpoint is recorded at the top of this roadmap and Sprint 4 remains primary.
 
 This historical checkpoint improved deterministic owner handoff only. The CEO subsequently approved the provisional Initial Launch Catalog V1 scope, formally closing Sprint 3 and making Sprint 4 primary. That later approval still does **not** satisfy subsystem production preflights or authorize catalog publication, payment, SMS, DNS cutover or automatic execution.
 
@@ -193,7 +205,7 @@ V1 must preserve these properties:
 
 ## Sprint 4 — Customer Experience
 
-**Status: CURRENT PRIMARY SPRINT / FOUNDATION MATERIALLY GREEN / ACTUAL CHECKOUT REVIEW RED FAIL-CLOSED**
+**Status: CURRENT PRIMARY SPRINT / FOUNDATION MATERIALLY GREEN / ACTUAL PREPRODUCTION FINAL-SCREEN ACCEPTANCE GREEN / PRODUCTION GATES FAIL-CLOSED**
 **Window:** 8–14 Sep 2026
 
 - Mobile-first
@@ -204,7 +216,7 @@ V1 must preserve these properties:
 - Pickup
 - Bilingual customer experience
 
-**Control note:** Mobile/PWA, branded catalog/detail/cart, checkout/pickup, custom-cake intake, private reference-image selection and KOMOJU handoff foundations are materially GREEN in isolated non-production scope. Sprint 4 is formally primary. On 16 Sep, the guarded actual WooCommerce preproduction final-screen review became GREEN after bounded corrections: verified Cool 60 shipping, the approved four-method KOMOJU test subset, bilingual Konbini deadline and both legal routes were visible. The final action was not invoked; no order or payment was created, and Order Approval was restored. This acceptance does not close Sprint 4 or authorize production execution.
+**Control note:** Mobile/PWA, branded catalog/detail/cart, checkout/pickup, custom-cake intake, private reference-image selection and KOMOJU handoff foundations are materially GREEN in isolated non-production scope. Sprint 4 is formally primary. On 16 Sep, the guarded actual WooCommerce preproduction final-screen review became GREEN after bounded corrections: verified Cool 60 shipping, the approved four-method KOMOJU test subset, bilingual Konbini deadline and both legal routes were visible. The final action was not invoked; no order or payment was created, and Order Approval was restored. First-party Quick Pickup decision and operator-disable controls are prepared in fixture-only scope, but its production route/readiness remain fail-closed. This acceptance and preparation do not close Sprint 4 or authorize production execution.
 
 ## Sprint 5 — Operations Hub
 
@@ -337,9 +349,9 @@ Update/review when:
 
 # 8. Current Decision Queue
 
-## Immediate — Sprint 4 actual checkout acceptance gate
+## Immediate — Sprint 4 post-acceptance launch gates
 
-**Status: GREEN / actual WooCommerce preproduction final-confirmation-screen acceptance completed without a transaction. Sprint 4 remains primary pending its separate closure and launch gates.**
+**Status: ACTUAL WOOCOMMERCE PREPRODUCTION FINAL-SCREEN ACCEPTANCE GREEN / remaining production launch gates separately fail-closed. Sprint 4 remains primary pending its separate closure and launch gates.**
 
 Completed acceptance controls and continuing boundaries:
 
@@ -350,6 +362,7 @@ Completed acceptance controls and continuing boundaries:
 - The disposable-cart review used synthetic QA data; only sanitized evidence was retained and the final action remained uninvoked.
 - Keep order creation, payment execution, catalog publication, DNS cutover and automatic production execution false.
 - Keep missing bilingual, media, packaging and fulfillment facts explicitly pending rather than manufacturing them.
+- Keep first-party Quick Pickup route activation false; its current stock/capacity decision and operator-disable controls are fixture-only preparation and do not satisfy production readiness.
 
 The owner-editable worksheet, human-readable checklist and fail-closed intake reviewer are now the preferred handoff path for catalog facts. The system must not invent missing owner values.
 
@@ -366,9 +379,9 @@ Do **not** activate historical working examples unless the owner explicitly conf
 
 ## Parallel external / later launch dependencies
 
-- Twilio provider/account authorization resolution plus controlled handset validation.
-- Public HTTPS Twilio delivery-status route/callback verification when separately authorized.
-- Safe actual WooCommerce final confirmation-screen evidence and owner acceptance.
+- Twilio provider/account authorization resolution plus controlled handset validation remains deferred/non-blocking for V1; do not activate sending without separate acceptance.
+- Public HTTPS Twilio delivery-status route/callback verification only if/when Twilio activation is separately resumed and authorized.
+- Retain the GREEN WooCommerce final-confirmation-screen acceptance evidence; repeat actual-screen acceptance only if a material checkout configuration change invalidates that evidence.
 - KOMOJU final live acceptance / real-money gate; execution only after payment-specific readiness and audit evidence are GREEN.
 - Tokushoho publication execution only when independent readiness prerequisites are GREEN.
 - Near-cutover backup/restore freshness check performed close to actual cutover, not prematurely.
@@ -428,5 +441,6 @@ These targets remain materially ahead of the original approximately two-month ob
 - **16 Sep 2026** — With action-time approval, enabled the connected KOMOJU test-account provider and added checkout links to the existing approved cancellation/refund and Tokushoho pages. All four approved test gateways are enabled, but the active Order Approval gateway intentionally remains the only customer-facing checkout method and defers payment until owner approval. No order or payment was executed; shipping remains unresolved pending a verified product class.
 - **16 Sep 2026** — Owner confirmed Fudgy Milky Bar may be cool or ambient and authorized temporary Cool 60. A synthetic one-item checkout showed Tokyo Yamato Cool 60 at ¥1,215, all four approved KOMOJU test methods and both legal links. Konbini's approved three-day deadline was absent. Order Approval was restored after the review; no final action, order or payment was executed.
 - **16 Sep 2026** — Added the owner-approved bilingual Konbini three-day deadline and repeated the bounded actual checkout review. One-item subtotal ¥250, Tokyo Cool 60 shipping ¥1,215, total ¥1,465, all four approved test methods, test-mode notice, legal links and the deadline were visible. The final action was not invoked; no order or payment was created. Order Approval was restored and the actual final-screen acceptance is GREEN. Sprint 4 remains primary; production launch authority remains fail-closed.
+- **17 Sep 2026** — PR #404/#405 reconciled the GREEN final-screen evidence across launch-state and KOMOJU prerequisite projections without promoting payment/publication authority. PR #406 added fixture-only first-party Quick Pickup stock/capacity decision preview; PR #407 added a fixture-only operator-disable foundation. Production Quick Pickup route/readiness remain false, `rollback_disable_path_green` remains false, and no order, payment, publication, DNS or automatic execution authority was introduced. Current merged `main` at this reconciliation: `48a0fdd47b22c6bce9e05030d09dbd1b4f5bc974`.
 
 > **DOCUMENT CONTROL RULE:** Do not create a replacement master timeline for ordinary schedule updates. Review and update this canonical roadmap, refresh the status dashboard at the top, and record material changes in the Change Log.
