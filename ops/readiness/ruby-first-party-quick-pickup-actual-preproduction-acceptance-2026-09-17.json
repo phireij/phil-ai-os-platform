@@ -2,19 +2,23 @@
   "version": "ruby-first-party-quick-pickup-actual-preproduction-acceptance-v1",
   "date": "2026-09-17",
   "environment": "preproduction",
-  "evidence_status": "BLOCKED_PENDING_ACTUAL_ROUTE_ACCESS",
+  "evidence_status": "BLOCKED_PENDING_FIRST_PARTY_ROUTE_DEPLOYMENT",
   "synthetic_only": true,
   "attempt": {
     "source_head": "9c79347e9b420330342586ca58788bfd7dd8fd9d",
-    "route_requested": "/quick-pickup.html",
+    "deployed_host": "https://darkgreen-wallaby-680439.hostingersite.com",
+    "first_party_route_requested": "/preview/quick-pickup.html",
+    "first_party_route_result": "HTTP/page rendered as WordPress Page not found",
+    "legacy_preview_checked": "/preview/quick-pickup-preview.html",
+    "legacy_preview_result": "Air Mobile readiness preview only; no first-party route or customer ordering surface",
     "locales_requested": ["en", "ja"],
-    "scenarios_requested": ["ordering_disabled","inventory_fresh","inventory_stale","inventory_out_of_stock","slot_available","slot_full","slot_cutoff","operator_disable","operator_rollback"],
-    "actual_preproduction_surface_reachable": false,
-    "blocker": "No accessible authenticated browser/preproduction route was available in this acceptance session; fixture/static source inspection is not actual preproduction evidence."
+    "scenarios_requested": ["ordering_disabled","inventory_fresh","inventory_stale","inventory_out_of_stock","slot_available","slot_full","slot_cutoff","operator_disable","operator_rollback"]
   },
   "observations": {
-    "english_route_rendered": false,
-    "japanese_route_rendered": false,
+    "host_reachable": true,
+    "first_party_route_deployed": false,
+    "english_first_party_route_rendered": false,
+    "japanese_first_party_route_rendered": false,
     "ordering_disabled_observed": false,
     "inventory_fresh_observed": false,
     "inventory_stale_blocked": false,
@@ -23,7 +27,10 @@
     "full_slot_blocked": false,
     "cutoff_slot_blocked": false,
     "operator_disable_observed": false,
-    "operator_rollback_observed": false
+    "operator_rollback_observed": false,
+    "legacy_air_mobile_preview_observed": true,
+    "legacy_preview_external_activation_disabled": true,
+    "legacy_preview_live_orders_payments_inventory_writes_disabled": true
   },
   "readiness_effect": "none",
   "safety": {
@@ -44,5 +51,10 @@
     "production_publish_authorized": false,
     "automatic_production_execution_authorized": false
   },
-  "next_required_evidence": ["reachable first-party Quick Pickup preproduction URL","controlled EN/JA route capture","sanitized inventory/capacity scenario observations","operator disable and recovery observations"]
+  "next_required_evidence": [
+    "deploy first-party route to the isolated preproduction surface",
+    "controlled EN/JA route capture",
+    "sanitized inventory/capacity scenario observations",
+    "operator disable and recovery observations"
+  ]
 }
