@@ -1,0 +1,31 @@
+{
+  "version": "ruby-public-cutover-plan-evidence-v1",
+  "runbook_ref": "docs/SPRINT_7_WOOCOMMERCE_STAGING_CUTOVER_RUNBOOK_2026-08-28.md",
+  "checks": {
+    "applicable_launch_gates_green": false,
+    "final_catalog_version_confirmed": false,
+    "near_cutover_recovery_green": false,
+    "main_branch_protection_green": false,
+    "rollback_abort_path_confirmed": false,
+    "ssl_domain_readiness_confirmed": false,
+    "cutover_window_and_operator_confirmed": false,
+    "pre_cutover_smoke_plan_confirmed": false,
+    "post_cutover_smoke_plan_confirmed": false,
+    "ceo_final_go_no_go_accepted": false,
+    "cto_signoff_recorded": false
+  },
+  "evidence_refs": [],
+  "contains_secret_material": false,
+  "authority": {
+    "dns_cutover_authorized": false,
+    "site_cutover_authorized": false,
+    "production_publish_authorized": false,
+    "payment_execution_authorized": false,
+    "order_creation_authorized": false,
+    "automatic_production_execution_authorized": false,
+    "automatic_rollback_authorized": false
+  },
+  "evidence_complete": false,
+  "confirmation_green": false,
+  "decision": "PENDING_PUBLIC_CUTOVER_PLAN_CONFIRMATION_FAIL_CLOSED"
+}
