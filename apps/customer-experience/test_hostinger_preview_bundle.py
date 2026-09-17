@@ -31,6 +31,24 @@ class HostingerPreviewBundleTests(unittest.TestCase):
                 self.assertIn("preview/src/ruby-product-preview.js", names)
                 self.assertIn("preview/src/ruby-preview-cart.js", names)
                 self.assertIn("preview/src/ruby-cart-preview.js", names)
+
+                # The actual first-party Quick Pickup preproduction acceptance route
+                # must be present in every deployable Hostinger preview artifact.
+                # This does not authorize deployment or production activation; it
+                # only prevents a stale/incomplete artifact from passing CI.
+                self.assertIn("preview/quick-pickup.html", names)
+                self.assertIn("preview/src/quick-pickup-route.js", names)
+                self.assertIn("preview/src/quick-pickup-route-copy.js", names)
+                self.assertIn("preview/src/quick-pickup-checkout-contract.js", names)
+                self.assertIn("preview/src/quick-pickup-disable-control.js", names)
+                self.assertIn("preview/src/quick-pickup-decision-preview.js", names)
+                self.assertIn("preview/src/quick-pickup-availability.js", names)
+                self.assertIn("preview/src/quick-pickup-capacity.js", names)
+                self.assertIn("preview/fixtures/first-party-quick-pickup.json", names)
+                self.assertIn("preview/fixtures/quick-pickup-inventory-snapshot.json", names)
+                self.assertIn("preview/fixtures/quick-pickup-capacity-snapshot.json", names)
+                self.assertIn("preview/fixtures/quick-pickup-disable-control.json", names)
+
                 self.assertTrue(any(name.startswith("preview/src/") and name.endswith(".js") for name in names))
                 self.assertFalse(any(name.startswith("preview/src/") and name.endswith(".mjs") for name in names))
                 for target in preview_builder.ALLOWED_FETCH_TARGETS:
@@ -47,6 +65,20 @@ class HostingerPreviewBundleTests(unittest.TestCase):
                 self.assertIn("engineering-preview.html", landing)
                 self.assertEqual(landing.count("PRE-PRODUCTION PREVIEW"), 1)
                 self.assertNotIn('class="phil-preview-boundary"', landing)
+
+                quick_pickup = archive.read("preview/quick-pickup.html").decode("utf-8")
+                self.assertIn("Ordering disabled", quick_pickup)
+                self.assertIn("src/quick-pickup-route.js", quick_pickup)
+                self.assertNotIn(".mjs", quick_pickup)
+                self.assertIn("PRE-PRODUCTION PREVIEW", quick_pickup)
+                self.assertIn('name="robots"', quick_pickup.lower())
+                self.assertIn("noindex", quick_pickup.lower())
+
+                quick_pickup_route = archive.read("preview/src/quick-pickup-route.js").decode("utf-8")
+                self.assertIn("order_creation_authorized: false", quick_pickup_route)
+                self.assertIn("payment_execution_authorized: false", quick_pickup_route)
+                self.assertIn("production_publish_authorized: false", quick_pickup_route)
+                self.assertNotIn(".mjs", quick_pickup_route)
 
                 product_detail = archive.read("preview/ruby-product-preview.html").decode("utf-8")
                 self.assertIn('id="ruby-product-detail"', product_detail)
