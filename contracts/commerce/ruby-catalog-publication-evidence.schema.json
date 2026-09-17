@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/commerce/ruby-catalog-publication-evidence.schema.json",
+  "title": "Ruby final production catalog publication evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "scope_ref",
+    "source_ref",
+    "products",
+    "checks",
+    "evidence_refs",
+    "contains_secret_material",
+    "authority",
+    "evidence_complete",
+    "acceptance_green",
+    "decision"
+  ],
+  "properties": {
+    "version": {"const": "ruby-catalog-publication-evidence-v1"},
+    "scope_ref": {"const": "ops/readiness/ruby-initial-launch-catalog-v1-ceo-decision-2026-09-16.json"},
+    "source_ref": {"const": "commerce/woocommerce/fixtures/working-catalog-subset-2026-09-11.json"},
+    "products": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["Moist Chocolate Round Cake", "Fudgy Milky Bar", "Cheezy Ensaymada"]
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "final_bilingual_customer_facing_copy_confirmed",
+        "verified_product_media_references_confirmed",
+        "final_fulfillment_package_shipping_classifications_confirmed",
+        "subsystem_preflight_green",
+        "controlled_publication_acceptance_green"
+      ],
+      "properties": {
+        "final_bilingual_customer_facing_copy_confirmed": {"type": "boolean"},
+        "verified_product_media_references_confirmed": {"type": "boolean"},
+        "final_fulfillment_package_shipping_classifications_confirmed": {"type": "boolean"},
+        "subsystem_preflight_green": {"type": "boolean"},
+        "controlled_publication_acceptance_green": {"type": "boolean"}
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "contains_secret_material": {"const": false},
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "woocommerce_catalog_write_authorized",
+        "production_publish_authorized",
+        "payment_execution_authorized",
+        "automatic_production_execution_authorized"
+      ],
+      "properties": {
+        "woocommerce_catalog_write_authorized": {"const": false},
+        "production_publish_authorized": {"const": false},
+        "payment_execution_authorized": {"const": false},
+        "automatic_production_execution_authorized": {"const": false}
+      }
+    },
+    "evidence_complete": {"type": "boolean"},
+    "acceptance_green": {"type": "boolean"},
+    "decision": {
+      "enum": [
+        "PENDING_CATALOG_PUBLICATION_CONTENT_FAIL_CLOSED",
+        "CATALOG_PUBLICATION_ACCEPTANCE_GREEN"
+      ]
+    }
+  }
+}

@@ -1,0 +1,45 @@
+name: Sprint 4 Catalog Publication Evidence CI
+
+on:
+  pull_request:
+    paths:
+      - "contracts/commerce/ruby-catalog-publication-evidence.schema.json"
+      - "ops/readiness/ruby-catalog-publication-evidence.template.json"
+      - "ops/readiness/ruby-initial-launch-catalog-v1-ceo-decision-2026-09-16.json"
+      - "ops/readiness/ruby-final-go-no-go-gate-2026-09-02.json"
+      - "scripts/validate_sprint7_catalog_publication_evidence.py"
+      - ".github/workflows/sprint-4-catalog-publication-evidence-ci.yml"
+  push:
+    branches:
+      - "main"
+      - "sprint4/**"
+    paths:
+      - "contracts/commerce/ruby-catalog-publication-evidence.schema.json"
+      - "ops/readiness/ruby-catalog-publication-evidence.template.json"
+      - "ops/readiness/ruby-initial-launch-catalog-v1-ceo-decision-2026-09-16.json"
+      - "ops/readiness/ruby-final-go-no-go-gate-2026-09-02.json"
+      - "scripts/validate_sprint7_catalog_publication_evidence.py"
+      - ".github/workflows/sprint-4-catalog-publication-evidence-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-publication-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate catalog publication evidence contract
+        run: python scripts/validate_sprint7_catalog_publication_evidence.py --self-test
+
+      - name: Verify pending template remains fail-closed
+        run: |
+          python -m json.tool ops/readiness/ruby-catalog-publication-evidence.template.json >/dev/null
+          ! grep -E '"(woocommerce_catalog_write_authorized|production_publish_authorized|payment_execution_authorized|automatic_production_execution_authorized)"[[:space:]]*:[[:space:]]*true' ops/readiness/ruby-catalog-publication-evidence.template.json
+          echo PHIL_AI_OS_CATALOG_PUBLICATION_TEMPLATE_FAIL_CLOSED_GREEN
