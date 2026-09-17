@@ -1,0 +1,40 @@
+{
+  "version": "ruby-first-party-quick-pickup-operator-rollback-evidence-v1",
+  "date": "2026-09-17",
+  "environment": "preproduction",
+  "evidence_status": "PENDING",
+  "synthetic_only": true,
+  "no_order_created": true,
+  "no_payment_executed": true,
+  "no_inventory_mutation": true,
+  "no_capacity_mutation": true,
+  "no_production_publish": true,
+  "operator_acceptance": {
+    "controlled_handset_exercised": false,
+    "english_copy_reviewed": false,
+    "japanese_copy_reviewed": false,
+    "ordering_disabled_state_observed": false,
+    "no_order_action_observed": false,
+    "operator_can_identify_pending_readiness": false,
+    "accepted": false
+  },
+  "rollback_disable_acceptance": {
+    "disable_control_engaged": false,
+    "route_withheld_after_disable": false,
+    "href_withheld_after_disable": false,
+    "order_path_withheld_after_disable": false,
+    "payment_path_withheld_after_disable": false,
+    "recovery_to_safe_disabled_state_confirmed": false,
+    "accepted": false
+  },
+  "production_readiness_effect": "none_until_all_observations_are_true",
+  "authority": {
+    "customer_order_creation_authorized": false,
+    "payment_execution_authorized": false,
+    "inventory_mutation_authorized": false,
+    "capacity_mutation_authorized": false,
+    "production_publish_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "notes": "Template only. Populate only from sanitized, bounded preproduction evidence. Do not infer acceptance from fixture tests or implementation alone."
+}
