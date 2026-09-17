@@ -11,6 +11,7 @@ ROUTE_HTML = ROOT / "apps/customer-experience/quick-pickup.html"
 ROUTE_JS = ROOT / "apps/customer-experience/src/quick-pickup-route.mjs"
 ROUTE_COPY = ROOT / "apps/customer-experience/src/quick-pickup-route-copy.mjs"
 CHECKOUT_CONTRACT = ROOT / "apps/customer-experience/src/quick-pickup-checkout-contract.mjs"
+OPERATOR_ROLLBACK_EVIDENCE = ROOT / "ops/readiness/ruby-first-party-quick-pickup-operator-rollback-evidence.template.json"
 ROADMAP = ROOT / "docs/MASTER_EXECUTIVE_ROADMAP_SCHEDULE_CONTROL.md"
 
 
@@ -22,6 +23,7 @@ def require(condition: bool, message: str) -> None:
 def main() -> None:
     data = json.loads(READINESS.read_text(encoding="utf-8"))
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    operator_rollback = json.loads(OPERATOR_ROLLBACK_EVIDENCE.read_text(encoding="utf-8"))
     route_html = ROUTE_HTML.read_text(encoding="utf-8")
     route_js = ROUTE_JS.read_text(encoding="utf-8")
     route_copy = ROUTE_COPY.read_text(encoding="utf-8")
@@ -50,12 +52,13 @@ def main() -> None:
         "isolated_customer_route_foundation_prepared",
         "bilingual_customer_copy_contract_prepared",
         "checkout_and_payment_contract_prepared",
+        "operator_rollback_acceptance_harness_prepared",
     ):
         require(preparation.get(key) is True, f"bounded Quick Pickup preparation regressed: {key}")
     require(preparation.get("operator_disable_control_production_accepted") is False, "fixture disable control cannot satisfy production acceptance")
     require(preparation.get("bilingual_customer_copy_production_accepted") is False, "copy implementation cannot satisfy production acceptance")
     require(preparation.get("checkout_and_payment_contract_production_accepted") is False, "checkout contract implementation cannot satisfy production acceptance")
-    require(preparation.get("production_readiness_effect") == "route_copy_and_checkout_contract_implementation_only", "bounded implementation must not claim broader production readiness")
+    require(preparation.get("production_readiness_effect") == "route_copy_checkout_and_acceptance_harness_implementation_only", "bounded implementation must not claim broader production readiness")
 
     readiness = data.get("production_readiness")
     require(isinstance(readiness, dict), "production readiness missing")
@@ -88,6 +91,10 @@ def main() -> None:
     ):
         require(fixture.get(key) is False, f"Quick Pickup fixture expanded readiness or authority: {key}")
 
+    require(operator_rollback.get("evidence_status") == "PENDING", "operator/rollback evidence must remain pending until actual preproduction acceptance")
+    require(operator_rollback.get("operator_acceptance", {}).get("accepted") is False, "operator acceptance cannot be inferred from harness preparation")
+    require(operator_rollback.get("rollback_disable_acceptance", {}).get("accepted") is False, "rollback acceptance cannot be inferred from harness preparation")
+
     require('meta name="robots" content="noindex,nofollow"' in route_html, "isolated Quick Pickup route must remain noindex")
     require("Ordering disabled" in route_html, "Quick Pickup route missing fail-closed customer status")
     require("No customer order action" in route_html, "Quick Pickup route missing non-ordering footer")
@@ -117,7 +124,7 @@ def main() -> None:
 
     require("first-party Quick Pickup" in roadmap, "roadmap first-party Quick Pickup reconciliation missing")
     require("Air Mobile Quick Pickup production URL" not in roadmap, "roadmap retains Air Mobile launch dependency")
-    print("PHIL_AI_OS_FIRST_PARTY_QUICK_PICKUP_READINESS_GREEN air_mobile_v1=false route_implemented=true bilingual_copy_contract=prepared_not_accepted checkout_payment_contract=prepared_not_accepted production_ready=false ordering=false authority=false")
+    print("PHIL_AI_OS_FIRST_PARTY_QUICK_PICKUP_READINESS_GREEN air_mobile_v1=false route_implemented=true bilingual_copy_contract=prepared_not_accepted checkout_payment_contract=prepared_not_accepted operator_rollback_harness=prepared_evidence_pending production_ready=false ordering=false authority=false")
 
 
 if __name__ == "__main__":
