@@ -10,6 +10,13 @@
     "sprint3_scope_approval_green": true,
     "publication_catalog_content_complete": false
   },
+  "publication_evidence_contract": {
+    "status": "contract_ready_evidence_pending",
+    "schema_ref": "contracts/commerce/ruby-catalog-publication-evidence.schema.json",
+    "template_ref": "ops/readiness/ruby-catalog-publication-evidence.template.json",
+    "validator_ref": "scripts/validate_sprint7_catalog_publication_evidence.py",
+    "publication_acceptance_green": false
+  },
   "authority": {
     "woocommerce_catalog_write_authorized": false,
     "production_publish_authorized": false,
