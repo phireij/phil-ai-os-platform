@@ -136,6 +136,15 @@ def validate_contract() -> None:
     validate_evidence(template, expect_pending=True)
 
     require(gate.get("version") == "ruby-launch-recovery-acceptance-gate-v1", "launch recovery gate version drift")
+    contract = gate.get("near_cutover_evidence_contract")
+    require(isinstance(contract, dict), "launch recovery evidence contract linkage missing")
+    require(contract.get("status") == "contract_ready_execution_deferred_until_near_cutover", "recovery contract status drift")
+    require(contract.get("schema_ref") == "contracts/operations/launch-recovery-near-cutover-evidence.schema.json", "recovery schema ref drift")
+    require(contract.get("template_ref") == "ops/readiness/ruby-launch-recovery-near-cutover-evidence.template.json", "recovery template ref drift")
+    require(contract.get("validator_ref") == "scripts/validate_sprint7_launch_recovery_evidence.py", "recovery validator ref drift")
+    require(contract.get("historical_baseline_satisfies_contract") is False, "historical baseline cannot satisfy launch-fresh evidence")
+    require(contract.get("fresh_execution_performed") is False, "near-cutover recovery execution was claimed prematurely")
+
     baseline = gate.get("current_baseline") or {}
     require(baseline.get("status") == "green_current_not_launch_fresh", "historical recovery baseline status drift")
     require(baseline.get("source_sqlite_quick_check") == "ok", "historical source quick_check regressed")
