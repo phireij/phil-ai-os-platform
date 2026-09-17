@@ -3,6 +3,7 @@ import {
   buildDeterministicQuickPickupFixtureRequest,
   evaluateQuickPickupDecisionPreview,
 } from "./quick-pickup-decision-preview.mjs";
+import { applyQuickPickupDisableControl, validateQuickPickupDisableControl } from "./quick-pickup-disable-control.mjs";
 import { syncLocaleLinks } from "./locale-links.mjs";
 
 const copy = {
@@ -23,6 +24,9 @@ const copy = {
     fixtureAvailable: "The synthetic snapshot has enough sample stock and slot capacity for this demonstration request.",
     fixtureBlocked: "The synthetic demonstration request is blocked by its fail-closed stock or slot checks.",
     fixtureSafety: "Historical test data only — this is not live inventory, not a reservation, and not an order. No customer action is available from this check.",
+    disableTitle: "Fixture operator-disable control",
+    disableEngaged: "ENGAGED — route exposure is vetoed even if an upstream synthetic route becomes ready.",
+    disableReleased: "Released in fixture only — upstream readiness still controls whether any route can be exposed.",
     safetyTitle: "No customer route is activated automatically",
     safetyCopy: "Implementation, eligible catalog, inventory freshness, capacity, payment, bilingual copy, operator acceptance, and rollback controls must all be GREEN before an approved route may be exposed. Automatic execution remains disabled.",
     technical: "Technical readiness details",
@@ -48,6 +52,9 @@ const copy = {
     fixtureAvailable: "このデモ用リクエストでは、合成スナップショット上のサンプル在庫と受取枠に余裕があります。",
     fixtureBlocked: "このデモ用リクエストは、在庫または受取枠のフェイルクローズ確認により停止されています。",
     fixtureSafety: "過去のテストデータのみです。実在庫、予約、注文ではなく、この確認画面からお客様の操作はできません。",
+    disableTitle: "フィクスチャ専用：運用者停止コントロール",
+    disableEngaged: "有効 — 上流の合成ルートが準備完了になっても、ルート公開を強制的に停止します。",
+    disableReleased: "フィクスチャ上のみ解除 — ルート公開可否は引き続き上流の準備状況に従います。",
     safetyTitle: "注文導線は自動で有効化されません",
     safetyCopy: "実装、対象カタログ、在庫鮮度、受取可能数、決済、日英コピー、運用者確認、ロールバック管理がすべてGREENになった場合のみ、承認済みルートを公開できます。自動実行は無効のままです。",
     technical: "技術的な準備状況",
@@ -63,6 +70,7 @@ const output = document.querySelector("#quick-pickup-state");
 let config;
 let inventorySnapshot;
 let capacitySnapshot;
+let disableControl;
 let decisionRequest;
 let decision;
 let locale = new URLSearchParams(location.search).get("lang") === "ja" ? "ja" : "en";
@@ -109,6 +117,17 @@ function renderFixtureDecision() {
   output.append(section);
 }
 
+function renderDisableControl() {
+  const section = document.createElement("section");
+  section.setAttribute("aria-label", copy[locale].disableTitle);
+  const heading = document.createElement("h3");
+  heading.textContent = copy[locale].disableTitle;
+  const status = document.createElement("strong");
+  status.textContent = disableControl.disable_engaged ? copy[locale].disableEngaged : copy[locale].disableReleased;
+  section.append(heading, status);
+  output.append(section);
+}
+
 function render() {
   document.documentElement.lang = locale;
   localeSelect.value = locale;
@@ -120,10 +139,11 @@ function render() {
   document.querySelector("#safety-copy").textContent = copy[locale].safetyCopy;
   syncMobileNavigation();
 
-  const state = firstPartyQuickPickupUiState(config);
-  const message = state.reason === "controlled_activation_ready"
+  const upstreamState = firstPartyQuickPickupUiState(config);
+  const state = applyQuickPickupDisableControl(upstreamState, disableControl);
+  const message = upstreamState.reason === "controlled_activation_ready"
     ? copy[locale].ready
-    : state.reason === "readiness_pending"
+    : upstreamState.reason === "readiness_pending"
       ? copy[locale].activationPending
       : copy[locale].pending;
 
@@ -137,6 +157,7 @@ function render() {
     output.append(document.createElement("p")).append(link);
   }
 
+  renderDisableControl();
   renderFixtureDecision();
 
   const details = document.createElement("details");
@@ -144,10 +165,10 @@ function render() {
   summary.textContent = copy[locale].technical;
   const pre = document.createElement("pre");
   pre.textContent = JSON.stringify({
-    route: {
-      available: state.available,
-      href_exposed: Boolean(state.href),
-      reason: state.reason,
+    upstream_route: {
+      available: upstreamState.available,
+      href_exposed: Boolean(upstreamState.href),
+      reason: upstreamState.reason,
       air_mobile_order_required_for_v1: config.air_mobile_order_required_for_v1,
       route_implemented: config.route_implemented,
       eligible_catalog_confirmed: config.eligible_catalog_confirmed,
@@ -160,6 +181,8 @@ function render() {
       activation_authorized: config.activation_authorized,
       automatic_production_execution_authorized: config.automatic_production_execution_authorized,
     },
+    guarded_route: state,
+    disable_control: disableControl,
     fixture_decision: decision,
     fixture_request: decisionRequest,
     fixture_sources: {
@@ -174,21 +197,25 @@ function render() {
 }
 
 async function boot() {
-  const [configResponse, inventoryResponse, capacityResponse] = await Promise.all([
+  const [configResponse, inventoryResponse, capacityResponse, disableResponse] = await Promise.all([
     fetch("./fixtures/first-party-quick-pickup.json", { cache: "no-store" }),
     fetch("./fixtures/quick-pickup-inventory-snapshot.json", { cache: "no-store" }),
     fetch("./fixtures/quick-pickup-capacity-snapshot.json", { cache: "no-store" }),
+    fetch("./fixtures/quick-pickup-disable-control.json", { cache: "no-store" }),
   ]);
   if (!configResponse.ok) throw new Error(`quick pickup readiness fixture failed: ${configResponse.status}`);
   if (!inventoryResponse.ok) throw new Error(`quick pickup inventory fixture failed: ${inventoryResponse.status}`);
   if (!capacityResponse.ok) throw new Error(`quick pickup capacity fixture failed: ${capacityResponse.status}`);
+  if (!disableResponse.ok) throw new Error(`quick pickup disable fixture failed: ${disableResponse.status}`);
 
-  [config, inventorySnapshot, capacitySnapshot] = await Promise.all([
+  [config, inventorySnapshot, capacitySnapshot, disableControl] = await Promise.all([
     configResponse.json(),
     inventoryResponse.json(),
     capacityResponse.json(),
+    disableResponse.json(),
   ]);
   validateFirstPartyQuickPickupConfig(config);
+  validateQuickPickupDisableControl(disableControl);
   decisionRequest = buildDeterministicQuickPickupFixtureRequest(inventorySnapshot, capacitySnapshot);
   decision = evaluateQuickPickupDecisionPreview(decisionRequest, inventorySnapshot, capacitySnapshot);
   render();

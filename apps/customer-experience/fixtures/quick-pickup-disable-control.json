@@ -1,0 +1,14 @@
+{
+  "fixture_only": true,
+  "control_id": "fixture:quick-pickup-disable-v1",
+  "mode": "operator_hold",
+  "disable_engaged": true,
+  "reason": "preproduction_not_ready",
+  "network_authorized": false,
+  "route_mutation_authorized": false,
+  "inventory_mutation_authorized": false,
+  "capacity_mutation_authorized": false,
+  "order_creation_authorized": false,
+  "payment_execution_authorized": false,
+  "production_publish_authorized": false
+}

@@ -16,6 +16,16 @@ test("Quick Pickup preview consumes both fixture-only stock and slot controls", 
   assert.match(text, /buildDeterministicQuickPickupFixtureRequest/);
 });
 
+test("Quick Pickup preview applies the fixture-only operator-disable control before route exposure", async () => {
+  const text = await source();
+  assert.match(text, /applyQuickPickupDisableControl/);
+  assert.match(text, /validateQuickPickupDisableControl/);
+  assert.match(text, /quick-pickup-disable-control\.json/);
+  assert.match(text, /const state = applyQuickPickupDisableControl\(upstreamState, disableControl\)/);
+  assert.match(text, /Fixture operator-disable control/);
+  assert.match(text, /フィクスチャ専用：運用者停止コントロール/);
+});
+
 test("customer copy makes the synthetic decision non-authorizing in English and Japanese", async () => {
   const text = await source();
   assert.match(text, /Historical test data only/);

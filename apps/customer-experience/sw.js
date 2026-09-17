@@ -1,5 +1,5 @@
-const CACHE_NAME = "phil-ai-os-cx-sprint4-v30";
-// 2026-09-17: cache the fixture-only Quick Pickup decision-preview layer while preserving network-first branded Ruby preview refresh behavior.
+const CACHE_NAME = "phil-ai-os-cx-sprint4-v31";
+// 2026-09-17: cache the fixture-only Quick Pickup operator-disable control while preserving network-first branded Ruby preview refresh behavior.
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -52,6 +52,7 @@ const APP_SHELL = [
   "./src/quick-pickup-availability.mjs",
   "./src/quick-pickup-capacity.mjs",
   "./src/quick-pickup-decision-preview.mjs",
+  "./src/quick-pickup-disable-control.mjs",
   "./src/quick-pickup-preview.mjs",
   "./src/order-intake-preview.mjs",
   "./src/order-intake-draft-state.mjs",
@@ -72,6 +73,7 @@ const APP_SHELL = [
   "./fixtures/first-party-quick-pickup.json",
   "./fixtures/quick-pickup-inventory-snapshot.json",
   "./fixtures/quick-pickup-capacity-snapshot.json",
+  "./fixtures/quick-pickup-disable-control.json",
 ];
 
 self.addEventListener("install", (event) => {

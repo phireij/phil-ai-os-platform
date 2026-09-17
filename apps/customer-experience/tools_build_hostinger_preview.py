@@ -16,6 +16,7 @@ ALLOWED_FETCH_TARGETS = {
     "./fixtures/first-party-quick-pickup.json",
     "./fixtures/quick-pickup-inventory-snapshot.json",
     "./fixtures/quick-pickup-capacity-snapshot.json",
+    "./fixtures/quick-pickup-disable-control.json",
     "./fixtures/catalog.json",
     "./fixtures/final-confirmation.json",
     "./fixtures/payment-provider.json",
