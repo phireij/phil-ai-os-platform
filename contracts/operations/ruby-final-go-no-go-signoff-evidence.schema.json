@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/operations/ruby-final-go-no-go-signoff-evidence.schema.json",
+  "title": "Ruby final Go/No-Go signoff evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "checks", "evidence_refs", "contains_secret_material", "authority", "evidence_complete", "ceo_go_no_go_accepted", "cto_signoff_recorded", "decision"],
+  "properties": {
+    "version": {"const": "ruby-final-go-no-go-signoff-evidence-v1"},
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "final_production_catalog_ready",
+        "final_checkout_tokushoho_payment_shipping_sync_green",
+        "komoju_live_acceptance_green",
+        "first_party_quick_pickup_production_ready",
+        "near_cutover_recovery_freshness_green",
+        "main_branch_protection_or_ruleset_green",
+        "public_cutover_plan_confirmed",
+        "current_head_ci_green"
+      ],
+      "properties": {
+        "final_production_catalog_ready": {"type": "boolean"},
+        "final_checkout_tokushoho_payment_shipping_sync_green": {"type": "boolean"},
+        "komoju_live_acceptance_green": {"type": "boolean"},
+        "first_party_quick_pickup_production_ready": {"type": "boolean"},
+        "near_cutover_recovery_freshness_green": {"type": "boolean"},
+        "main_branch_protection_or_ruleset_green": {"type": "boolean"},
+        "public_cutover_plan_confirmed": {"type": "boolean"},
+        "current_head_ci_green": {"type": "boolean"}
+      }
+    },
+    "evidence_refs": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "contains_secret_material": {"const": false},
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production_launch_authorized", "dns_cutover_authorized", "production_publish_authorized", "payment_execution_authorized", "order_creation_authorized", "automatic_production_execution_authorized"],
+      "properties": {
+        "production_launch_authorized": {"const": false},
+        "dns_cutover_authorized": {"const": false},
+        "production_publish_authorized": {"const": false},
+        "payment_execution_authorized": {"const": false},
+        "order_creation_authorized": {"const": false},
+        "automatic_production_execution_authorized": {"const": false}
+      }
+    },
+    "evidence_complete": {"type": "boolean"},
+    "ceo_go_no_go_accepted": {"type": "boolean"},
+    "cto_signoff_recorded": {"type": "boolean"},
+    "decision": {"enum": ["PENDING_FINAL_GO_NO_GO_SIGNOFF_FAIL_CLOSED", "FINAL_GO_NO_GO_SIGNOFF_EVIDENCE_COMPLETE"]}
+  }
+}
