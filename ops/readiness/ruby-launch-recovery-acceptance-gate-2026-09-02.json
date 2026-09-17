@@ -13,6 +13,14 @@
     "backup_monitor_active": true,
     "control_api_health": "ok"
   },
+  "near_cutover_evidence_contract": {
+    "status": "contract_ready_execution_deferred_until_near_cutover",
+    "schema_ref": "contracts/operations/launch-recovery-near-cutover-evidence.schema.json",
+    "template_ref": "ops/readiness/ruby-launch-recovery-near-cutover-evidence.template.json",
+    "validator_ref": "scripts/validate_sprint7_launch_recovery_evidence.py",
+    "historical_baseline_satisfies_contract": false,
+    "fresh_execution_performed": false
+  },
   "launch_time_acceptance": {
     "fresh_run_completed_near_cutover": false,
     "source_sqlite_quick_check_ok": false,

@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/operations/launch-recovery-near-cutover-evidence.schema.json",
+  "title": "Ruby launch recovery near-cutover evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "evidence_scope",
+    "captured_at",
+    "run_id",
+    "near_cutover_window_confirmed",
+    "checks",
+    "evidence_refs",
+    "contains_secret_material",
+    "authority",
+    "evidence_complete",
+    "acceptance_green",
+    "decision"
+  ],
+  "properties": {
+    "version": {
+      "const": "ruby-launch-recovery-near-cutover-evidence-v1"
+    },
+    "evidence_scope": {
+      "const": "near_cutover_recovery_recheck"
+    },
+    "captured_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "run_id": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "near_cutover_window_confirmed": {
+      "type": "boolean"
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_sqlite_quick_check_ok",
+        "restored_sqlite_quick_check_ok",
+        "row_counts_match",
+        "backup_timer_active",
+        "backup_monitor_active",
+        "control_api_health_ok",
+        "rollback_abort_path_confirmed"
+      ],
+      "properties": {
+        "source_sqlite_quick_check_ok": {"type": "boolean"},
+        "restored_sqlite_quick_check_ok": {"type": "boolean"},
+        "row_counts_match": {"type": "boolean"},
+        "backup_timer_active": {"type": "boolean"},
+        "backup_monitor_active": {"type": "boolean"},
+        "control_api_health_ok": {"type": "boolean"},
+        "rollback_abort_path_confirmed": {"type": "boolean"}
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "contains_secret_material": {
+      "const": false
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "production_activation_authorized",
+        "automatic_production_rollback_authorized",
+        "automatic_production_retry_authorized",
+        "dns_cutover_authorized",
+        "payment_execution_authorized",
+        "order_creation_authorized"
+      ],
+      "properties": {
+        "production_activation_authorized": {"const": false},
+        "automatic_production_rollback_authorized": {"const": false},
+        "automatic_production_retry_authorized": {"const": false},
+        "dns_cutover_authorized": {"const": false},
+        "payment_execution_authorized": {"const": false},
+        "order_creation_authorized": {"const": false}
+      }
+    },
+    "evidence_complete": {
+      "type": "boolean"
+    },
+    "acceptance_green": {
+      "type": "boolean"
+    },
+    "decision": {
+      "enum": [
+        "PENDING_NEAR_CUTOVER_RECHECK_FAIL_CLOSED",
+        "NEAR_CUTOVER_RECOVERY_ACCEPTANCE_GREEN"
+      ]
+    }
+  }
+}

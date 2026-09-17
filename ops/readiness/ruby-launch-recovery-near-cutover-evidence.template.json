@@ -1,0 +1,29 @@
+{
+  "version": "ruby-launch-recovery-near-cutover-evidence-v1",
+  "evidence_scope": "near_cutover_recovery_recheck",
+  "captured_at": null,
+  "run_id": null,
+  "near_cutover_window_confirmed": false,
+  "checks": {
+    "source_sqlite_quick_check_ok": false,
+    "restored_sqlite_quick_check_ok": false,
+    "row_counts_match": false,
+    "backup_timer_active": false,
+    "backup_monitor_active": false,
+    "control_api_health_ok": false,
+    "rollback_abort_path_confirmed": false
+  },
+  "evidence_refs": [],
+  "contains_secret_material": false,
+  "authority": {
+    "production_activation_authorized": false,
+    "automatic_production_rollback_authorized": false,
+    "automatic_production_retry_authorized": false,
+    "dns_cutover_authorized": false,
+    "payment_execution_authorized": false,
+    "order_creation_authorized": false
+  },
+  "evidence_complete": false,
+  "acceptance_green": false,
+  "decision": "PENDING_NEAR_CUTOVER_RECHECK_FAIL_CLOSED"
+}
