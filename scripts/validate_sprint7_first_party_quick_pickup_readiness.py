@@ -9,6 +9,7 @@ READINESS = ROOT / "ops/readiness/ruby-first-party-quick-pickup-readiness.json"
 FIXTURE = ROOT / "apps/customer-experience/fixtures/first-party-quick-pickup.json"
 ROUTE_HTML = ROOT / "apps/customer-experience/quick-pickup.html"
 ROUTE_JS = ROOT / "apps/customer-experience/src/quick-pickup-route.mjs"
+ROUTE_COPY = ROOT / "apps/customer-experience/src/quick-pickup-route-copy.mjs"
 ROADMAP = ROOT / "docs/MASTER_EXECUTIVE_ROADMAP_SCHEDULE_CONTROL.md"
 
 
@@ -22,6 +23,7 @@ def main() -> None:
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
     route_html = ROUTE_HTML.read_text(encoding="utf-8")
     route_js = ROUTE_JS.read_text(encoding="utf-8")
+    route_copy = ROUTE_COPY.read_text(encoding="utf-8")
     roadmap = ROADMAP.read_text(encoding="utf-8")
 
     require(data.get("version") == "ruby-first-party-quick-pickup-readiness-v1", "schema drift")
@@ -44,10 +46,12 @@ def main() -> None:
         "fixture_combined_decision_preview_prepared",
         "fixture_operator_disable_control_prepared",
         "isolated_customer_route_foundation_prepared",
+        "bilingual_customer_copy_contract_prepared",
     ):
         require(preparation.get(key) is True, f"bounded Quick Pickup preparation regressed: {key}")
     require(preparation.get("operator_disable_control_production_accepted") is False, "fixture disable control cannot satisfy production acceptance")
-    require(preparation.get("production_readiness_effect") == "route_implementation_only", "route foundation must not claim broader production readiness")
+    require(preparation.get("bilingual_customer_copy_production_accepted") is False, "copy implementation cannot satisfy production acceptance")
+    require(preparation.get("production_readiness_effect") == "route_and_copy_contract_implementation_only", "bounded implementation must not claim broader production readiness")
 
     readiness = data.get("production_readiness")
     require(isinstance(readiness, dict), "production readiness missing")
@@ -87,6 +91,9 @@ def main() -> None:
     require("order_creation_authorized: false" in route_js, "Quick Pickup route must keep order creation false")
     require("payment_execution_authorized: false" in route_js, "Quick Pickup route must keep payment execution false")
     require("production_publish_authorized: false" in route_js, "Quick Pickup route must keep publication false")
+    require("QUICK_PICKUP_ROUTE_COPY" in route_copy, "Quick Pickup bilingual copy contract missing")
+    require("validateQuickPickupRouteCopy" in route_copy, "Quick Pickup bilingual copy validator missing")
+    require("Ordering disabled" in route_copy and "注文無効" in route_copy, "Quick Pickup bilingual fail-closed copy missing")
 
     authority = data.get("authority")
     require(isinstance(authority, dict), "authority posture missing")
@@ -95,7 +102,7 @@ def main() -> None:
 
     require("first-party Quick Pickup" in roadmap, "roadmap first-party Quick Pickup reconciliation missing")
     require("Air Mobile Quick Pickup production URL" not in roadmap, "roadmap retains Air Mobile launch dependency")
-    print("PHIL_AI_OS_FIRST_PARTY_QUICK_PICKUP_READINESS_GREEN air_mobile_v1=false route_implemented=true production_ready=false ordering=false authority=false")
+    print("PHIL_AI_OS_FIRST_PARTY_QUICK_PICKUP_READINESS_GREEN air_mobile_v1=false route_implemented=true bilingual_copy_contract=prepared_not_accepted production_ready=false ordering=false authority=false")
 
 
 if __name__ == "__main__":
