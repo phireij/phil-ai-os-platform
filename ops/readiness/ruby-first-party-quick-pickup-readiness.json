@@ -22,9 +22,11 @@
     "fixture_operator_disable_control_prepared": true,
     "isolated_customer_route_foundation_prepared": true,
     "bilingual_customer_copy_contract_prepared": true,
+    "checkout_and_payment_contract_prepared": true,
     "operator_disable_control_production_accepted": false,
     "bilingual_customer_copy_production_accepted": false,
-    "production_readiness_effect": "route_and_copy_contract_implementation_only"
+    "checkout_and_payment_contract_production_accepted": false,
+    "production_readiness_effect": "route_copy_and_checkout_contract_implementation_only"
   },
   "production_readiness": {
     "first_party_pickup_route_implemented": true,
