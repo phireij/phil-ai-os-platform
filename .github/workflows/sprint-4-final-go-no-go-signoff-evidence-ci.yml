@@ -1,0 +1,47 @@
+name: Sprint 4 Final Go-No-Go Signoff Evidence CI
+
+on:
+  pull_request:
+    paths:
+      - "contracts/operations/ruby-final-go-no-go-signoff-evidence.schema.json"
+      - "ops/readiness/ruby-final-go-no-go-signoff-evidence.template.json"
+      - "ops/readiness/ruby-final-go-no-go-gate-2026-09-02.json"
+      - "ops/readiness/sprint7-launch-acceptance.json"
+      - "scripts/validate_sprint7_final_go_no_go_signoff_evidence.py"
+      - ".github/workflows/sprint-4-final-go-no-go-signoff-evidence-ci.yml"
+  push:
+    branches:
+      - "main"
+      - "sprint4/**"
+    paths:
+      - "contracts/operations/ruby-final-go-no-go-signoff-evidence.schema.json"
+      - "ops/readiness/ruby-final-go-no-go-signoff-evidence.template.json"
+      - "ops/readiness/ruby-final-go-no-go-gate-2026-09-02.json"
+      - "ops/readiness/sprint7-launch-acceptance.json"
+      - "scripts/validate_sprint7_final_go_no_go_signoff_evidence.py"
+      - ".github/workflows/sprint-4-final-go-no-go-signoff-evidence-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  final-go-no-go-signoff-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate final Go/No-Go signoff evidence contract
+        run: python scripts/validate_sprint7_final_go_no_go_signoff_evidence.py --self-test
+
+      - name: Verify pending signoff template remains non-authorizing
+        run: |
+          python -m json.tool ops/readiness/ruby-final-go-no-go-signoff-evidence.template.json >/dev/null
+          ! grep -E '"(production_launch_authorized|dns_cutover_authorized|production_publish_authorized|payment_execution_authorized|order_creation_authorized|automatic_production_execution_authorized)"[[:space:]]*:[[:space:]]*true' ops/readiness/ruby-final-go-no-go-signoff-evidence.template.json
+          grep -F '"ceo_go_no_go_accepted": false' ops/readiness/ruby-final-go-no-go-signoff-evidence.template.json
+          grep -F '"cto_signoff_recorded": false' ops/readiness/ruby-final-go-no-go-signoff-evidence.template.json
+          echo PHIL_AI_OS_FINAL_GO_NO_GO_SIGNOFF_TEMPLATE_FAIL_CLOSED_GREEN
