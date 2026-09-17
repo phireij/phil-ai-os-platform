@@ -24,10 +24,11 @@
     "bilingual_customer_copy_contract_prepared": true,
     "checkout_and_payment_contract_prepared": true,
     "operator_rollback_acceptance_harness_prepared": true,
+    "inventory_capacity_acceptance_harness_prepared": true,
     "operator_disable_control_production_accepted": false,
     "bilingual_customer_copy_production_accepted": false,
     "checkout_and_payment_contract_production_accepted": false,
-    "production_readiness_effect": "route_copy_checkout_and_acceptance_harness_implementation_only"
+    "production_readiness_effect": "route_copy_checkout_operator_rollback_inventory_capacity_harnesses_only"
   },
   "production_readiness": {
     "first_party_pickup_route_implemented": true,

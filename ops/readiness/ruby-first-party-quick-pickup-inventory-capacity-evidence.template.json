@@ -1,0 +1,43 @@
+{
+  "version": "ruby-first-party-quick-pickup-inventory-capacity-evidence-v1",
+  "date": "2026-09-17",
+  "environment": "preproduction",
+  "evidence_status": "PENDING",
+  "synthetic_only": true,
+  "inventory_freshness_acceptance": {
+    "source_identified": false,
+    "capture_timestamp_recorded": false,
+    "staleness_threshold_defined": false,
+    "fresh_snapshot_observed": false,
+    "stale_snapshot_blocked": false,
+    "out_of_stock_blocked": false,
+    "accepted": false
+  },
+  "capacity_and_cutoff_acceptance": {
+    "slot_source_identified": false,
+    "capacity_limit_recorded": false,
+    "cutoff_rule_recorded": false,
+    "available_slot_observed": false,
+    "full_slot_blocked": false,
+    "cutoff_slot_blocked": false,
+    "accepted": false
+  },
+  "safety": {
+    "no_order_created": true,
+    "no_payment_executed": true,
+    "no_inventory_mutation": true,
+    "no_capacity_mutation": true,
+    "no_reservation_created": true,
+    "no_production_publish": true
+  },
+  "authority": {
+    "customer_order_creation_authorized": false,
+    "payment_execution_authorized": false,
+    "inventory_mutation_authorized": false,
+    "capacity_mutation_authorized": false,
+    "reservation_authorized": false,
+    "production_publish_authorized": false,
+    "automatic_production_execution_authorized": false
+  },
+  "notes": "Template only. Populate from bounded preproduction evidence. Synthetic fixture tests do not satisfy production acceptance."
+}
