@@ -311,18 +311,69 @@
       "work_id": "ao-work:orchestrator-service-boundary",
       "project_id": "phil-ai-os",
       "title": "Define restart-safe orchestrator service boundary and lease semantics",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 9,
       "dependencies": [
         "ao-work:persistent-loop-runner",
         "ao-work:ao4-approval-escalation"
       ],
       "evidence_refs": [
-        "scripts/ao_mvp_persistent_loop_runner.py"
+        "scripts/ao_mvp_orchestrator_service_boundary.py",
+        "scripts/test_ao_mvp_orchestrator_service_boundary.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: restart-safe single-worker lease exclusion/expiry/owner-release contract exact-head GREEN",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:service-heartbeat-recovery",
+      "project_id": "phil-ai-os",
+      "title": "Add lease heartbeat and crash-recovery contract",
+      "state": "ready_for_inert_selection",
+      "priority": 10,
+      "dependencies": [
+        "ao-work:orchestrator-service-boundary"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_orchestrator_service_boundary.py"
       ],
       "selection": {
         "eligible": true,
-        "reason": "Persistent local loop and escalation contracts complete; service boundary design is development-branch-only",
+        "reason": "Lease boundary GREEN; restart/crash semantics are bounded development-branch engineering",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:scheduler-contract",
+      "project_id": "phil-ai-os",
+      "title": "Define bounded recurring scheduler contract",
+      "state": "planned",
+      "priority": 11,
+      "dependencies": [
+        "ao-work:service-heartbeat-recovery"
+      ],
+      "evidence_refs": [],
+      "selection": {
+        "eligible": false,
+        "reason": "Wait for crash-recovery contract",
         "execution_authorized": false
       },
       "authority": {
