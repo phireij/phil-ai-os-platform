@@ -532,16 +532,43 @@
       "work_id": "ao-work:hosted-runtime-readiness-record",
       "project_id": "phil-ai-os",
       "title": "Materialize non-authorizing hosted-runtime readiness record",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 17,
       "dependencies": [
         "ao-work:runtime-state-integrity",
         "ao-work:runtime-rollback-drill"
       ],
+      "evidence_refs": [
+        "ops/runtime/ao-mvp-hosted-runtime-readiness.v1.json",
+        "scripts/test_ao_mvp_runtime_readiness_record.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: fail-closed readiness record exact-head Contract and Supply-Chain CI GREEN; deployment remains unauthorized",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:deployment-gate-package",
+      "project_id": "phil-ai-os",
+      "title": "Prepare exact hosted activation gate and evidence template",
+      "state": "ready_for_inert_selection",
+      "priority": 18,
+      "dependencies": [
+        "ao-work:hosted-runtime-readiness-record"
+      ],
       "evidence_refs": [],
       "selection": {
         "eligible": true,
-        "reason": "Predeployment integrity and rollback contracts complete; readiness record can be materialized without deployment",
+        "reason": "All host-independent predeployment contracts GREEN; exact activation gate package can be prepared without deployment",
         "execution_authorized": false
       },
       "authority": {
