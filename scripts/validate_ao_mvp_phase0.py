@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "ops/project-registry/project-registry.v1.json"
 ARCH = ROOT / "docs/AO_MVP_PHASE_0_ARCHITECTURE_2026-10-05.md"
 BASELINE = ROOT / "docs/AO_MVP_PHASE_0_VERIFIED_BASELINE_2026-10-05.md"
+MASTER_STATUS = ROOT / "ops/project-state/master-project-status.v1.json"
 
 EXPECTED_IDS = {"phil-ai-os", "rubys-cake-delights-hq", "kcfc-portal"}
 
@@ -23,6 +24,7 @@ def main() -> None:
     require(REGISTRY.is_file(), "project registry missing")
     require(ARCH.is_file(), "architecture document missing")
     require(BASELINE.is_file(), "verified baseline missing")
+    require(MASTER_STATUS.is_file(), "master project status missing")
 
     data = json.loads(REGISTRY.read_text(encoding="utf-8"))
     require(data.get("schema") == "phil-ai-os-project-registry", "unexpected registry schema")
@@ -46,6 +48,16 @@ def main() -> None:
 
     kcfc = next(p for p in projects if p["project_id"] == "kcfc-portal")
     require(kcfc.get("role") == "external_project_read_only_integration", "KCFC must begin read-only")
+
+    master = json.loads(MASTER_STATUS.read_text(encoding="utf-8"))
+    require(master.get("schema") == "phil-ai-os-master-project-status", "unexpected master status schema")
+    require(master.get("authority_effect") == "none", "master status must not change authority")
+    require(master.get("autonomy_ceiling") == "A0", "master status must remain A0")
+    master_projects = master.get("projects")
+    require(isinstance(master_projects, list), "master projects must be a list")
+    require({p.get("project_id") for p in master_projects} == EXPECTED_IDS, "master project set must match registry")
+    for project in master_projects:
+        require(project.get("authority", {}).get("mutation_authorized") is False, "master status cannot authorize mutation")
 
     architecture = ARCH.read_text(encoding="utf-8")
     for token in ("Mission Control: read-only", "A1 is not authorized", "awaiting_ceo_approval"):
