@@ -25,6 +25,8 @@ on:
       - "scripts/validate_a1_activation.py"
       - "scripts/ao_mvp_a1_selector.py"
       - "scripts/test_ao_mvp_a1_selector.py"
+      - "scripts/ao_mvp_durable_dispatch_ledger.py"
+      - "scripts/test_ao_mvp_durable_dispatch_ledger.py"
       - "ops/project-state/project-observation.v1.schema.json"
       - "ops/project-state/observations/**"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
@@ -54,6 +56,8 @@ on:
       - "scripts/validate_a1_activation.py"
       - "scripts/ao_mvp_a1_selector.py"
       - "scripts/test_ao_mvp_a1_selector.py"
+      - "scripts/ao_mvp_durable_dispatch_ledger.py"
+      - "scripts/test_ao_mvp_durable_dispatch_ledger.py"
       - "ops/project-state/project-observation.v1.schema.json"
       - "ops/project-state/observations/**"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
@@ -81,3 +85,4 @@ jobs:
           python scripts/test_ao_mvp_a1_threat_model.py
           python scripts/validate_a1_activation.py
           python scripts/test_ao_mvp_a1_selector.py
+          python scripts/test_ao_mvp_durable_dispatch_ledger.py
