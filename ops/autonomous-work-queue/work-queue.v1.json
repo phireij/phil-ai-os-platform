@@ -230,17 +230,18 @@
       "work_id": "ao-work:ao4-approval-escalation",
       "project_id": "phil-ai-os",
       "title": "Add deterministic escalation result for denied or approval-gated work",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 8,
       "dependencies": [
         "ao-work:ao4-synthetic-orchestrator"
       ],
       "evidence_refs": [
-        "ops/authorizations/a1-authority-matrix.v1.json"
+        "scripts/ao_mvp_approval_escalation.py",
+        "scripts/test_ao_mvp_approval_escalation.py"
       ],
       "selection": {
-        "eligible": true,
-        "reason": "Bounded planning only; escalation cannot grant authority",
+        "eligible": false,
+        "reason": "Completed: escalation formatter cannot approve, execute, or widen authority",
         "execution_authorized": false
       },
       "authority": {
@@ -283,17 +284,45 @@
       "work_id": "ao-work:persistent-loop-runner",
       "project_id": "phil-ai-os",
       "title": "Compose persistent local loop runner with durable state",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 8,
       "dependencies": [
         "ao-work:orchestrator-state-machine"
       ],
       "evidence_refs": [
-        "scripts/ao_mvp_orchestrator_state_machine.py"
+        "scripts/ao_mvp_persistent_loop_runner.py",
+        "scripts/test_ao_mvp_persistent_loop_runner.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: durable local loop reaches independently verified terminal state and no-ops on repeat; provider execution remains absent",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:orchestrator-service-boundary",
+      "project_id": "phil-ai-os",
+      "title": "Define restart-safe orchestrator service boundary and lease semantics",
+      "state": "ready_for_inert_selection",
+      "priority": 9,
+      "dependencies": [
+        "ao-work:persistent-loop-runner",
+        "ao-work:ao4-approval-escalation"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_persistent_loop_runner.py"
       ],
       "selection": {
         "eligible": true,
-        "reason": "Lifecycle/verification dependency completed; local durable loop composition now eligible",
+        "reason": "Persistent local loop and escalation contracts complete; service boundary design is development-branch-only",
         "execution_authorized": false
       },
       "authority": {
