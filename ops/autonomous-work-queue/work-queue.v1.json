@@ -393,20 +393,46 @@
       "work_id": "ao-work:service-loop-composition",
       "project_id": "phil-ai-os",
       "title": "Compose scheduler lease and persistent loop into bounded service iteration",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 12,
       "dependencies": [
         "ao-work:scheduler-contract",
         "ao-work:persistent-loop-runner"
       ],
       "evidence_refs": [
-        "scripts/ao_mvp_scheduler_contract.py",
-        "scripts/ao_mvp_orchestrator_service_boundary.py",
-        "scripts/ao_mvp_persistent_loop_runner.py"
+        "scripts/ao_mvp_service_loop.py",
+        "scripts/test_ao_mvp_service_loop.py",
+        "docs/AO_MVP_PERSISTENT_SERVICE_BOUNDARY_ACCEPTANCE_2026-10-05.md"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: scheduler→lease→persistent planning loop composition exact-head CI GREEN; no provider execution",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:runtime-deployment-plan",
+      "project_id": "phil-ai-os",
+      "title": "Prepare non-deploying hosted orchestrator runtime plan",
+      "state": "ready_for_inert_selection",
+      "priority": 13,
+      "dependencies": [
+        "ao-work:service-loop-composition"
+      ],
+      "evidence_refs": [
+        "docs/AO_MVP_PERSISTENT_SERVICE_BOUNDARY_ACCEPTANCE_2026-10-05.md"
       ],
       "selection": {
         "eligible": true,
-        "reason": "Scheduler and persistent loop contracts GREEN; bounded composition only",
+        "reason": "Service-loop contract GREEN; architecture/deployment planning is allowed but deployment remains separately gated",
         "execution_authorized": false
       },
       "authority": {
