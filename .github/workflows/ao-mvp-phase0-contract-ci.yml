@@ -1,0 +1,33 @@
+name: AO-MVP Phase 0 Contract CI
+
+on:
+  pull_request:
+    paths:
+      - "docs/AO_MVP_PHASE_0_*.md"
+      - "ops/project-registry/**"
+      - "scripts/validate_ao_mvp_phase0.py"
+      - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
+  push:
+    branches:
+      - "ao-mvp/**"
+    paths:
+      - "docs/AO_MVP_PHASE_0_*.md"
+      - "ops/project-registry/**"
+      - "scripts/validate_ao_mvp_phase0.py"
+      - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate A0-inert AO-MVP contracts
+        run: python scripts/validate_ao_mvp_phase0.py
