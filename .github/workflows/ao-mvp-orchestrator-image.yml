@@ -1,0 +1,80 @@
+name: AO-MVP Orchestrator Image
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile.ao-mvp'
+      - '.dockerignore'
+      - '.github/workflows/ao-mvp-orchestrator-image.yml'
+      - 'scripts/ao_mvp_*.py'
+      - 'ops/authorizations/**'
+      - 'ops/autonomous-work-queue/**'
+      - 'ops/runtime/**'
+      - 'policy/**'
+  push:
+    branches: [main]
+    tags: ['ao-mvp-orchestrator-v*']
+    paths:
+      - 'Dockerfile.ao-mvp'
+      - '.dockerignore'
+      - '.github/workflows/ao-mvp-orchestrator-image.yml'
+      - 'scripts/ao_mvp_*.py'
+      - 'ops/authorizations/**'
+      - 'ops/autonomous-work-queue/**'
+      - 'ops/runtime/**'
+      - 'policy/**'
+
+permissions:
+  contents: read
+
+jobs:
+  pull-request-build:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build without publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx build --file Dockerfile.ao-mvp --tag ao-mvp-orchestrator:pr-check .
+          echo 'Pull request build completed without publishing.' >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build and publish image
+        id: image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}/ao-mvp-orchestrator
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx build \
+            --file Dockerfile.ao-mvp \
+            --tag "$IMAGE:sha-$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --push \
+            --metadata-file /tmp/ao-mvp-image-metadata.json \
+            .
+          digest="$(python -c 'import json; print(json.load(open("/tmp/ao-mvp-image-metadata.json"))["containerimage.digest"])')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Published `$IMAGE@$digest` from commit `$GITHUB_SHA`." >> "$GITHUB_STEP_SUMMARY"
+          docker logout ghcr.io

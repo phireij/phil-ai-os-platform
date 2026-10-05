@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """One bounded service tick: scheduler -> lease -> persistent planning loop."""
 from __future__ import annotations
+import json
 import importlib.util
+import os
+import signal
+import time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 def mod(name,path):
@@ -20,3 +24,43 @@ def tick(state_dir:Path,owner:str,epoch:int,schedule:dict)->dict:
   return {"state":"tick_complete","result":result,"execution_performed":False,"production_mutation":False}
  finally:
   lease.release(lp,owner)
+
+def run()->None:
+ """Run bounded local planning ticks; never performs provider or production I/O."""
+ state_dir=Path(os.environ.get("PHIL_AI_OS_STATE_DIR","/var/lib/phil-ai-os/ao-mvp"))
+ interval=int(os.environ.get("PHIL_AI_OS_INTERVAL_SECONDS","300"))
+ if interval<sched.MIN_INTERVAL:
+  raise SystemExit(f"PHIL_AI_OS_INTERVAL_SECONDS must be >= {sched.MIN_INTERVAL}")
+ owner=os.environ.get("HOSTNAME","ao-mvp-orchestrator")
+ stop=False
+ def request_stop(_signum,_frame):
+  nonlocal stop
+  stop=True
+ signal.signal(signal.SIGTERM,request_stop)
+ signal.signal(signal.SIGINT,request_stop)
+ while not stop:
+  schedule_path=state_dir/"schedule.json"
+  schedule={"interval_seconds":interval,"last_completed_epoch":None}
+  if schedule_path.exists():
+   try:
+    saved=json.loads(schedule_path.read_text(encoding="utf-8"))
+    schedule["last_completed_epoch"]=saved.get("last_completed_epoch")
+   except (OSError,ValueError,AttributeError):
+    # Corrupt scheduling state fails closed; it is preserved for investigation.
+    print(json.dumps({"state":"schedule_state_invalid","execution_performed":False,"production_mutation":False}),flush=True)
+    time.sleep(interval)
+    continue
+  now=int(time.time())
+  result=tick(state_dir,owner,now,schedule)
+  print(json.dumps({"state":result.get("state"),"execution_performed":False,"production_mutation":False}),flush=True)
+  if result.get("state")=="tick_complete":
+   schedule_path.parent.mkdir(parents=True,exist_ok=True)
+   tmp=schedule_path.with_suffix(".json.tmp")
+   tmp.write_text(json.dumps({"interval_seconds":interval,"last_completed_epoch":now},sort_keys=True)+"\n",encoding="utf-8")
+   os.replace(tmp,schedule_path)
+  for _ in range(interval):
+   if stop:break
+   time.sleep(1)
+
+if __name__=="__main__":
+ run()
