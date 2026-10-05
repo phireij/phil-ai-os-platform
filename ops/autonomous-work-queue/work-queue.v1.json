@@ -589,15 +589,41 @@
       "work_id": "ao-work:predeployment-acceptance-summary",
       "project_id": "phil-ai-os",
       "title": "Freeze host-independent predeployment acceptance summary",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 19,
       "dependencies": [
         "ao-work:deployment-gate-package"
       ],
+      "evidence_refs": [
+        "docs/AO_MVP_HOST_INDEPENDENT_PREDEPLOYMENT_ACCEPTANCE_2026-10-05.md"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: host-independent predeployment acceptance frozen; hosted activation remains gated",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:runtime-target-decision-package",
+      "project_id": "phil-ai-os",
+      "title": "Prepare runtime target decision package for CEO approval",
+      "state": "ready_for_inert_selection",
+      "priority": 20,
+      "dependencies": [
+        "ao-work:predeployment-acceptance-summary"
+      ],
       "evidence_refs": [],
       "selection": {
         "eligible": true,
-        "reason": "Host-independent gate package complete; acceptance summary can be frozen without activation",
+        "reason": "Host-independent engineering complete; target decision documentation is non-deploying",
         "execution_authorized": false
       },
       "authority": {
