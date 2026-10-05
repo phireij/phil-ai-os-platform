@@ -1,11 +1,11 @@
 {
-  "schema":"phil-ai-os-a1-authority-matrix",
-  "version":1,
-  "ceo_pre_authorized_on":"2026-10-05",
-  "activation_state":"preauthorized_pending_preconditions",
-  "effective_autonomy_ceiling":"A0",
-  "authority_effect":"none",
-  "allowlisted_capabilities":[
+  "schema": "phil-ai-os-a1-authority-matrix",
+  "version": 1,
+  "ceo_pre_authorized_on": "2026-10-05",
+  "activation_state": "active",
+  "effective_autonomy_ceiling": "A1",
+  "authority_effect": "none",
+  "allowlisted_capabilities": [
     "repository_inspection",
     "status_reconciliation",
     "tests_static_analysis",
@@ -16,7 +16,7 @@
     "draft_pull_request_preparation",
     "read_only_staging_evidence_collection"
   ],
-  "denied_capabilities":[
+  "denied_capabilities": [
     "pull_request_merge",
     "branch_protection_bypass",
     "production_publish_or_cutover",
@@ -31,15 +31,22 @@
     "kcfc_production_action",
     "authority_matrix_self_widening"
   ],
-  "activation_preconditions":{
-    "a0_contracts_green":true,
-    "selector_green":false,
-    "dispatcher_replay_and_denylist_green":false,
-    "rollback_green":false,
-    "threat_model_tests_green":false,
-    "exact_head_ci_green":false,
-    "activation_record_created":false
+  "activation_preconditions": {
+    "a0_contracts_green": true,
+    "selector_green": true,
+    "dispatcher_replay_and_denylist_green": true,
+    "rollback_green": true,
+    "threat_model_tests_green": true,
+    "exact_head_ci_green": true,
+    "activation_record_created": true
   },
-  "automatic_execution_enabled":false,
-  "production_mutation_authorized":false
+  "automatic_execution_enabled": true,
+  "production_mutation_authorized": false,
+  "activation_evidence": {
+    "ceo_approval_date": "2026-10-05",
+    "preactivation_exact_head": "fcb57f3b930ee7a46209f0066dfc2314379155fd",
+    "contract_ci_run_id": 37313888336,
+    "supply_chain_ci_run_id": 37313888324,
+    "scope": "bounded_engineering_allowlist_only"
+  }
 }
