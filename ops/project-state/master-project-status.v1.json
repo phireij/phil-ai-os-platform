@@ -1,7 +1,7 @@
 {
   "schema": "phil-ai-os-master-project-status",
   "version": 1,
-  "generated_from": "AO-1 committed evidence reconciliation",
+  "generated_from": "AO-1 explicit committed observation evidence",
   "observed_at": "2026-10-05",
   "authority_effect": "none",
   "autonomy_ceiling": "A0",
@@ -12,53 +12,83 @@
       "priority": 1,
       "status": "green",
       "objective": "Persistent Autonomous Execution MVP + Master Multi-Project Status",
-      "milestone": "AO-1 evidence reconciliation",
-      "verified_repository_head": "1a2731c6b301f98454bfe3a5f366b9f64d9e951b",
+      "milestone": "AO-4 bounded synthetic orchestration",
+      "verified_repository_head": "110d7df1c12adb3d06404a5c8da94cb417e480ef",
       "verified_ref": "ao-mvp/phase0-architecture",
       "completed": [
-        "AO-MVP Phase 0 architecture and registry prepared",
-        "AO-MVP contract CI exact-head GREEN",
-        "Workflow supply-chain policy exact-head GREEN"
+        "AO-1 explicit observation reconciliation",
+        "AO-5 Mission Control master-project projection contract",
+        "Bounded A1 activation contract",
+        "Synthetic selector-dispatcher-durable replay iteration"
       ],
-      "in_progress": ["AO-1 read-only evidence reconciliation"],
+      "in_progress": [
+        "Master status regeneration",
+        "Persistent orchestrator hardening"
+      ],
       "blockers": [],
       "approvals_required": [],
       "next_actions": [
-        "Materialize deterministic project state from evidence",
-        "Add read-only evidence adapter boundaries",
-        "Prepare Mission Control master-project read model"
+        "Validate regenerated master status in CI",
+        "Define persistent orchestrator state machine without provider execution"
       ],
-      "authority": {"mutation_authorized": false}
+      "authority": {
+        "mutation_authorized": false
+      }
     },
     {
       "project_id": "rubys-cake-delights-hq",
       "priority": 2,
       "status": "yellow",
       "objective": "Preserve Sprint 4 and Quick Pickup readiness while integrating authoritative project state",
-      "milestone": "Ruby evidence reconciliation",
+      "milestone": "Ruby read-only adapter integrated",
       "verified_repository_head": "35853cea3c8ebedf8f61a3ab5b3c81e5dcfa148e",
       "verified_ref": "main",
-      "completed": ["First-party Quick Pickup route engineering foundation prepared"],
-      "in_progress": ["Integrate committed Ruby readiness evidence"],
-      "blockers": ["Quick Pickup production activation readiness is false"],
-      "approvals_required": ["Production publish remains separately gated"],
-      "next_actions": ["Reconcile eligible catalog and Quick Pickup readiness evidence"],
-      "authority": {"mutation_authorized": false}
+      "completed": [
+        "First-party Quick Pickup route engineering foundation prepared",
+        "Committed readiness mapped through AO read-only adapter"
+      ],
+      "in_progress": [
+        "Freshness remains stale pending new verified operational evidence"
+      ],
+      "blockers": [
+        "Quick Pickup production activation readiness is false",
+        "Committed readiness observation is stale and cannot support GREEN"
+      ],
+      "approvals_required": [
+        "Production publish remains separately gated"
+      ],
+      "next_actions": [
+        "Preserve unmet readiness controls explicitly",
+        "Refresh only through bounded read-only evidence collection"
+      ],
+      "authority": {
+        "mutation_authorized": false
+      }
     },
     {
       "project_id": "kcfc-portal",
       "priority": 3,
       "status": "yellow",
       "objective": "Preserve staging/production isolation and expose verified status to Phil AI OS",
-      "milestone": "External project read-only integration",
+      "milestone": "KCFC read-only repository adapter integrated",
       "verified_repository_head": "a57224f336d55ad419bece3c0eeeb6d768429181",
       "verified_ref": "redesign/mobile-first-v2",
-      "completed": ["Read-only integration baseline registered"],
-      "in_progress": ["Define KCFC repository/staging observation adapter"],
-      "blockers": ["Live KCFC evidence refresh is not yet implemented in AO-1"],
+      "completed": [
+        "Read-only repository observation adapter contract"
+      ],
+      "in_progress": [
+        "Staging runtime evidence not yet represented as fresh AO observation"
+      ],
+      "blockers": [
+        "Fresh staging runtime evidence is not yet represented"
+      ],
       "approvals_required": [],
-      "next_actions": ["Add read-only KCFC repository/staging evidence adapter"],
-      "authority": {"mutation_authorized": false}
+      "next_actions": [
+        "Add bounded read-only staging observation when evidence is available"
+      ],
+      "authority": {
+        "mutation_authorized": false
+      }
     }
   ]
 }
