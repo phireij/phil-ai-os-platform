@@ -451,17 +451,66 @@
       "work_id": "ao-work:runtime-package-contract",
       "project_id": "phil-ai-os",
       "title": "Prepare inert hosted-runtime package and rollback contract",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 14,
       "dependencies": [
         "ao-work:runtime-deployment-plan"
       ],
       "evidence_refs": [
-        "docs/AO_MVP_HOSTED_ORCHESTRATOR_RUNTIME_PLAN_2026-10-05.md"
+        "ops/runtime/ao-mvp-hosted-runtime-package.v1.json",
+        "scripts/test_ao_mvp_runtime_package.py"
       ],
       "selection": {
+        "eligible": false,
+        "reason": "Completed: inert package/rollback contract exact-head Contract CI and Supply-Chain CI GREEN",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:runtime-state-integrity",
+      "project_id": "phil-ai-os",
+      "title": "Add hosted runtime state-integrity and corruption fail-closed contract",
+      "state": "ready_for_inert_selection",
+      "priority": 15,
+      "dependencies": [
+        "ao-work:runtime-package-contract"
+      ],
+      "evidence_refs": [],
+      "selection": {
         "eligible": true,
-        "reason": "Predeployment safety contracts prepared; package definition may proceed without deployment",
+        "reason": "Inert package GREEN; state integrity hardening is non-deploying A1 engineering",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:runtime-rollback-drill",
+      "project_id": "phil-ai-os",
+      "title": "Add synthetic stop/A0 rollback acceptance drill",
+      "state": "planned",
+      "priority": 16,
+      "dependencies": [
+        "ao-work:runtime-state-integrity"
+      ],
+      "evidence_refs": [],
+      "selection": {
+        "eligible": false,
+        "reason": "Wait for state-integrity contract",
         "execution_authorized": false
       },
       "authority": {
