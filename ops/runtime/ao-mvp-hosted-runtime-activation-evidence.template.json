@@ -1,0 +1,36 @@
+{
+  "schema": "phil-ai-os-hosted-runtime-activation-evidence",
+  "version": 1,
+  "status": "not_ready",
+  "activation_authorized": false,
+  "authority_effect": "none",
+  "target": {
+    "provider": null,
+    "runtime": null,
+    "owner": null
+  },
+  "revision": {
+    "git_sha": null,
+    "package_digest": null,
+    "contract_ci": null,
+    "supply_chain_ci": null
+  },
+  "checks": {
+    "persistent_volume_restart": null,
+    "concurrent_single_worker": null,
+    "crash_recovery_no_duplicate": null,
+    "corrupt_state_fail_closed": null,
+    "health_fail_closed": null,
+    "log_redaction": null,
+    "egress_policy": null,
+    "a1_denylist_end_to_end": null,
+    "rollback_drill": null,
+    "no_production_credentials": null
+  },
+  "approval": {
+    "explicit": false,
+    "scope": null,
+    "evidence_ref": null
+  },
+  "prohibited_scope_unchanged": true
+}
