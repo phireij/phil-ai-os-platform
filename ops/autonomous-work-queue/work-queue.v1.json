@@ -615,15 +615,41 @@
       "work_id": "ao-work:runtime-target-decision-package",
       "project_id": "phil-ai-os",
       "title": "Prepare runtime target decision package for CEO approval",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 20,
       "dependencies": [
         "ao-work:predeployment-acceptance-summary"
       ],
+      "evidence_refs": [
+        "docs/AO_MVP_RUNTIME_TARGET_DECISION_PACKAGE_2026-10-05.md"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: existing Hostinger VPS recommended as first bounded runtime target; activation remains explicitly gated",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:hostinger-deployment-fixtures",
+      "project_id": "phil-ai-os",
+      "title": "Prepare inert Hostinger Docker deployment fixtures",
+      "state": "ready_for_inert_selection",
+      "priority": 21,
+      "dependencies": [
+        "ao-work:runtime-target-decision-package"
+      ],
       "evidence_refs": [],
       "selection": {
         "eligible": true,
-        "reason": "Host-independent engineering complete; target decision documentation is non-deploying",
+        "reason": "Target recommendation documented; inert deployment fixtures may be prepared without server mutation",
         "execution_authorized": false
       },
       "authority": {
