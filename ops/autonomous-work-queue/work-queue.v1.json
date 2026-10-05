@@ -11,16 +11,19 @@
       "work_id": "ao-work:ao1-evidence-adapters",
       "project_id": "phil-ai-os",
       "title": "Complete AO-1 read-only evidence adapter boundaries",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 1,
       "dependencies": [],
       "evidence_refs": [
-        "docs/AO_1_PROJECT_STATE_EVIDENCE_RECONCILIATION_CONTRACT.md",
-        "ops/project-state/master-project-status.v1.json"
+        "ops/project-state/project-observation.v1.schema.json",
+        "ops/project-state/observations/phil-ai-os-ci.v1.json",
+        "ops/project-state/observations/ruby-readiness.v1.json",
+        "ops/project-state/observations/kcfc-repository.v1.json",
+        "scripts/reconcile_ao_project_state.py"
       ],
       "selection": {
-        "eligible": true,
-        "reason": "A0 read-only engineering; no production mutation",
+        "eligible": false,
+        "reason": "Completed: explicit observation schema and evidence-derived reconciler validated at exact head 7399fb13",
         "execution_authorized": false
       },
       "authority": {
@@ -46,7 +49,7 @@
       ],
       "selection": {
         "eligible": true,
-        "reason": "Read-model-only projection; deployment is not authorized",
+        "reason": "Dependency ao-work:ao1-evidence-adapters completed; read-model validation only",
         "execution_authorized": false
       },
       "authority": {
@@ -62,7 +65,7 @@
       "work_id": "ao-work:ruby-readiness-reconcile",
       "project_id": "rubys-cake-delights-hq",
       "title": "Reconcile committed Ruby Quick Pickup readiness evidence",
-      "state": "planned",
+      "state": "ready_for_inert_selection",
       "priority": 3,
       "dependencies": [
         "ao-work:ao1-evidence-adapters"
@@ -71,8 +74,8 @@
         "ops/readiness/ruby-first-party-quick-pickup-readiness.json"
       ],
       "selection": {
-        "eligible": false,
-        "reason": "Dependency must be satisfied first",
+        "eligible": true,
+        "reason": "AO-1 dependency completed; bounded read-only reconciliation eligible",
         "execution_authorized": false
       },
       "authority": {
@@ -88,7 +91,7 @@
       "work_id": "ao-work:kcfc-readonly-adapter",
       "project_id": "kcfc-portal",
       "title": "Prepare KCFC repository/staging read-only evidence adapter",
-      "state": "planned",
+      "state": "ready_for_inert_selection",
       "priority": 4,
       "dependencies": [
         "ao-work:ao1-evidence-adapters"
@@ -97,8 +100,8 @@
         "ops/project-registry/project-registry.v1.json"
       ],
       "selection": {
-        "eligible": false,
-        "reason": "Dependency must be satisfied first; KCFC remains external read-only",
+        "eligible": true,
+        "reason": "AO-1 dependency completed; external integration remains read-only",
         "execution_authorized": false
       },
       "authority": {
