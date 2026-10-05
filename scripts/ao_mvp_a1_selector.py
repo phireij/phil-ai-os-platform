@@ -16,7 +16,9 @@ CAP={
  "ao-work:orchestrator-state-machine":"tests_static_analysis",
  "ao-work:persistent-loop-runner":"development_branch_code_preparation",
  "ao-work:ao4-verification-gate":"tests_static_analysis",
- "ao-work:ao4-approval-escalation":"documentation"
+ "ao-work:ao4-approval-escalation":"documentation",
+ "ao-work:orchestrator-state-machine":"tests_static_analysis",
+ "ao-work:persistent-loop-runner":"development_branch_code_preparation"
 }
 def load(p:Path)->dict[str,Any]: return json.loads(p.read_text())
 def select()->dict[str,Any]:
