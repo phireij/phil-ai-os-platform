@@ -1,0 +1,22 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"phil-ai-os://ao-mvp/project-observation.v1",
+  "title":"AO-MVP Project Observation",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["schema","version","project_id","source_kind","observed_at","freshness","facts","authority"],
+  "properties":{
+    "schema":{"const":"phil-ai-os-project-observation"},
+    "version":{"const":1},
+    "project_id":{"enum":["phil-ai-os","rubys-cake-delights-hq","kcfc-portal"]},
+    "source_kind":{"enum":["github_ci","committed_readiness","repository_snapshot","staging_snapshot"]},
+    "observed_at":{"type":"string","minLength":10},
+    "freshness":{"enum":["fresh","stale","unknown"]},
+    "facts":{"type":"object"},
+    "authority":{
+      "type":"object","additionalProperties":false,
+      "required":["authority_effect","mutation_authorized"],
+      "properties":{"authority_effect":{"const":"none"},"mutation_authorized":{"const":false}}
+    }
+  }
+}
