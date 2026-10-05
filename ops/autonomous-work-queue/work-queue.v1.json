@@ -422,17 +422,46 @@
       "work_id": "ao-work:runtime-deployment-plan",
       "project_id": "phil-ai-os",
       "title": "Prepare non-deploying hosted orchestrator runtime plan",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 13,
       "dependencies": [
         "ao-work:service-loop-composition"
       ],
       "evidence_refs": [
-        "docs/AO_MVP_PERSISTENT_SERVICE_BOUNDARY_ACCEPTANCE_2026-10-05.md"
+        "docs/AO_MVP_HOSTED_ORCHESTRATOR_RUNTIME_PLAN_2026-10-05.md",
+        "scripts/ao_mvp_runtime_readiness.py",
+        "scripts/ao_mvp_runtime_health.py",
+        "scripts/ao_mvp_log_redaction.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: non-deploying runtime plan plus readiness/health/log-safety contracts prepared; hosted activation remains separately gated",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:runtime-package-contract",
+      "project_id": "phil-ai-os",
+      "title": "Prepare inert hosted-runtime package and rollback contract",
+      "state": "ready_for_inert_selection",
+      "priority": 14,
+      "dependencies": [
+        "ao-work:runtime-deployment-plan"
+      ],
+      "evidence_refs": [
+        "docs/AO_MVP_HOSTED_ORCHESTRATOR_RUNTIME_PLAN_2026-10-05.md"
       ],
       "selection": {
         "eligible": true,
-        "reason": "Service-loop contract GREEN; architecture/deployment planning is allowed but deployment remains separately gated",
+        "reason": "Predeployment safety contracts prepared; package definition may proceed without deployment",
         "execution_authorized": false
       },
       "authority": {
