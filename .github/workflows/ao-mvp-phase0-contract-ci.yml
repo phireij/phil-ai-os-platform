@@ -11,6 +11,8 @@ on:
       - "scripts/ao_mvp_patch_mission_control_project_read_model.py"
       - "scripts/test_ao_mvp_mission_control_project_read_model.py"
       - "ops/project-state/**"
+      - "ops/autonomous-work-queue/**"
+      - "scripts/validate_ao_mvp_work_queue.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   push:
     branches:
@@ -24,6 +26,8 @@ on:
       - "scripts/ao_mvp_patch_mission_control_project_read_model.py"
       - "scripts/test_ao_mvp_mission_control_project_read_model.py"
       - "ops/project-state/**"
+      - "ops/autonomous-work-queue/**"
+      - "scripts/validate_ao_mvp_work_queue.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   workflow_dispatch:
 
@@ -44,3 +48,4 @@ jobs:
           python scripts/validate_ao_mvp_phase0.py
           python scripts/test_reconcile_ao_project_state.py
           python scripts/test_ao_mvp_mission_control_project_read_model.py
+          python scripts/validate_ao_mvp_work_queue.py
