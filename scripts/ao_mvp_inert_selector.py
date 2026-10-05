@@ -14,10 +14,10 @@ def load(p: Path) -> dict[str,Any]:
 
 def select() -> dict[str,Any]:
     queue=load(QUEUE); matrix=load(MATRIX)
-    if queue.get("execution_enabled") is not False:
-        raise SystemExit("fail closed: queue execution flag must be false")
     if matrix.get("effective_autonomy_ceiling") != "A0":
         raise SystemExit("fail closed: selector is pre-activation and requires A0")
+    if queue.get("execution_enabled") is not False:
+        raise SystemExit("fail closed: A0 queue execution flag must be false")
     items=queue.get("items") or []
     by_id={i["work_id"]:i for i in items}
     completed={i["work_id"] for i in items if i.get("state")=="completed"}
