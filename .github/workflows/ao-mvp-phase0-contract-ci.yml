@@ -13,6 +13,11 @@ on:
       - "ops/project-state/**"
       - "ops/autonomous-work-queue/**"
       - "scripts/validate_ao_mvp_work_queue.py"
+      - "ops/authorizations/a1-authority-matrix.v1.json"
+      - "docs/AO_7_A1_BOUNDED_ACTIVATION_GATE_2026-10-05.md"
+      - "scripts/ao_mvp_inert_selector.py"
+      - "scripts/test_ao_mvp_inert_selector.py"
+      - "scripts/validate_a1_preactivation.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   push:
     branches:
@@ -28,6 +33,11 @@ on:
       - "ops/project-state/**"
       - "ops/autonomous-work-queue/**"
       - "scripts/validate_ao_mvp_work_queue.py"
+      - "ops/authorizations/a1-authority-matrix.v1.json"
+      - "docs/AO_7_A1_BOUNDED_ACTIVATION_GATE_2026-10-05.md"
+      - "scripts/ao_mvp_inert_selector.py"
+      - "scripts/test_ao_mvp_inert_selector.py"
+      - "scripts/validate_a1_preactivation.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   workflow_dispatch:
 
@@ -49,3 +59,5 @@ jobs:
           python scripts/test_reconcile_ao_project_state.py
           python scripts/test_ao_mvp_mission_control_project_read_model.py
           python scripts/validate_ao_mvp_work_queue.py
+          python scripts/test_ao_mvp_inert_selector.py
+          python scripts/validate_a1_preactivation.py
