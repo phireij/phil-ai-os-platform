@@ -19,6 +19,8 @@ CAP={
  "ao-work:service-heartbeat-recovery":"development_branch_code_preparation",
  "ao-work:scheduler-contract":"development_branch_code_preparation",
  "ao-work:service-loop-composition":"development_branch_code_preparation",
+ "ao-work:runtime-deployment-plan":"documentation",
+ "ao-work:runtime-package-contract":"development_branch_code_preparation",
  "ao-work:ao4-verification-gate":"tests_static_analysis",
  "ao-work:ao4-approval-escalation":"documentation",
  "ao-work:orchestrator-state-machine":"tests_static_analysis",
