@@ -146,19 +146,19 @@
       "work_id": "ao-work:ao4-synthetic-orchestrator",
       "project_id": "phil-ai-os",
       "title": "Build synthetic bounded orchestrator iteration",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 5,
       "dependencies": [
         "ao-work:ao1-evidence-adapters"
       ],
       "evidence_refs": [
-        "scripts/ao_mvp_a1_selector.py",
-        "scripts/ao_mvp_a1_dispatcher_simulation.py",
+        "scripts/ao_mvp_synthetic_orchestrator.py",
+        "scripts/test_ao_mvp_synthetic_orchestrator.py",
         "scripts/ao_mvp_durable_dispatch_ledger.py"
       ],
       "selection": {
-        "eligible": true,
-        "reason": "Core selector/dispatcher/replay contracts are GREEN; synthetic iteration only",
+        "eligible": false,
+        "reason": "Completed: selector→dispatcher→durable replay synthetic iteration validated; no selected work or provider execution performed",
         "execution_authorized": false
       },
       "authority": {
