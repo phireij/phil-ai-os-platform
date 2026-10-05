@@ -39,17 +39,18 @@
       "work_id": "ao-work:ao5-mission-control-projection",
       "project_id": "phil-ai-os",
       "title": "Validate Mission Control master-project projection",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 2,
       "dependencies": [
         "ao-work:ao1-evidence-adapters"
       ],
       "evidence_refs": [
-        "scripts/ao_mvp_patch_mission_control_project_read_model.py"
+        "scripts/ao_mvp_patch_mission_control_project_read_model.py",
+        "scripts/test_ao_mvp_mission_control_project_read_model.py"
       ],
       "selection": {
-        "eligible": true,
-        "reason": "Dependency ao-work:ao1-evidence-adapters completed; read-model validation only",
+        "eligible": false,
+        "reason": "Completed: read-only Mission Control master-project projection contract validated; deployment remains unauthorized",
         "execution_authorized": false
       },
       "authority": {
