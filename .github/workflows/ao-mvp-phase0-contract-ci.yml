@@ -48,6 +48,8 @@ on:
       - "scripts/test_ao_mvp_service_recovery.py"
       - "scripts/ao_mvp_scheduler_contract.py"
       - "scripts/test_ao_mvp_scheduler_contract.py"
+      - "scripts/ao_mvp_service_loop.py"
+      - "scripts/test_ao_mvp_service_loop.py"
       - "scripts/ao_mvp_generate_master_status.py"
       - "scripts/test_ao_mvp_generate_master_status.py"
       - "scripts/ao_mvp_verification_gate.py"
@@ -60,6 +62,8 @@ on:
       - "scripts/test_ao_mvp_service_recovery.py"
       - "scripts/ao_mvp_scheduler_contract.py"
       - "scripts/test_ao_mvp_scheduler_contract.py"
+      - "scripts/ao_mvp_service_loop.py"
+      - "scripts/test_ao_mvp_service_loop.py"
       - "scripts/ao_mvp_approval_escalation.py"
       - "scripts/test_ao_mvp_approval_escalation.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
@@ -112,6 +116,8 @@ on:
       - "scripts/test_ao_mvp_service_recovery.py"
       - "scripts/ao_mvp_scheduler_contract.py"
       - "scripts/test_ao_mvp_scheduler_contract.py"
+      - "scripts/ao_mvp_service_loop.py"
+      - "scripts/test_ao_mvp_service_loop.py"
       - "scripts/ao_mvp_generate_master_status.py"
       - "scripts/test_ao_mvp_generate_master_status.py"
       - "scripts/ao_mvp_verification_gate.py"
@@ -124,6 +130,8 @@ on:
       - "scripts/test_ao_mvp_service_recovery.py"
       - "scripts/ao_mvp_scheduler_contract.py"
       - "scripts/test_ao_mvp_scheduler_contract.py"
+      - "scripts/ao_mvp_service_loop.py"
+      - "scripts/test_ao_mvp_service_loop.py"
       - "scripts/ao_mvp_approval_escalation.py"
       - "scripts/test_ao_mvp_approval_escalation.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
@@ -162,6 +170,7 @@ jobs:
           python scripts/test_ao_mvp_orchestrator_service_boundary.py
           python scripts/test_ao_mvp_service_recovery.py
           python scripts/test_ao_mvp_scheduler_contract.py
+          python scripts/test_ao_mvp_service_loop.py
           python scripts/test_ao_mvp_generate_master_status.py
           python scripts/test_ao_mvp_verification_gate.py
           python scripts/test_ao_mvp_approval_escalation.py
