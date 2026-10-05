@@ -10,7 +10,9 @@ M=ROOT/"ops/authorizations/a1-authority-matrix.v1.json"
 CAP={
  "ao-work:ao5-mission-control-projection":"tests_static_analysis",
  "ao-work:ruby-readiness-reconcile":"status_reconciliation",
- "ao-work:kcfc-readonly-adapter":"read_only_staging_evidence_collection"
+ "ao-work:kcfc-readonly-adapter":"read_only_staging_evidence_collection",
+ "ao-work:ao4-synthetic-orchestrator":"tests_static_analysis",
+ "ao-work:master-status-regeneration":"status_reconciliation"
 }
 def load(p:Path)->dict[str,Any]: return json.loads(p.read_text())
 def select()->dict[str,Any]:
