@@ -27,6 +27,7 @@ CAP={
  "ao-work:deployment-gate-package":"documentation",
  "ao-work:predeployment-acceptance-summary":"documentation",
  "ao-work:runtime-target-decision-package":"documentation",
+ "ao-work:hostinger-deployment-fixtures":"development_branch_code_preparation",
  "ao-work:ao4-verification-gate":"tests_static_analysis",
  "ao-work:ao4-approval-escalation":"documentation",
  "ao-work:orchestrator-state-machine":"tests_static_analysis",
