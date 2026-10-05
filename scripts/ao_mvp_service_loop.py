@@ -21,6 +21,12 @@ def tick(state_dir:Path,owner:str,epoch:int,schedule:dict)->dict:
  if not a["acquired"]:return {"state":"lease_held","execution_performed":False,"production_mutation":False}
  try:
   result=runner.iterate(state_dir/"work")
+  if result.get("state") in {"success", "blocked", "replay_blocked", "terminal_noop", "idle"}:
+   state_dir.mkdir(parents=True,exist_ok=True)
+   schedule_path=state_dir/"schedule.json"
+   tmp=schedule_path.with_suffix(".json.tmp")
+   tmp.write_text(json.dumps({"interval_seconds":int(schedule["interval_seconds"]),"last_completed_epoch":epoch},sort_keys=True)+"\n",encoding="utf-8")
+   os.replace(tmp,schedule_path)
   return {"state":"tick_complete","result":result,"execution_performed":False,"production_mutation":False}
  finally:
   lease.release(lp,owner)
@@ -53,11 +59,6 @@ def run()->None:
   now=int(time.time())
   result=tick(state_dir,owner,now,schedule)
   print(json.dumps({"state":result.get("state"),"execution_performed":False,"production_mutation":False}),flush=True)
-  if result.get("state")=="tick_complete":
-   schedule_path.parent.mkdir(parents=True,exist_ok=True)
-   tmp=schedule_path.with_suffix(".json.tmp")
-   tmp.write_text(json.dumps({"interval_seconds":interval,"last_completed_epoch":now},sort_keys=True)+"\n",encoding="utf-8")
-   os.replace(tmp,schedule_path)
   for _ in range(interval):
    if stop:break
    time.sleep(1)
