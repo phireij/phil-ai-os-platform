@@ -66,17 +66,19 @@
       "work_id": "ao-work:ruby-readiness-reconcile",
       "project_id": "rubys-cake-delights-hq",
       "title": "Reconcile committed Ruby Quick Pickup readiness evidence",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 3,
       "dependencies": [
         "ao-work:ao1-evidence-adapters"
       ],
       "evidence_refs": [
+        "scripts/ao_mvp_ruby_readiness_adapter.py",
+        "scripts/test_ao_mvp_ruby_readiness_adapter.py",
         "ops/readiness/ruby-first-party-quick-pickup-readiness.json"
       ],
       "selection": {
-        "eligible": true,
-        "reason": "AO-1 dependency completed; bounded read-only reconciliation eligible",
+        "eligible": false,
+        "reason": "Completed: committed Quick Pickup readiness mapped read-only; stale evidence and unmet production controls remain explicit",
         "execution_authorized": false
       },
       "authority": {
@@ -92,17 +94,19 @@
       "work_id": "ao-work:kcfc-readonly-adapter",
       "project_id": "kcfc-portal",
       "title": "Prepare KCFC repository/staging read-only evidence adapter",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 4,
       "dependencies": [
         "ao-work:ao1-evidence-adapters"
       ],
       "evidence_refs": [
+        "scripts/ao_mvp_kcfc_readonly_adapter.py",
+        "scripts/test_ao_mvp_kcfc_readonly_adapter.py",
         "ops/project-registry/project-registry.v1.json"
       ],
       "selection": {
-        "eligible": true,
-        "reason": "AO-1 dependency completed; external integration remains read-only",
+        "eligible": false,
+        "reason": "Completed: repository observation adapter preserves KCFC read-only isolation; staging runtime refresh remains separate future work",
         "execution_authorized": false
       },
       "authority": {
@@ -127,6 +131,61 @@
       "selection": {
         "eligible": false,
         "reason": "CEO preauthorization consumed after all A1 activation preconditions passed; activation recorded",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:ao4-synthetic-orchestrator",
+      "project_id": "phil-ai-os",
+      "title": "Build synthetic bounded orchestrator iteration",
+      "state": "ready_for_inert_selection",
+      "priority": 5,
+      "dependencies": [
+        "ao-work:ao1-evidence-adapters"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_a1_selector.py",
+        "scripts/ao_mvp_a1_dispatcher_simulation.py",
+        "scripts/ao_mvp_durable_dispatch_ledger.py"
+      ],
+      "selection": {
+        "eligible": true,
+        "reason": "Core selector/dispatcher/replay contracts are GREEN; synthetic iteration only",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:master-status-regeneration",
+      "project_id": "phil-ai-os",
+      "title": "Regenerate master status from observation evidence",
+      "state": "ready_for_inert_selection",
+      "priority": 6,
+      "dependencies": [
+        "ao-work:ruby-readiness-reconcile",
+        "ao-work:kcfc-readonly-adapter"
+      ],
+      "evidence_refs": [
+        "scripts/reconcile_ao_project_state.py"
+      ],
+      "selection": {
+        "eligible": true,
+        "reason": "Ruby and KCFC adapter contracts completed; deterministic regeneration only",
         "execution_authorized": false
       },
       "authority": {
