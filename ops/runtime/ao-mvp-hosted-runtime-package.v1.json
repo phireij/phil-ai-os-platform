@@ -1,0 +1,21 @@
+{
+  "schema": "phil-ai-os-hosted-runtime-package",
+  "version": 1,
+  "status": "inert_not_deployed",
+  "entrypoint": "scripts/ao_mvp_service_loop.py",
+  "state_mount": "/var/lib/phil-ai-os/ao-mvp",
+  "network_egress": "none_by_default",
+  "production_credentials_required": false,
+  "health_contract": "scripts/ao_mvp_runtime_health.py",
+  "readiness_contract": "scripts/ao_mvp_runtime_readiness.py",
+  "log_redaction_contract": "scripts/ao_mvp_log_redaction.py",
+  "rollback": {
+    "action": "stop_runtime_and_revert_effective_autonomy_to_A0",
+    "delete_evidence": false
+  },
+  "authority": {
+    "deployment_authorized": false,
+    "production_mutation_authorized": false,
+    "authority_effect": "none"
+  }
+}
