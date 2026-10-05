@@ -24,6 +24,7 @@ CAP={
  "ao-work:runtime-state-integrity":"tests_static_analysis",
  "ao-work:runtime-rollback-drill":"tests_static_analysis",
  "ao-work:hosted-runtime-readiness-record":"status_reconciliation",
+ "ao-work:deployment-gate-package":"documentation",
  "ao-work:ao4-verification-gate":"tests_static_analysis",
  "ao-work:ao4-approval-escalation":"documentation",
  "ao-work:orchestrator-state-machine":"tests_static_analysis",
