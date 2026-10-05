@@ -478,15 +478,18 @@
       "work_id": "ao-work:runtime-state-integrity",
       "project_id": "phil-ai-os",
       "title": "Add hosted runtime state-integrity and corruption fail-closed contract",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 15,
       "dependencies": [
         "ao-work:runtime-package-contract"
       ],
-      "evidence_refs": [],
+      "evidence_refs": [
+        "scripts/ao_mvp_runtime_state_integrity.py",
+        "scripts/test_ao_mvp_runtime_state_integrity.py"
+      ],
       "selection": {
-        "eligible": true,
-        "reason": "Inert package GREEN; state integrity hardening is non-deploying A1 engineering",
+        "eligible": false,
+        "reason": "Completed: persisted-state checksum envelope rejects corruption/malformed state",
         "execution_authorized": false
       },
       "authority": {
@@ -502,15 +505,43 @@
       "work_id": "ao-work:runtime-rollback-drill",
       "project_id": "phil-ai-os",
       "title": "Add synthetic stop/A0 rollback acceptance drill",
-      "state": "planned",
+      "state": "completed",
       "priority": 16,
       "dependencies": [
         "ao-work:runtime-state-integrity"
       ],
-      "evidence_refs": [],
+      "evidence_refs": [
+        "scripts/ao_mvp_runtime_rollback_drill.py",
+        "scripts/test_ao_mvp_runtime_rollback_drill.py"
+      ],
       "selection": {
         "eligible": false,
-        "reason": "Wait for state-integrity contract",
+        "reason": "Completed: synthetic rollback stops service, reduces to A0, disables dispatch and preserves evidence",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:hosted-runtime-readiness-record",
+      "project_id": "phil-ai-os",
+      "title": "Materialize non-authorizing hosted-runtime readiness record",
+      "state": "ready_for_inert_selection",
+      "priority": 17,
+      "dependencies": [
+        "ao-work:runtime-state-integrity",
+        "ao-work:runtime-rollback-drill"
+      ],
+      "evidence_refs": [],
+      "selection": {
+        "eligible": true,
+        "reason": "Predeployment integrity and rollback contracts complete; readiness record can be materialized without deployment",
         "execution_authorized": false
       },
       "authority": {
