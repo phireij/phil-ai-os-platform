@@ -58,6 +58,10 @@ on:
       - "scripts/test_ao_mvp_log_redaction.py"
       - "ops/runtime/ao-mvp-hosted-runtime-package.v1.json"
       - "scripts/test_ao_mvp_runtime_package.py"
+      - "scripts/ao_mvp_runtime_state_integrity.py"
+      - "scripts/test_ao_mvp_runtime_state_integrity.py"
+      - "scripts/ao_mvp_runtime_rollback_drill.py"
+      - "scripts/test_ao_mvp_runtime_rollback_drill.py"
       - "scripts/ao_mvp_generate_master_status.py"
       - "scripts/test_ao_mvp_generate_master_status.py"
       - "scripts/ao_mvp_verification_gate.py"
@@ -80,6 +84,10 @@ on:
       - "scripts/test_ao_mvp_log_redaction.py"
       - "ops/runtime/ao-mvp-hosted-runtime-package.v1.json"
       - "scripts/test_ao_mvp_runtime_package.py"
+      - "scripts/ao_mvp_runtime_state_integrity.py"
+      - "scripts/test_ao_mvp_runtime_state_integrity.py"
+      - "scripts/ao_mvp_runtime_rollback_drill.py"
+      - "scripts/test_ao_mvp_runtime_rollback_drill.py"
       - "scripts/ao_mvp_approval_escalation.py"
       - "scripts/test_ao_mvp_approval_escalation.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
@@ -142,6 +150,10 @@ on:
       - "scripts/test_ao_mvp_log_redaction.py"
       - "ops/runtime/ao-mvp-hosted-runtime-package.v1.json"
       - "scripts/test_ao_mvp_runtime_package.py"
+      - "scripts/ao_mvp_runtime_state_integrity.py"
+      - "scripts/test_ao_mvp_runtime_state_integrity.py"
+      - "scripts/ao_mvp_runtime_rollback_drill.py"
+      - "scripts/test_ao_mvp_runtime_rollback_drill.py"
       - "scripts/ao_mvp_generate_master_status.py"
       - "scripts/test_ao_mvp_generate_master_status.py"
       - "scripts/ao_mvp_verification_gate.py"
@@ -164,6 +176,10 @@ on:
       - "scripts/test_ao_mvp_log_redaction.py"
       - "ops/runtime/ao-mvp-hosted-runtime-package.v1.json"
       - "scripts/test_ao_mvp_runtime_package.py"
+      - "scripts/ao_mvp_runtime_state_integrity.py"
+      - "scripts/test_ao_mvp_runtime_state_integrity.py"
+      - "scripts/ao_mvp_runtime_rollback_drill.py"
+      - "scripts/test_ao_mvp_runtime_rollback_drill.py"
       - "scripts/ao_mvp_approval_escalation.py"
       - "scripts/test_ao_mvp_approval_escalation.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
@@ -207,6 +223,8 @@ jobs:
           python scripts/test_ao_mvp_runtime_health.py
           python scripts/test_ao_mvp_log_redaction.py
           python scripts/test_ao_mvp_runtime_package.py
+          python scripts/test_ao_mvp_runtime_state_integrity.py
+          python scripts/test_ao_mvp_runtime_rollback_drill.py
           python scripts/test_ao_mvp_generate_master_status.py
           python scripts/test_ao_mvp_verification_gate.py
           python scripts/test_ao_mvp_approval_escalation.py
