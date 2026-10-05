@@ -29,6 +29,7 @@ on:
       - "scripts/test_ao_mvp_durable_dispatch_ledger.py"
       - "ops/project-state/project-observation.v1.schema.json"
       - "ops/project-state/observations/**"
+      - "scripts/test_ao_mvp_evidence_freshness.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   push:
     branches:
@@ -60,6 +61,7 @@ on:
       - "scripts/test_ao_mvp_durable_dispatch_ledger.py"
       - "ops/project-state/project-observation.v1.schema.json"
       - "ops/project-state/observations/**"
+      - "scripts/test_ao_mvp_evidence_freshness.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   workflow_dispatch:
 
@@ -86,3 +88,4 @@ jobs:
           python scripts/validate_a1_activation.py
           python scripts/test_ao_mvp_a1_selector.py
           python scripts/test_ao_mvp_durable_dispatch_ledger.py
+          python scripts/test_ao_mvp_evidence_freshness.py
