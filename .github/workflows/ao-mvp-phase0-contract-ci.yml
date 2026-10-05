@@ -6,6 +6,9 @@ on:
       - "docs/AO_MVP_PHASE_0_*.md"
       - "ops/project-registry/**"
       - "scripts/validate_ao_mvp_phase0.py"
+      - "scripts/reconcile_ao_project_state.py"
+      - "scripts/test_reconcile_ao_project_state.py"
+      - "ops/project-state/**"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   push:
     branches:
@@ -14,6 +17,9 @@ on:
       - "docs/AO_MVP_PHASE_0_*.md"
       - "ops/project-registry/**"
       - "scripts/validate_ao_mvp_phase0.py"
+      - "scripts/reconcile_ao_project_state.py"
+      - "scripts/test_reconcile_ao_project_state.py"
+      - "ops/project-state/**"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   workflow_dispatch:
 
@@ -30,4 +36,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Validate A0-inert AO-MVP contracts
-        run: python scripts/validate_ao_mvp_phase0.py
+        run: |
+          python scripts/validate_ao_mvp_phase0.py
+          python scripts/test_reconcile_ao_project_state.py
