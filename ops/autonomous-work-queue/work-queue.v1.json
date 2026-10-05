@@ -339,17 +339,18 @@
       "work_id": "ao-work:service-heartbeat-recovery",
       "project_id": "phil-ai-os",
       "title": "Add lease heartbeat and crash-recovery contract",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 10,
       "dependencies": [
         "ao-work:orchestrator-service-boundary"
       ],
       "evidence_refs": [
-        "scripts/ao_mvp_orchestrator_service_boundary.py"
+        "scripts/ao_mvp_service_recovery.py",
+        "scripts/test_ao_mvp_service_recovery.py"
       ],
       "selection": {
-        "eligible": true,
-        "reason": "Lease boundary GREEN; restart/crash semantics are bounded development-branch engineering",
+        "eligible": false,
+        "reason": "Completed: owner-bound heartbeat and expired-lease crash recovery contract validated",
         "execution_authorized": false
       },
       "authority": {
@@ -365,15 +366,15 @@
       "work_id": "ao-work:scheduler-contract",
       "project_id": "phil-ai-os",
       "title": "Define bounded recurring scheduler contract",
-      "state": "planned",
+      "state": "ready_for_inert_selection",
       "priority": 11,
       "dependencies": [
         "ao-work:service-heartbeat-recovery"
       ],
       "evidence_refs": [],
       "selection": {
-        "eligible": false,
-        "reason": "Wait for crash-recovery contract",
+        "eligible": true,
+        "reason": "Crash-recovery contract completed; bounded scheduler semantics eligible",
         "execution_authorized": false
       },
       "authority": {
