@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 p=ROOT/"scripts/ao_mvp_a1_selector.py"; s=importlib.util.spec_from_file_location("s",p); assert s and s.loader
 m=importlib.util.module_from_spec(s); s.loader.exec_module(m)
 r=m.select()
-assert r["selected_work_id"]=="ao-work:ao5-mission-control-projection"
-assert r["capability"]=="tests_static_analysis"
+assert r["selected_work_id"]=="ao-work:ruby-readiness-reconcile"
+assert r["capability"]=="status_reconciliation"
 assert r["execution_authorized"] is False and r["mutation"] is False and r["production"] is False
 print("AO-MVP active A1 selector: GREEN")
