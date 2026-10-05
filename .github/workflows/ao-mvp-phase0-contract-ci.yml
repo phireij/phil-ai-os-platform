@@ -21,6 +21,8 @@ on:
       - "scripts/ao_mvp_a1_dispatcher_simulation.py"
       - "scripts/ao_mvp_a1_rollback.py"
       - "scripts/test_ao_mvp_a1_threat_model.py"
+      - "ops/authorizations/a1-activation-record-2026-10-05.json"
+      - "scripts/validate_a1_activation.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   push:
     branches:
@@ -44,6 +46,8 @@ on:
       - "scripts/ao_mvp_a1_dispatcher_simulation.py"
       - "scripts/ao_mvp_a1_rollback.py"
       - "scripts/test_ao_mvp_a1_threat_model.py"
+      - "ops/authorizations/a1-activation-record-2026-10-05.json"
+      - "scripts/validate_a1_activation.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   workflow_dispatch:
 
@@ -66,5 +70,5 @@ jobs:
           python scripts/test_ao_mvp_mission_control_project_read_model.py
           python scripts/validate_ao_mvp_work_queue.py
           python scripts/test_ao_mvp_inert_selector.py
-          python scripts/validate_a1_preactivation.py
           python scripts/test_ao_mvp_a1_threat_model.py
+          python scripts/validate_a1_activation.py
