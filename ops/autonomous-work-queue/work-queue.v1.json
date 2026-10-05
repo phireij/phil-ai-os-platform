@@ -560,15 +560,44 @@
       "work_id": "ao-work:deployment-gate-package",
       "project_id": "phil-ai-os",
       "title": "Prepare exact hosted activation gate and evidence template",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 18,
       "dependencies": [
         "ao-work:hosted-runtime-readiness-record"
       ],
+      "evidence_refs": [
+        "docs/AO_MVP_HOSTED_RUNTIME_ACTIVATION_GATE_2026-10-05.md",
+        "ops/runtime/ao-mvp-hosted-runtime-activation-evidence.template.json",
+        "scripts/validate_ao_mvp_hosted_runtime_activation.py",
+        "scripts/test_validate_ao_mvp_hosted_runtime_activation.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: exact hosted activation gate, evidence template, and non-self-authorizing validator prepared",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:predeployment-acceptance-summary",
+      "project_id": "phil-ai-os",
+      "title": "Freeze host-independent predeployment acceptance summary",
+      "state": "ready_for_inert_selection",
+      "priority": 19,
+      "dependencies": [
+        "ao-work:deployment-gate-package"
+      ],
       "evidence_refs": [],
       "selection": {
         "eligible": true,
-        "reason": "All host-independent predeployment contracts GREEN; exact activation gate package can be prepared without deployment",
+        "reason": "Host-independent gate package complete; acceptance summary can be frozen without activation",
         "execution_authorized": false
       },
       "authority": {
