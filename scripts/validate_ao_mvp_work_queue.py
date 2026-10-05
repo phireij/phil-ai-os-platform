@@ -38,6 +38,22 @@ def main() -> None:
         require(selection.get("execution_authorized") is False,"selection cannot authorize execution")
         for dep in item.get("dependencies",[]):
             require(dep in known,"unknown dependency")
+    graph={i["work_id"]:i.get("dependencies",[]) for i in items}
+    visiting=set(); visited=set()
+    def visit(node):
+        require(node not in visiting,"dependency cycle")
+        if node in visited: return
+        visiting.add(node)
+        for dep in graph[node]: visit(dep)
+        visiting.remove(node); visited.add(node)
+    for node in graph: visit(node)
+    completed={i["work_id"] for i in items if i.get("state")=="completed"}
+    for item in items:
+        unmet=[d for d in item.get("dependencies",[]) if d not in completed]
+        if unmet:
+            require((item.get("selection") or {}).get("eligible") is False,"unmet dependency cannot be selector eligible")
+        if item.get("state")=="completed":
+            require((item.get("selection") or {}).get("eligible") is False,"completed item cannot remain selector eligible")
     a1=next((i for i in items if i.get("work_id")=="ao-work:a1-activation"),None)
     require(a1 is not None,"A1 gate item missing")
     if ceiling=="A0":
@@ -46,7 +62,7 @@ def main() -> None:
         require(a1.get("state")=="selected_inert","active A1 must preserve inert activation record")
     require((a1.get("selection") or {}).get("eligible") is False,"A1 activation item cannot be selector eligible")
     require((a1.get("selection") or {}).get("execution_authorized") is False,"activation item cannot self-authorize execution")
-    print("AO-MVP A0 durable work queue: GREEN")
+    print("AO-MVP durable work queue lifecycle/dependency contract: GREEN")
 
 if __name__=="__main__":
     main()
