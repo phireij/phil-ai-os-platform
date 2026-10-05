@@ -8,6 +8,8 @@ on:
       - "scripts/validate_ao_mvp_phase0.py"
       - "scripts/reconcile_ao_project_state.py"
       - "scripts/test_reconcile_ao_project_state.py"
+      - "scripts/ao_mvp_patch_mission_control_project_read_model.py"
+      - "scripts/test_ao_mvp_mission_control_project_read_model.py"
       - "ops/project-state/**"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   push:
@@ -19,6 +21,8 @@ on:
       - "scripts/validate_ao_mvp_phase0.py"
       - "scripts/reconcile_ao_project_state.py"
       - "scripts/test_reconcile_ao_project_state.py"
+      - "scripts/ao_mvp_patch_mission_control_project_read_model.py"
+      - "scripts/test_ao_mvp_mission_control_project_read_model.py"
       - "ops/project-state/**"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   workflow_dispatch:
@@ -39,3 +43,4 @@ jobs:
         run: |
           python scripts/validate_ao_mvp_phase0.py
           python scripts/test_reconcile_ao_project_state.py
+          python scripts/test_ao_mvp_mission_control_project_read_model.py
