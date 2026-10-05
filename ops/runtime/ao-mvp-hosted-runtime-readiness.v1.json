@@ -1,0 +1,25 @@
+{
+  "schema": "phil-ai-os-hosted-runtime-readiness-record",
+  "version": 1,
+  "observed_at": "2026-10-05",
+  "status": "predeployment_not_ready",
+  "deployment_authorized": false,
+  "authority_effect": "none",
+  "production_mutation_authorized": false,
+  "checks": {
+    "persistent_volume": false,
+    "single_worker_exclusion": true,
+    "corrupt_state_fail_closed": true,
+    "log_redaction": true,
+    "egress_policy": true,
+    "a1_denylist": true,
+    "rollback": true,
+    "exact_revision_ci": false
+  },
+  "notes": [
+    "Single-worker, corruption, log-redaction, denylist and rollback contracts are repository-tested.",
+    "Persistent-volume behavior requires an actual approved host/runtime and remains unverified.",
+    "Exact hosted image/revision CI cannot exist before runtime packaging/build on an approved deployment target.",
+    "This record never grants deployment authority."
+  ]
+}
