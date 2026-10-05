@@ -34,6 +34,8 @@ on:
       - "scripts/test_ao_mvp_ruby_readiness_adapter.py"
       - "scripts/ao_mvp_kcfc_readonly_adapter.py"
       - "scripts/test_ao_mvp_kcfc_readonly_adapter.py"
+      - "scripts/ao_mvp_synthetic_orchestrator.py"
+      - "scripts/test_ao_mvp_synthetic_orchestrator.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   push:
     branches:
@@ -70,6 +72,8 @@ on:
       - "scripts/test_ao_mvp_ruby_readiness_adapter.py"
       - "scripts/ao_mvp_kcfc_readonly_adapter.py"
       - "scripts/test_ao_mvp_kcfc_readonly_adapter.py"
+      - "scripts/ao_mvp_synthetic_orchestrator.py"
+      - "scripts/test_ao_mvp_synthetic_orchestrator.py"
       - ".github/workflows/ao-mvp-phase0-contract-ci.yml"
   workflow_dispatch:
 
@@ -99,3 +103,4 @@ jobs:
           python scripts/test_ao_mvp_evidence_freshness.py
           python scripts/test_ao_mvp_ruby_readiness_adapter.py
           python scripts/test_ao_mvp_kcfc_readonly_adapter.py
+          python scripts/test_ao_mvp_synthetic_orchestrator.py
