@@ -203,17 +203,18 @@
       "work_id": "ao-work:ao4-verification-gate",
       "project_id": "phil-ai-os",
       "title": "Add independent verification gate before terminal success",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 7,
       "dependencies": [
         "ao-work:ao4-synthetic-orchestrator"
       ],
       "evidence_refs": [
-        "scripts/ao_mvp_synthetic_orchestrator.py"
+        "scripts/ao_mvp_verification_gate.py",
+        "scripts/test_ao_mvp_verification_gate.py"
       ],
       "selection": {
-        "eligible": true,
-        "reason": "Synthetic orchestrator is complete; next step is fail-closed independent verification",
+        "eligible": false,
+        "reason": "Completed: independent verification rejects missing/unknown/failed/side-effect outcomes",
         "execution_authorized": false
       },
       "authority": {
@@ -255,7 +256,7 @@
       "work_id": "ao-work:orchestrator-state-machine",
       "project_id": "phil-ai-os",
       "title": "Harden persistent orchestrator lifecycle and verification gate",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 7,
       "dependencies": [
         "ao-work:ao4-synthetic-orchestrator"
@@ -265,8 +266,8 @@
         "scripts/ao_mvp_verification_gate.py"
       ],
       "selection": {
-        "eligible": true,
-        "reason": "Synthetic loop completed; pure lifecycle and verification hardening is bounded A1 engineering",
+        "eligible": false,
+        "reason": "Completed: fail-closed lifecycle and terminal immutability contract validated",
         "execution_authorized": false
       },
       "authority": {
@@ -282,7 +283,7 @@
       "work_id": "ao-work:persistent-loop-runner",
       "project_id": "phil-ai-os",
       "title": "Compose persistent local loop runner with durable state",
-      "state": "planned",
+      "state": "ready_for_inert_selection",
       "priority": 8,
       "dependencies": [
         "ao-work:orchestrator-state-machine"
@@ -291,8 +292,8 @@
         "scripts/ao_mvp_orchestrator_state_machine.py"
       ],
       "selection": {
-        "eligible": false,
-        "reason": "Wait for lifecycle and verification contract to complete",
+        "eligible": true,
+        "reason": "Lifecycle/verification dependency completed; local durable loop composition now eligible",
         "execution_authorized": false
       },
       "authority": {
