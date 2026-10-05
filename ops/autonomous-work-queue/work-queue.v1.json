@@ -366,15 +366,47 @@
       "work_id": "ao-work:scheduler-contract",
       "project_id": "phil-ai-os",
       "title": "Define bounded recurring scheduler contract",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 11,
       "dependencies": [
         "ao-work:service-heartbeat-recovery"
       ],
-      "evidence_refs": [],
+      "evidence_refs": [
+        "scripts/ao_mvp_scheduler_contract.py",
+        "scripts/test_ao_mvp_scheduler_contract.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: minimum cadence, due/not-due, clock-regression and non-authorizing scheduler contract exact-head GREEN",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:service-loop-composition",
+      "project_id": "phil-ai-os",
+      "title": "Compose scheduler lease and persistent loop into bounded service iteration",
+      "state": "ready_for_inert_selection",
+      "priority": 12,
+      "dependencies": [
+        "ao-work:scheduler-contract",
+        "ao-work:persistent-loop-runner"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_scheduler_contract.py",
+        "scripts/ao_mvp_orchestrator_service_boundary.py",
+        "scripts/ao_mvp_persistent_loop_runner.py"
+      ],
       "selection": {
         "eligible": true,
-        "reason": "Crash-recovery contract completed; bounded scheduler semantics eligible",
+        "reason": "Scheduler and persistent loop contracts GREEN; bounded composition only",
         "execution_authorized": false
       },
       "authority": {
