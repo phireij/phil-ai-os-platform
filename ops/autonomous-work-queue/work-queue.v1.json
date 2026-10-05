@@ -174,18 +174,72 @@
       "work_id": "ao-work:master-status-regeneration",
       "project_id": "phil-ai-os",
       "title": "Regenerate master status from observation evidence",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 6,
       "dependencies": [
         "ao-work:ruby-readiness-reconcile",
         "ao-work:kcfc-readonly-adapter"
       ],
       "evidence_refs": [
-        "scripts/reconcile_ao_project_state.py"
+        "scripts/ao_mvp_generate_master_status.py",
+        "scripts/test_ao_mvp_generate_master_status.py",
+        "scripts/print_ao_mvp_master_status.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: deterministic evidence-derived master status generator and fail-closed tests added",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:ao4-verification-gate",
+      "project_id": "phil-ai-os",
+      "title": "Add independent verification gate before terminal success",
+      "state": "ready_for_inert_selection",
+      "priority": 7,
+      "dependencies": [
+        "ao-work:ao4-synthetic-orchestrator"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_synthetic_orchestrator.py"
       ],
       "selection": {
         "eligible": true,
-        "reason": "Ruby and KCFC adapter contracts completed; deterministic regeneration only",
+        "reason": "Synthetic orchestrator is complete; next step is fail-closed independent verification",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:ao4-approval-escalation",
+      "project_id": "phil-ai-os",
+      "title": "Add deterministic escalation result for denied or approval-gated work",
+      "state": "ready_for_inert_selection",
+      "priority": 8,
+      "dependencies": [
+        "ao-work:ao4-synthetic-orchestrator"
+      ],
+      "evidence_refs": [
+        "ops/authorizations/a1-authority-matrix.v1.json"
+      ],
+      "selection": {
+        "eligible": true,
+        "reason": "Bounded planning only; escalation cannot grant authority",
         "execution_authorized": false
       },
       "authority": {
