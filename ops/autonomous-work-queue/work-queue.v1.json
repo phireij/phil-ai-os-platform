@@ -1,0 +1,54 @@
+{
+  "schema":"phil-ai-os-autonomous-work-queue",
+  "version":1,
+  "authority_effect":"none",
+  "autonomy_ceiling":"A0",
+  "execution_enabled":false,
+  "items":[
+    {
+      "schema":"phil-ai-os-autonomous-work-item","version":1,
+      "work_id":"ao-work:ao1-evidence-adapters","project_id":"phil-ai-os",
+      "title":"Complete AO-1 read-only evidence adapter boundaries","state":"ready_for_inert_selection","priority":1,
+      "dependencies":[],
+      "evidence_refs":["docs/AO_1_PROJECT_STATE_EVIDENCE_RECONCILIATION_CONTRACT.md","ops/project-state/master-project-status.v1.json"],
+      "selection":{"eligible":true,"reason":"A0 read-only engineering; no production mutation","execution_authorized":false},
+      "authority":{"autonomy_ceiling":"A0","authority_effect":"none","mutation_authorized":false,"automatic_execution":false}
+    },
+    {
+      "schema":"phil-ai-os-autonomous-work-item","version":1,
+      "work_id":"ao-work:ao5-mission-control-projection","project_id":"phil-ai-os",
+      "title":"Validate Mission Control master-project projection","state":"ready_for_inert_selection","priority":2,
+      "dependencies":["ao-work:ao1-evidence-adapters"],
+      "evidence_refs":["scripts/ao_mvp_patch_mission_control_project_read_model.py"],
+      "selection":{"eligible":true,"reason":"Read-model-only projection; deployment is not authorized","execution_authorized":false},
+      "authority":{"autonomy_ceiling":"A0","authority_effect":"none","mutation_authorized":false,"automatic_execution":false}
+    },
+    {
+      "schema":"phil-ai-os-autonomous-work-item","version":1,
+      "work_id":"ao-work:ruby-readiness-reconcile","project_id":"rubys-cake-delights-hq",
+      "title":"Reconcile committed Ruby Quick Pickup readiness evidence","state":"planned","priority":3,
+      "dependencies":["ao-work:ao1-evidence-adapters"],
+      "evidence_refs":["ops/readiness/ruby-first-party-quick-pickup-readiness.json"],
+      "selection":{"eligible":false,"reason":"Dependency must be satisfied first","execution_authorized":false},
+      "authority":{"autonomy_ceiling":"A0","authority_effect":"none","mutation_authorized":false,"automatic_execution":false}
+    },
+    {
+      "schema":"phil-ai-os-autonomous-work-item","version":1,
+      "work_id":"ao-work:kcfc-readonly-adapter","project_id":"kcfc-portal",
+      "title":"Prepare KCFC repository/staging read-only evidence adapter","state":"planned","priority":4,
+      "dependencies":["ao-work:ao1-evidence-adapters"],
+      "evidence_refs":["ops/project-registry/project-registry.v1.json"],
+      "selection":{"eligible":false,"reason":"Dependency must be satisfied first; KCFC remains external read-only","execution_authorized":false},
+      "authority":{"autonomy_ceiling":"A0","authority_effect":"none","mutation_authorized":false,"automatic_execution":false}
+    },
+    {
+      "schema":"phil-ai-os-autonomous-work-item","version":1,
+      "work_id":"ao-work:a1-activation","project_id":"phil-ai-os",
+      "title":"Activate bounded A1 autonomous execution","state":"awaiting_ceo_approval","priority":100,
+      "dependencies":[],
+      "evidence_refs":["docs/AO_MVP_PHASE_0_ARCHITECTURE_2026-10-05.md"],
+      "selection":{"eligible":false,"reason":"Separate CEO approval is mandatory before A1 activation","execution_authorized":false},
+      "authority":{"autonomy_ceiling":"A0","authority_effect":"none","mutation_authorized":false,"automatic_execution":false}
+    }
+  ]
+}
