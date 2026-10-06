@@ -1,0 +1,22 @@
+{
+  "schema": "phil-ai-os-project-observation",
+  "version": 1,
+  "project_id": "phil-ai-os",
+  "source_kind": "github_ci",
+  "observed_at": "2026-10-05T13:08:00Z",
+  "freshness": "fresh",
+  "facts": {
+    "branch": "ao-mvp/phase0-architecture",
+    "head": "b3ccf6f9294eef8dcd5cbdcfe343cd7921156c60",
+    "contract_ci_run_id": 37314415021,
+    "contract_ci": "success",
+    "supply_chain_run_id": 37314415061,
+    "supply_chain": "success",
+    "bounded_a1_contract_active": true,
+    "production_mutation_authorized": false
+  },
+  "authority": {
+    "authority_effect": "none",
+    "mutation_authorized": false
+  }
+}

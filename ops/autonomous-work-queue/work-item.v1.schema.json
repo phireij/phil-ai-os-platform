@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "phil-ai-os://ao-mvp/work-queue-item.v1",
+  "title": "AO-MVP Durable Work Queue Item",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "work_id",
+    "project_id",
+    "title",
+    "state",
+    "priority",
+    "dependencies",
+    "evidence_refs",
+    "selection",
+    "authority"
+  ],
+  "properties": {
+    "schema": {
+      "const": "phil-ai-os-autonomous-work-item"
+    },
+    "version": {
+      "const": 1
+    },
+    "work_id": {
+      "type": "string",
+      "pattern": "^ao-work:[a-z0-9][a-z0-9._-]{2,127}$"
+    },
+    "project_id": {
+      "enum": [
+        "phil-ai-os",
+        "rubys-cake-delights-hq",
+        "kcfc-portal"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240
+    },
+    "state": {
+      "enum": [
+        "planned",
+        "blocked",
+        "awaiting_ceo_approval",
+        "preauthorized_pending_preconditions",
+        "ready_for_inert_selection",
+        "selected_inert",
+        "completed"
+      ]
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "dependencies": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eligible",
+        "reason",
+        "execution_authorized"
+      ],
+      "properties": {
+        "eligible": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "execution_authorized": {
+          "const": false
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "autonomy_ceiling",
+        "authority_effect",
+        "mutation_authorized",
+        "automatic_execution"
+      ],
+      "properties": {
+        "autonomy_ceiling": {
+          "const": "A0"
+        },
+        "authority_effect": {
+          "const": "none"
+        },
+        "mutation_authorized": {
+          "const": false
+        },
+        "automatic_execution": {
+          "const": false
+        }
+      }
+    }
+  }
+}

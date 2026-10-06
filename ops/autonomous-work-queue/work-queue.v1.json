@@ -1,0 +1,663 @@
+{
+  "schema": "phil-ai-os-autonomous-work-queue",
+  "version": 1,
+  "authority_effect": "none",
+  "autonomy_ceiling": "A1",
+  "execution_enabled": true,
+  "items": [
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:ao1-evidence-adapters",
+      "project_id": "phil-ai-os",
+      "title": "Complete AO-1 read-only evidence adapter boundaries",
+      "state": "completed",
+      "priority": 1,
+      "dependencies": [],
+      "evidence_refs": [
+        "ops/project-state/project-observation.v1.schema.json",
+        "ops/project-state/observations/phil-ai-os-ci.v1.json",
+        "ops/project-state/observations/ruby-readiness.v1.json",
+        "ops/project-state/observations/kcfc-repository.v1.json",
+        "scripts/reconcile_ao_project_state.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: explicit observation schema and evidence-derived reconciler validated at exact head 7399fb13",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:ao5-mission-control-projection",
+      "project_id": "phil-ai-os",
+      "title": "Validate Mission Control master-project projection",
+      "state": "completed",
+      "priority": 2,
+      "dependencies": [
+        "ao-work:ao1-evidence-adapters"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_patch_mission_control_project_read_model.py",
+        "scripts/test_ao_mvp_mission_control_project_read_model.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: read-only Mission Control master-project projection contract validated; deployment remains unauthorized",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:ruby-readiness-reconcile",
+      "project_id": "rubys-cake-delights-hq",
+      "title": "Reconcile committed Ruby Quick Pickup readiness evidence",
+      "state": "completed",
+      "priority": 3,
+      "dependencies": [
+        "ao-work:ao1-evidence-adapters"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_ruby_readiness_adapter.py",
+        "scripts/test_ao_mvp_ruby_readiness_adapter.py",
+        "ops/readiness/ruby-first-party-quick-pickup-readiness.json"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: committed Quick Pickup readiness mapped read-only; stale evidence and unmet production controls remain explicit",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:kcfc-readonly-adapter",
+      "project_id": "kcfc-portal",
+      "title": "Prepare KCFC repository/staging read-only evidence adapter",
+      "state": "completed",
+      "priority": 4,
+      "dependencies": [
+        "ao-work:ao1-evidence-adapters"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_kcfc_readonly_adapter.py",
+        "scripts/test_ao_mvp_kcfc_readonly_adapter.py",
+        "ops/project-registry/project-registry.v1.json"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: repository observation adapter preserves KCFC read-only isolation; staging runtime refresh remains separate future work",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:a1-activation",
+      "project_id": "phil-ai-os",
+      "title": "Activate bounded A1 autonomous execution",
+      "state": "selected_inert",
+      "priority": 100,
+      "dependencies": [],
+      "evidence_refs": [
+        "docs/AO_MVP_PHASE_0_ARCHITECTURE_2026-10-05.md"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "CEO preauthorization consumed after all A1 activation preconditions passed; activation recorded",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:ao4-synthetic-orchestrator",
+      "project_id": "phil-ai-os",
+      "title": "Build synthetic bounded orchestrator iteration",
+      "state": "completed",
+      "priority": 5,
+      "dependencies": [
+        "ao-work:ao1-evidence-adapters"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_synthetic_orchestrator.py",
+        "scripts/test_ao_mvp_synthetic_orchestrator.py",
+        "scripts/ao_mvp_durable_dispatch_ledger.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: selector→dispatcher→durable replay synthetic iteration validated; no selected work or provider execution performed",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:master-status-regeneration",
+      "project_id": "phil-ai-os",
+      "title": "Regenerate master status from observation evidence",
+      "state": "completed",
+      "priority": 6,
+      "dependencies": [
+        "ao-work:ruby-readiness-reconcile",
+        "ao-work:kcfc-readonly-adapter"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_generate_master_status.py",
+        "scripts/test_ao_mvp_generate_master_status.py",
+        "ops/project-state/master-project-status.v1.json"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: deterministic master-status generator added and contract-tested from explicit observations",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:ao4-verification-gate",
+      "project_id": "phil-ai-os",
+      "title": "Add independent verification gate before terminal success",
+      "state": "completed",
+      "priority": 7,
+      "dependencies": [
+        "ao-work:ao4-synthetic-orchestrator"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_verification_gate.py",
+        "scripts/test_ao_mvp_verification_gate.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: independent verification rejects missing/unknown/failed/side-effect outcomes",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:ao4-approval-escalation",
+      "project_id": "phil-ai-os",
+      "title": "Add deterministic escalation result for denied or approval-gated work",
+      "state": "completed",
+      "priority": 8,
+      "dependencies": [
+        "ao-work:ao4-synthetic-orchestrator"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_approval_escalation.py",
+        "scripts/test_ao_mvp_approval_escalation.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: escalation formatter cannot approve, execute, or widen authority",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:orchestrator-state-machine",
+      "project_id": "phil-ai-os",
+      "title": "Harden persistent orchestrator lifecycle and verification gate",
+      "state": "completed",
+      "priority": 7,
+      "dependencies": [
+        "ao-work:ao4-synthetic-orchestrator"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_orchestrator_state_machine.py",
+        "scripts/ao_mvp_verification_gate.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: fail-closed lifecycle and terminal immutability contract validated",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:persistent-loop-runner",
+      "project_id": "phil-ai-os",
+      "title": "Compose persistent local loop runner with durable state",
+      "state": "completed",
+      "priority": 8,
+      "dependencies": [
+        "ao-work:orchestrator-state-machine"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_persistent_loop_runner.py",
+        "scripts/test_ao_mvp_persistent_loop_runner.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: durable local loop reaches independently verified terminal state and no-ops on repeat; provider execution remains absent",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:orchestrator-service-boundary",
+      "project_id": "phil-ai-os",
+      "title": "Define restart-safe orchestrator service boundary and lease semantics",
+      "state": "completed",
+      "priority": 9,
+      "dependencies": [
+        "ao-work:persistent-loop-runner",
+        "ao-work:ao4-approval-escalation"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_orchestrator_service_boundary.py",
+        "scripts/test_ao_mvp_orchestrator_service_boundary.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: restart-safe single-worker lease exclusion/expiry/owner-release contract exact-head GREEN",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:service-heartbeat-recovery",
+      "project_id": "phil-ai-os",
+      "title": "Add lease heartbeat and crash-recovery contract",
+      "state": "completed",
+      "priority": 10,
+      "dependencies": [
+        "ao-work:orchestrator-service-boundary"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_service_recovery.py",
+        "scripts/test_ao_mvp_service_recovery.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: owner-bound heartbeat and expired-lease crash recovery contract validated",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:scheduler-contract",
+      "project_id": "phil-ai-os",
+      "title": "Define bounded recurring scheduler contract",
+      "state": "completed",
+      "priority": 11,
+      "dependencies": [
+        "ao-work:service-heartbeat-recovery"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_scheduler_contract.py",
+        "scripts/test_ao_mvp_scheduler_contract.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: minimum cadence, due/not-due, clock-regression and non-authorizing scheduler contract exact-head GREEN",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:service-loop-composition",
+      "project_id": "phil-ai-os",
+      "title": "Compose scheduler lease and persistent loop into bounded service iteration",
+      "state": "completed",
+      "priority": 12,
+      "dependencies": [
+        "ao-work:scheduler-contract",
+        "ao-work:persistent-loop-runner"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_service_loop.py",
+        "scripts/test_ao_mvp_service_loop.py",
+        "docs/AO_MVP_PERSISTENT_SERVICE_BOUNDARY_ACCEPTANCE_2026-10-05.md"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: scheduler→lease→persistent planning loop composition exact-head CI GREEN; no provider execution",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:runtime-deployment-plan",
+      "project_id": "phil-ai-os",
+      "title": "Prepare non-deploying hosted orchestrator runtime plan",
+      "state": "completed",
+      "priority": 13,
+      "dependencies": [
+        "ao-work:service-loop-composition"
+      ],
+      "evidence_refs": [
+        "docs/AO_MVP_HOSTED_ORCHESTRATOR_RUNTIME_PLAN_2026-10-05.md",
+        "scripts/ao_mvp_runtime_readiness.py",
+        "scripts/ao_mvp_runtime_health.py",
+        "scripts/ao_mvp_log_redaction.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: non-deploying runtime plan plus readiness/health/log-safety contracts prepared; hosted activation remains separately gated",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:runtime-package-contract",
+      "project_id": "phil-ai-os",
+      "title": "Prepare inert hosted-runtime package and rollback contract",
+      "state": "completed",
+      "priority": 14,
+      "dependencies": [
+        "ao-work:runtime-deployment-plan"
+      ],
+      "evidence_refs": [
+        "ops/runtime/ao-mvp-hosted-runtime-package.v1.json",
+        "scripts/test_ao_mvp_runtime_package.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: inert package/rollback contract exact-head Contract CI and Supply-Chain CI GREEN",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:runtime-state-integrity",
+      "project_id": "phil-ai-os",
+      "title": "Add hosted runtime state-integrity and corruption fail-closed contract",
+      "state": "completed",
+      "priority": 15,
+      "dependencies": [
+        "ao-work:runtime-package-contract"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_runtime_state_integrity.py",
+        "scripts/test_ao_mvp_runtime_state_integrity.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: persisted-state checksum envelope rejects corruption/malformed state",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:runtime-rollback-drill",
+      "project_id": "phil-ai-os",
+      "title": "Add synthetic stop/A0 rollback acceptance drill",
+      "state": "completed",
+      "priority": 16,
+      "dependencies": [
+        "ao-work:runtime-state-integrity"
+      ],
+      "evidence_refs": [
+        "scripts/ao_mvp_runtime_rollback_drill.py",
+        "scripts/test_ao_mvp_runtime_rollback_drill.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: synthetic rollback stops service, reduces to A0, disables dispatch and preserves evidence",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:hosted-runtime-readiness-record",
+      "project_id": "phil-ai-os",
+      "title": "Materialize non-authorizing hosted-runtime readiness record",
+      "state": "completed",
+      "priority": 17,
+      "dependencies": [
+        "ao-work:runtime-state-integrity",
+        "ao-work:runtime-rollback-drill"
+      ],
+      "evidence_refs": [
+        "ops/runtime/ao-mvp-hosted-runtime-readiness.v1.json",
+        "scripts/test_ao_mvp_runtime_readiness_record.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: fail-closed readiness record exact-head Contract and Supply-Chain CI GREEN; deployment remains unauthorized",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:deployment-gate-package",
+      "project_id": "phil-ai-os",
+      "title": "Prepare exact hosted activation gate and evidence template",
+      "state": "completed",
+      "priority": 18,
+      "dependencies": [
+        "ao-work:hosted-runtime-readiness-record"
+      ],
+      "evidence_refs": [
+        "docs/AO_MVP_HOSTED_RUNTIME_ACTIVATION_GATE_2026-10-05.md",
+        "ops/runtime/ao-mvp-hosted-runtime-activation-evidence.template.json",
+        "scripts/validate_ao_mvp_hosted_runtime_activation.py",
+        "scripts/test_validate_ao_mvp_hosted_runtime_activation.py"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: exact hosted activation gate, evidence template, and non-self-authorizing validator prepared",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:predeployment-acceptance-summary",
+      "project_id": "phil-ai-os",
+      "title": "Freeze host-independent predeployment acceptance summary",
+      "state": "completed",
+      "priority": 19,
+      "dependencies": [
+        "ao-work:deployment-gate-package"
+      ],
+      "evidence_refs": [
+        "docs/AO_MVP_HOST_INDEPENDENT_PREDEPLOYMENT_ACCEPTANCE_2026-10-05.md"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: host-independent predeployment acceptance frozen; hosted activation remains gated",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:runtime-target-decision-package",
+      "project_id": "phil-ai-os",
+      "title": "Prepare runtime target decision package for CEO approval",
+      "state": "completed",
+      "priority": 20,
+      "dependencies": [
+        "ao-work:predeployment-acceptance-summary"
+      ],
+      "evidence_refs": [
+        "docs/AO_MVP_RUNTIME_TARGET_DECISION_PACKAGE_2026-10-05.md"
+      ],
+      "selection": {
+        "eligible": false,
+        "reason": "Completed: existing Hostinger VPS recommended as first bounded runtime target; activation remains explicitly gated",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    },
+    {
+      "schema": "phil-ai-os-autonomous-work-item",
+      "version": 1,
+      "work_id": "ao-work:hostinger-deployment-fixtures",
+      "project_id": "phil-ai-os",
+      "title": "Prepare inert Hostinger Docker deployment fixtures",
+      "state": "ready_for_inert_selection",
+      "priority": 21,
+      "dependencies": [
+        "ao-work:runtime-target-decision-package"
+      ],
+      "evidence_refs": [],
+      "selection": {
+        "eligible": true,
+        "reason": "Target recommendation documented; inert deployment fixtures may be prepared without server mutation",
+        "execution_authorized": false
+      },
+      "authority": {
+        "autonomy_ceiling": "A0",
+        "authority_effect": "none",
+        "mutation_authorized": false,
+        "automatic_execution": false
+      }
+    }
+  ]
+}

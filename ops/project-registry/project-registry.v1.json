@@ -1,0 +1,46 @@
+{
+  "schema": "phil-ai-os-project-registry",
+  "version": 1,
+  "authority_effect": "none",
+  "autonomy_ceiling": "A0",
+  "projects": [
+    {
+      "project_id": "phil-ai-os",
+      "name": "Phil AI OS Platform",
+      "priority": 1,
+      "role": "orchestration_control_platform",
+      "repository": "phireij/phil-ai-os-platform",
+      "default_branch": "main",
+      "verified_head": "35853cea3c8ebedf8f61a3ab5b3c81e5dcfa148e",
+      "verified_at": "2026-10-05",
+      "current_objective": "Persistent Autonomous Execution MVP + Master Multi-Project Status",
+      "mutation_authorized": false
+    },
+    {
+      "project_id": "rubys-cake-delights-hq",
+      "name": "Ruby's Cake Delights HQ",
+      "priority": 2,
+      "role": "first_business_integration",
+      "repository": "phireij/phil-ai-os-platform",
+      "default_branch": "main",
+      "verified_head": "35853cea3c8ebedf8f61a3ab5b3c81e5dcfa148e",
+      "verified_at": "2026-10-05",
+      "current_objective": "Preserve Sprint 4 and Quick Pickup readiness while integrating authoritative project state",
+      "mutation_authorized": false
+    },
+    {
+      "project_id": "kcfc-portal",
+      "name": "KCFC Portal",
+      "priority": 3,
+      "role": "external_project_read_only_integration",
+      "repository": "phireij/KCFC-Portal",
+      "default_branch": "main",
+      "verified_head": "653cc7229600fd7baff17a21a21f12d267b66d2b",
+      "development_branch": "redesign/mobile-first-v2",
+      "verified_development_head": "a57224f336d55ad419bece3c0eeeb6d768429181",
+      "verified_at": "2026-10-05",
+      "current_objective": "Preserve staging/production isolation and expose verified status to Phil AI OS",
+      "mutation_authorized": false
+    }
+  ]
+}

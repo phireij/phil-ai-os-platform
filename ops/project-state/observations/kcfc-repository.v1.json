@@ -1,0 +1,19 @@
+{
+  "schema": "phil-ai-os-project-observation",
+  "version": 1,
+  "project_id": "kcfc-portal",
+  "source_kind": "repository_snapshot",
+  "observed_at": "2026-10-05",
+  "freshness": "fresh",
+  "facts": {
+    "repository": "phireij/KCFC-Portal",
+    "main_head": "653cc7229600fd7baff17a21a21f12d267b66d2b",
+    "development_branch": "redesign/mobile-first-v2",
+    "development_head": "a57224f336d55ad419bece3c0eeeb6d768429181",
+    "integration_mode": "read_only"
+  },
+  "authority": {
+    "authority_effect": "none",
+    "mutation_authorized": false
+  }
+}

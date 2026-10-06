@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/schemas/project-state.v1.schema.json",
+  "title": "Phil AI OS Project State v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "project_id",
+    "objective",
+    "milestone",
+    "status",
+    "repository_state",
+    "deployment_state",
+    "completed",
+    "in_progress",
+    "queue",
+    "blockers",
+    "approvals_required",
+    "agent_activity",
+    "next_actions",
+    "evidence",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "objective": {"type": "string", "minLength": 1},
+    "milestone": {"type": "string", "minLength": 1},
+    "status": {"enum": ["green", "yellow", "red", "unknown"]},
+    "repository_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "ref", "verified_head", "verified_at"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "ref": {"type": "string", "minLength": 1},
+        "verified_head": {"type": "string", "minLength": 7},
+        "verified_at": {"type": "string", "minLength": 10}
+      }
+    },
+    "deployment_state": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["green", "yellow", "red", "unknown", "not_applicable"]},
+        "verified_at": {"type": ["string", "null"]},
+        "environment": {"type": ["string", "null"]},
+        "evidence_ref": {"type": ["string", "null"]}
+      }
+    },
+    "completed": {"type": "array", "items": {"type": "string"}},
+    "in_progress": {"type": "array", "items": {"type": "string"}},
+    "queue": {"type": "array", "items": {"type": "string"}},
+    "blockers": {"type": "array", "items": {"type": "string"}},
+    "approvals_required": {"type": "array", "items": {"type": "string"}},
+    "agent_activity": {"type": "array", "items": {"type": "string"}},
+    "next_actions": {"type": "array", "items": {"type": "string"}},
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "ref", "observed_at", "freshness"],
+        "properties": {
+          "kind": {"type": "string"},
+          "ref": {"type": "string"},
+          "observed_at": {"type": "string"},
+          "freshness": {"enum": ["fresh", "stale", "unknown"]}
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["autonomy_ceiling", "mutation_authorized"],
+      "properties": {
+        "autonomy_ceiling": {"const": "A0"},
+        "mutation_authorized": {"const": false}
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+# INERT TEMPLATE ONLY. Do not deploy without hosted-runtime activation approval.
+services:
+  orchestrator:
+    image: phil-ai-os/ao-mvp-orchestrator:UNBUILT
+    restart: unless-stopped
+    network_mode: none
+    read_only: true
+    volumes:
+      - /var/lib/phil-ai-os/ao-mvp:/var/lib/phil-ai-os/ao-mvp
+    environment:
+      PHIL_AI_OS_AUTONOMY_CEILING: A1
+      PHIL_AI_OS_PRODUCTION_MUTATION: "false"
+      PHIL_AI_OS_PROVIDER_EXECUTION: "false"
+    command: ["python","scripts/ao_mvp_service_loop.py"]

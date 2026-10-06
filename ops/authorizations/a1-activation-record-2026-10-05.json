@@ -1,0 +1,24 @@
+{
+  "schema":"phil-ai-os-a1-activation-record",
+  "version":1,
+  "activated_on":"2026-10-05",
+  "ceo_approval":"advance approval in Chat on 2026-10-05",
+  "preactivation_exact_head":"fcb57f3b930ee7a46209f0066dfc2314379155fd",
+  "evidence":{
+    "ao_mvp_contract_ci":{"run_id":37313888336,"conclusion":"success"},
+    "workflow_supply_chain_policy_ci":{"run_id":37313888324,"conclusion":"success"},
+    "selector":"scripts/ao_mvp_inert_selector.py",
+    "dispatcher":"scripts/ao_mvp_a1_dispatcher_simulation.py",
+    "rollback":"scripts/ao_mvp_a1_rollback.py",
+    "threat_model_test":"scripts/test_ao_mvp_a1_threat_model.py"
+  },
+  "effective_autonomy_ceiling":"A1",
+  "scope":"bounded_engineering_allowlist_only",
+  "production_mutation_authorized":false,
+  "live_customer_messaging_authorized":false,
+  "payment_execution_authorized":false,
+  "pull_request_merge_authorized":false,
+  "dns_change_authorized":false,
+  "kcfc_production_action_authorized":false,
+  "rollback_target":"A0"
+}
