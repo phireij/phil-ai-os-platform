@@ -5,6 +5,7 @@ import json
 import importlib.util
 import os
 import signal
+import argparse
 import time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -31,7 +32,7 @@ def tick(state_dir:Path,owner:str,epoch:int,schedule:dict)->dict:
  finally:
   lease.release(lp,owner)
 
-def run()->None:
+def run(once: bool = False)->None:
  """Run bounded local planning ticks; never performs provider or production I/O."""
  state_dir=Path(os.environ.get("PHIL_AI_OS_STATE_DIR","/var/lib/phil-ai-os/ao-mvp"))
  interval=int(os.environ.get("PHIL_AI_OS_INTERVAL_SECONDS","300"))
@@ -59,9 +60,13 @@ def run()->None:
   now=int(time.time())
   result=tick(state_dir,owner,now,schedule)
   print(json.dumps({"state":result.get("state"),"execution_performed":False,"production_mutation":False}),flush=True)
+  if once:
+   return
   for _ in range(interval):
    if stop:break
    time.sleep(1)
 
 if __name__=="__main__":
- run()
+ parser=argparse.ArgumentParser(description="Run bounded AO-MVP planning ticks")
+ parser.add_argument("--once",action="store_true",help="run exactly one local tick and exit")
+ run(once=parser.parse_args().once)
