@@ -72,6 +72,8 @@ jobs:
           fi
           docker buildx build \
             --platform linux/amd64 \
+            --provenance=false \
+            --sbom=false \
             --file Dockerfile.ao-mvp \
             "${tag_args[@]}" \
             --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
@@ -81,6 +83,13 @@ jobs:
             .
           digest="$(python -c 'import json; print(json.load(open("/tmp/ao-mvp-image-metadata.json"))["containerimage.digest"])')"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          # Verify the pushed registry artifact, not only the local build request.
+          # This prevents a misleading success when the tag resolves to an image
+          # that Docker cannot run on the declared linux/amd64 target.
+          docker pull --platform linux/amd64 "$IMAGE@$digest"
+          platform="$(docker image inspect "$IMAGE@$digest" --format '{{.Os}}/{{.Architecture}}')"
+          [[ "$platform" == "linux/amd64" ]]
+          docker image rm "$IMAGE@$digest" >/dev/null
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          echo "Published `$IMAGE@$digest` from commit `$GITHUB_SHA` (linux/amd64)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Published and verified `$IMAGE@$digest` from commit `$GITHUB_SHA` (linux/amd64; registry pull verified)." >> "$GITHUB_STEP_SUMMARY"
           docker logout ghcr.io
