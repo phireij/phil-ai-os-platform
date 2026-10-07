@@ -1,0 +1,25 @@
+name: AO-MVP public webhook readiness contract
+
+on:
+  pull_request:
+    paths:
+      - "docs/AO_MVP_PUBLIC_WEBHOOK_ACTIVATION_READINESS_CONTRACT_2026-10-07.md"
+      - "ops/runtime/ao-mvp-public-webhook-readiness.v1.json"
+      - "scripts/validate_ao_mvp_public_webhook_readiness.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_readiness.py"
+      - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scripts/validate_ao_mvp_public_webhook_readiness.py
+      - run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_readiness.py
