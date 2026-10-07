@@ -15,6 +15,11 @@ on:
       - "scripts/test_ao_mvp_public_webhook_isolation.py"
       - "scripts/ao_mvp_public_webhook_rollback.py"
       - "scripts/test_ao_mvp_public_webhook_rollback.py"
+      - "ops/runtime/ao-mvp-public-webhook-activation-evidence.template.json"
+      - "scripts/validate_ao_mvp_public_webhook_activation_evidence.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_activation_evidence.py"
+      - "scripts/ao_mvp_public_webhook_activation_gate.py"
+      - "scripts/test_ao_mvp_public_webhook_activation_gate.py"
       - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
   push:
     branches:
@@ -32,6 +37,11 @@ on:
       - "scripts/test_ao_mvp_public_webhook_isolation.py"
       - "scripts/ao_mvp_public_webhook_rollback.py"
       - "scripts/test_ao_mvp_public_webhook_rollback.py"
+      - "ops/runtime/ao-mvp-public-webhook-activation-evidence.template.json"
+      - "scripts/validate_ao_mvp_public_webhook_activation_evidence.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_activation_evidence.py"
+      - "scripts/ao_mvp_public_webhook_activation_gate.py"
+      - "scripts/test_ao_mvp_public_webhook_activation_gate.py"
       - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
   workflow_dispatch:
 
@@ -59,3 +69,9 @@ jobs:
         run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_isolation.py
       - name: Test public webhook rollback
         run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_rollback.py
+      - name: Validate activation evidence template
+        run: python scripts/validate_ao_mvp_public_webhook_activation_evidence.py
+      - name: Test activation evidence template
+        run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_activation_evidence.py
+      - name: Test activation decision gate
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_activation_gate.py
