@@ -6,7 +6,6 @@ ROOT = Path(__file__).resolve().parents[1]
 RECORD = ROOT / "ops/runtime/ao-mvp-public-webhook-readiness.v1.json"
 
 DENIED_TRUE = (
-    "public_webhook_activation_authorized",
     "production_mutation_authorized",
     "hermes_reuse_authorized",
     "dns_change_authorized",
@@ -57,8 +56,13 @@ def validate(data):
         errors.append("missing checks: " + ", ".join(missing))
     # Planning record is intentionally NOT READY. No individual readiness check
     # may silently grant authority; phase-specific approval remains separate.
-    if data.get("status") != "planning_only_not_authorized":
-        errors.append("planning record status must remain planning_only_not_authorized")
+    if data.get("status") not in ("planning_only_not_authorized", "activation_authorized_pending_operational_evidence"):
+        errors.append("unexpected readiness status")
+    if data.get("status") == "activation_authorized_pending_operational_evidence":
+        if data.get("public_webhook_activation_authorized") is not True:
+            errors.append("authorized-pending status requires explicit public activation authorization")
+        if checks.get("phase_specific_ceo_approval_recorded") is not True:
+            errors.append("authorized-pending status requires phase-specific CEO approval evidence")
     return errors
 
 def main():
