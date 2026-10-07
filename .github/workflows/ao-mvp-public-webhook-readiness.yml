@@ -9,6 +9,12 @@ on:
       - "scripts/test_validate_ao_mvp_public_webhook_readiness.py"
       - "scripts/ao_mvp_public_webhook_contract.py"
       - "scripts/test_ao_mvp_public_webhook_contract.py"
+      - "scripts/ao_mvp_public_webhook_rate_limit.py"
+      - "scripts/test_ao_mvp_public_webhook_rate_limit.py"
+      - "scripts/ao_mvp_public_webhook_isolation.py"
+      - "scripts/test_ao_mvp_public_webhook_isolation.py"
+      - "scripts/ao_mvp_public_webhook_rollback.py"
+      - "scripts/test_ao_mvp_public_webhook_rollback.py"
       - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
   push:
     branches:
@@ -41,3 +47,9 @@ jobs:
         run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_readiness.py
       - name: Test synthetic webhook ingress contract
         run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_contract.py
+      - name: Test synthetic abuse guard
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_rate_limit.py
+      - name: Test public webhook isolation
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_isolation.py
+      - name: Test public webhook rollback
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_rollback.py
