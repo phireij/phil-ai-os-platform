@@ -20,6 +20,10 @@ on:
       - "scripts/test_validate_ao_mvp_public_webhook_activation_evidence.py"
       - "scripts/ao_mvp_public_webhook_activation_gate.py"
       - "scripts/test_ao_mvp_public_webhook_activation_gate.py"
+      - "scripts/ao_mvp_public_webhook_log_redaction.py"
+      - "scripts/test_ao_mvp_public_webhook_log_redaction.py"
+      - "scripts/ao_mvp_public_webhook_synthetic_e2e.py"
+      - "scripts/test_ao_mvp_public_webhook_synthetic_e2e.py"
       - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
   push:
     branches:
@@ -42,6 +46,10 @@ on:
       - "scripts/test_validate_ao_mvp_public_webhook_activation_evidence.py"
       - "scripts/ao_mvp_public_webhook_activation_gate.py"
       - "scripts/test_ao_mvp_public_webhook_activation_gate.py"
+      - "scripts/ao_mvp_public_webhook_log_redaction.py"
+      - "scripts/test_ao_mvp_public_webhook_log_redaction.py"
+      - "scripts/ao_mvp_public_webhook_synthetic_e2e.py"
+      - "scripts/test_ao_mvp_public_webhook_synthetic_e2e.py"
       - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
   workflow_dispatch:
 
@@ -75,3 +83,7 @@ jobs:
         run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_activation_evidence.py
       - name: Test activation decision gate
         run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_activation_gate.py
+      - name: Test webhook log allowlist
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_log_redaction.py
+      - name: Test network-free synthetic E2E
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_synthetic_e2e.py
