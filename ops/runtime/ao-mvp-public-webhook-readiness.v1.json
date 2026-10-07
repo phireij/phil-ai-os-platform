@@ -2,10 +2,10 @@
   "schema": "phil-ai-os-public-webhook-activation-readiness",
   "version": 1,
   "observed_at": "2026-10-07",
-  "status": "planning_only_not_authorized",
+  "status": "activation_authorized_pending_operational_evidence",
   "authority_effect": "none",
   "private_a1_checkpoint_complete": true,
-  "public_webhook_activation_authorized": false,
+  "public_webhook_activation_authorized": true,
   "production_mutation_authorized": false,
   "hermes_reuse_authorized": false,
   "dns_change_authorized": false,
@@ -31,7 +31,7 @@
     "synthetic_e2e_green": true,
     "rollback_plan_green": true,
     "exact_revision_ci_green": false,
-    "phase_specific_ceo_approval_recorded": false
+    "phase_specific_ceo_approval_recorded": true
   },
   "notes": [
     "This record plans a separate future public-webhook phase only.",
@@ -39,6 +39,7 @@
     "No hostname, DNS, route, port, Hermes, production credential, Twilio, customer-system, payment, or production-data change is authorized.",
     "Any missing, stale, unknown, or failed check remains NOT READY.",
     "Repository-only synthetic contract evidence is GREEN for authentication, replay, payload validation, abuse limiting, allowlist-only logging, zero production mutation, network-free E2E, and rollback. These checks do not authorize or prove public ingress.",
-    "Non-applying DNS, dedicated route/port, and TLS plans are now repository-defined and validated; all concrete DNS/hostname/port/binding values remain unset."
+    "Non-applying DNS, dedicated route/port, and TLS plans are now repository-defined and validated; all concrete DNS/hostname/port/binding values remain unset.",
+    "CEO explicitly approved isolated public ingress activation in ChatGPT on 2026-10-07. Authorization remains bounded by production_mutation_authorized=false and authority_effect=none."
   ]
 }
