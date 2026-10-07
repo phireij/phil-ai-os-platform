@@ -27,6 +27,9 @@ on:
       - "ops/runtime/ao-mvp-public-webhook-nonapplying-ingress-plan.v1.json"
       - "scripts/validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py"
       - "scripts/test_validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py"
+      - "ops/runtime/ao-mvp-public-webhook-activation-manifest.v1.json"
+      - "scripts/validate_ao_mvp_public_webhook_activation_manifest.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_activation_manifest.py"
       - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
   push:
     branches:
@@ -56,6 +59,9 @@ on:
       - "ops/runtime/ao-mvp-public-webhook-nonapplying-ingress-plan.v1.json"
       - "scripts/validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py"
       - "scripts/test_validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py"
+      - "ops/runtime/ao-mvp-public-webhook-activation-manifest.v1.json"
+      - "scripts/validate_ao_mvp_public_webhook_activation_manifest.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_activation_manifest.py"
       - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
   workflow_dispatch:
 
@@ -97,3 +103,7 @@ jobs:
         run: python scripts/validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py
       - name: Test non-applying ingress plan
         run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py
+      - name: Validate activation manifest
+        run: python scripts/validate_ao_mvp_public_webhook_activation_manifest.py
+      - name: Test activation manifest
+        run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_activation_manifest.py
