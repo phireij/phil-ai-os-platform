@@ -6,7 +6,9 @@ on:
       - "docs/AO_MVP_PUBLIC_WEBHOOK_ACTIVATION_READINESS_CONTRACT_2026-10-07.md"
       - "ops/runtime/ao-mvp-public-webhook-readiness.v1.json"
       - "scripts/validate_ao_mvp_public_webhook_readiness.py"
-      - "scripts/test_validate_ao_mvp_public_webhook_readiness.py"\n      - "scripts/ao_mvp_public_webhook_contract.py"\n      - "scripts/test_ao_mvp_public_webhook_contract.py"\n      - "scripts/ao_mvp_public_webhook_contract.py"\n      - "scripts/test_ao_mvp_public_webhook_contract.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_readiness.py"
+      - "scripts/ao_mvp_public_webhook_contract.py"
+      - "scripts/test_ao_mvp_public_webhook_contract.py"
       - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
   push:
     branches:
@@ -16,6 +18,8 @@ on:
       - "ops/runtime/ao-mvp-public-webhook-readiness.v1.json"
       - "scripts/validate_ao_mvp_public_webhook_readiness.py"
       - "scripts/test_validate_ao_mvp_public_webhook_readiness.py"
+      - "scripts/ao_mvp_public_webhook_contract.py"
+      - "scripts/test_ao_mvp_public_webhook_contract.py"
       - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
   workflow_dispatch:
 
@@ -35,3 +39,5 @@ jobs:
         run: python scripts/validate_ao_mvp_public_webhook_readiness.py
       - name: Test public webhook planning boundary
         run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_readiness.py
+      - name: Test synthetic webhook ingress contract
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_contract.py
