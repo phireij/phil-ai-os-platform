@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-import importlib.util
+import json,subprocess,sys
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1];p=ROOT/"scripts/ao_mvp_runtime_rollback_drill.py";s=importlib.util.spec_from_file_location("x",p);assert s and s.loader;m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
-r=m.rollback({"revision":"fixture","effective_autonomy":"A1","service_state":"running"})
-assert r["service_state"]=="stopped" and r["effective_autonomy"]=="A0"
-assert r["dispatch_enabled"] is False and r["production_mutation_authorized"] is False
-assert r["evidence_preserved"] is True and r["authority_effect"]=="reduce_only"
-print("AO-MVP synthetic runtime rollback drill: GREEN")
+ROOT=Path(__file__).resolve().parents[1]
+p=ROOT/"scripts/ao_mvp_runtime_rollback_drill.py"
+r=subprocess.run([sys.executable,str(p),"--revision","fixture-revision"],cwd=ROOT,capture_output=True,text=True,check=True)
+out=json.loads(r.stdout)
+assert out=={"authority_effect":"reduce_only","dispatch_enabled":False,"effective_autonomy":"A0","evidence_preserved":True,"prior_revision":"fixture-revision","production_mutation_authorized":False,"service_state":"stopped"}
+print("AO-MVP rollback drill observability: GREEN")
