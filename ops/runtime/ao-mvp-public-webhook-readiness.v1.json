@@ -19,9 +19,9 @@
   "checks": {
     "dedicated_ingress_identity": false,
     "hermes_isolation_proven": false,
-    "dns_plan_reviewed_not_applied": false,
-    "route_port_plan_reviewed_not_applied": false,
-    "tls_plan_defined": false,
+    "dns_plan_reviewed_not_applied": true,
+    "route_port_plan_reviewed_not_applied": true,
+    "tls_plan_defined": true,
     "authentication_contract_green": true,
     "replay_protection_green": true,
     "payload_validation_green": true,
@@ -38,6 +38,7 @@
     "Private A1 activation does not authorize public ingress.",
     "No hostname, DNS, route, port, Hermes, production credential, Twilio, customer-system, payment, or production-data change is authorized.",
     "Any missing, stale, unknown, or failed check remains NOT READY.",
-    "Repository-only synthetic contract evidence is GREEN for authentication, replay, payload validation, abuse limiting, allowlist-only logging, zero production mutation, network-free E2E, and rollback. These checks do not authorize or prove public ingress."
+    "Repository-only synthetic contract evidence is GREEN for authentication, replay, payload validation, abuse limiting, allowlist-only logging, zero production mutation, network-free E2E, and rollback. These checks do not authorize or prove public ingress.",
+    "Non-applying DNS, dedicated route/port, and TLS plans are now repository-defined and validated; all concrete DNS/hostname/port/binding values remain unset."
   ]
 }
