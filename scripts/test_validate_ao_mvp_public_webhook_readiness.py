@@ -21,9 +21,12 @@ BASE={
 class TestPublicWebhookReadiness(unittest.TestCase):
  def test_planning_record_passes(self):
   self.assertEqual(m.validate(copy.deepcopy(BASE)),[])
- def test_public_activation_cannot_be_inferred(self):
-  d=copy.deepcopy(BASE); d["public_webhook_activation_authorized"]=True
-  self.assertTrue(m.validate(d))
+ def test_explicit_approval_advances_only_to_pending_evidence(self):
+  d=copy.deepcopy(BASE)
+  d["status"]="activation_authorized_pending_operational_evidence"
+  d["public_webhook_activation_authorized"]=True
+  d["checks"]["phase_specific_ceo_approval_recorded"]=True
+  self.assertEqual(m.validate(d),[])
  def test_production_authority_stays_denied(self):
   d=copy.deepcopy(BASE); d["production_mutation_authorized"]=True
   self.assertTrue(m.validate(d))
