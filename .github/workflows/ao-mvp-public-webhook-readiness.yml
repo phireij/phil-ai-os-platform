@@ -24,6 +24,9 @@ on:
       - "scripts/test_ao_mvp_public_webhook_log_redaction.py"
       - "scripts/ao_mvp_public_webhook_synthetic_e2e.py"
       - "scripts/test_ao_mvp_public_webhook_synthetic_e2e.py"
+      - "ops/runtime/ao-mvp-public-webhook-nonapplying-ingress-plan.v1.json"
+      - "scripts/validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py"
       - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
   push:
     branches:
@@ -50,6 +53,9 @@ on:
       - "scripts/test_ao_mvp_public_webhook_log_redaction.py"
       - "scripts/ao_mvp_public_webhook_synthetic_e2e.py"
       - "scripts/test_ao_mvp_public_webhook_synthetic_e2e.py"
+      - "ops/runtime/ao-mvp-public-webhook-nonapplying-ingress-plan.v1.json"
+      - "scripts/validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py"
       - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
   workflow_dispatch:
 
@@ -87,3 +93,7 @@ jobs:
         run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_log_redaction.py
       - name: Test network-free synthetic E2E
         run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_synthetic_e2e.py
+      - name: Validate non-applying ingress plan
+        run: python scripts/validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py
+      - name: Test non-applying ingress plan
+        run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py
