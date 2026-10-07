@@ -8,6 +8,15 @@ on:
       - "scripts/validate_ao_mvp_public_webhook_readiness.py"
       - "scripts/test_validate_ao_mvp_public_webhook_readiness.py"
       - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
+  push:
+    branches:
+      - "ao-mvp/**"
+    paths:
+      - "docs/AO_MVP_PUBLIC_WEBHOOK_ACTIVATION_READINESS_CONTRACT_2026-10-07.md"
+      - "ops/runtime/ao-mvp-public-webhook-readiness.v1.json"
+      - "scripts/validate_ao_mvp_public_webhook_readiness.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_readiness.py"
+      - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
   workflow_dispatch:
 
 permissions:
@@ -15,11 +24,14 @@ permissions:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - run: python scripts/validate_ao_mvp_public_webhook_readiness.py
-      - run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_readiness.py
+      - name: Validate fail-closed public webhook planning record
+        run: python scripts/validate_ao_mvp_public_webhook_readiness.py
+      - name: Test public webhook planning boundary
+        run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_readiness.py
