@@ -6,7 +6,7 @@ on:
       - "docs/AO_MVP_PUBLIC_WEBHOOK_ACTIVATION_READINESS_CONTRACT_2026-10-07.md"
       - "ops/runtime/ao-mvp-public-webhook-readiness.v1.json"
       - "scripts/validate_ao_mvp_public_webhook_readiness.py"
-      - "scripts/test_validate_ao_mvp_public_webhook_readiness.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_readiness.py"\n      - "scripts/ao_mvp_public_webhook_contract.py"\n      - "scripts/test_ao_mvp_public_webhook_contract.py"\n      - "scripts/ao_mvp_public_webhook_contract.py"\n      - "scripts/test_ao_mvp_public_webhook_contract.py"
       - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
   push:
     branches:
