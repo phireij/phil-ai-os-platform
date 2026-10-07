@@ -1,0 +1,60 @@
+{
+  "schema": "phil-ai-os-public-webhook-activation-manifest",
+  "version": 1,
+  "status": "prepared_not_authorized",
+  "authority_effect": "none",
+  "production_mutation_authorized": false,
+  "public_webhook_activation_authorized": false,
+  "source": {
+    "repository": "phireij/phil-ai-os-platform",
+    "branch": "ao-mvp/public-webhook-readiness-contract",
+    "verified_repository_head": "8869e10201e10bcab0e3b053c90702fde4b42e8a",
+    "verified_ci": true
+  },
+  "ingress": {
+    "identity": "ao-mvp-public-webhook",
+    "hostname": null,
+    "dedicated_route": true,
+    "reuse_hermes_hostname": false,
+    "reuse_existing_traefik_route": false,
+    "reuse_phil_ai_os_core_workload": false,
+    "public_port": null
+  },
+  "isolation_acceptance": [
+    "hostname does not equal or alias Hermes hostname",
+    "route does not target Hermes router or authority surface",
+    "ingress has no production credentials",
+    "handler has no production mutation adapter",
+    "only synthetic_canary event kind is accepted during activation canary",
+    "logs are allowlist-only and contain no request body or sensitive headers"
+  ],
+  "post_approval_sequence": [
+    "revalidate immutable source revision and CI",
+    "record explicit phase-specific CEO approval",
+    "select dedicated hostname without Hermes reuse",
+    "record DNS and dedicated route values before application",
+    "verify TLS certificate ownership and renewal",
+    "apply minimum isolated ingress only",
+    "run synthetic authenticated canary",
+    "verify replay, malformed payload, abuse and redaction failures remain fail-closed",
+    "verify zero production mutation and zero Hermes reachability",
+    "capture activation evidence",
+    "rollback immediately on any unknown or failed invariant"
+  ],
+  "rollback": [
+    "disable ingress",
+    "remove dedicated route",
+    "close dedicated public port if one was introduced",
+    "preserve private A1 runtime",
+    "preserve evidence"
+  ],
+  "forbidden": [
+    "Hermes hostname/router/credential/authority reuse",
+    "existing production workload mutation",
+    "production credentials or production data",
+    "Twilio or live customer messaging",
+    "payments",
+    "customer systems",
+    "authority widening"
+  ]
+}
