@@ -22,14 +22,14 @@
     "dns_plan_reviewed_not_applied": false,
     "route_port_plan_reviewed_not_applied": false,
     "tls_plan_defined": false,
-    "authentication_contract_green": false,
-    "replay_protection_green": false,
-    "payload_validation_green": false,
-    "rate_limit_abuse_green": false,
-    "log_redaction_green": false,
-    "zero_production_mutation_capability_green": false,
-    "synthetic_e2e_green": false,
-    "rollback_plan_green": false,
+    "authentication_contract_green": true,
+    "replay_protection_green": true,
+    "payload_validation_green": true,
+    "rate_limit_abuse_green": true,
+    "log_redaction_green": true,
+    "zero_production_mutation_capability_green": true,
+    "synthetic_e2e_green": true,
+    "rollback_plan_green": true,
     "exact_revision_ci_green": false,
     "phase_specific_ceo_approval_recorded": false
   },
@@ -37,6 +37,7 @@
     "This record plans a separate future public-webhook phase only.",
     "Private A1 activation does not authorize public ingress.",
     "No hostname, DNS, route, port, Hermes, production credential, Twilio, customer-system, payment, or production-data change is authorized.",
-    "Any missing, stale, unknown, or failed check remains NOT READY."
+    "Any missing, stale, unknown, or failed check remains NOT READY.",
+    "Repository-only synthetic contract evidence is GREEN for authentication, replay, payload validation, abuse limiting, allowlist-only logging, zero production mutation, network-free E2E, and rollback. These checks do not authorize or prove public ingress."
   ]
 }
