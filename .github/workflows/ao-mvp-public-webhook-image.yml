@@ -1,0 +1,47 @@
+name: AO-MVP Public Webhook Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile.ao-mvp-public-webhook
+      - scripts/ao_mvp_public_webhook_server.py
+      - .github/workflows/ao-mvp-public-webhook-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Publish and verify immutable image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY}/ao-mvp-public-webhook"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx build \
+            --platform linux/amd64 \
+            --provenance=false \
+            --sbom=false \
+            --file Dockerfile.ao-mvp-public-webhook \
+            --tag "$IMAGE:sha-$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --push \
+            --metadata-file /tmp/ao-mvp-public-webhook-image-metadata.json \
+            .
+          digest="$(python -c 'import json; print(json.load(open("/tmp/ao-mvp-public-webhook-image-metadata.json"))["containerimage.digest"])')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker pull --platform linux/amd64 "$IMAGE@$digest"
+          platform="$(docker image inspect "$IMAGE@$digest" --format '{{.Os}}/{{.Architecture}}')"
+          [[ "$platform" == "linux/amd64" ]]
+          docker image rm "$IMAGE@$digest" >/dev/null
+          echo "Published and verified $IMAGE@$digest from commit $GITHUB_SHA (linux/amd64; registry pull verified)." >> "$GITHUB_STEP_SUMMARY"
+          docker logout ghcr.io
