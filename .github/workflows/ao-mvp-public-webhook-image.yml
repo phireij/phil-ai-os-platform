@@ -17,23 +17,31 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile.ao-mvp-public-webhook
-          platforms: linux/amd64
-          provenance: false
-          sbom: false
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/phil-ai-os-public-webhook:sha-${{ github.sha }}
-      - name: Verify AMD64 pull
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Publish and verify immutable image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          IMAGE="ghcr.io/${{ github.repository_owner }}/phil-ai-os-public-webhook:sha-${{ github.sha }}"
-          docker pull --platform linux/amd64 "$IMAGE"
-          test "$(docker image inspect --format '{{.Architecture}}/{{.Os}}' "$IMAGE")" = "amd64/linux"
+          set -euo pipefail
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY}/ao-mvp-public-webhook"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx build \
+            --platform linux/amd64 \
+            --provenance=false \
+            --sbom=false \
+            --file Dockerfile.ao-mvp-public-webhook \
+            --tag "$IMAGE:sha-$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --push \
+            --metadata-file /tmp/ao-mvp-public-webhook-image-metadata.json \
+            .
+          digest="$(python -c 'import json; print(json.load(open("/tmp/ao-mvp-public-webhook-image-metadata.json"))["containerimage.digest"])')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker pull --platform linux/amd64 "$IMAGE@$digest"
+          platform="$(docker image inspect "$IMAGE@$digest" --format '{{.Os}}/{{.Architecture}}')"
+          [[ "$platform" == "linux/amd64" ]]
+          docker image rm "$IMAGE@$digest" >/dev/null
+          echo "Published and verified $IMAGE@$digest from commit $GITHUB_SHA (linux/amd64; registry pull verified)." >> "$GITHUB_STEP_SUMMARY"
+          docker logout ghcr.io
