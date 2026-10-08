@@ -1,0 +1,36 @@
+{
+  "schema": "phil-ai-os-public-webhook-repository-evidence",
+  "version": 1,
+  "observed_at": "2026-10-07",
+  "authority_effect": "none",
+  "public_webhook_activation_authorized": false,
+  "production_mutation_authorized": false,
+  "verified_predecessor_head": "50786166878402e16c9aca85de4e8cad91cfcbb0",
+  "verified_predecessor_checks": {
+    "readiness_validate": "success",
+    "workflow_supply_chain_policy": "success",
+    "orchestrator_pull_request_build": "success",
+    "publish": "skipped"
+  },
+  "current_branch": "ao-mvp/public-webhook-readiness-contract",
+  "current_exact_head": "26208c96a1548f2fb892c7d7cdc2c810d88a8e60",
+  "current_exact_head_ci_green": false,
+  "proven_repository_controls": [
+    "authentication/signature contract",
+    "timestamp and nonce replay protection",
+    "strict payload validation",
+    "synthetic rate limiting",
+    "allowlist-only logging",
+    "zero production mutation synthetic harness",
+    "network-free synthetic end-to-end canary",
+    "rollback preserving private A1",
+    "non-applying DNS/route/port/TLS planning"
+  ],
+  "unresolved_activation_items": [
+    "dedicated ingress identity with actual hostname remains unselected",
+    "Hermes isolation cannot be operationally proven until dedicated ingress exists",
+    "current exact-head CI must be GREEN",
+    "phase-specific explicit CEO public-webhook activation approval is absent"
+  ],
+  "note": "Forward-only evidence record. It grants no activation authority and does not replace AO-MVP-STATUS.md."
+}

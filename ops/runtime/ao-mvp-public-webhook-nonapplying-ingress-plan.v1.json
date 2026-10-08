@@ -1,0 +1,53 @@
+{
+  "schema": "phil-ai-os-public-webhook-nonapplying-ingress-plan",
+  "version": 1,
+  "status": "planned_not_applied",
+  "authority_effect": "none",
+  "apply_changes": false,
+  "public_webhook_activation_authorized": false,
+  "dedicated_ingress_identity": {
+    "logical_name": "ao-mvp-public-webhook",
+    "hostname": null,
+    "must_not_reuse_hermes": true,
+    "must_not_reuse_existing_traefik": true,
+    "must_not_reuse_phil_ai_os_core": true
+  },
+  "dns": {
+    "reviewed_not_applied": true,
+    "record_type": null,
+    "record_name": null,
+    "target": null,
+    "ttl": null
+  },
+  "route_and_port": {
+    "reviewed_not_applied": true,
+    "dedicated_route_required": true,
+    "public_port": null,
+    "existing_route_reuse": false,
+    "existing_public_port_change": false
+  },
+  "tls": {
+    "plan_defined": true,
+    "certificate_source": "future-dedicated-ingress-managed-certificate",
+    "hostname_binding": null,
+    "renewal": "automatic renewal required; readiness fails closed on invalid or near-expiry certificate",
+    "minimum_protocol": "TLS 1.2",
+    "plaintext_fallback": false
+  },
+  "credentials_and_data": {
+    "production_credentials": false,
+    "production_data": false,
+    "twilio": false,
+    "customer_systems": false,
+    "payments": false
+  },
+  "activation_prerequisites": [
+    "separate explicit CEO public-webhook activation approval",
+    "dedicated hostname selected and proven isolated from Hermes",
+    "DNS values completed and reviewed",
+    "dedicated route/port values completed and reviewed",
+    "TLS certificate bound to the approved dedicated hostname",
+    "exact immutable revision CI GREEN",
+    "synthetic canary and rollback evidence GREEN"
+  ]
+}

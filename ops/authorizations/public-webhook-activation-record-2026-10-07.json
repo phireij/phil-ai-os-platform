@@ -1,0 +1,30 @@
+{
+  "schema": "phil-ai-os-public-webhook-phase-approval",
+  "version": 1,
+  "approved_on": "2026-10-07",
+  "approval_source": "CEO explicit approval in ChatGPT conversation",
+  "approval_text": "I am approving to activate public ingress",
+  "phase": "public_webhook_activation",
+  "public_webhook_activation_authorized": true,
+  "scope": "isolated AO-MVP public ingress with synthetic canary only during activation acceptance",
+  "preactivation_verified_head": "e4ab7117bbcf2fae63bbf4502041712050868e47",
+  "preactivation_ci_green": true,
+  "production_mutation_authorized": false,
+  "authority_effect": "none",
+  "hermes_reuse_authorized": false,
+  "existing_traefik_reuse_authorized": false,
+  "production_credentials_authorized": false,
+  "production_data_authorized": false,
+  "twilio_authorized": false,
+  "customer_systems_authorized": false,
+  "payments_authorized": false,
+  "live_customer_messaging_authorized": false,
+  "conditions": [
+    "dedicated ingress identity and hostname must not reuse Hermes",
+    "minimum isolated ingress change only",
+    "TLS and authentication must validate before acceptance",
+    "synthetic canary only during activation acceptance",
+    "zero production mutation and zero Hermes authority reachability must be verified",
+    "rollback immediately on unknown or failed invariant"
+  ]
+}

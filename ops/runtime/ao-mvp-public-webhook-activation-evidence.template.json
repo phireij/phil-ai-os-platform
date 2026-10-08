@@ -1,0 +1,45 @@
+{
+  "schema": "phil-ai-os-public-webhook-activation-evidence",
+  "version": 1,
+  "status": "template_not_authorized",
+  "exact_revision": null,
+  "observed_at": null,
+  "private_a1_checkpoint_complete": true,
+  "public_webhook_activation_authorized": false,
+  "production_mutation_authorized": false,
+  "authority_effect": "none",
+  "dedicated_hostname": null,
+  "hermes_reuse": false,
+  "existing_traefik_reuse": false,
+  "existing_core_workload_reuse": false,
+  "production_credentials_present": false,
+  "production_data_present": false,
+  "twilio_enabled": false,
+  "customer_systems_enabled": false,
+  "payments_enabled": false,
+  "evidence": {
+    "exact_revision_ci_green": false,
+    "supply_chain_ci_green": false,
+    "authentication_contract_green": false,
+    "replay_protection_green": false,
+    "payload_validation_green": false,
+    "rate_limit_abuse_green": false,
+    "log_redaction_green": false,
+    "hermes_isolation_green": false,
+    "zero_production_mutation_green": false,
+    "rollback_green": false,
+    "synthetic_canary_green": false,
+    "tls_green": false
+  },
+  "approval": {
+    "phase": "public_webhook_activation",
+    "ceo_explicit_approval": false,
+    "approved_at": null,
+    "scope": null
+  },
+  "notes": [
+    "Template only. It grants no authority.",
+    "Private A1 approval cannot satisfy the phase-specific public webhook approval field.",
+    "Before approval, hostname/DNS/route/port changes remain prohibited."
+  ]
+}

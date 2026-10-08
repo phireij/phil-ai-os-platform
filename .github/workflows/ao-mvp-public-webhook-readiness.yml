@@ -1,0 +1,109 @@
+name: AO-MVP public webhook readiness contract
+
+on:
+  pull_request:
+    paths:
+      - "docs/AO_MVP_PUBLIC_WEBHOOK_ACTIVATION_READINESS_CONTRACT_2026-10-07.md"
+      - "ops/runtime/ao-mvp-public-webhook-readiness.v1.json"
+      - "scripts/validate_ao_mvp_public_webhook_readiness.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_readiness.py"
+      - "scripts/ao_mvp_public_webhook_contract.py"
+      - "scripts/test_ao_mvp_public_webhook_contract.py"
+      - "scripts/ao_mvp_public_webhook_rate_limit.py"
+      - "scripts/test_ao_mvp_public_webhook_rate_limit.py"
+      - "scripts/ao_mvp_public_webhook_isolation.py"
+      - "scripts/test_ao_mvp_public_webhook_isolation.py"
+      - "scripts/ao_mvp_public_webhook_rollback.py"
+      - "scripts/test_ao_mvp_public_webhook_rollback.py"
+      - "ops/runtime/ao-mvp-public-webhook-activation-evidence.template.json"
+      - "scripts/validate_ao_mvp_public_webhook_activation_evidence.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_activation_evidence.py"
+      - "scripts/ao_mvp_public_webhook_activation_gate.py"
+      - "scripts/test_ao_mvp_public_webhook_activation_gate.py"
+      - "scripts/ao_mvp_public_webhook_log_redaction.py"
+      - "scripts/test_ao_mvp_public_webhook_log_redaction.py"
+      - "scripts/ao_mvp_public_webhook_synthetic_e2e.py"
+      - "scripts/test_ao_mvp_public_webhook_synthetic_e2e.py"
+      - "ops/runtime/ao-mvp-public-webhook-nonapplying-ingress-plan.v1.json"
+      - "scripts/validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py"
+      - "ops/runtime/ao-mvp-public-webhook-activation-manifest.v1.json"
+      - "scripts/validate_ao_mvp_public_webhook_activation_manifest.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_activation_manifest.py"
+      - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
+  push:
+    branches:
+      - "ao-mvp/**"
+    paths:
+      - "docs/AO_MVP_PUBLIC_WEBHOOK_ACTIVATION_READINESS_CONTRACT_2026-10-07.md"
+      - "ops/runtime/ao-mvp-public-webhook-readiness.v1.json"
+      - "scripts/validate_ao_mvp_public_webhook_readiness.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_readiness.py"
+      - "scripts/ao_mvp_public_webhook_contract.py"
+      - "scripts/test_ao_mvp_public_webhook_contract.py"
+      - "scripts/ao_mvp_public_webhook_rate_limit.py"
+      - "scripts/test_ao_mvp_public_webhook_rate_limit.py"
+      - "scripts/ao_mvp_public_webhook_isolation.py"
+      - "scripts/test_ao_mvp_public_webhook_isolation.py"
+      - "scripts/ao_mvp_public_webhook_rollback.py"
+      - "scripts/test_ao_mvp_public_webhook_rollback.py"
+      - "ops/runtime/ao-mvp-public-webhook-activation-evidence.template.json"
+      - "scripts/validate_ao_mvp_public_webhook_activation_evidence.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_activation_evidence.py"
+      - "scripts/ao_mvp_public_webhook_activation_gate.py"
+      - "scripts/test_ao_mvp_public_webhook_activation_gate.py"
+      - "scripts/ao_mvp_public_webhook_log_redaction.py"
+      - "scripts/test_ao_mvp_public_webhook_log_redaction.py"
+      - "scripts/ao_mvp_public_webhook_synthetic_e2e.py"
+      - "scripts/test_ao_mvp_public_webhook_synthetic_e2e.py"
+      - "ops/runtime/ao-mvp-public-webhook-nonapplying-ingress-plan.v1.json"
+      - "scripts/validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py"
+      - "ops/runtime/ao-mvp-public-webhook-activation-manifest.v1.json"
+      - "scripts/validate_ao_mvp_public_webhook_activation_manifest.py"
+      - "scripts/test_validate_ao_mvp_public_webhook_activation_manifest.py"
+      - ".github/workflows/ao-mvp-public-webhook-readiness.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Validate fail-closed public webhook planning record
+        run: python scripts/validate_ao_mvp_public_webhook_readiness.py
+      - name: Test public webhook planning boundary
+        run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_readiness.py
+      - name: Test synthetic webhook ingress contract
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_contract.py
+      - name: Test synthetic abuse guard
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_rate_limit.py
+      - name: Test public webhook isolation
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_isolation.py
+      - name: Test public webhook rollback
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_rollback.py
+      - name: Validate activation evidence template
+        run: python scripts/validate_ao_mvp_public_webhook_activation_evidence.py
+      - name: Test activation evidence template
+        run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_activation_evidence.py
+      - name: Test activation decision gate
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_activation_gate.py
+      - name: Test webhook log allowlist
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_log_redaction.py
+      - name: Test network-free synthetic E2E
+        run: PYTHONPATH=scripts python -m unittest scripts/test_ao_mvp_public_webhook_synthetic_e2e.py
+      - name: Validate non-applying ingress plan
+        run: python scripts/validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py
+      - name: Test non-applying ingress plan
+        run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_nonapplying_ingress_plan.py
+      - name: Validate activation manifest
+        run: python scripts/validate_ao_mvp_public_webhook_activation_manifest.py
+      - name: Test activation manifest
+        run: python -m unittest scripts/test_validate_ao_mvp_public_webhook_activation_manifest.py
