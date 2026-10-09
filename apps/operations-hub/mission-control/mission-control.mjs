@@ -382,6 +382,44 @@ function renderLiveSummary(snapshot) {
     row.append(dt, dd);
     return row;
   }));
+  renderLiveAgentPosture(snapshot);
+}
+
+function renderLiveAgentPosture(snapshot) {
+  const target = document.querySelector("#live-agent-posture");
+  const state = document.querySelector("#live-agent-posture-state");
+  const model = snapshot.multi_agent ?? snapshot.agent_posture ?? {};
+  const agents = Array.isArray(model.agents) ? model.agents : [];
+  const handoffs = Array.isArray(model.handoffs) ? model.handoffs : [];
+  if (!agents.length && !handoffs.length) {
+    state.textContent = "not exposed";
+    state.className = "state-chip";
+    const empty = document.createElement("p");
+    empty.className = "load-state";
+    empty.textContent = "The authenticated snapshot does not expose the multi-agent projection yet.";
+    target.replaceChildren(empty);
+    return;
+  }
+  state.textContent = `${agents.length} agents · ${handoffs.length} handoffs`;
+  state.className = "state-chip safe";
+  const rows = [];
+  for (const agent of agents.slice(0, 6)) {
+    const id = text(agent.agent_id ?? "agent");
+    const readiness = text(agent.readiness?.state ?? "unknown");
+    const authority = text(agent.authority_ceiling ?? "unknown");
+    rows.push([id, `${readiness} · ceiling ${authority}`]);
+  }
+  if (handoffs.length) rows.push(["Historical handoffs", `${handoffs.length} recorded`]);
+  target.replaceChildren(...rows.map(([label, value]) => {
+    const row = document.createElement("div");
+    row.className = "safety-row";
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    row.append(dt, dd);
+    return row;
+  }));
 }
 
 function recordItems(payload) {
