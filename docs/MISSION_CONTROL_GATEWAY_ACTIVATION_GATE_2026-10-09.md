@@ -5,6 +5,8 @@ The authenticated gateway is packaged as a separate immutable image. It must not
 1. A CEO authentication secret is provisioned through the approved secret-management path and mounted as `MISSION_CONTROL_CEO_TOKEN_FILE`.
 2. A dedicated route is selected and verified, either a separate hostname or an explicit `/api` path route that cannot capture existing workloads.
 
+The provisioning record must identify the CEO principal, secret reference, allowed scopes, rotation owner, and expiry without storing the token value. The minimum first activation scope is `mission_control:read` plus `mission_control:decision_request`; `mission_control:delegate` remains a separate explicit gate.
+
 Until those inputs are available:
 
 - the public `miscon.phireij.cloud` preview remains read-only;

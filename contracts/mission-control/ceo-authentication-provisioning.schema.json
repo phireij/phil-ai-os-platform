@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/ceo-authentication-provisioning.schema.json",
+  "title": "Mission Control CEO authentication provisioning record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["principal", "method", "secret_reference", "scopes", "authority_effect"],
+  "properties": {
+    "principal": {"const": "ceo"},
+    "method": {"enum": ["bearer_token_file", "oidc_proxy"]},
+    "secret_reference": {"type": "string", "minLength": 1, "description": "Reference only; never the credential value."},
+    "scopes": {
+      "type": "array",
+      "items": {"enum": ["mission_control:read", "mission_control:decision_request", "mission_control:delegate"]},
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "expires_at": {"type": ["string", "null"], "format": "date-time"},
+    "rotation_owner": {"const": "ceo"},
+    "authority_effect": {"const": "none"}
+  }
+}
