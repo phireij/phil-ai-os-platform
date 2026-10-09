@@ -101,7 +101,6 @@ jobs:
             --name "$CONTAINER" \
             --restart unless-stopped \
             --network "$DEPLOY_NET" \
-            --publish 127.0.0.1:18080:8080 \
             --read-only \
             --tmpfs /tmp:rw,noexec,nosuid,size=16m \
             --cap-drop ALL \
