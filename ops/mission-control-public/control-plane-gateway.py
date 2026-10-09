@@ -17,8 +17,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "apps" / "operations-hub" / "src"))
+_container_source = Path(os.environ.get("MISSION_CONTROL_SOURCE_ROOT", "/srv/apps/operations-hub/src"))
+_repository_source = Path(__file__).resolve().parents[2] / "apps" / "operations-hub" / "src"
+SOURCE_ROOT = _container_source if _container_source.exists() else _repository_source
+sys.path.insert(0, str(SOURCE_ROOT))
 
 from operations_hub.mission_control_control_plane import (  # noqa: E402
     MissionControlControlPlane,
