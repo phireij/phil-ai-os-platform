@@ -1,0 +1,10 @@
+FROM python:3.12-alpine
+WORKDIR /srv
+COPY apps/operations-hub/mission-control /srv/mission-control
+COPY ops/mission-control-public/readonly-static-server.py /srv/readonly-static-server.py
+RUN addgroup -S app && adduser -S -G app app \
+    && chown -R app:app /srv
+USER app
+ENV MISSION_CONTROL_ROOT=/srv/mission-control MISSION_CONTROL_HOST=0.0.0.0 MISSION_CONTROL_PORT=8080
+EXPOSE 8080
+ENTRYPOINT ["python3", "/srv/readonly-static-server.py"]
