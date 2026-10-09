@@ -61,6 +61,7 @@ jobs:
           set -euo pipefail
           CONTROL=$(docker ps --format '{{.Names}}' | grep -m1 'control-api')
           DB=/app/state/control-plane.db
+          PORT=4891
           PIDFILE=/tmp/phase21b-dashboard.pid
           LOG=/tmp/phase21b-dashboard.log
           HTML=/tmp/phase21b-dashboard.html
@@ -74,11 +75,11 @@ jobs:
 
           BEFORE="$(docker exec "$CONTROL" python -c "import sqlite3,json; c=sqlite3.connect('$DB'); print(json.dumps({'approvals':c.execute('select count(*) from approval_requests').fetchone()[0],'audits':c.execute('select count(*) from execution_audit').fetchone()[0]},sort_keys=True))")"
 
-          PHIL_AI_OS_MC_HOST=127.0.0.1 PHIL_AI_OS_MC_PORT=4881 PHIL_AI_OS_MC_READ_MODEL="$R_MODEL" python3 "$R_SERVER" > "$LOG" 2>&1 &
+          PHIL_AI_OS_MC_HOST=127.0.0.1 PHIL_AI_OS_MC_PORT="$PORT" PHIL_AI_OS_MC_READ_MODEL="$R_MODEL" python3 "$R_SERVER" > "$LOG" 2>&1 &
           echo $! > "$PIDFILE"
 
           for i in $(seq 1 20); do
-            if curl -fsS --max-time 3 http://127.0.0.1:4881/ > "$HTML"; then break; fi
+            if curl -fsS --max-time 3 "http://127.0.0.1:$PORT/" > "$HTML"; then break; fi
             sleep 1
           done
           test -s "$HTML"
@@ -91,11 +92,10 @@ jobs:
           grep -q 'Executions & Audit' "$HTML"
           grep -q 'Recovery & Data Quality' "$HTML"
 
-          curl -fsS --max-time 20 http://127.0.0.1:4881/api/read-model > "$JSON"
+          curl -fsS --max-time 20 "http://127.0.0.1:$PORT/api/read-model" > "$JSON"
           python3 - "$JSON" <<'PY'
           import json,sys
           d=json.load(open(sys.argv[1]))
-          print('dashboard_model_summary', {k: d.get(k) for k in ('schema_version','overall_state','governance','durable_correlation_summary')})
           assert d['schema_version']=='2.1e.v1'
           assert d['governance']['execution_allowed_task_classes']==['general']
           assert d['governance']['direct_provider_bypass_allowed'] is False
@@ -108,14 +108,14 @@ jobs:
 
           # All mutation methods must be unavailable.
           for method in POST PUT PATCH DELETE; do
-            code=$(curl -sS -o /tmp/phase21b-method.out -w '%{http_code}' -X "$method" http://127.0.0.1:4881/api/read-model)
+            code=$(curl -sS -o /tmp/phase21b-method.out -w '%{http_code}' -X "$method" "http://127.0.0.1:$PORT/api/read-model")
             test "$code" = 405
           done
           echo mutation_methods=blocked
 
           # Loopback binding must be explicit; no public listener is allowed in this gate.
-          ss -ltnp | grep -q '127.0.0.1:4881'
-          if ss -ltnp | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):4881'; then
+          ss -ltnp | grep -q "127.0.0.1:$PORT"
+          if ss -ltnp | grep -Eq "(^|[[:space:]])(0\.0\.0\.0|\[::\]):$PORT"; then
             echo public_listener=unexpected
             exit 1
           fi
