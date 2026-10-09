@@ -104,13 +104,13 @@ jobs:
           print('canary_latest_stage=COMPLETED')
           PY
 
-          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.21.1-phase22a68'
+          test "$(docker inspect "$CONTROL" --format '{{.Config.Image}}')" = 'phil-ai-os/control-api:0.21.3-twilio-status-callback'
           test "$(docker exec "$CONTROL" sh -lc 'printf %s "$PHIL_AI_OS_EXECUTION_ALLOWED_TASK_CLASSES"')" = general
           curl -fsS http://127.0.0.1:4870/healthz >/dev/null
           curl -fsS http://127.0.0.1:4870/readyz >/dev/null
           for m in POST PUT PATCH DELETE; do test "$(curl -sS -X "$m" -o /dev/null -w '%{http_code}' http://127.0.0.1:4881/api/read-model)" = 405; done
           for unit in phil-ai-os-agent-heartbeat.timer phil-ai-os-specialist-worker-01-presence.timer phil-ai-os-monitor.service phil-ai-os-backup.timer phil-ai-os-backup-self-heal.timer; do systemctl is-active --quiet "$unit"; done
-          echo control_api_image=0.21.1-phase22a68
+          echo control_api_image=0.21.3-twilio-status-callback
           echo execution_allowlist=general
           echo mission_control_mutations=405
           echo production_change=none
