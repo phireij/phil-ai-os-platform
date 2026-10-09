@@ -212,26 +212,22 @@ def main() -> None:
         if value is not False:
             fail(f"privacy exposure must remain false: {field}")
 
-    forbidden_html = (
-        r"<form\b",
-        r"<button\b",
-        r"type=[\"']submit[\"']",
-        r"\bapprove\b[^<]{0,30}(button|control)",
-        r"\bsend\b[^<]{0,30}(button|control)",
-    )
-    for pattern in forbidden_html:
-        if re.search(pattern, html, flags=re.IGNORECASE):
-            fail(f"interactive/authorizing HTML surface found: {pattern}")
+    if "#live-control-form" not in html or "#conversation-composer" not in html:
+        fail("authenticated CEO control surface is missing")
 
     forbidden_js = (
-        r"method\s*:\s*[\"'](?:POST|PUT|PATCH|DELETE)[\"']",
         r"XMLHttpRequest",
         r"WebSocket",
         r"navigator\.sendBeacon",
+        r"/api/tasks/",
+        r"/api/execution/",
     )
     for pattern in forbidden_js:
         if re.search(pattern, js, flags=re.IGNORECASE):
             fail(f"network write capability found: {pattern}")
+
+    if '"/api/decision-requests"' not in js or 'method: "POST"' not in js:
+        fail("governed CEO decision-request path is missing")
 
     if 'fetch("./fixture.json"' not in js or 'fetch("./channel-readiness.json"' not in js:
         fail("preview must load both bounded local projections")
