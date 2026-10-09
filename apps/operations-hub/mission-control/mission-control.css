@@ -2,3 +2,4 @@
 .live-control-panel{margin-top:1rem}.live-control-form input{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:.5rem;padding:.7rem;background:var(--bg);color:var(--text)}.live-control-form button{background:#1d4ed8;color:#fff;cursor:pointer}.live-control-form button:disabled{opacity:.6;cursor:wait}.live-control-panel .safety-list{margin-top:1rem}
 .live-records{margin-top:1rem}.live-record-panel{padding:1rem}.live-record-panel h3{margin:.15rem 0;font-size:1rem}.live-record-panel .lifecycle-list{margin-top:.75rem}
 .live-control-panel>#live-records-refresh{margin-top:1rem;border:0;border-radius:.5rem;padding:.6rem .9rem;background:var(--muted);color:var(--bg);cursor:pointer}.live-control-panel>#live-records-refresh:disabled{opacity:.6;cursor:wait}
+.live-control-actions{display:flex;gap:.6rem;flex-wrap:wrap}.live-control-actions button{cursor:pointer}.live-control-actions button:disabled{opacity:.6;cursor:wait}
