@@ -21,7 +21,7 @@ class MissionControlControlPlaneError(RuntimeError):
 
 @dataclass(frozen=True)
 class MissionControlControlPlane:
-    base_url: str = os.getenv("PHIL_AI_OS_CONTROL_API_URL", "http://127.0.0.1:4870")
+    base_url: str = os.getenv("PHIL_AI_OS_CONTROL_API_URL", "http://phil-ai-os-core-control-api-1:4870")
     token_file: str = os.getenv(
         "PHIL_AI_OS_CONTROL_API_TOKEN_FILE",
         "/run/philaios/hermes_control_api_token",
