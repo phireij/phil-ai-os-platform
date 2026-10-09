@@ -50,7 +50,10 @@
       <form id="live-control-form" class="conversation-composer">
         <label for="ceo-token">CEO session token</label>
         <input id="ceo-token" type="password" autocomplete="off" placeholder="Paste from your password manager; kept in memory only">
-        <button type="submit">Connect read-only snapshot</button>
+        <div class="live-control-actions">
+          <button type="submit">Connect read-only snapshot</button>
+          <button id="live-control-disconnect" type="button" disabled>Disconnect</button>
+        </div>
       </form>
       <dl id="live-control-summary" class="safety-list"></dl>
       <button id="live-records-refresh" type="button" disabled>Refresh live records</button>

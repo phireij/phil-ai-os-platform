@@ -471,6 +471,7 @@ function installLiveControlConnection() {
   const form = document.querySelector("#live-control-form");
   const input = document.querySelector("#ceo-token");
   const state = document.querySelector("#live-control-state");
+  const disconnect = document.querySelector("#live-control-disconnect");
   const button = form.querySelector("button");
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -493,6 +494,7 @@ function installLiveControlConnection() {
       document.querySelector("#conversation-message").disabled = false;
       document.querySelector("#decision-request-button").disabled = false;
       document.querySelector("#live-records-refresh").disabled = false;
+      disconnect.disabled = false;
       state.textContent = "connected · read only";
       state.className = "state-chip safe";
       input.value = "";
@@ -504,10 +506,36 @@ function installLiveControlConnection() {
       document.querySelector("#conversation-message").disabled = true;
       document.querySelector("#decision-request-button").disabled = true;
       document.querySelector("#live-records-refresh").disabled = true;
+      disconnect.disabled = true;
       document.querySelector("#live-control-summary").replaceChildren();
     } finally {
       button.disabled = false;
     }
+  });
+  disconnect.addEventListener("click", () => {
+    liveSessionToken = null;
+    input.value = "";
+    document.querySelector("#conversation-message").disabled = true;
+    document.querySelector("#decision-request-button").disabled = true;
+    document.querySelector("#live-records-refresh").disabled = true;
+    disconnect.disabled = true;
+    document.querySelector("#live-control-summary").replaceChildren();
+    for (const [listSelector, stateSelector, label] of [
+      ["#live-approvals-list", "#live-approvals-state", "approvals"],
+      ["#live-executions-list", "#live-executions-state", "executions"],
+    ]) {
+      const empty = document.createElement("p");
+      empty.className = "load-state";
+      empty.textContent = `Connect to load recent ${label}.`;
+      document.querySelector(listSelector).replaceChildren(empty);
+      const recordState = document.querySelector(stateSelector);
+      recordState.textContent = "not loaded";
+      recordState.className = "state-chip";
+    }
+    state.textContent = "disconnected";
+    state.className = "state-chip";
+    document.querySelector("#conversation-state").textContent = "preview · disconnected";
+    document.querySelector("#conversation-state").className = "state-chip safe";
   });
 }
 
