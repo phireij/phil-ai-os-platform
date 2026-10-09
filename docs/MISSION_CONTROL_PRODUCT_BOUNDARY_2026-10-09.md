@@ -45,3 +45,16 @@ Within one week, a credible Mission Control MVP can be completed if scope is lim
 
 Full production automation across all projects, live customer/order execution, unrestricted third-party channel operation, and broad autonomous authority are outside the one-week MVP target.
 
+## Accelerated schedule with continuous CEO availability
+
+If the CEO responds continuously to decisions, reviews, credentials, and acceptance questions, the active build can be compressed to approximately four or five days:
+
+- **October 10–11:** CEO-to-Chief-of-Staff conversation and control-plane contract.
+- **October 11–12:** bounded delegation and agent-result return.
+- **October 12–13:** approval, escalation, notification, and audit flow.
+- **October 13–14:** Ruby's Cake Delights read-only project status adapter and one external channel.
+- **October 14–15:** integrated acceptance, rollback rehearsal, and MVP go/no-go.
+- **October 16:** contingency for defects, provider delays, or CEO decisions that arrive late.
+
+This accelerated schedule is achievable only for the focused Mission Control MVP. Delays may come from CEO decisions or credentials, third-party channel/provider setup, authentication, live project data readiness, or defects found during acceptance.
+
