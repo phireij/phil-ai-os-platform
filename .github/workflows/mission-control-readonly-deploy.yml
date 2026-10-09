@@ -1,0 +1,121 @@
+name: Mission Control Read-only Publish and Isolated Deploy
+
+on:
+  push:
+    branches:
+      - codex/mission-control-readonly-deploy
+    paths:
+      - Dockerfile.mission-control-readonly
+      - apps/operations-hub/mission-control/**
+      - ops/mission-control-public/readonly-static-server.py
+      - .github/workflows/mission-control-readonly-deploy.yml
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish-and-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}/mission-control-readonly
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      HOSTNAME: miscon.phireij.cloud
+      CONTAINER: phil-ai-os-mission-control-readonly
+
+    steps:
+      - name: Checkout merged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build, publish, and verify immutable image
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx build \
+            --platform linux/amd64 \
+            --provenance=false \
+            --sbom=false \
+            --file Dockerfile.mission-control-readonly \
+            --tag "$IMAGE:sha-$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --push \
+            --metadata-file /tmp/mission-control-image-metadata.json \
+            .
+          digest="$(python -c 'import json; print(json.load(open("/tmp/mission-control-image-metadata.json"))["containerimage.digest"])')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker pull --platform linux/amd64 "$IMAGE@$digest"
+          platform="$(docker image inspect "$IMAGE@$digest" --format '{{.Os}}/{{.Architecture}}')"
+          [[ "$platform" == "linux/amd64" ]]
+          docker image rm "$IMAGE@$digest" >/dev/null
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Published and verified $IMAGE@$digest from $GITHUB_SHA (linux/amd64)." >> "$GITHUB_STEP_SUMMARY"
+          docker logout ghcr.io
+
+      - name: Prepare SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -T 15 -p "$VPS_PORT" -H "$VPS_HOST" > ~/.ssh/known_hosts
+
+      - name: Deploy isolated read-only container
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DIGEST"
+          printf '%s' "$GH_TOKEN" | ssh -p "$VPS_PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
+            "docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin"
+          ssh -p "$VPS_PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' -- "$IMAGE" "$DIGEST" "$HOSTNAME" "$CONTAINER" <<'REMOTE'
+          set -euo pipefail
+          IMAGE="$1"; DIGEST="$2"; HOSTNAME="$3"; CONTAINER="$4"
+          test "$(docker ps --format '{{.Names}}' | grep -Fx "$CONTAINER" || true)" = ""
+          TRAEFIK_NET="$(docker inspect traefik-fhxl --format '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n 1)"
+          test -n "$TRAEFIK_NET"
+          BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | sort)"
+          docker pull --platform linux/amd64 "$IMAGE@$DIGEST" >/dev/null
+          docker run -d \
+            --name "$CONTAINER" \
+            --restart unless-stopped \
+            --network "$TRAEFIK_NET" \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --pids-limit 128 \
+            --label "traefik.enable=true" \
+            --label "traefik.docker.network=$TRAEFIK_NET" \
+            --label "traefik.http.routers.mission-control-readonly.rule=Host(\`$HOSTNAME\`)" \
+            --label "traefik.http.routers.mission-control-readonly.entrypoints=websecure" \
+            --label "traefik.http.routers.mission-control-readonly.tls.certresolver=letsencrypt" \
+            --label "traefik.http.routers.mission-control-readonly.service=mission-control-readonly" \
+            --label "traefik.http.services.mission-control-readonly.loadbalancer.server.port=8080" \
+            "$IMAGE@$DIGEST" >/dev/null
+          sleep 5
+          test "$(docker inspect "$CONTAINER" --format '{{.State.Running}}')" = "true"
+          AFTER="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | grep -v "^$CONTAINER|" | sort)"
+          test "$BEFORE" = "$AFTER"
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          echo "container=$CONTAINER image=$IMAGE@$DIGEST network=$TRAEFIK_NET existing_workloads_unchanged=true"
+          REMOTE
+
+      - name: Verify public read-only route and isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(curl -fsS https://$HOSTNAME/healthz)" = '{"status":"ok","mode":"read_only"}'
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' -X POST https://$HOSTNAME/)" = "405"
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' https://$HOSTNAME/../../etc/passwd)" = "404"
+          echo "HTTPS, healthz, mutation denial, and traversal denial verified." >> "$GITHUB_STEP_SUMMARY"
