@@ -9,6 +9,8 @@ The provisioning record must identify the CEO principal, secret reference, allow
 
 The gateway image runs as UID/GID `10001`. The VPS secret file must therefore be owned by `root:10001` with mode `0640`; it must never be committed to GitHub or passed as a Docker environment variable.
 
+The existing `hermes_control_api_token` remains untouched at its source path. Activation stages its contents into a dedicated read-only Docker volume owned by UID/GID `10001`, then mounts that volume only into the Mission Control gateway.
+
 Until those inputs are available:
 
 - the public `miscon.phireij.cloud` preview remains read-only;
