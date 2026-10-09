@@ -1,0 +1,12 @@
+FROM python:3.12-alpine
+WORKDIR /srv
+COPY apps/operations-hub/src /srv/apps/operations-hub/src
+COPY ops/mission-control-public/control-plane-gateway.py /srv/control-plane-gateway.py
+RUN addgroup -S app && adduser -S -G app app \
+    && chown -R app:app /srv
+USER app
+ENV PYTHONPATH=/srv/apps/operations-hub/src \
+    MISSION_CONTROL_GATEWAY_HOST=0.0.0.0 \
+    MISSION_CONTROL_GATEWAY_PORT=8090
+EXPOSE 8090
+ENTRYPOINT ["python3", "/srv/control-plane-gateway.py"]
