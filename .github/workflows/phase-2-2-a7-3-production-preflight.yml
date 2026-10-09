@@ -28,7 +28,16 @@ jobs:
           python3 -m py_compile scripts/phase2_2_a7_4_multi_agent_read_model.py
           grep -Fq "schema_version'] = '2.2-a7.v1'" scripts/phase2_2_a7_4_multi_agent_read_model.py
           grep -Fq "mission_control_authority':'read_only_observer'" scripts/phase2_2_a7_4_multi_agent_read_model.py
-          ! grep -Eiq '/v1/execute|Authorization:|Bearer |api[_-]?key|provider[_-]?key' scripts/phase2_2_a7_4_multi_agent_read_model.py
+          ! grep -Eiq '/v1/execute|Authorization:|Bearer ' scripts/phase2_2_a7_4_multi_agent_read_model.py
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          lines = Path('scripts/phase2_2_a7_4_multi_agent_read_model.py').read_text().splitlines()
+          key_pattern = re.compile(r'api[_-]?key|provider[_-]?key', re.I)
+          matches = [line for line in lines if key_pattern.search(line)]
+          assert matches, 'candidate must declare explicit sensitive-key redaction'
+          assert all('forbidden_keys' in line for line in matches), matches
+          PY
 
       - name: Configure IPv4 SSH
         shell: bash
