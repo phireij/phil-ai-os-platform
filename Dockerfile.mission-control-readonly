@@ -1,4 +1,4 @@
-FROM python:3.12-alpine
+FROM public.ecr.aws/docker/library/python:3.12-alpine
 WORKDIR /srv
 COPY apps/operations-hub/mission-control /srv/mission-control
 COPY ops/mission-control-public/readonly-static-server.py /srv/readonly-static-server.py
