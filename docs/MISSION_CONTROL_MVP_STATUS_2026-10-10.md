@@ -23,7 +23,7 @@ The decision-request path records an approval request only. Delegation, executio
 
 ## Next governed increment
 
-The next implementation boundary is the canonical operator read model for task and agent lifecycle. It should add only read-only identity, task correlation, and lifecycle visibility using existing Control API state. It must not enable automatic delegation, specialist execution, broader autonomy, new provider credentials, or customer/order operations.
+The canonical operator read-model contract is now defined at `contracts/mission-control/operator-read-model.schema.json`, with a bounded baseline fixture at `apps/operations-hub/mission-control/operator-read-model.json`. The next implementation step is compatibility discovery against existing Control API state, followed by read-only UI wiring. It must not enable automatic delegation, specialist execution, broader autonomy, new provider credentials, or customer/order operations.
 
 ## Explicit acceptance gate
 

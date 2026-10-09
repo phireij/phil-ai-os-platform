@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/operator-read-model.schema.json",
+  "title": "Mission Control read-only operator task and agent model",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "status", "read_only", "authority_effect", "agents", "tasks"],
+  "properties": {
+    "schema": {"const": "phil-ai-os-mission-control-operator-read-model"},
+    "version": {"const": 1},
+    "status": {"const": "read_only"},
+    "read_only": {"const": true},
+    "authority_effect": {"const": "none"},
+    "agents": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/agent"}
+    },
+    "tasks": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/task"}
+    }
+  },
+  "$defs": {
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent_id", "role", "state", "execution_authorized", "mutation_authorized"],
+      "properties": {
+        "agent_id": {"type": "string", "minLength": 1},
+        "role": {"enum": ["chief_of_staff", "hermes", "ceo", "operator"]},
+        "state": {"enum": ["idle", "available", "awaiting_approval", "review_required"]},
+        "execution_authorized": {"const": false},
+        "mutation_authorized": {"const": false}
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "task_class", "state", "agent_id", "approval_required", "execution_authorized", "customer_payload_exposed"],
+      "properties": {
+        "task_id": {"type": "string", "minLength": 1},
+        "task_class": {"const": "general"},
+        "state": {"enum": ["planned", "awaiting_approval", "ready_for_review", "completed", "stopped"]},
+        "agent_id": {"type": "string", "minLength": 1},
+        "approval_required": {"const": true},
+        "execution_authorized": {"const": false},
+        "customer_payload_exposed": {"const": false}
+      }
+    }
+  }
+}
