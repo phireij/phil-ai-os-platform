@@ -53,6 +53,16 @@
         <button type="submit">Connect read-only snapshot</button>
       </form>
       <dl id="live-control-summary" class="safety-list"></dl>
+      <div class="split-grid live-records" aria-label="Live approval and execution records">
+        <article class="panel live-record-panel">
+          <div class="panel-head"><div><p class="eyebrow">Governed records</p><h3>Recent approvals</h3></div><span id="live-approvals-state" class="state-chip">not loaded</span></div>
+          <div id="live-approvals-list" class="lifecycle-list"><p class="load-state">Connect to load recent approvals.</p></div>
+        </article>
+        <article class="panel live-record-panel">
+          <div class="panel-head"><div><p class="eyebrow">Governed records</p><h3>Recent executions</h3></div><span id="live-executions-state" class="state-chip">not loaded</span></div>
+          <div id="live-executions-list" class="lifecycle-list"><p class="load-state">Connect to load recent executions.</p></div>
+        </article>
+      </div>
       <p class="operator-note compact">The token is used only for this browser session and is never written to local storage, cookies, fixtures, or the repository.</p>
     </section>
 

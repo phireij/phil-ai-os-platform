@@ -383,6 +383,78 @@ function renderLiveSummary(snapshot) {
   }));
 }
 
+function recordItems(payload) {
+  if (Array.isArray(payload)) return payload;
+  for (const key of ["records", "items", "approvals", "executions"]) {
+    if (Array.isArray(payload?.[key])) return payload[key];
+  }
+  return [];
+}
+
+function renderLiveRecords(payload, listSelector, stateSelector, kind) {
+  const list = document.querySelector(listSelector);
+  const state = document.querySelector(stateSelector);
+  const items = recordItems(payload);
+  state.textContent = `${items.length} loaded`;
+  state.className = "state-chip safe";
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "load-state";
+    empty.textContent = `No recent ${kind} records.`;
+    list.replaceChildren(empty);
+    return;
+  }
+  const fields = kind === "approval"
+    ? [["State", "state", "status"], ["Requester", "requester", "requested_by"], ["Expires", "expires_at", "expiry"], ["Created", "created_at", "created"]]
+    : [["Outcome", "outcome", "status"], ["Task", "task_id", "task"], ["Agent", "agent_id", "agent"], ["Created", "created_at", "created"]];
+  list.replaceChildren(...items.slice(0, 10).map((item) => {
+    const article = document.createElement("article");
+    article.className = "lifecycle";
+    const top = document.createElement("div");
+    top.className = "lifecycle-top";
+    const label = document.createElement("span");
+    label.className = "lifecycle-id";
+    label.textContent = kind === "approval" ? "Approval record" : "Execution record";
+    const chip = document.createElement("span");
+    chip.className = "state-chip";
+    chip.textContent = text(item.state ?? item.status ?? item.outcome ?? "recorded");
+    top.append(label, chip);
+    const meta = document.createElement("div");
+    meta.className = "lifecycle-meta";
+    for (const [labelText, ...keys] of fields.slice(0, 3)) {
+      const cell = document.createElement("span");
+      cell.textContent = labelText;
+      const strong = document.createElement("strong");
+      const value = keys.map((key) => item[key]).find((candidate) => candidate !== undefined && candidate !== null && candidate !== "");
+      strong.textContent = text(value);
+      cell.append(strong);
+      meta.append(cell);
+    }
+    article.append(top, meta);
+    return article;
+  }));
+}
+
+async function loadLiveRecords(token) {
+  const headers = { Authorization: `Bearer ${token}` };
+  const results = await Promise.allSettled([
+    fetch("/api/approvals", { cache: "no-store", headers }),
+    fetch("/api/executions", { cache: "no-store", headers }),
+  ]);
+  for (const [index, result] of results.entries()) {
+    const listSelector = index === 0 ? "#live-approvals-list" : "#live-executions-list";
+    const stateSelector = index === 0 ? "#live-approvals-state" : "#live-executions-state";
+    const kind = index === 0 ? "approval" : "execution";
+    if (result.status === "fulfilled" && result.value.ok) {
+      renderLiveRecords(await result.value.json(), listSelector, stateSelector, kind);
+    } else {
+      const state = document.querySelector(stateSelector);
+      state.textContent = "unavailable";
+      state.className = "state-chip";
+    }
+  }
+}
+
 function installLiveControlConnection() {
   const form = document.querySelector("#live-control-form");
   const input = document.querySelector("#ceo-token");
@@ -411,6 +483,7 @@ function installLiveControlConnection() {
       state.textContent = "connected · read only";
       state.className = "state-chip safe";
       input.value = "";
+      loadLiveRecords(token);
     } catch (error) {
       state.textContent = `connection failed · ${error.message}`;
       state.className = "state-chip";
