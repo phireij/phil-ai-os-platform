@@ -94,6 +94,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, api.recent_approvals())
             elif path == "/api/executions":
                 self._send(200, api.recent_executions())
+            elif path == "/api/agent-posture":
+                self._send(200, api.agent_posture())
             else:
                 self._send(404, {"status": "not_found"})
         except MissionControlControlPlaneError:

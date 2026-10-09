@@ -422,6 +422,58 @@ function renderLiveAgentPosture(snapshot) {
   }));
 }
 
+function renderLiveAgentPosture(snapshot) {
+  const target = document.querySelector("#live-agent-posture");
+  const state = document.querySelector("#live-agent-posture-state");
+  const model = snapshot.multi_agent ?? snapshot.agent_posture ?? {};
+  const agents = Array.isArray(model.agents) ? model.agents : [];
+  const handoffs = Array.isArray(model.handoffs) ? model.handoffs : [];
+  if (!agents.length && !handoffs.length) {
+    state.textContent = "not exposed";
+    state.className = "state-chip";
+    const empty = document.createElement("p");
+    empty.className = "load-state";
+    empty.textContent = "The authenticated snapshot does not expose the multi-agent projection yet.";
+    target.replaceChildren(empty);
+    return;
+  }
+  state.textContent = `${agents.length} agents · ${handoffs.length} handoffs`;
+  state.className = "state-chip safe";
+  const rows = [];
+  for (const agent of agents.slice(0, 6)) {
+    const id = text(agent.agent_id ?? "agent");
+    const readiness = text(agent.readiness?.state ?? "unknown");
+    const authority = text(agent.authority_ceiling ?? "unknown");
+    rows.push([id, `${readiness} · ceiling ${authority}`]);
+  }
+  if (handoffs.length) rows.push(["Historical handoffs", `${handoffs.length} recorded`]);
+  target.replaceChildren(...rows.map(([label, value]) => {
+    const row = document.createElement("div");
+    row.className = "safety-row";
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    row.append(dt, dd);
+    return row;
+  }));
+}
+
+async function loadLiveAgentPosture(token) {
+  const headers = { Authorization: `Bearer ${token}` };
+  try {
+    const response = await fetch("/api/agent-posture", { cache: "no-store", headers });
+    if (response.status === 401) {
+      document.querySelector("#live-control-disconnect").click();
+      return;
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    renderLiveAgentPosture(await response.json());
+  } catch (_error) {
+    renderLiveAgentPosture({});
+  }
+}
+
 function recordItems(payload) {
   if (Array.isArray(payload)) return payload;
   for (const key of ["records", "items", "approvals", "executions"]) {
@@ -544,9 +596,11 @@ function installLiveControlConnection() {
       state.className = "state-chip safe";
       input.value = "";
       loadLiveRecords(token);
+      loadLiveAgentPosture(token);
       if (liveRefreshTimer) clearInterval(liveRefreshTimer);
       liveRefreshTimer = setInterval(() => {
         if (liveSessionToken) loadLiveRecords(liveSessionToken);
+        if (liveSessionToken) loadLiveAgentPosture(liveSessionToken);
       }, 60_000);
     } catch (error) {
       state.textContent = `connection failed · ${error.message}`;
@@ -574,6 +628,7 @@ function installLiveControlConnection() {
     document.querySelector("#live-records-refresh").disabled = true;
     disconnect.disabled = true;
     document.querySelector("#live-control-summary").replaceChildren();
+    renderLiveAgentPosture({});
     document.querySelector("#live-records-refreshed").textContent = "Not refreshed";
     for (const [listSelector, stateSelector, label] of [
       ["#live-approvals-list", "#live-approvals-state", "approvals"],
