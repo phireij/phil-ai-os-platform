@@ -106,7 +106,6 @@ jobs:
             --security-opt no-new-privileges:true \
             --pids-limit 128 \
             --label "traefik.enable=true" \
-            --label "traefik.docker.network=$TRAEFIK_NET" \
             --label "traefik.http.routers.mission-control-readonly.rule=Host(\`$HOSTNAME\`)" \
             --label "traefik.http.routers.mission-control-readonly.entrypoints=web,websecure" \
             --label "traefik.http.routers.mission-control-readonly.tls=true" \
