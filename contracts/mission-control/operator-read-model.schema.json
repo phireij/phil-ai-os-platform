@@ -1,51 +1,29 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://phil-ai-os.local/contracts/mission-control/operator-read-model.schema.json",
-  "title": "Mission Control read-only operator task and agent model",
+  "title": "Mission Control Phase 2.1A read-only operator model",
   "type": "object",
-  "additionalProperties": false,
-  "required": ["schema", "version", "status", "read_only", "authority_effect", "agents", "tasks"],
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "overall_state", "platform", "governance", "agents", "tasks", "approvals", "executions", "recovery", "data_quality"],
   "properties": {
-    "schema": {"const": "phil-ai-os-mission-control-operator-read-model"},
-    "version": {"const": 1},
-    "status": {"const": "read_only"},
-    "read_only": {"const": true},
-    "authority_effect": {"const": "none"},
-    "agents": {
-      "type": "array",
-      "items": {"$ref": "#/$defs/agent"}
-    },
-    "tasks": {
-      "type": "array",
-      "items": {"$ref": "#/$defs/task"}
-    }
+    "schema_version": {"const": "2.1a.v1"},
+    "generated_at": {"type": "string", "minLength": 1},
+    "overall_state": {"enum": ["healthy", "degraded", "contained", "unknown"]},
+    "platform": {"$ref": "#/$defs/platform"},
+    "governance": {"$ref": "#/$defs/governance"},
+    "agents": {"type": "array", "items": {"$ref": "#/$defs/agent"}},
+    "tasks": {"type": "array", "items": {"$ref": "#/$defs/task"}},
+    "approvals": {"type": "array", "items": {"type": "object"}},
+    "executions": {"type": "array", "items": {"type": "object"}},
+    "recovery": {"$ref": "#/$defs/recovery"},
+    "data_quality": {"$ref": "#/$defs/data_quality"}
   },
   "$defs": {
-    "agent": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["agent_id", "role", "state", "execution_authorized", "mutation_authorized"],
-      "properties": {
-        "agent_id": {"type": "string", "minLength": 1},
-        "role": {"enum": ["chief_of_staff", "hermes", "ceo", "operator"]},
-        "state": {"enum": ["idle", "available", "awaiting_approval", "review_required"]},
-        "execution_authorized": {"const": false},
-        "mutation_authorized": {"const": false}
-      }
-    },
-    "task": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["task_id", "task_class", "state", "agent_id", "approval_required", "execution_authorized", "customer_payload_exposed"],
-      "properties": {
-        "task_id": {"type": "string", "minLength": 1},
-        "task_class": {"const": "general"},
-        "state": {"enum": ["planned", "awaiting_approval", "ready_for_review", "completed", "stopped"]},
-        "agent_id": {"type": "string", "minLength": 1},
-        "approval_required": {"const": true},
-        "execution_authorized": {"const": false},
-        "customer_payload_exposed": {"const": false}
-      }
-    }
+    "platform": {"type": "object", "required": ["control_api_health", "control_api_readiness", "monitoring_state", "snapshot_generated_at", "snapshot_age_seconds"], "properties": {"control_api_health": {"enum": ["ok", "degraded", "down", "unknown"]}, "control_api_readiness": {"enum": ["ok", "not_ready", "unknown"]}, "monitoring_state": {"enum": ["active", "inactive", "failed", "unknown"]}, "snapshot_generated_at": {}, "snapshot_age_seconds": {"type": ["number", "null"]}}},
+    "governance": {"type": "object", "required": ["execution_allowed_task_classes", "execution_enforcement_mode", "execution_enforcement_scope", "kill_switch_state", "human_approval_required", "direct_provider_bypass_allowed", "authority_expansion_state"], "properties": {"execution_allowed_task_classes": {"const": ["general"]}, "execution_enforcement_mode": {}, "execution_enforcement_scope": {}, "kill_switch_state": {"enum": ["enabled", "disabled", "unknown"]}, "human_approval_required": {"type": "boolean"}, "direct_provider_bypass_allowed": {"const": false}, "authority_expansion_state": {"const": "blocked"}}},
+    "agent": {"type": "object", "required": ["agent_id", "display_name", "role", "owner", "authority_level", "status", "credential_binding", "allowed_task_classes", "can_self_approve"], "properties": {"agent_id": {"type": "string", "minLength": 1}, "display_name": {"type": "string", "minLength": 1}, "role": {"enum": ["human_operator", "cto", "gateway", "specialist"]}, "owner": {"type": "string", "minLength": 1}, "authority_level": {"enum": ["L0", "L1", "L2", "L3", "L4"]}, "status": {"enum": ["active", "inactive", "degraded", "unknown"]}, "credential_binding": {"type": "string", "minLength": 1}, "allowed_task_classes": {"type": "array", "items": {"type": "string"}}, "can_self_approve": {"const": false}}},
+    "task": {"type": "object", "required": ["task_id", "lifecycle_state", "correlation_quality"], "properties": {"task_id": {"type": "string", "minLength": 1}, "lifecycle_state": {"type": "string", "minLength": 1}, "correlation_quality": {"enum": ["canonical", "partial", "legacy", "none", "unknown"]}}},
+    "recovery": {"type": "object", "required": ["backup_timer_state", "backup_self_heal_state", "latest_backup_status", "latest_backup_at", "restore_validation_status", "monitoring_independent_of_ui"], "properties": {"backup_timer_state": {"enum": ["active", "inactive", "failed", "unknown"]}, "backup_self_heal_state": {"enum": ["active", "inactive", "failed", "unknown"]}, "latest_backup_status": {"enum": ["ok", "stale", "failed", "unknown"]}, "latest_backup_at": {}, "restore_validation_status": {"enum": ["validated", "not_validated", "unknown"]}, "monitoring_independent_of_ui": {"const": true}}},
+    "data_quality": {"type": "object", "required": ["freshness", "partial", "missing_sources", "correlation_quality", "warnings"], "properties": {"freshness": {"enum": ["fresh", "stale", "unknown"]}, "partial": {"type": "boolean"}, "missing_sources": {"type": "array", "items": {"type": "string"}}, "correlation_quality": {"enum": ["complete", "partial", "legacy", "unknown"]}, "warnings": {"type": "array", "items": {"type": "string"}}}}
   }
 }

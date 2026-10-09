@@ -1,24 +1,17 @@
 {
-  "schema": "phil-ai-os-mission-control-operator-read-model",
-  "version": 1,
-  "status": "read_only",
-  "read_only": true,
-  "authority_effect": "none",
+  "schema_version": "2.1a.v1",
+  "generated_at": "unknown",
+  "overall_state": "unknown",
+  "platform": {"control_api_health": "unknown", "control_api_readiness": "unknown", "monitoring_state": "unknown", "snapshot_generated_at": null, "snapshot_age_seconds": null},
+  "governance": {"execution_allowed_task_classes": ["general"], "execution_enforcement_mode": "unknown", "execution_enforcement_scope": "unknown", "kill_switch_state": "unknown", "human_approval_required": true, "direct_provider_bypass_allowed": false, "authority_expansion_state": "blocked"},
   "agents": [
-    {
-      "agent_id": "hermes",
-      "role": "hermes",
-      "state": "idle",
-      "execution_authorized": false,
-      "mutation_authorized": false
-    },
-    {
-      "agent_id": "chief-of-staff",
-      "role": "chief_of_staff",
-      "state": "available",
-      "execution_authorized": false,
-      "mutation_authorized": false
-    }
+    {"agent_id": "human-ceo", "display_name": "Human Operator / CEO", "role": "human_operator", "owner": "CEO", "authority_level": "L4", "status": "active", "credential_binding": "operator-authentication", "allowed_task_classes": ["policy", "approval", "governance"], "can_self_approve": false},
+    {"agent_id": "cto-office", "display_name": "CTO Office", "role": "cto", "owner": "CEO", "authority_level": "L2", "status": "active", "credential_binding": "declared-control-plane-role", "allowed_task_classes": ["observe", "analyze", "propose", "validate"], "can_self_approve": false},
+    {"agent_id": "hermes", "display_name": "Hermes", "role": "gateway", "owner": "CEO", "authority_level": "L3", "status": "active", "credential_binding": "hermes-control-api-token-mount", "allowed_task_classes": ["general"], "can_self_approve": false}
   ],
-  "tasks": []
+  "tasks": [],
+  "approvals": [],
+  "executions": [],
+  "recovery": {"backup_timer_state": "unknown", "backup_self_heal_state": "unknown", "latest_backup_status": "unknown", "latest_backup_at": null, "restore_validation_status": "unknown", "monitoring_independent_of_ui": true},
+  "data_quality": {"freshness": "unknown", "partial": true, "missing_sources": ["live_control_api_compatibility"], "correlation_quality": "unknown", "warnings": ["Static baseline only; no live Control API compatibility result is asserted."]}
 }
