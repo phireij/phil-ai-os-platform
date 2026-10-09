@@ -442,6 +442,11 @@ async function loadLiveRecords(token) {
     fetch("/api/approvals", { cache: "no-store", headers }),
     fetch("/api/executions", { cache: "no-store", headers }),
   ]);
+  if (results.some((result) => result.status === "fulfilled" && result.value.status === 401)) {
+    document.querySelector("#live-control-disconnect").click();
+    document.querySelector("#live-control-state").textContent = "session expired";
+    return;
+  }
   for (const [index, result] of results.entries()) {
     const listSelector = index === 0 ? "#live-approvals-list" : "#live-executions-list";
     const stateSelector = index === 0 ? "#live-approvals-state" : "#live-executions-state";
