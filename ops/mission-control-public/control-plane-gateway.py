@@ -18,8 +18,11 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 _container_source = Path(os.environ.get("MISSION_CONTROL_SOURCE_ROOT", "/srv/apps/operations-hub/src"))
-_repository_source = Path(__file__).resolve().parents[2] / "apps" / "operations-hub" / "src"
-SOURCE_ROOT = _container_source if _container_source.exists() else _repository_source
+if _container_source.exists():
+    SOURCE_ROOT = _container_source
+else:
+    _repository_root = Path(__file__).resolve().parents[2]
+    SOURCE_ROOT = _repository_root / "apps" / "operations-hub" / "src"
 sys.path.insert(0, str(SOURCE_ROOT))
 
 from operations_hub.mission_control_control_plane import (  # noqa: E402
