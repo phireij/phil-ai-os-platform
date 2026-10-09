@@ -35,11 +35,11 @@
       </div>
       <div id="conversation-thread" class="conversation-thread" aria-live="polite"></div>
       <form id="conversation-composer" class="conversation-composer">
-        <label for="conversation-message">Message the Chief of Staff</label>
-        <textarea id="conversation-message" rows="3" placeholder="Live CEO conversation will be enabled after authenticated control-plane integration." disabled></textarea>
-        <button type="submit" disabled>Send to Chief of Staff</button>
+        <label for="conversation-message">Request Chief of Staff action</label>
+        <textarea id="conversation-message" rows="3" placeholder="Describe the work or decision you want the Chief of Staff to review." disabled></textarea>
+        <button id="decision-request-button" type="submit" disabled>Create governed decision request</button>
       </form>
-      <p class="operator-note compact">This preview shows the intended CEO-to-Chief-of-Staff surface. Sending, delegation, approvals, and external-channel delivery remain disabled until the governed control-plane endpoint is connected.</p>
+      <p class="operator-note compact">Authenticated requests create approval records for Chief of Staff review. Delegation, execution, and external-channel delivery remain separately gated.</p>
     </section>
 
     <section class="panel live-control-panel" aria-labelledby="live-control-title">
