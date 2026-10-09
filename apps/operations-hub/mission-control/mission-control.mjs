@@ -596,6 +596,12 @@ function installDecisionRequest() {
       state.className = "state-chip safe";
       await loadLiveRecords(liveSessionToken);
     } catch (error) {
+      if (error.message === "HTTP 401") {
+        document.querySelector("#live-control-disconnect").click();
+        state.textContent = "session expired · reconnect required";
+        state.className = "state-chip";
+        return;
+      }
       state.textContent = `request failed · ${error.message}`;
       state.className = "state-chip";
     } finally {
