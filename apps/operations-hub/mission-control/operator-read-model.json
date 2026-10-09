@@ -1,0 +1,24 @@
+{
+  "schema": "phil-ai-os-mission-control-operator-read-model",
+  "version": 1,
+  "status": "read_only",
+  "read_only": true,
+  "authority_effect": "none",
+  "agents": [
+    {
+      "agent_id": "hermes",
+      "role": "hermes",
+      "state": "idle",
+      "execution_authorized": false,
+      "mutation_authorized": false
+    },
+    {
+      "agent_id": "chief-of-staff",
+      "role": "chief_of_staff",
+      "state": "available",
+      "execution_authorized": false,
+      "mutation_authorized": false
+    }
+  ],
+  "tasks": []
+}
