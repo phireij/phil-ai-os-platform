@@ -5,6 +5,7 @@ from .mission_control_projection import (
     MissionControlProjectionError,
     build_mission_control_lifecycle_projection,
 )
+from .mission_control_control_plane import MissionControlControlPlane, MissionControlControlPlaneError
 from .normalizer import (
     InMemoryDeduplicator,
     NormalizationError,
@@ -76,6 +77,8 @@ __all__ = [
     "InMemoryDeduplicator",
     "IngestionAdapter",
     "MissionControlProjectionError",
+    "MissionControlControlPlane",
+    "MissionControlControlPlaneError",
     "MockChannelAdapter",
     "NormalizationError",
     "OperationsDashboardError",
