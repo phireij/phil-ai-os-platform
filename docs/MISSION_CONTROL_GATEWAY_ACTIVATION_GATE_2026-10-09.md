@@ -7,6 +7,8 @@ The authenticated gateway is packaged as a separate immutable image. It must not
 
 The provisioning record must identify the CEO principal, secret reference, allowed scopes, rotation owner, and expiry without storing the token value. The minimum first activation scope is `mission_control:read` plus `mission_control:decision_request`; `mission_control:delegate` remains a separate explicit gate.
 
+The gateway image runs as UID/GID `10001`. The VPS secret file must therefore be owned by `root:10001` with mode `0640`; it must never be committed to GitHub or passed as a Docker environment variable.
+
 Until those inputs are available:
 
 - the public `miscon.phireij.cloud` preview remains read-only;
