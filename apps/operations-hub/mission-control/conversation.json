@@ -1,0 +1,31 @@
+{
+  "schema": "phil-ai-os-mission-control-ceo-chief-of-staff-preview",
+  "version": 1,
+  "conversation_id": "preview-ceo-chief-of-staff",
+  "live": false,
+  "authority_effect": "none",
+  "messages": [
+    {
+      "message_id": "preview-message-001",
+      "conversation_id": "preview-ceo-chief-of-staff",
+      "sender": "ceo",
+      "body": "Prepare the next Mission Control MVP milestone plan and identify any decision I need to make.",
+      "created_at": "2026-10-09T09:00:00Z",
+      "authority_effect": "none",
+      "requires_ceo_decision": false,
+      "decision_id": null,
+      "task_ids": []
+    },
+    {
+      "message_id": "preview-message-002",
+      "conversation_id": "preview-ceo-chief-of-staff",
+      "sender": "chief_of_staff",
+      "body": "I will map the bounded work, delegate only general-class tasks, and return an approval request before any sensitive action. This preview does not execute or delegate live work.",
+      "created_at": "2026-10-09T09:01:00Z",
+      "authority_effect": "none",
+      "requires_ceo_decision": false,
+      "decision_id": null,
+      "task_ids": []
+    }
+  ]
+}

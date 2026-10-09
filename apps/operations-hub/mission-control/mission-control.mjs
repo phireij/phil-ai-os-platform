@@ -327,18 +327,49 @@ function assertChannelReadiness(data) {
   if (expected.size) throw new Error("Missing operations channel readiness");
 }
 
+function assertConversation(data) {
+  if (data.schema !== "phil-ai-os-mission-control-ceo-chief-of-staff-preview" || data.version !== 1) throw new Error("Unexpected conversation preview schema");
+  if (data.live !== false || data.authority_effect !== "none" || !Array.isArray(data.messages)) throw new Error("Conversation preview must remain non-live and non-authorizing");
+  for (const message of data.messages) {
+    if (!message.message_id || !message.conversation_id || !message.body || message.authority_effect !== "none") throw new Error("Conversation message contract invalid");
+    if (!["ceo", "chief_of_staff", "agent"].includes(message.sender)) throw new Error("Conversation sender contract invalid");
+  }
+}
+
+function renderConversation(data) {
+  const thread = document.querySelector("#conversation-thread");
+  thread.replaceChildren(...data.messages.map((message) => {
+    const article = document.createElement("article");
+    article.className = `conversation-message ${message.sender}`;
+    const top = document.createElement("div");
+    top.className = "conversation-message-top";
+    const sender = document.createElement("strong");
+    sender.textContent = message.sender === "chief_of_staff" ? "Chief of Staff" : message.sender === "ceo" ? "CEO" : "Agent";
+    const timestamp = document.createElement("span");
+    timestamp.textContent = new Date(message.created_at).toLocaleString();
+    top.append(sender, timestamp);
+    const body = document.createElement("p");
+    body.textContent = message.body;
+    article.append(top, body);
+    return article;
+  }));
+}
+
 async function boot() {
   const state = document.querySelector("#load-state");
   try {
-    const [projectionResponse, channelResponse] = await Promise.all([
+    const [projectionResponse, channelResponse, conversationResponse] = await Promise.all([
       fetch("./fixture.json", { cache: "no-store" }),
       fetch("./channel-readiness.json", { cache: "no-store" }),
+      fetch("./conversation.json", { cache: "no-store" }),
     ]);
     if (!projectionResponse.ok) throw new Error(`Projection fixture HTTP ${projectionResponse.status}`);
     if (!channelResponse.ok) throw new Error(`Channel readiness HTTP ${channelResponse.status}`);
-    const [data, channelData] = await Promise.all([projectionResponse.json(), channelResponse.json()]);
+    if (!conversationResponse.ok) throw new Error(`Conversation fixture HTTP ${conversationResponse.status}`);
+    const [data, channelData, conversationData] = await Promise.all([projectionResponse.json(), channelResponse.json(), conversationResponse.json()]);
     assertReadOnly(data);
     assertChannelReadiness(channelData);
+    assertConversation(conversationData);
     renderMetrics(data);
     renderTaskComposition(data);
     renderApproval(data);
@@ -346,6 +377,7 @@ async function boot() {
     renderAttention(data);
     renderControlPlane(data);
     renderChannelReadiness(channelData);
+    renderConversation(conversationData);
     renderLifecycles(data);
     renderSafety(data);
     renderPrivacy(data);
@@ -354,7 +386,7 @@ async function boot() {
     state.textContent = `${data.operations.tasks} tasks · ${data.operations.tasks_awaiting_approval} awaiting approval · ${data.operations.tasks_ready_for_operator_review} ready for review`;
   } catch (error) {
     state.textContent = `Fail-closed: ${error.message}`;
-    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#approval-list", "#approval-state-list", "#recovery-list", "#recovery-error-list", "#attention-list", "#control-plane-list", "#channel-readiness-list", "#lifecycle-list", "#safety-list", "#privacy-grid"]) document.querySelector(selector)?.replaceChildren();
+    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#approval-list", "#approval-state-list", "#recovery-list", "#recovery-error-list", "#attention-list", "#control-plane-list", "#channel-readiness-list", "#conversation-thread", "#lifecycle-list", "#safety-list", "#privacy-grid"]) document.querySelector(selector)?.replaceChildren();
   }
 }
 

@@ -28,6 +28,20 @@
       <span id="authority-effect" class="authority-chip">authority_effect: none</span>
     </section>
 
+    <section class="panel conversation-panel" aria-labelledby="conversation-title">
+      <div class="panel-head">
+        <div><p class="eyebrow">CEO control plane</p><h2 id="conversation-title">Chief of Staff conversation</h2></div>
+        <span id="conversation-state" class="state-chip safe">preview · authenticated endpoint pending</span>
+      </div>
+      <div id="conversation-thread" class="conversation-thread" aria-live="polite"></div>
+      <form id="conversation-composer" class="conversation-composer">
+        <label for="conversation-message">Message the Chief of Staff</label>
+        <textarea id="conversation-message" rows="3" placeholder="Live CEO conversation will be enabled after authenticated control-plane integration." disabled></textarea>
+        <button type="submit" disabled>Send to Chief of Staff</button>
+      </form>
+      <p class="operator-note compact">This preview shows the intended CEO-to-Chief-of-Staff surface. Sending, delegation, approvals, and external-channel delivery remain disabled until the governed control-plane endpoint is connected.</p>
+    </section>
+
     <section aria-labelledby="overview-title">
       <div class="section-head">
         <div><p class="eyebrow">Operations</p><h2 id="overview-title">Current workload</h2></div>
