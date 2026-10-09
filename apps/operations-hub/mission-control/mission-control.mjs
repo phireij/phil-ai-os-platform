@@ -29,6 +29,8 @@ const controlPlaneFields = [
   ["operator_decision_required_for_sensitive_actions", "Sensitive actions"],
 ];
 
+let liveSessionToken = null;
+
 function text(value) {
   return String(value ?? "—");
 }
@@ -403,13 +405,66 @@ function installLiveControlConnection() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const snapshot = await response.json();
       renderLiveSummary(snapshot);
+      liveSessionToken = token;
+      document.querySelector("#conversation-message").disabled = false;
+      document.querySelector("#decision-request-button").disabled = false;
       state.textContent = "connected · read only";
       state.className = "state-chip safe";
       input.value = "";
     } catch (error) {
       state.textContent = `connection failed · ${error.message}`;
       state.className = "state-chip";
+      liveSessionToken = null;
+      document.querySelector("#conversation-message").disabled = true;
+      document.querySelector("#decision-request-button").disabled = true;
       document.querySelector("#live-control-summary").replaceChildren();
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+function installDecisionRequest() {
+  const form = document.querySelector("#conversation-composer");
+  const input = document.querySelector("#conversation-message");
+  const button = document.querySelector("#decision-request-button");
+  const state = document.querySelector("#conversation-state");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const taskText = input.value.trim();
+    if (!liveSessionToken) {
+      state.textContent = "connect read-only first";
+      state.className = "state-chip";
+      return;
+    }
+    if (!taskText) {
+      state.textContent = "request text required";
+      state.className = "state-chip";
+      return;
+    }
+    button.disabled = true;
+    state.textContent = "recording decision request";
+    state.className = "state-chip";
+    try {
+      const response = await fetch("/api/decision-requests", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${liveSessionToken}`,
+        },
+        body: JSON.stringify({
+          task_text: taskText,
+          conversation_id: "ceo-chief-of-staff",
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      input.value = "";
+      state.textContent = "decision request recorded · approval pending";
+      state.className = "state-chip safe";
+    } catch (error) {
+      state.textContent = `request failed · ${error.message}`;
+      state.className = "state-chip";
     } finally {
       button.disabled = false;
     }
@@ -453,3 +508,4 @@ async function boot() {
 
 boot();
 installLiveControlConnection();
+installDecisionRequest();
