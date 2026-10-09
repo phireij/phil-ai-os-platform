@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/ceo-decision-notification.schema.json",
+  "title": "Mission Control CEO decision notification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["notification_id", "kind", "title", "message", "priority", "requires_ceo_decision", "authority_effect"],
+  "properties": {
+    "notification_id": {"type": "string", "minLength": 1},
+    "kind": {"enum": ["approval_required", "escalation", "blocked_task", "agent_result", "system_attention"]},
+    "title": {"type": "string", "minLength": 1, "maxLength": 300},
+    "message": {"type": "string", "minLength": 1, "maxLength": 5000},
+    "priority": {"enum": ["low", "medium", "high", "critical"]},
+    "requires_ceo_decision": {"type": "boolean"},
+    "decision_id": {"type": ["string", "null"]},
+    "authority_effect": {"const": "none"}
+  }
+}

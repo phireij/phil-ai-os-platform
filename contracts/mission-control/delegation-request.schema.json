@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/delegation-request.schema.json",
+  "title": "Mission Control bounded delegation request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request_id", "conversation_id", "task_text", "task_class", "requested_by", "assigned_agent", "approval_required", "execution_authorized", "authority_effect"],
+  "properties": {
+    "request_id": {"type": "string", "minLength": 1},
+    "conversation_id": {"type": "string", "minLength": 1},
+    "task_text": {"type": "string", "minLength": 1, "maxLength": 20000},
+    "task_class": {"const": "general"},
+    "requested_by": {"enum": ["ceo", "chief_of_staff"]},
+    "assigned_agent": {"type": "string", "minLength": 1},
+    "approval_required": {"type": "boolean"},
+    "approval_state": {"enum": ["not_required", "required", "approved", "denied", "expired"]},
+    "execution_authorized": {"const": false},
+    "channel_reply_authorized": {"const": false},
+    "mutation_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}
