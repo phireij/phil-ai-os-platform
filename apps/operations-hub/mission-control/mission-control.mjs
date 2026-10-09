@@ -454,6 +454,7 @@ async function loadLiveRecords(token) {
       state.className = "state-chip";
     }
   }
+  document.querySelector("#live-records-refreshed").textContent = `Last refreshed ${new Date().toLocaleString()}`;
 }
 
 function installLiveRecordsRefresh() {
@@ -515,6 +516,7 @@ function installLiveControlConnection() {
       document.querySelector("#live-records-refresh").disabled = true;
       disconnect.disabled = true;
       document.querySelector("#live-control-summary").replaceChildren();
+      document.querySelector("#live-records-refreshed").textContent = "Not refreshed";
     } finally {
       button.disabled = false;
     }
@@ -529,6 +531,7 @@ function installLiveControlConnection() {
     document.querySelector("#live-records-refresh").disabled = true;
     disconnect.disabled = true;
     document.querySelector("#live-control-summary").replaceChildren();
+    document.querySelector("#live-records-refreshed").textContent = "Not refreshed";
     for (const [listSelector, stateSelector, label] of [
       ["#live-approvals-list", "#live-approvals-state", "approvals"],
       ["#live-executions-list", "#live-executions-state", "executions"],

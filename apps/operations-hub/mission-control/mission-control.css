@@ -3,3 +3,4 @@
 .live-records{margin-top:1rem}.live-record-panel{padding:1rem}.live-record-panel h3{margin:.15rem 0;font-size:1rem}.live-record-panel .lifecycle-list{margin-top:.75rem}
 .live-control-panel>#live-records-refresh{margin-top:1rem;border:0;border-radius:.5rem;padding:.6rem .9rem;background:var(--muted);color:var(--bg);cursor:pointer}.live-control-panel>#live-records-refresh:disabled{opacity:.6;cursor:wait}
 .live-control-actions{display:flex;gap:.6rem;flex-wrap:wrap}.live-control-actions button{cursor:pointer}.live-control-actions button:disabled{opacity:.6;cursor:wait}
+.live-records-toolbar{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-top:1rem}.live-records-toolbar #live-records-refresh{margin-top:0}
