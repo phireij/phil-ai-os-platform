@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/ceo-chief-of-staff-message.schema.json",
+  "title": "Mission Control CEO and Chief of Staff message",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["message_id", "conversation_id", "sender", "body", "created_at", "authority_effect"],
+  "properties": {
+    "message_id": {"type": "string", "minLength": 1},
+    "conversation_id": {"type": "string", "minLength": 1},
+    "sender": {"enum": ["ceo", "chief_of_staff", "agent"]},
+    "agent_id": {"type": ["string", "null"]},
+    "body": {"type": "string", "minLength": 1, "maxLength": 20000},
+    "created_at": {"type": "string", "format": "date-time"},
+    "authority_effect": {"const": "none"},
+    "requires_ceo_decision": {"type": "boolean"},
+    "decision_id": {"type": ["string", "null"]},
+    "task_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+  }
+}
