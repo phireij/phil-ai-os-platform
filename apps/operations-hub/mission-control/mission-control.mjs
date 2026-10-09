@@ -30,6 +30,7 @@ const controlPlaneFields = [
 ];
 
 let liveSessionToken = null;
+let liveRefreshTimer = null;
 
 function text(value) {
   return String(value ?? "—");
@@ -499,10 +500,16 @@ function installLiveControlConnection() {
       state.className = "state-chip safe";
       input.value = "";
       loadLiveRecords(token);
+      if (liveRefreshTimer) clearInterval(liveRefreshTimer);
+      liveRefreshTimer = setInterval(() => {
+        if (liveSessionToken) loadLiveRecords(liveSessionToken);
+      }, 60_000);
     } catch (error) {
       state.textContent = `connection failed · ${error.message}`;
       state.className = "state-chip";
       liveSessionToken = null;
+      if (liveRefreshTimer) clearInterval(liveRefreshTimer);
+      liveRefreshTimer = null;
       document.querySelector("#conversation-message").disabled = true;
       document.querySelector("#decision-request-button").disabled = true;
       document.querySelector("#live-records-refresh").disabled = true;
@@ -514,6 +521,8 @@ function installLiveControlConnection() {
   });
   disconnect.addEventListener("click", () => {
     liveSessionToken = null;
+    if (liveRefreshTimer) clearInterval(liveRefreshTimer);
+    liveRefreshTimer = null;
     input.value = "";
     document.querySelector("#conversation-message").disabled = true;
     document.querySelector("#decision-request-button").disabled = true;
