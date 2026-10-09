@@ -455,6 +455,18 @@ async function loadLiveRecords(token) {
   }
 }
 
+function installLiveRecordsRefresh() {
+  const button = document.querySelector("#live-records-refresh");
+  button.addEventListener("click", async () => {
+    if (!liveSessionToken) return;
+    button.disabled = true;
+    button.textContent = "Refreshing live records";
+    await loadLiveRecords(liveSessionToken);
+    button.textContent = "Refresh live records";
+    button.disabled = false;
+  });
+}
+
 function installLiveControlConnection() {
   const form = document.querySelector("#live-control-form");
   const input = document.querySelector("#ceo-token");
@@ -480,6 +492,7 @@ function installLiveControlConnection() {
       liveSessionToken = token;
       document.querySelector("#conversation-message").disabled = false;
       document.querySelector("#decision-request-button").disabled = false;
+      document.querySelector("#live-records-refresh").disabled = false;
       state.textContent = "connected · read only";
       state.className = "state-chip safe";
       input.value = "";
@@ -490,6 +503,7 @@ function installLiveControlConnection() {
       liveSessionToken = null;
       document.querySelector("#conversation-message").disabled = true;
       document.querySelector("#decision-request-button").disabled = true;
+      document.querySelector("#live-records-refresh").disabled = true;
       document.querySelector("#live-control-summary").replaceChildren();
     } finally {
       button.disabled = false;
@@ -535,6 +549,7 @@ function installDecisionRequest() {
       input.value = "";
       state.textContent = "decision request recorded · approval pending";
       state.className = "state-chip safe";
+      await loadLiveRecords(liveSessionToken);
     } catch (error) {
       state.textContent = `request failed · ${error.message}`;
       state.className = "state-chip";
@@ -582,3 +597,4 @@ async function boot() {
 boot();
 installLiveControlConnection();
 installDecisionRequest();
+installLiveRecordsRefresh();
