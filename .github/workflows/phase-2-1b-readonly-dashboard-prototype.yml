@@ -95,6 +95,7 @@ jobs:
           python3 - "$JSON" <<'PY'
           import json,sys
           d=json.load(open(sys.argv[1]))
+          print('dashboard_model_summary', {k: d.get(k) for k in ('schema_version','overall_state','governance','durable_correlation_summary')})
           assert d['schema_version']=='2.1e.v1'
           assert d['governance']['execution_allowed_task_classes']==['general']
           assert d['governance']['direct_provider_bypass_allowed'] is False
