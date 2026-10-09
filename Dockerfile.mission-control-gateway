@@ -2,7 +2,7 @@ FROM python:3.12-alpine
 WORKDIR /srv
 COPY apps/operations-hub/src /srv/apps/operations-hub/src
 COPY ops/mission-control-public/control-plane-gateway.py /srv/control-plane-gateway.py
-RUN addgroup -S app && adduser -S -G app app \
+RUN addgroup -S -g 10001 app && adduser -S -D -u 10001 -G app app \
     && chown -R app:app /srv
 USER app
 ENV PYTHONPATH=/srv/apps/operations-hub/src \

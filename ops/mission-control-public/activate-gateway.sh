@@ -11,6 +11,7 @@ NETWORK="${DEPLOY_NET:-bridge}"
 
 test -f "$CEO_TOKEN_FILE"
 test -s "$CEO_TOKEN_FILE"
+test "$(stat -c '%u:%a' "$CEO_TOKEN_FILE")" = "0:640"
 test "$HOSTNAME" != "miscon.phireij.cloud" || test "${ALLOW_SHARED_HOSTNAME:-false}" = "true"
 
 TRAEFIK_CONTAINER=""
