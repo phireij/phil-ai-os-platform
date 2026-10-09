@@ -20,7 +20,7 @@ jobs:
       VPS_PORT: ${{ secrets.VPS_PORT }}
       VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Configure SSH
         shell: bash
@@ -68,7 +68,7 @@ jobs:
           import json,sys
           p=sys.argv[1]
           d=json.load(open(p))
-          assert d['schema_version']=='2.1a.v1', d
+          assert d['schema_version']=='2.1e.v1', d
           assert d['overall_state'] in {'healthy','degraded','contained','unknown'}, d
           assert d['governance']['execution_allowed_task_classes']==['general'], d['governance']
           assert d['governance']['direct_provider_bypass_allowed'] is False, d['governance']
@@ -77,6 +77,8 @@ jobs:
           agents={a['agent_id']:a for a in d['agents']}
           assert {'human-ceo','cto-office','hermes'} <= set(agents), agents
           assert agents['hermes']['can_self_approve'] is False, agents['hermes']
+          assert d['durable_correlation_summary']['correlation_key_type']=='approval_id', d['durable_correlation_summary']
+          assert d['durable_correlation_summary']['canonical_task_persistence']=='absent', d['durable_correlation_summary']
           text=json.dumps(d).lower()
           for forbidden in ['authorization: bearer','telegram_bot_token','openai_api_key','private_key']:
               assert forbidden not in text, forbidden
