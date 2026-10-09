@@ -21,7 +21,7 @@ jobs:
       VPS_PORT: ${{ secrets.VPS_PORT }}
       VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Configure SSH
         shell: bash
@@ -95,11 +95,13 @@ jobs:
           python3 - "$JSON" <<'PY'
           import json,sys
           d=json.load(open(sys.argv[1]))
-          assert d['schema_version']=='2.1a.v1'
+          assert d['schema_version']=='2.1e.v1'
           assert d['governance']['execution_allowed_task_classes']==['general']
           assert d['governance']['direct_provider_bypass_allowed'] is False
           assert d['governance']['authority_expansion_state']=='blocked'
           assert {'human-ceo','cto-office','hermes'} <= {x['agent_id'] for x in d['agents']}
+          assert d['durable_correlation_summary']['correlation_key_type']=='approval_id'
+          assert d['durable_correlation_summary']['canonical_task_persistence']=='absent'
           print('dashboard_read_model=valid')
           PY
 
