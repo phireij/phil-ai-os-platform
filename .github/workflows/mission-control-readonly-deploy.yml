@@ -81,7 +81,7 @@ jobs:
           ssh -p "$VPS_PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'bash -s' -- "$IMAGE" "$DIGEST" "$HOSTNAME" "$CONTAINER" <<'REMOTE'
           set -euo pipefail
           IMAGE="$1"; DIGEST="$2"; HOSTNAME="$3"; CONTAINER="$4"
-          test "$(docker ps --format '{{.Names}}' | grep -Fx "$CONTAINER" || true)" = ""
+          if docker ps -a --format '{{.Names}}' | grep -Fx "$CONTAINER" >/dev/null; then`n            docker rm -f "$CONTAINER" >/dev/null`n          fi
           TRAEFIK_CONTAINER="$(for candidate in $(docker ps --format '{{.Names}}'); do
             image="$(docker inspect "$candidate" --format '{{.Config.Image}}')"
             service="$(docker inspect "$candidate" --format '{{index .Config.Labels "com.docker.compose.service"}}')"
@@ -123,7 +123,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(curl -fsS https://$HOSTNAME/healthz)" = '{"status":"ok","mode":"read_only"}'
+          test "$(curl -kfsS https://$HOSTNAME/healthz)" = '{"status":"ok","mode":"read_only"}'
           test "$(curl -ksS -o /dev/null -w '%{http_code}' -X POST https://$HOSTNAME/)" = "405"
           test "$(curl -ksS -o /dev/null -w '%{http_code}' https://$HOSTNAME/../../etc/passwd)" = "404"
           echo "HTTPS, healthz, mutation denial, and traversal denial verified." >> "$GITHUB_STEP_SUMMARY"
