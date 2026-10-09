@@ -5,6 +5,7 @@ set -euo pipefail
 : "${CEO_TOKEN_FILE:?Set CEO_TOKEN_FILE to the mounted CEO token file on the VPS}"
 : "${HOSTNAME:?Set HOSTNAME to the dedicated Mission Control gateway hostname}"
 ROUTE_PATH_PREFIX="${ROUTE_PATH_PREFIX:-/api}"
+CONTROL_API_NETWORK="${CONTROL_API_NETWORK:-phil-ai-os-core_core-net}"
 
 IMAGE="ghcr.io/${GITHUB_REPOSITORY:-phireij/phil-ai-os-platform}/mission-control-gateway"
 CONTAINER="phil-ai-os-mission-control-gateway"
@@ -28,6 +29,7 @@ while read -r candidate; do
   fi
 done < <(docker ps --format '{{.Names}}')
 test -n "$TRAEFIK_CONTAINER"
+docker network inspect "$CONTROL_API_NETWORK" >/dev/null
 
 BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | sort)"
 if docker ps -a --format '{{.Names}}' | grep -Fxq "$CONTAINER"; then
@@ -44,8 +46,10 @@ docker run -d \
   --security-opt no-new-privileges:true \
   --tmpfs /tmp:rw,noexec,nosuid,size=16m \
   --env "MISSION_CONTROL_CEO_TOKEN_FILE=/run/secrets/mission_control_ceo_token" \
+  --env "PHIL_AI_OS_CONTROL_API_URL=http://phil-ai-os-core-control-api-1:4870" \
   --mount "type=bind,src=$CEO_TOKEN_FILE,dst=/run/secrets/mission_control_ceo_token,readonly" \
   --label "traefik.enable=true" \
+  --label "traefik.docker.network=$NETWORK" \
   --label "traefik.http.routers.mission-control-gateway.rule=Host(\`$HOSTNAME\`) && PathPrefix(\`$ROUTE_PATH_PREFIX\`)" \
   --label "traefik.http.routers.mission-control-gateway.priority=100" \
   --label "traefik.http.routers.mission-control-gateway.entrypoints=web,websecure" \
@@ -55,8 +59,10 @@ docker run -d \
   --label "traefik.http.services.mission-control-gateway.loadbalancer.server.port=8090" \
   "$IMAGE@$IMAGE_DIGEST" >/dev/null
 
+docker network connect "$CONTROL_API_NETWORK" "$CONTAINER"
+
 sleep 5
 test "$(docker inspect "$CONTAINER" --format '{{.State.Running}}')" = "true"
 AFTER="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | sort)"
 test "$BEFORE" = "$(printf '%s\n' "$AFTER" | grep -v "^$CONTAINER|")"
-echo "container=$CONTAINER image=$IMAGE@$IMAGE_DIGEST route=https://$HOSTNAME$ROUTE_PATH_PREFIX traefik_container=$TRAEFIK_CONTAINER existing_workloads_unchanged=true"
+echo "container=$CONTAINER image=$IMAGE@$IMAGE_DIGEST route=https://$HOSTNAME$ROUTE_PATH_PREFIX control_api_network=$CONTROL_API_NETWORK traefik_container=$TRAEFIK_CONTAINER existing_workloads_unchanged=true"
