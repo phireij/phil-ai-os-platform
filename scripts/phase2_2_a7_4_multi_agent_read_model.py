@@ -419,7 +419,27 @@ def main():
         'automatic_delegation':False,
         'automatic_execution':False,
     })
-    print(json.dumps(data, sort_keys=True))
+    # The base A7 model contains durable audit detail from the control-plane
+    # database.  That detail is useful internally, but the public read model
+    # must never expose credential-shaped fields.  Redact by key at the final
+    # serialization boundary so inherited fields are covered as well.
+    forbidden_keys = {
+        'token', 'secret', 'private_key', 'signature_base64',
+        'authorization', 'bearer', 'api_key', 'provider_key',
+    }
+
+    def redact(value):
+        if isinstance(value, dict):
+            return {
+                key: redact(item)
+                for key, item in value.items()
+                if str(key).lower() not in forbidden_keys
+            }
+        if isinstance(value, list):
+            return [redact(item) for item in value]
+        return value
+
+    print(json.dumps(redact(data), sort_keys=True))
 
 
 if __name__ == '__main__':
