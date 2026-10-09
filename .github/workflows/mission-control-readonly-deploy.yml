@@ -82,7 +82,15 @@ jobs:
           set -euo pipefail
           IMAGE="$1"; DIGEST="$2"; HOSTNAME="$3"; CONTAINER="$4"
           test "$(docker ps --format '{{.Names}}' | grep -Fx "$CONTAINER" || true)" = ""
-          TRAEFIK_NET="$(docker inspect traefik-fhxl --format '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n 1)"
+          TRAEFIK_CONTAINER="$(for candidate in $(docker ps --format '{{.Names}}'); do
+            image="$(docker inspect "$candidate" --format '{{.Config.Image}}')"
+            service="$(docker inspect "$candidate" --format '{{index .Config.Labels "com.docker.compose.service"}}')"
+            case "$image:$service" in
+              traefik*:*|*:traefik) printf '%s\n' "$candidate"; break ;;
+            esac
+          done)"
+          test -n "$TRAEFIK_CONTAINER"
+          TRAEFIK_NET="$(docker inspect "$TRAEFIK_CONTAINER" --format '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n 1)"
           test -n "$TRAEFIK_NET"
           BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | sort)"
           docker pull --platform linux/amd64 "$IMAGE@$DIGEST" >/dev/null
@@ -108,7 +116,7 @@ jobs:
           AFTER="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | grep -v "^$CONTAINER|" | sort)"
           test "$BEFORE" = "$AFTER"
           docker logout ghcr.io >/dev/null 2>&1 || true
-          echo "container=$CONTAINER image=$IMAGE@$DIGEST network=$TRAEFIK_NET existing_workloads_unchanged=true"
+          echo "container=$CONTAINER image=$IMAGE@$DIGEST traefik_container=$TRAEFIK_CONTAINER network=$TRAEFIK_NET existing_workloads_unchanged=true"
           REMOTE
 
       - name: Verify public read-only route and isolation
