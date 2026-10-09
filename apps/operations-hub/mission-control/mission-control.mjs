@@ -355,6 +355,67 @@ function renderConversation(data) {
   }));
 }
 
+function renderLiveSummary(snapshot) {
+  const target = document.querySelector("#live-control-summary");
+  const runtime = snapshot.runtime ?? {};
+  const approvals = snapshot.approval_counts ?? {};
+  const rows = [
+    ["Snapshot status", snapshot.status ?? "unknown"],
+    ["Routed execution", runtime.routed_execution_enabled === true ? "enabled" : "disabled"],
+    ["Execution kill switch", runtime.execution_kill_switch === true ? "enabled" : "disabled"],
+    ["Live test", runtime.live_test_enabled === true ? "enabled" : "disabled"],
+    ["Pending approvals", approvals.pending ?? 0],
+    ["Approved records", approvals.approved ?? 0],
+    ["Denied records", approvals.denied ?? 0],
+  ];
+  target.replaceChildren(...rows.map(([label, value]) => {
+    const row = document.createElement("div");
+    row.className = "safety-row";
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = text(value);
+    if (["disabled", "unknown"].includes(String(value))) dd.className = "off";
+    row.append(dt, dd);
+    return row;
+  }));
+}
+
+function installLiveControlConnection() {
+  const form = document.querySelector("#live-control-form");
+  const input = document.querySelector("#ceo-token");
+  const state = document.querySelector("#live-control-state");
+  const button = form.querySelector("button");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const token = input.value.trim();
+    if (!token) {
+      state.textContent = "token required";
+      return;
+    }
+    button.disabled = true;
+    state.textContent = "connecting";
+    try {
+      const response = await fetch("/api/snapshot", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const snapshot = await response.json();
+      renderLiveSummary(snapshot);
+      state.textContent = "connected · read only";
+      state.className = "state-chip safe";
+      input.value = "";
+    } catch (error) {
+      state.textContent = `connection failed · ${error.message}`;
+      state.className = "state-chip";
+      document.querySelector("#live-control-summary").replaceChildren();
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
 async function boot() {
   const state = document.querySelector("#load-state");
   try {
@@ -391,3 +452,4 @@ async function boot() {
 }
 
 boot();
+installLiveControlConnection();
