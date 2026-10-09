@@ -122,6 +122,7 @@ jobs:
           docker inspect "$TRAEFIK_CONTAINER" --format 'traefik_image={{.Config.Image}} labels={{json .Config.Labels}} networks={{json .NetworkSettings.Networks}}'
           docker inspect "$TRAEFIK_CONTAINER" --format 'traefik_cmd={{json .Config.Cmd}} entrypoint={{json .Config.Entrypoint}} mounts={{json .Mounts}}'
           docker exec "$TRAEFIK_CONTAINER" traefik version || true
+          docker logs --tail 80 "$TRAEFIK_CONTAINER" 2>&1 | tail -n 80 || true
           REMOTE
 
       - name: Verify public read-only route and isolation
