@@ -382,7 +382,6 @@ function renderLiveSummary(snapshot) {
     row.append(dt, dd);
     return row;
   }));
-  renderLiveAgentPosture(snapshot);
 }
 
 function renderLiveAgentPosture(snapshot) {
@@ -420,6 +419,21 @@ function renderLiveAgentPosture(snapshot) {
     row.append(dt, dd);
     return row;
   }));
+}
+
+async function loadLiveAgentPosture(token) {
+  const headers = { Authorization: `Bearer ${token}` };
+  try {
+    const response = await fetch("/api/agent-posture", { cache: "no-store", headers });
+    if (response.status === 401) {
+      document.querySelector("#live-control-disconnect").click();
+      return;
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    renderLiveAgentPosture(await response.json());
+  } catch (_error) {
+    renderLiveAgentPosture({});
+  }
 }
 
 function recordItems(payload) {
@@ -544,9 +558,11 @@ function installLiveControlConnection() {
       state.className = "state-chip safe";
       input.value = "";
       loadLiveRecords(token);
+      loadLiveAgentPosture(token);
       if (liveRefreshTimer) clearInterval(liveRefreshTimer);
       liveRefreshTimer = setInterval(() => {
         if (liveSessionToken) loadLiveRecords(liveSessionToken);
+        if (liveSessionToken) loadLiveAgentPosture(liveSessionToken);
       }, 60_000);
     } catch (error) {
       state.textContent = `connection failed · ${error.message}`;
@@ -574,6 +590,7 @@ function installLiveControlConnection() {
     document.querySelector("#live-records-refresh").disabled = true;
     disconnect.disabled = true;
     document.querySelector("#live-control-summary").replaceChildren();
+    renderLiveAgentPosture({});
     document.querySelector("#live-records-refreshed").textContent = "Not refreshed";
     for (const [listSelector, stateSelector, label] of [
       ["#live-approvals-list", "#live-approvals-state", "approvals"],

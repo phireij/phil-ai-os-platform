@@ -72,6 +72,18 @@ class MissionControlControlPlane:
     def recent_executions(self) -> dict[str, Any]:
         return self._call("/v1/execution/recent")
 
+    def agent_posture(self) -> dict[str, Any]:
+        snapshot = self.snapshot()
+        return {
+            "status": snapshot.get("status", "unknown"),
+            "multi_agent": snapshot.get("multi_agent") or snapshot.get("agent_posture") or {},
+            "agent_runtime": snapshot.get("agent_runtime"),
+            "worker_readiness": snapshot.get("worker_readiness"),
+            "handoffs": snapshot.get("handoffs", []),
+            "governance": snapshot.get("governance", {}),
+            "authority_effect": "none",
+        }
+
     def request_ceo_decision(self, task_text: str, conversation_id: str) -> dict[str, Any]:
         if not task_text.strip() or not conversation_id.strip():
             raise MissionControlControlPlaneError("task_text_and_conversation_id_required")
