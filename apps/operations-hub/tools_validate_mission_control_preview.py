@@ -212,7 +212,7 @@ def main() -> None:
         if value is not False:
             fail(f"privacy exposure must remain false: {field}")
 
-    if "#live-control-form" not in html or "#conversation-composer" not in html:
+    if 'id="live-control-form"' not in html or 'id="conversation-composer"' not in html:
         fail("authenticated CEO control surface is missing")
 
     forbidden_js = (
