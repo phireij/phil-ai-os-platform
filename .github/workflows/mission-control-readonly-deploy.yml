@@ -110,6 +110,7 @@ jobs:
             --label "traefik.http.routers.mission-control-readonly.rule=Host(\`$HOSTNAME\`)" \
             --label "traefik.http.routers.mission-control-readonly.entrypoints=web,websecure" \
             --label "traefik.http.routers.mission-control-readonly.tls=true" \
+            --label "traefik.http.routers.mission-control-readonly.tls.certresolver=letsencrypt" \
             --label "traefik.http.routers.mission-control-readonly.service=mission-control-readonly" \
             --label "traefik.http.services.mission-control-readonly.loadbalancer.server.port=8080" \
             "$IMAGE@$DIGEST" >/dev/null
