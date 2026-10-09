@@ -42,6 +42,20 @@
       <p class="operator-note compact">This preview shows the intended CEO-to-Chief-of-Staff surface. Sending, delegation, approvals, and external-channel delivery remain disabled until the governed control-plane endpoint is connected.</p>
     </section>
 
+    <section class="panel live-control-panel" aria-labelledby="live-control-title">
+      <div class="panel-head">
+        <div><p class="eyebrow">Authenticated control plane</p><h2 id="live-control-title">Live platform connection</h2></div>
+        <span id="live-control-state" class="state-chip">not connected</span>
+      </div>
+      <form id="live-control-form" class="conversation-composer">
+        <label for="ceo-token">CEO session token</label>
+        <input id="ceo-token" type="password" autocomplete="off" placeholder="Paste from your password manager; kept in memory only">
+        <button type="submit">Connect read-only snapshot</button>
+      </form>
+      <dl id="live-control-summary" class="safety-list"></dl>
+      <p class="operator-note compact">The token is used only for this browser session and is never written to local storage, cookies, fixtures, or the repository.</p>
+    </section>
+
     <section aria-labelledby="overview-title">
       <div class="section-head">
         <div><p class="eyebrow">Operations</p><h2 id="overview-title">Current workload</h2></div>
