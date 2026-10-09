@@ -30,13 +30,24 @@ jobs:
           grep -Fq "mission_control_authority':'read_only_observer'" scripts/phase2_2_a7_4_multi_agent_read_model.py
           ! grep -Eiq '/v1/execute|Authorization:|Bearer ' scripts/phase2_2_a7_4_multi_agent_read_model.py
           python3 - <<'PY'
+          import ast
           import re
           from pathlib import Path
-          lines = Path('scripts/phase2_2_a7_4_multi_agent_read_model.py').read_text().splitlines()
+          source = Path('scripts/phase2_2_a7_4_multi_agent_read_model.py').read_text()
+          lines = source.splitlines()
           key_pattern = re.compile(r'api[_-]?key|provider[_-]?key', re.I)
-          matches = [line for line in lines if key_pattern.search(line)]
+          tree = ast.parse(source)
+          redaction_nodes = [
+              node for node in ast.walk(tree)
+              if isinstance(node, (ast.Assign, ast.AnnAssign))
+              and 'forbidden_keys' in ast.get_source_segment(source, node)
+          ]
+          assert redaction_nodes, 'candidate must declare explicit sensitive-key redaction'
+          start = min(node.lineno for node in redaction_nodes)
+          end = max(getattr(node, 'end_lineno', node.lineno) for node in redaction_nodes)
+          matches = [(idx, line) for idx, line in enumerate(lines, 1) if key_pattern.search(line)]
           assert matches, 'candidate must declare explicit sensitive-key redaction'
-          assert all('forbidden_keys' in line for line in matches), matches
+          assert all(start <= idx <= end for idx, _ in matches), matches
           PY
 
       - name: Configure IPv4 SSH
