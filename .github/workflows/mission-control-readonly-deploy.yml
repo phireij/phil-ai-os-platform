@@ -116,7 +116,7 @@ jobs:
           AFTER="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | grep -v "^$CONTAINER|" | sort)"
           test "$BEFORE" = "$AFTER"
           docker logout ghcr.io >/dev/null 2>&1 || true
-          echo "container=$CONTAINER image=$IMAGE@$DIGEST traefik_container=$TRAEFIK_CONTAINER network=$TRAEFIK_NET existing_workloads_unchanged=true"
+          echo "container=$CONTAINER image=$IMAGE@$DIGEST traefik_container=$TRAEFIK_CONTAINER network=$TRAEFIK_NET existing_workloads_unchanged=true"`n          docker inspect "$TRAEFIK_CONTAINER" --format 'traefik_image={{.Config.Image}} labels={{json .Config.Labels}} networks={{json .NetworkSettings.Networks}}'
           REMOTE
 
       - name: Verify public read-only route and isolation
