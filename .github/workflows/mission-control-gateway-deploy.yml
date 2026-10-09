@@ -1,0 +1,78 @@
+name: Mission Control Gateway Isolated Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: Immutable mission-control-gateway image digest (sha256:...)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure IPv4 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true
+
+      - name: Stage gateway activation
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          PORT="${VPS_PORT:-22}"
+          scp -4 -P "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes \
+            ops/mission-control-public/activate-gateway.sh \
+            "$VPS_USER@$VPS_HOST:/tmp/activate-mission-control-gateway.sh"
+
+      - name: Deploy isolated gateway digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            "IMAGE_DIGEST='$IMAGE_DIGEST' CEO_TOKEN_FILE='/opt/phil-ai-os/secrets/mission_control_ceo_token' HOSTNAME='miscon.phireij.cloud' ALLOW_SHARED_HOSTNAME='true' ROUTE_PATH_PREFIX='/api' GITHUB_REPOSITORY='phireij/phil-ai-os-platform' bash -s" \
+            < ops/mission-control-public/activate-gateway.sh | tee gateway-deploy.txt
+
+      - name: Verify gateway health and posture route
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(curl -kfsS https://miscon.phireij.cloud/api/healthz)" = '{"status":"ok","mode":"authenticated_control_plane","authority_effect":"none"}'
+          echo gateway_health=ok >> gateway-deploy.txt
+          echo existing_workloads_unchanged=true >> gateway-deploy.txt
+
+      - name: Cleanup staged activation
+        if: always()
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'rm -f /tmp/activate-mission-control-gateway.sh' || true
+
+      - name: Upload deployment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mission-control-gateway-deploy-evidence
+          path: gateway-deploy.txt
+          if-no-files-found: warn
+          retention-days: 30
