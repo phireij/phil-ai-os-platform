@@ -94,12 +94,14 @@ jobs:
           test -n "$TRAEFIK_CONTAINER"
           TRAEFIK_NET="$(docker inspect "$TRAEFIK_CONTAINER" --format '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n 1)"
           test -n "$TRAEFIK_NET"
+          DEPLOY_NET=bridge
           BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | sort)"
           docker pull --platform linux/amd64 "$IMAGE@$DIGEST" >/dev/null
           docker run -d \
             --name "$CONTAINER" \
             --restart unless-stopped \
-            --network "$TRAEFIK_NET" \
+            --network "$DEPLOY_NET" \
+            --publish 127.0.0.1:18080:8080 \
             --read-only \
             --tmpfs /tmp:rw,noexec,nosuid,size=16m \
             --cap-drop ALL \
