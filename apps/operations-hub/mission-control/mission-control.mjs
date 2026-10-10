@@ -235,7 +235,7 @@ function renderProjectReadiness(data) {
     top.append(label, chip);
     const meta = document.createElement("div");
     meta.className = "lifecycle-meta";
-    for (const [labelText, value] of [["Adapter", project.adapter], ["Production cutover", project.production_cutover_authorized ? "authorized" : "not authorized"], ["Mutation", project.mutation_authorized ? "authorized" : "disabled"], ["Customer data", project.customer_data_exposed ? "exposed" : "not exposed"]]) {
+    for (const [labelText, value] of [["Adapter", project.adapter], ["Evidence", project.evidence_state ?? "unknown"], ["Production cutover", project.production_cutover_authorized ? "authorized" : "not authorized"], ["Mutation", project.mutation_authorized ? "authorized" : "disabled"], ["Customer data", project.customer_data_exposed ? "exposed" : "not exposed"]]) {
       const cell = document.createElement("span");
       cell.textContent = labelText;
       const strong = document.createElement("strong");
@@ -362,10 +362,10 @@ function assertChannelReadiness(data) {
 }
 
 function assertProjectReadiness(data) {
-  if (data.schema !== "phil-ai-os-mission-control-project-readiness" || data.version !== 1 || data.status !== "read_only" || data.authority_effect !== "none") throw new Error("Unexpected project readiness projection");
+  if (data.schema !== "phil-ai-os-mission-control-project-readiness" || data.version !== 1 || data.status !== "read_only" || data.authority_effect !== "none" || !data.observed_at || !data.source) throw new Error("Unexpected project readiness projection");
   if (!Array.isArray(data.projects)) throw new Error("Project readiness must contain projects");
   for (const project of data.projects) {
-    if (project.mutation_authorized !== false || project.production_cutover_authorized !== false || project.customer_data_exposed !== false) throw new Error("Unsafe project readiness authority");
+    if (project.mutation_authorized !== false || project.production_cutover_authorized !== false || project.customer_data_exposed !== false || project.evidence_state !== "contract_verified") throw new Error("Unsafe project readiness authority");
   }
 }
 
