@@ -26,6 +26,7 @@ The decision-request path records an approval request only. Delegation, executio
 - The host-networked agent-posture bridge uses immutable digest `sha256:18957f58cf16fab49893954967b9aa649ae38d95555a15badc33541adb3ed5c5`, rejects all mutation verbs, and verifies its digest, host network, and read-only root filesystem at activation.
 - The UI deployment uses an immutable image and verifies its digest, bridge network, read-only root filesystem, route health, traversal denial, and mutation denial.
 - Project readiness includes an observed date, source description, and `contract_verified` evidence state; it does not claim live customer or order status.
+- A fresh AO project observation now records the adapter contract as verified while keeping production activation and customer/order status unavailable.
 - The CEO token is kept in the password manager and VPS secret volume; it is not stored in the repository or browser storage.
 
 ## Next governed increment

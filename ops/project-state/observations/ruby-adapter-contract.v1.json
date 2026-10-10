@@ -1,0 +1,18 @@
+{
+  "schema": "phil-ai-os-project-observation",
+  "version": 1,
+  "project_id": "rubys-cake-delights-hq",
+  "source_kind": "committed_adapter_contract",
+  "observed_at": "2026-10-10",
+  "freshness": "fresh",
+  "facts": {
+    "ref": "ops/integrations/ruby-cake-delights-ao-mvp.v1.json",
+    "adapter_contract_verified": true,
+    "production_activation_ready": false,
+    "customer_order_status_available": false
+  },
+  "authority": {
+    "authority_effect": "none",
+    "mutation_authorized": false
+  }
+}
