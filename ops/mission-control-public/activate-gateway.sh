@@ -37,7 +37,7 @@ docker network inspect "$CONTROL_API_NETWORK" >/dev/null
 docker volume create "$CONTROL_API_SECRET_VOLUME" >/dev/null
 docker run --rm -i --user 0:0 --entrypoint /bin/sh -v "$CONTROL_API_SECRET_VOLUME:/run/staged-secrets" "$IMAGE@$IMAGE_DIGEST" -c 'cat > /run/staged-secrets/control_api_token; chown 10001:10001 /run/staged-secrets/control_api_token; chmod 400 /run/staged-secrets/control_api_token' < "$CONTROL_API_TOKEN_SOURCE_FILE"
 
-BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | sort)"
+BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | grep -v "^$CONTAINER|" | sort)"
 if docker ps -a --format '{{.Names}}' | grep -Fxq "$CONTAINER"; then
   docker rm -f "$CONTAINER" >/dev/null
 fi
