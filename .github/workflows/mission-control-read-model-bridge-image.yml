@@ -1,0 +1,37 @@
+name: Mission Control Read Model Bridge Immutable Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile.mission-control-read-model-bridge'
+      - 'ops/mission-control-public/read-model-bridge.py'
+      - '.github/workflows/mission-control-read-model-bridge-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Validate bridge source
+        run: python3 -m py_compile ops/mission-control-public/read-model-bridge.py
+      - name: Build and publish immutable bridge image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}/mission-control-read-model-bridge
+        run: |
+          set -euo pipefail
+          docker buildx build --file Dockerfile.mission-control-read-model-bridge --tag "$IMAGE:${GITHUB_SHA}" --push .
+          digest="$(docker buildx imagetools inspect "$IMAGE:${GITHUB_SHA}" --format '{{json .Manifest.Digest}}' | tr -d '"')"
+          test -n "$digest"
+          echo "Published $IMAGE@$digest"
