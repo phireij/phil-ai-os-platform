@@ -41,6 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(curl -sk -o /dev/null -w '%{http_code}' https://miscon.phireij.cloud/api/agent-posture)" = 401
+          test "$(curl -sk -X POST -o /dev/null -w '%{http_code}' https://miscon.phireij.cloud/api/agent-posture)" = 405
           test "$(curl -kfsS https://miscon.phireij.cloud/api/healthz)" = '{"status":"ok","mode":"authenticated_control_plane","authority_effect":"none"}'
       - name: Cleanup
         if: always()
