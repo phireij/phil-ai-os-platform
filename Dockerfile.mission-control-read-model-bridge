@@ -1,0 +1,11 @@
+FROM python:3.12-alpine
+WORKDIR /srv
+COPY ops/mission-control-public/read-model-bridge.py /srv/read-model-bridge.py
+RUN addgroup -S -g 10001 app && adduser -S -D -u 10001 -G app app \
+    && chown -R app:app /srv
+USER app
+ENV MISSION_CONTROL_BRIDGE_HOST=0.0.0.0 \
+    MISSION_CONTROL_BRIDGE_PORT=8091 \
+    MISSION_CONTROL_READ_MODEL_URL=http://127.0.0.1:4881/api/read-model
+EXPOSE 8091
+ENTRYPOINT ["python3", "/srv/read-model-bridge.py"]
