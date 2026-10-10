@@ -6,6 +6,13 @@ set -euo pipefail
 IMAGE="ghcr.io/${GITHUB_REPOSITORY:-phireij/phil-ai-os-platform}/mission-control-read-model-bridge"
 CONTAINER="phil-ai-os-mission-control-read-model-bridge"
 TRAEFIK_CONTAINER=""
+on_error() {
+  status=$?
+  echo "bridge_deploy_failed status=$status" >&2
+  docker logs --tail 100 "$CONTAINER" 2>&1 || true
+  exit "$status"
+}
+trap on_error ERR
 while read -r candidate; do
   image="$(docker inspect "$candidate" --format '{{.Config.Image}}')"
   service="$(docker inspect "$candidate" --format '{{index .Config.Labels "com.docker.compose.service"}}')"
@@ -13,7 +20,7 @@ while read -r candidate; do
 done < <(docker ps --format '{{.Names}}')
 test -n "$TRAEFIK_CONTAINER"
 test -s "$CEO_TOKEN_FILE"
-BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | grep -v "^$CONTAINER|" | sort)"
+BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}' | grep -v "^$CONTAINER|" | sort)"
 if docker ps -a --format '{{.Names}}' | grep -Fxq "$CONTAINER"; then docker rm -f "$CONTAINER" >/dev/null; fi
 docker pull "$IMAGE@$IMAGE_DIGEST" >/dev/null
 docker run -d --name "$CONTAINER" --restart unless-stopped --network host --read-only --cap-drop ALL --security-opt no-new-privileges:true --tmpfs /tmp:rw,noexec,nosuid,size=16m \
@@ -31,6 +38,6 @@ docker run -d --name "$CONTAINER" --restart unless-stopped --network host --read
   "$IMAGE@$IMAGE_DIGEST" >/dev/null
 sleep 5
 test "$(docker inspect "$CONTAINER" --format '{{.State.Running}}')" = true
-AFTER="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | sort)"
+AFTER="$(docker ps --format '{{.Names}}|{{.Image}}' | sort)"
 test "$BEFORE" = "$(printf '%s\n' "$AFTER" | grep -v "^$CONTAINER|")"
 echo "container=$CONTAINER image=$IMAGE@$IMAGE_DIGEST route=https://$HOSTNAME/api/agent-posture traefik_container=$TRAEFIK_CONTAINER existing_workloads_unchanged=true"
