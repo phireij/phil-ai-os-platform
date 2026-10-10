@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - codex/mission-control-readonly-deploy
+      - main
     paths:
       - Dockerfile.mission-control-readonly
       - apps/operations-hub/mission-control/**
       - ops/mission-control-public/readonly-static-server.py
       - .github/workflows/mission-control-readonly-deploy.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
