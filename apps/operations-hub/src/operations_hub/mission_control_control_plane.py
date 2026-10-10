@@ -74,9 +74,19 @@ class MissionControlControlPlane:
 
     def agent_posture(self) -> dict[str, Any]:
         snapshot = self.snapshot()
+        multi_agent = snapshot.get("multi_agent") or snapshot.get("agent_posture") or {}
+        if not isinstance(multi_agent, dict):
+            multi_agent = {}
+        # The A7 read model keeps the bounded agent list at the top level.
+        # Normalize that documented shape for the gateway/UI without adding
+        # authority or exposing any mutation surface.
+        if not multi_agent.get("agents") and isinstance(snapshot.get("agents"), list):
+            multi_agent = {**multi_agent, "agents": snapshot["agents"]}
+        if not multi_agent.get("handoffs") and isinstance(snapshot.get("handoffs"), list):
+            multi_agent = {**multi_agent, "handoffs": snapshot["handoffs"]}
         return {
             "status": snapshot.get("status", "unknown"),
-            "multi_agent": snapshot.get("multi_agent") or snapshot.get("agent_posture") or {},
+            "multi_agent": multi_agent,
             "agent_runtime": snapshot.get("agent_runtime"),
             "worker_readiness": snapshot.get("worker_readiness"),
             "handoffs": snapshot.get("handoffs", []),
