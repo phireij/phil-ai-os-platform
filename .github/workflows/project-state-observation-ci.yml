@@ -1,0 +1,51 @@
+name: Project State Observation CI
+
+on:
+  push:
+    paths:
+      - 'ops/project-state/observations/**'
+      - 'ops/project-registry/project-registry.v1.json'
+      - '.github/workflows/project-state-observation-ci.yml'
+  pull_request:
+    paths:
+      - 'ops/project-state/observations/**'
+      - 'ops/project-registry/project-registry.v1.json'
+      - '.github/workflows/project-state-observation-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate bounded observations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from datetime import date
+          from pathlib import Path
+
+          root = Path('.')
+          registry = json.loads((root / 'ops/project-registry/project-registry.v1.json').read_text())
+          registered = {p['project_id'] for p in registry['projects']}
+          assert registry['authority_effect'] == 'none'
+          assert registry['autonomy_ceiling'] == 'A0'
+          forbidden = {'token', 'secret', 'password', 'api_key', 'authorization', 'bearer', 'private_key'}
+          count = 0
+          for path in sorted((root / 'ops/project-state/observations').glob('*.json')):
+              obs = json.loads(path.read_text())
+              assert obs['schema'] == 'phil-ai-os-project-observation'
+              assert obs['project_id'] in registered
+              assert obs['freshness'] in {'fresh', 'stale', 'unknown'}
+              date.fromisoformat(obs['observed_at'])
+              assert obs['authority'] == {'authority_effect': 'none', 'mutation_authorized': False}
+              text = json.dumps(obs).lower()
+              assert not any(f'"{key}"' in text for key in forbidden)
+              count += 1
+          assert count > 0
+          print(f'project_observations_validated={count}')
+          PY
