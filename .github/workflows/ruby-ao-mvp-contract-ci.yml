@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'ops/integrations/ruby-cake-delights-ao-mvp.v1.json'
+      - 'ops/project-registry/project-registry.v1.json'
       - '.github/workflows/ruby-ao-mvp-contract-ci.yml'
   pull_request:
     paths:
       - 'ops/integrations/ruby-cake-delights-ao-mvp.v1.json'
+      - 'ops/project-registry/project-registry.v1.json'
       - '.github/workflows/ruby-ao-mvp-contract-ci.yml'
 
 permissions:
@@ -27,6 +29,10 @@ jobs:
           from pathlib import Path
 
           p = json.loads(Path('ops/integrations/ruby-cake-delights-ao-mvp.v1.json').read_text())
+          registry = json.loads(Path('ops/project-registry/project-registry.v1.json').read_text())
+          project = next(x for x in registry['projects'] if x['project_id'] == p['project_id'])
+          assert project['mutation_authorized'] is False
+          assert registry['authority_effect'] == 'none'
           assert p['schema'] == 'phil-ai-os-ruby-ao-mvp-adapter'
           assert p['version'] == 1
           assert p['authority_effect'] == 'none'
