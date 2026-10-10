@@ -556,6 +556,9 @@ function installLiveControlConnection() {
       disconnect.disabled = false;
       state.textContent = "connected · read only";
       state.className = "state-chip safe";
+      const conversationState = document.querySelector("#conversation-state");
+      conversationState.textContent = "authenticated · read only";
+      conversationState.className = "state-chip safe";
       input.value = "";
       loadLiveRecords(token);
       loadLiveAgentPosture(token);
