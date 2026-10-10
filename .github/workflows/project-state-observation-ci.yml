@@ -26,7 +26,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import json
-          from datetime import date
+          from datetime import datetime
           from pathlib import Path
 
           root = Path('.')
@@ -41,7 +41,7 @@ jobs:
               assert obs['schema'] == 'phil-ai-os-project-observation'
               assert obs['project_id'] in registered
               assert obs['freshness'] in {'fresh', 'stale', 'unknown'}
-              date.fromisoformat(obs['observed_at'])
+              datetime.fromisoformat(obs['observed_at'].replace('Z', '+00:00'))
               assert obs['authority'] == {'authority_effect': 'none', 'mutation_authorized': False}
               text = json.dumps(obs).lower()
               assert not any(f'"{key}"' in text for key in forbidden)
