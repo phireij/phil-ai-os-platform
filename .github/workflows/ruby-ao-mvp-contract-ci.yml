@@ -1,0 +1,50 @@
+name: Ruby AO-MVP Adapter Contract CI
+
+on:
+  push:
+    paths:
+      - 'ops/integrations/ruby-cake-delights-ao-mvp.v1.json'
+      - '.github/workflows/ruby-ao-mvp-contract-ci.yml'
+  pull_request:
+    paths:
+      - 'ops/integrations/ruby-cake-delights-ao-mvp.v1.json'
+      - '.github/workflows/ruby-ao-mvp-contract-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate synthetic-only authority contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = json.loads(Path('ops/integrations/ruby-cake-delights-ao-mvp.v1.json').read_text())
+          assert p['schema'] == 'phil-ai-os-ruby-ao-mvp-adapter'
+          assert p['version'] == 1
+          assert p['authority_effect'] == 'none'
+          assert p['mutation_authorized'] is False
+          assert p['production_mutation_authorized'] is False
+          assert p['activation']['mode'] == 'synthetic_only'
+          assert p['activation']['production_cutover_authorized'] is False
+          assert p['ingress']['accepted_event_type'] == 'synthetic_canary'
+          assert p['ingress']['customer_data_allowed'] is False
+          assert p['ingress']['production_credentials_allowed'] is False
+          assert p['notification_projection']['request_body_logging'] is False
+          assert p['notification_projection']['sensitive_header_logging'] is False
+          assert p['notification_projection']['secret_logging'] is False
+          required_denials = {
+              'order_creation', 'inventory_mutation', 'customer_messaging',
+              'payment_execution', 'refunds', 'twilio_traffic',
+              'automatic_production_execution',
+          }
+          assert required_denials <= set(p['denied_capabilities'])
+          print('ruby_ao_mvp_contract=synthetic_only_deny_by_default')
+          PY
