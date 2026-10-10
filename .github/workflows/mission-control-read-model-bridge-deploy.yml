@@ -1,0 +1,50 @@
+name: Mission Control Read Model Bridge Isolated Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: Immutable bridge image digest (sha256:...)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+      - name: Deploy isolated bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          scp -4 -P "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-public/activate-read-model-bridge.sh "$VPS_USER@$VPS_HOST:/tmp/activate-read-model-bridge.sh"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" "chmod 700 /tmp/activate-read-model-bridge.sh && IMAGE_DIGEST='$IMAGE_DIGEST' CEO_TOKEN_FILE='/opt/phil-ai-os/secrets/mission_control_ceo_token' HOSTNAME='miscon.phireij.cloud' GITHUB_REPOSITORY='phireij/phil-ai-os-platform' bash /tmp/activate-read-model-bridge.sh"
+      - name: Verify boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(curl -sk -o /dev/null -w '%{http_code}' https://miscon.phireij.cloud/api/agent-posture)" = 401
+          test "$(curl -kfsS https://miscon.phireij.cloud/api/healthz)" = '{"status":"ok","mode":"authenticated_control_plane","authority_effect":"none"}'
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: |
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'rm -f /tmp/activate-read-model-bridge.sh' || true
