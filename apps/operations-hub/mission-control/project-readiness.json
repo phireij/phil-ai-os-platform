@@ -1,0 +1,17 @@
+{
+  "schema": "phil-ai-os-mission-control-project-readiness",
+  "version": 1,
+  "status": "read_only",
+  "authority_effect": "none",
+  "projects": [
+    {
+      "project_id": "rubys-cake-delights-hq",
+      "name": "Ruby's Cake Delights HQ",
+      "adapter": "AO-MVP adapter v1",
+      "mode": "synthetic_only",
+      "production_cutover_authorized": false,
+      "mutation_authorized": false,
+      "customer_data_exposed": false
+    }
+  ]
+}

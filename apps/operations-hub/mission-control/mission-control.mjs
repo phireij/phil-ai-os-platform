@@ -217,6 +217,37 @@ function renderChannelReadiness(data) {
   }));
 }
 
+function renderProjectReadiness(data) {
+  const list = document.querySelector("#project-readiness-list");
+  const projects = Array.isArray(data.projects) ? data.projects : [];
+  document.querySelector("#project-readiness-chip").textContent = `${projects.length} registered`;
+  list.replaceChildren(...projects.map((project) => {
+    const article = document.createElement("article");
+    article.className = "lifecycle";
+    const top = document.createElement("div");
+    top.className = "lifecycle-top";
+    const label = document.createElement("span");
+    label.className = "lifecycle-id";
+    label.textContent = text(project.name ?? project.project_id);
+    const chip = document.createElement("span");
+    chip.className = "state-chip safe";
+    chip.textContent = text(project.mode ?? "read only");
+    top.append(label, chip);
+    const meta = document.createElement("div");
+    meta.className = "lifecycle-meta";
+    for (const [labelText, value] of [["Adapter", project.adapter], ["Production cutover", project.production_cutover_authorized ? "authorized" : "not authorized"], ["Mutation", project.mutation_authorized ? "authorized" : "disabled"], ["Customer data", project.customer_data_exposed ? "exposed" : "not exposed"]]) {
+      const cell = document.createElement("span");
+      cell.textContent = labelText;
+      const strong = document.createElement("strong");
+      strong.textContent = text(value);
+      cell.append(strong);
+      meta.append(cell);
+    }
+    article.append(top, meta);
+    return article;
+  }));
+}
+
 function renderLifecycles(data) {
   const list = document.querySelector("#lifecycle-list");
   const lifecycles = data.automation?.lifecycles ?? [];
@@ -328,6 +359,14 @@ function assertChannelReadiness(data) {
     if (channel.controlled_scope_authorized !== true) throw new Error(`Channel controlled scope missing: ${channel.channel}`);
   }
   if (expected.size) throw new Error("Missing operations channel readiness");
+}
+
+function assertProjectReadiness(data) {
+  if (data.schema !== "phil-ai-os-mission-control-project-readiness" || data.version !== 1 || data.status !== "read_only" || data.authority_effect !== "none") throw new Error("Unexpected project readiness projection");
+  if (!Array.isArray(data.projects)) throw new Error("Project readiness must contain projects");
+  for (const project of data.projects) {
+    if (project.mutation_authorized !== false || project.production_cutover_authorized !== false || project.customer_data_exposed !== false) throw new Error("Unsafe project readiness authority");
+  }
 }
 
 function assertConversation(data) {
@@ -671,18 +710,21 @@ function installDecisionRequest() {
 async function boot() {
   const state = document.querySelector("#load-state");
   try {
-    const [projectionResponse, channelResponse, conversationResponse] = await Promise.all([
+    const [projectionResponse, channelResponse, conversationResponse, projectResponse] = await Promise.all([
       fetch("./fixture.json", { cache: "no-store" }),
       fetch("./channel-readiness.json", { cache: "no-store" }),
       fetch("./conversation.json", { cache: "no-store" }),
+      fetch("./project-readiness.json", { cache: "no-store" }),
     ]);
     if (!projectionResponse.ok) throw new Error(`Projection fixture HTTP ${projectionResponse.status}`);
     if (!channelResponse.ok) throw new Error(`Channel readiness HTTP ${channelResponse.status}`);
     if (!conversationResponse.ok) throw new Error(`Conversation fixture HTTP ${conversationResponse.status}`);
-    const [data, channelData, conversationData] = await Promise.all([projectionResponse.json(), channelResponse.json(), conversationResponse.json()]);
+    if (!projectResponse.ok) throw new Error(`Project readiness HTTP ${projectResponse.status}`);
+    const [data, channelData, conversationData, projectData] = await Promise.all([projectionResponse.json(), channelResponse.json(), conversationResponse.json(), projectResponse.json()]);
     assertReadOnly(data);
     assertChannelReadiness(channelData);
     assertConversation(conversationData);
+    assertProjectReadiness(projectData);
     renderMetrics(data);
     renderTaskComposition(data);
     renderApproval(data);
@@ -690,6 +732,7 @@ async function boot() {
     renderAttention(data);
     renderControlPlane(data);
     renderChannelReadiness(channelData);
+    renderProjectReadiness(projectData);
     renderConversation(conversationData);
     renderLifecycles(data);
     renderSafety(data);
