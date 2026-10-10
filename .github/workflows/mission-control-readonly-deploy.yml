@@ -102,7 +102,7 @@ jobs:
           TRAEFIK_NET="$(docker inspect "$TRAEFIK_CONTAINER" --format '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n 1)"
           test -n "$TRAEFIK_NET"
           DEPLOY_NET=bridge
-          BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | sort)"
+          BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}' | sort)"
           docker pull --platform linux/amd64 "$IMAGE@$DIGEST" >/dev/null
           docker run -d \
             --name "$CONTAINER" \
@@ -123,7 +123,10 @@ jobs:
             "$IMAGE@$DIGEST" >/dev/null
           sleep 5
           test "$(docker inspect "$CONTAINER" --format '{{.State.Running}}')" = "true"
-          AFTER="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | grep -v "^$CONTAINER|" | sort)"
+          test "$(docker inspect "$CONTAINER" --format '{{.Config.Image}}')" = "$IMAGE@$DIGEST"
+          test "$(docker inspect "$CONTAINER" --format '{{.HostConfig.NetworkMode}}')" = "$DEPLOY_NET"
+          test "$(docker inspect "$CONTAINER" --format '{{.HostConfig.ReadonlyRootfs}}')" = "true"
+          AFTER="$(docker ps --format '{{.Names}}|{{.Image}}' | grep -v "^$CONTAINER|" | sort)"
           test "$BEFORE" = "$AFTER"
           docker logout ghcr.io >/dev/null 2>&1 || true
           echo "container=$CONTAINER image=$IMAGE@$DIGEST traefik_container=$TRAEFIK_CONTAINER network=$TRAEFIK_NET existing_workloads_unchanged=true"
