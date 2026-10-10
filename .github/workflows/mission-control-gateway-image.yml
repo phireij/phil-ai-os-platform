@@ -10,6 +10,7 @@ on:
       - apps/operations-hub/src/operations_hub/mission_control_control_plane.py
       - apps/operations-hub/src/operations_hub/__init__.py
       - ops/mission-control-public/control-plane-gateway.py
+      - ops/mission-control-public/activate-gateway.sh
       - .github/workflows/mission-control-gateway-image.yml
 
 permissions:
