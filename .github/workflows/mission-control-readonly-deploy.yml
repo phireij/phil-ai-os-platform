@@ -87,6 +87,7 @@ jobs:
           ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$IMAGE" "$DIGEST" "$HOSTNAME" "$CONTAINER" <<'REMOTE'
           set -euo pipefail
           IMAGE="$1"; DIGEST="$2"; HOSTNAME="$3"; CONTAINER="$4"
+          trap 'docker logs "$CONTAINER" 2>&1 || true' ERR
           if docker ps -a --format '{{.Names}}' | grep -Fx "$CONTAINER" >/dev/null; then
             docker rm -f "$CONTAINER" >/dev/null
           fi
