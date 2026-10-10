@@ -38,6 +38,9 @@ docker run -d --name "$CONTAINER" --restart unless-stopped --network host --read
   "$IMAGE@$IMAGE_DIGEST" >/dev/null
 sleep 5
 test "$(docker inspect "$CONTAINER" --format '{{.State.Running}}')" = true
+test "$(docker inspect "$CONTAINER" --format '{{.Config.Image}}')" = "$IMAGE@$IMAGE_DIGEST"
+test "$(docker inspect "$CONTAINER" --format '{{.HostConfig.NetworkMode}}')" = host
+test "$(docker inspect "$CONTAINER" --format '{{.HostConfig.ReadonlyRootfs}}')" = true
 AFTER="$(docker ps --format '{{.Names}}|{{.Image}}' | sort)"
 test "$BEFORE" = "$(printf '%s\n' "$AFTER" | grep -v "^$CONTAINER|")"
 echo "container=$CONTAINER image=$IMAGE@$IMAGE_DIGEST route=https://$HOSTNAME/api/agent-posture traefik_container=$TRAEFIK_CONTAINER existing_workloads_unchanged=true"
