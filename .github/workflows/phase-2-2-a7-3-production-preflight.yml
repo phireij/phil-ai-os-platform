@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: phase-2-2-a7-vps-validation
+  cancel-in-progress: false
+
 jobs:
   preflight:
     runs-on: ubuntu-24.04
