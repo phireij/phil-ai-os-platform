@@ -1,0 +1,49 @@
+{
+  "schema": "phil-ai-os-ruby-ao-mvp-adapter",
+  "version": 1,
+  "project_id": "rubys-cake-delights-hq",
+  "display_name": "Ruby's Cake Delights HQ",
+  "authority_effect": "none",
+  "mutation_authorized": false,
+  "production_mutation_authorized": false,
+  "ingress": {
+    "identity": "ao-mvp-public-webhook",
+    "path": "/webhook",
+    "authentication": "hmac-sha256-timestamp-nonce",
+    "accepted_event_type": "synthetic_canary",
+    "accepted_payload_fields": ["event_type", "canary_id"],
+    "customer_data_allowed": false,
+    "production_credentials_allowed": false
+  },
+  "notification_projection": {
+    "channel": "rubyscakedelights",
+    "workspace": "PhiReij",
+    "allowed_fields": [
+      "project_id",
+      "event_type",
+      "canary_id_hash",
+      "decision",
+      "authority_effect",
+      "production_mutation"
+    ],
+    "request_body_logging": false,
+    "sensitive_header_logging": false,
+    "secret_logging": false
+  },
+  "denied_capabilities": [
+    "order_creation",
+    "inventory_mutation",
+    "slot_reservation",
+    "customer_data_mutation",
+    "customer_messaging",
+    "payment_execution",
+    "refunds",
+    "twilio_traffic",
+    "automatic_production_execution"
+  ],
+  "activation": {
+    "mode": "synthetic_only",
+    "requires_separate_project_authorization": true,
+    "production_cutover_authorized": false
+  }
+}
