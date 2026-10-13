@@ -3,7 +3,6 @@ name: Mission Control Read-only Publish and Isolated Deploy
 on:
   push:
     branches:
-      - codex/mission-control-readonly-deploy
       - main
     paths:
       - Dockerfile.mission-control-readonly
@@ -18,6 +17,7 @@ permissions:
 
 jobs:
   publish-and-deploy:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -29,6 +29,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       HOSTNAME: miscon.phireij.cloud
       CONTAINER: phil-ai-os-mission-control-readonly
+      REMOTE_DOCKER_CONFIG: /tmp/phil-ai-os-mission-control-ghcr-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout merged source
@@ -39,6 +40,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          html = Path("apps/operations-hub/mission-control/index.html").read_text()
+          module = Path("apps/operations-hub/mission-control/mission-control.mjs").read_text()
+          required_labels = (
+              "Chief of Staff sample exchange",
+              "sample only · no live chat",
+              "Sample workload",
+              "Sample agent posture",
+              "local demo fixtures",
+              "not current system or customer activity",
+          )
+          missing = [label for label in required_labels if label not in html]
+          if missing:
+              raise SystemExit(f"Mission Control UI is missing required sample labels: {missing}")
+          if "/api/decision-requests" in module or re.search(r"\bPOST\b", module, re.IGNORECASE):
+              raise SystemExit("Mission Control read-only UI contains a mutation request path")
+          PY
           printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker buildx build \
             --platform linux/amd64 \
@@ -62,6 +83,7 @@ jobs:
           docker logout ghcr.io
 
       - name: Prepare SSH
+        id: prepare-ssh
         shell: bash
         run: |
           set -euo pipefail
@@ -76,6 +98,7 @@ jobs:
           exit 1
 
       - name: Deploy isolated read-only container
+        id: deploy
         env:
           DIGEST: ${{ steps.image.outputs.digest }}
         shell: bash
@@ -83,13 +106,50 @@ jobs:
           set -euo pipefail
           test -n "$DIGEST"
           printf '%s' "$GH_TOKEN" | ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" \
-            "docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin"
-          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$IMAGE" "$DIGEST" "$HOSTNAME" "$CONTAINER" <<'REMOTE'
+            "mkdir -m 700 -p '$REMOTE_DOCKER_CONFIG' && DOCKER_CONFIG='$REMOTE_DOCKER_CONFIG' docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin"
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$IMAGE" "$DIGEST" "$HOSTNAME" "$CONTAINER" "$REMOTE_DOCKER_CONFIG" <<'REMOTE'
           set -euo pipefail
-          IMAGE="$1"; DIGEST="$2"; HOSTNAME="$3"; CONTAINER="$4"
-          trap 'docker logs "$CONTAINER" 2>&1 || true' ERR
-          if docker ps -a --format '{{.Names}}' | grep -Fx "$CONTAINER" >/dev/null; then
-            docker rm -f "$CONTAINER" >/dev/null
+          IMAGE="$1"; DIGEST="$2"; HOSTNAME="$3"; CONTAINER="$4"; REMOTE_DOCKER_CONFIG="$5"
+          [[ "$REMOTE_DOCKER_CONFIG" =~ ^/tmp/phil-ai-os-mission-control-ghcr-[0-9]+-[0-9]+$ ]]
+          export DOCKER_CONFIG="$REMOTE_DOCKER_CONFIG"
+          PREVIOUS_CONTAINER="${CONTAINER}-rollback"
+          PREFLIGHT_CONTAINER="${CONTAINER}-preflight"
+          PREVIOUS_STAGED=false
+          PREFLIGHT_STARTED=false
+          NEW_START_ATTEMPTED=false
+          restore_and_exit() {
+            status="$1"
+            trap - ERR HUP INT TERM
+            if [[ "$PREFLIGHT_STARTED" == "true" ]]; then
+              docker rm -f "$PREFLIGHT_CONTAINER" >/dev/null 2>&1 || true
+            fi
+            if [[ "$PREVIOUS_STAGED" == "true" ]] && docker inspect "$PREVIOUS_CONTAINER" >/dev/null 2>&1; then
+              docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+              docker rename "$PREVIOUS_CONTAINER" "$CONTAINER"
+              docker start "$CONTAINER" >/dev/null
+            elif [[ "$NEW_START_ATTEMPTED" == "true" ]]; then
+              docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+            fi
+            docker logout ghcr.io >/dev/null 2>&1 || true
+            rm -f -- "$REMOTE_DOCKER_CONFIG/config.json"
+            rmdir -- "$REMOTE_DOCKER_CONFIG" >/dev/null 2>&1 || true
+            exit "$status"
+          }
+          restore_on_error() {
+            local status=$?
+            restore_and_exit "$status"
+          }
+          trap restore_on_error ERR
+          trap 'restore_and_exit 129' HUP
+          trap 'restore_and_exit 130' INT
+          trap 'restore_and_exit 143' TERM
+          if docker inspect "$PREVIOUS_CONTAINER" >/dev/null 2>&1; then
+            echo "Refusing deploy: rollback container already exists: $PREVIOUS_CONTAINER" >&2
+            exit 1
+          fi
+          if docker inspect "$PREFLIGHT_CONTAINER" >/dev/null 2>&1; then
+            echo "Refusing deploy: preflight container already exists: $PREFLIGHT_CONTAINER" >&2
+            exit 1
           fi
           TRAEFIK_CONTAINER="$(for candidate in $(docker ps --format '{{.Names}}'); do
             image="$(docker inspect "$candidate" --format '{{.Config.Image}}')"
@@ -102,7 +162,30 @@ jobs:
           TRAEFIK_NET="$(docker inspect "$TRAEFIK_CONTAINER" --format '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n 1)"
           test -n "$TRAEFIK_NET"
           DEPLOY_NET=bridge
-          BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}' | sort)"
+          docker pull --platform linux/amd64 "$IMAGE@$DIGEST" >/dev/null
+          docker run -d \
+            --name "$PREFLIGHT_CONTAINER" \
+            --network "$DEPLOY_NET" \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --pids-limit 128 \
+            --label 'traefik.enable=false' \
+            "$IMAGE@$DIGEST" >/dev/null
+          PREFLIGHT_STARTED=true
+          sleep 2
+          test "$(docker inspect "$PREFLIGHT_CONTAINER" --format '{{.State.Running}}')" = "true"
+          docker exec "$PREFLIGHT_CONTAINER" python3 -c 'import json,urllib.request; r=urllib.request.urlopen("http://127.0.0.1:8080/healthz",timeout=3); assert r.status == 200 and json.load(r)=={"status":"ok","mode":"read_only"}'
+          docker rm -f "$PREFLIGHT_CONTAINER" >/dev/null
+          PREFLIGHT_STARTED=false
+          BEFORE_OTHER="$(docker ps --format '{{.Names}}|{{.Image}}' | awk -F'|' -v c="$CONTAINER" -v p="$PREVIOUS_CONTAINER" '$1 != c && $1 != p' | sort)"
+          if docker inspect "$CONTAINER" >/dev/null 2>&1; then
+            docker rename "$CONTAINER" "$PREVIOUS_CONTAINER"
+            PREVIOUS_STAGED=true
+            docker stop "$PREVIOUS_CONTAINER" >/dev/null
+          fi
+          NEW_START_ATTEMPTED=true
           docker pull --platform linux/amd64 "$IMAGE@$DIGEST" >/dev/null
           docker run -d \
             --name "$CONTAINER" \
@@ -126,17 +209,97 @@ jobs:
           test "$(docker inspect "$CONTAINER" --format '{{.Config.Image}}')" = "$IMAGE@$DIGEST"
           test "$(docker inspect "$CONTAINER" --format '{{.HostConfig.NetworkMode}}')" = "$DEPLOY_NET"
           test "$(docker inspect "$CONTAINER" --format '{{.HostConfig.ReadonlyRootfs}}')" = "true"
-          AFTER="$(docker ps --format '{{.Names}}|{{.Image}}' | grep -v "^$CONTAINER|" | sort)"
-          test "$BEFORE" = "$AFTER"
+          docker exec "$CONTAINER" python3 -c 'import json,urllib.request; r=urllib.request.urlopen("http://127.0.0.1:8080/healthz",timeout=3); assert r.status == 200 and json.load(r)=={"status":"ok","mode":"read_only"}'
+          AFTER_OTHER="$(docker ps --format '{{.Names}}|{{.Image}}' | awk -F'|' -v c="$CONTAINER" -v p="$PREVIOUS_CONTAINER" '$1 != c && $1 != p' | sort)"
+          test "$BEFORE_OTHER" = "$AFTER_OTHER"
           docker logout ghcr.io >/dev/null 2>&1 || true
-          echo "container=$CONTAINER image=$IMAGE@$DIGEST traefik_container=$TRAEFIK_CONTAINER network=$TRAEFIK_NET existing_workloads_unchanged=true"
+          rm -f -- "$REMOTE_DOCKER_CONFIG/config.json"
+          rmdir -- "$REMOTE_DOCKER_CONFIG" >/dev/null 2>&1 || true
+          trap - ERR
+          echo "container=$CONTAINER image=$IMAGE@$DIGEST rollback_container=$PREVIOUS_CONTAINER previous_present=$PREVIOUS_STAGED traefik_container=$TRAEFIK_CONTAINER network=$TRAEFIK_NET existing_workloads_unchanged=true"
           REMOTE
 
       - name: Verify public read-only route and isolation
+        id: verify
         shell: bash
         run: |
           set -euo pipefail
           test "$(curl -kfsS https://$HOSTNAME/healthz)" = '{"status":"ok","mode":"read_only"}'
+          python3 - <<'PY'
+          import os
+          import re
+          from urllib.request import urlopen
+
+          base = f"https://{os.environ['HOSTNAME']}"
+          with urlopen(base + "/", timeout=10) as response:
+              html = response.read().decode("utf-8")
+          with urlopen(base + "/mission-control.mjs", timeout=10) as response:
+              module = response.read().decode("utf-8")
+          required_labels = (
+              "Chief of Staff sample exchange",
+              "sample only · no live chat",
+              "Sample workload",
+              "Sample agent posture",
+              "local demo fixtures",
+              "not current system or customer activity",
+          )
+          missing = [label for label in required_labels if label not in html]
+          if missing:
+              raise SystemExit(f"Public UI is missing required sample labels: {missing}")
+          if "/api/decision-requests" in module or re.search(r"\bPOST\b", module, re.IGNORECASE):
+              raise SystemExit("Public UI contains a mutation request path")
+          PY
           test "$(curl -ksS -o /dev/null -w '%{http_code}' -X POST https://$HOSTNAME/)" = "405"
           test "$(curl -ksS -o /dev/null -w '%{http_code}' https://$HOSTNAME/../../etc/passwd)" = "404"
-          echo "HTTPS, healthz, mutation denial, and traversal denial verified." >> "$GITHUB_STEP_SUMMARY"
+          echo "HTTPS, healthz, synthetic UI labels, no client mutation path, mutation denial, and traversal denial verified." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore previous UI after failed deployment verification
+        if: ${{ failure() && steps.verify.outcome == 'failure' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$CONTAINER" <<'REMOTE'
+          set -euo pipefail
+          CONTAINER="$1"
+          PREVIOUS_CONTAINER="${CONTAINER}-rollback"
+          if docker inspect "$PREVIOUS_CONTAINER" >/dev/null 2>&1; then
+            docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+            docker rename "$PREVIOUS_CONTAINER" "$CONTAINER"
+            docker start "$CONTAINER" >/dev/null
+            sleep 3
+            test "$(docker inspect "$CONTAINER" --format '{{.State.Running}}')" = "true"
+            echo "restored_previous_container=$CONTAINER"
+          else
+            docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+            echo "No prior UI existed; removed the failed replacement container."
+          fi
+          REMOTE
+          test "$(curl -kfsS https://$HOSTNAME/healthz)" = '{"status":"ok","mode":"read_only"}'
+
+      - name: Remove previous UI after successful verification
+        if: ${{ success() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$CONTAINER" <<'REMOTE'
+          set -euo pipefail
+          PREVIOUS_CONTAINER="$1-rollback"
+          if docker inspect "$PREVIOUS_CONTAINER" >/dev/null 2>&1; then
+            docker rm "$PREVIOUS_CONTAINER" >/dev/null
+            echo "previous_ui_removed_after_successful_public_verification=true"
+          fi
+          REMOTE
+
+      - name: Clean up registry credentials
+        if: ${{ always() && steps.prepare-ssh.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$REMOTE_DOCKER_CONFIG" <<'REMOTE'
+          set -euo pipefail
+          REMOTE_DOCKER_CONFIG="$1"
+          [[ "$REMOTE_DOCKER_CONFIG" =~ ^/tmp/phil-ai-os-mission-control-ghcr-[0-9]+-[0-9]+$ ]]
+          DOCKER_CONFIG="$REMOTE_DOCKER_CONFIG" docker logout ghcr.io >/dev/null 2>&1 || true
+          rm -f -- "$REMOTE_DOCKER_CONFIG/config.json"
+          rmdir -- "$REMOTE_DOCKER_CONFIG" >/dev/null 2>&1 || true
+          REMOTE

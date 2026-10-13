@@ -1,0 +1,14 @@
+{
+  "schema": "phil-ai-os-mission-control-notification-read-model",
+  "version": 1,
+  "read_state": "not_configured",
+  "generated_at": null,
+  "freshness": "unknown",
+  "freshness_policy_version": null,
+  "items": [],
+  "authority": {
+    "authority_effect": "none",
+    "mutation_authorized": false,
+    "notification_send_authorized": false
+  }
+}
