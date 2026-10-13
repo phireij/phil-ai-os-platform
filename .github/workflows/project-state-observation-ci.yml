@@ -3,13 +3,25 @@ name: Project State Observation CI
 on:
   push:
     paths:
-      - 'ops/project-state/observations/**'
-      - 'ops/project-registry/project-registry.v1.json'
+      - 'ops/project-state/**'
+      - 'ops/project-registry/**'
+      - 'contracts/mission-control/**'
+      - 'apps/operations-hub/mission-control/**'
+      - 'scripts/project_observation_freshness.py'
+      - 'scripts/reconcile_ao_project_state.py'
+      - 'scripts/collect_mission_control_*.py'
+      - 'scripts/collect_phil_ai_os_github_ci.py'
       - '.github/workflows/project-state-observation-ci.yml'
   pull_request:
     paths:
-      - 'ops/project-state/observations/**'
-      - 'ops/project-registry/project-registry.v1.json'
+      - 'ops/project-state/**'
+      - 'ops/project-registry/**'
+      - 'contracts/mission-control/**'
+      - 'apps/operations-hub/mission-control/**'
+      - 'scripts/project_observation_freshness.py'
+      - 'scripts/reconcile_ao_project_state.py'
+      - 'scripts/collect_mission_control_*.py'
+      - 'scripts/collect_phil_ai_os_github_ci.py'
       - '.github/workflows/project-state-observation-ci.yml'
 
 permissions:
