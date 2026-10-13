@@ -23,28 +23,28 @@
       <div>
         <p class="eyebrow">Authority boundary</p>
         <h2 id="authority-title">Observe, review, decide later.</h2>
-        <p>This preview exposes operational status only. Execution, replies, payments, SMS, inventory changes, WooCommerce writes, automatic retries and publication remain disabled.</p>
+        <p>Outside the explicitly authenticated live-record panels, this preview shows local demo fixtures and registry snapshots, including workload counts, control-plane posture, channel readiness, project evidence, lifecycle examples, and the sample transcript. These are not current system or customer activity, and are not component health checks. Authenticated records load separately after a read-only connection. Execution, replies, payments, SMS, inventory changes, WooCommerce writes, automatic retries and publication remain disabled.</p>
       </div>
       <span id="authority-effect" class="authority-chip">authority_effect: none</span>
     </section>
 
     <section class="panel conversation-panel" aria-labelledby="conversation-title">
       <div class="panel-head">
-        <div><p class="eyebrow">CEO control plane</p><h2 id="conversation-title">Chief of Staff conversation</h2></div>
-        <span id="conversation-state" class="state-chip safe">preview · connect to authenticate</span>
+        <div><p class="eyebrow">CEO control plane</p><h2 id="conversation-title">Chief of Staff sample exchange</h2></div>
+        <span id="conversation-state" class="state-chip safe">sample only · no live chat</span>
       </div>
       <div id="conversation-thread" class="conversation-thread" aria-live="polite"></div>
-      <form id="conversation-composer" class="conversation-composer">
-        <label for="conversation-message">Request Chief of Staff action</label>
-        <textarea id="conversation-message" rows="3" placeholder="Describe the work or decision you want the Chief of Staff to review." disabled></textarea>
-        <button id="decision-request-button" type="submit" disabled>Create governed decision request</button>
-      </form>
-      <p class="operator-note compact">Authenticated requests create approval records for Chief of Staff review. Delegation, execution, and external-channel delivery remain separately gated.</p>
+      <div class="conversation-composer">
+        <label for="conversation-message">Decision request submission (disabled)</label>
+        <textarea id="conversation-message" rows="3" placeholder="Request submission is disabled in this read-only preview." disabled></textarea>
+        <button id="decision-request-button" type="button" disabled>Unavailable in read-only preview</button>
+      </div>
+      <p class="operator-note compact">The transcript above is a local sample, not a live chat. This read-only preview cannot create a decision request, return an agent reply, delegate work, or execute actions.</p>
     </section>
 
     <section class="panel live-control-panel" aria-labelledby="live-control-title">
       <div class="panel-head">
-        <div><p class="eyebrow">Authenticated control plane</p><h2 id="live-control-title">Live platform connection</h2></div>
+      <div><p class="eyebrow">Authenticated control plane</p><h2 id="live-control-title">Read-only platform connection</h2></div>
         <span id="live-control-state" class="state-chip">not connected</span>
       </div>
       <form id="live-control-form" class="conversation-composer" onsubmit="return false">
@@ -79,8 +79,8 @@
 
     <section aria-labelledby="overview-title">
       <div class="section-head">
-        <div><p class="eyebrow">Operations</p><h2 id="overview-title">Current workload</h2></div>
-        <p id="load-state" class="load-state" aria-live="polite">Loading bounded fixture…</p>
+        <div><p class="eyebrow">Synthetic demonstration</p><h2 id="overview-title">Sample workload</h2></div>
+        <p id="load-state" class="load-state" aria-live="polite">Loading synthetic demo fixtures…</p>
       </div>
       <div id="metric-grid" class="metric-grid" aria-live="polite"></div>
     </section>
@@ -128,7 +128,8 @@
       </article>
 
       <article class="panel">
-        <div class="panel-head"><div><p class="eyebrow">Control plane</p><h2>Agent posture</h2></div><span class="state-chip safe">A0</span></div>
+        <div class="panel-head"><div><p class="eyebrow">Synthetic control-plane fixture</p><h2>Sample agent posture</h2></div><span class="state-chip safe">A0 sample</span></div>
+        <p class="operator-note compact">Values below, including Hermes IDLE, are local demonstration data and do not report current agent or workload health. Authenticated live posture is shown separately after connection.</p>
         <dl id="control-plane-list" class="safety-list"></dl>
       </article>
     </section>
@@ -142,9 +143,16 @@
     </section>
 
     <section class="panel" aria-labelledby="project-readiness-title">
-      <div class="panel-head"><div><p class="eyebrow">Project adapters</p><h2 id="project-readiness-title">Project readiness</h2></div><span id="project-readiness-chip" class="state-chip safe">read only</span></div>
+      <div class="panel-head"><div><p class="eyebrow">Project status sources</p><h2 id="project-readiness-title">Project readiness and evidence</h2></div><span id="project-readiness-chip" class="state-chip safe">read only</span></div>
+      <p id="project-readiness-snapshot" class="load-state">Workspace snapshot; sources are not queried when this page loads.</p>
       <div id="project-readiness-list" class="lifecycle-list"></div>
-      <p class="operator-note compact">Project adapters are informational until separately authorized. Synthetic-only mode does not expose customer data or production mutation authority.</p>
+      <p class="operator-note compact">Adapter contract readiness is separate from live project status. Domain facts stay unknown until an authoritative source and freshness policy are established; synthetic-only mode does not expose customer data or production mutation authority.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="notification-title">
+      <div class="panel-head"><div><p class="eyebrow">CEO notifications</p><h2 id="notification-title">Approval delivery state</h2></div><span id="notification-state-chip" class="state-chip">not configured</span></div>
+      <div id="notification-list" class="lifecycle-list"></div>
+      <p class="operator-note compact">Phase 2.1L records a separate server-side Telegram approval outbox path. This local preview has no read-only outbox connection and cannot send, retry, approve, or consume notifications.</p>
     </section>
 
     <section class="split-grid" aria-label="Mission Control detail panels">

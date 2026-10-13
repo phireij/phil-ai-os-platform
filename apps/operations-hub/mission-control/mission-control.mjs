@@ -22,7 +22,7 @@ const safetyFields = [
 const controlPlaneFields = [
   ["autonomy_level", "Autonomy level"],
   ["execution_task_class", "Execution task class"],
-  ["hermes_state", "Hermes"],
+  ["hermes_state", "Hermes sample state"],
   ["specialists_enabled", "Specialists"],
   ["mission_control_write_enabled", "Mission Control writes"],
   ["live_execution_enabled", "Live execution"],
@@ -31,6 +31,7 @@ const controlPlaneFields = [
 
 let liveSessionToken = null;
 let liveRefreshTimer = null;
+let liveSessionEpoch = 0;
 
 function text(value) {
   return String(value ?? "—");
@@ -38,6 +39,15 @@ function text(value) {
 
 function pretty(value) {
   return text(value).replaceAll("_", " ");
+}
+
+function timestampBasisLabel(value) {
+  return ({
+    source_updated_at: "Source update time",
+    collected_at: "Collection time",
+    manual_observation_at: "Manual observation time",
+    unset: "Not selected",
+  })[value] ?? "Unknown";
 }
 
 function renderMetrics(data) {
@@ -220,6 +230,7 @@ function renderChannelReadiness(data) {
 function renderProjectReadiness(data) {
   const list = document.querySelector("#project-readiness-list");
   const projects = Array.isArray(data.projects) ? data.projects : [];
+  document.querySelector("#project-readiness-snapshot").textContent = `Workspace snapshot generated ${text(data.observed_at)} · sources are not queried when this page loads · freshness is classified only where an approved source policy applies`;
   document.querySelector("#project-readiness-chip").textContent = `${projects.length} registered`;
   list.replaceChildren(...projects.map((project) => {
     const article = document.createElement("article");
@@ -244,7 +255,105 @@ function renderProjectReadiness(data) {
       meta.append(cell);
     }
     article.append(top, meta);
+    if (Array.isArray(project.domain_status) && project.domain_status.length) {
+      const domainList = document.createElement("div");
+      domainList.className = "lifecycle-list";
+      for (const domain of project.domain_status) {
+        const evidence = document.createElement("div");
+        evidence.className = "lifecycle";
+        const evidenceTop = document.createElement("div");
+        evidenceTop.className = "lifecycle-top";
+        const domainName = document.createElement("span");
+        domainName.className = "lifecycle-id";
+        domainName.textContent = pretty(domain.domain);
+        const state = document.createElement("span");
+        state.className = "state-chip";
+        state.textContent = `${text(domain.status)} · ${text(domain.freshness)}`;
+        evidenceTop.append(domainName, state);
+        const evidenceMeta = document.createElement("div");
+        evidenceMeta.className = "lifecycle-meta";
+        for (const [labelText, value] of [["Source ID", domain.source_id], ["Candidate system", domain.candidate_system], ["Authority scope", domain.authority_scope], ["Source state", domain.source_state], ["Freshness policy", pretty(domain.freshness_policy_status)], ["Timestamp basis", timestampBasisLabel(domain.freshness_timestamp_basis)], ["Policy version", domain.freshness_policy_version ?? "not applied"], ["Source reference", domain.source_reference ?? "not recorded"], ["Observed", domain.observed_at ?? "not observed"], ["Source updated at", domain.source_updated_at ?? "not recorded"], ["Collected at", domain.collected_at ?? "not recorded"], ["Manual observation at", domain.manual_observation_at ?? "not recorded"], ["Age", Number.isInteger(domain.age_seconds) ? `${domain.age_seconds}s` : "not computed"], ["Status note", domain.freshness_reason ?? domain.reason]]) {
+          const cell = document.createElement("span");
+          cell.textContent = labelText;
+          const detail = document.createElement("strong");
+          detail.textContent = text(value);
+          cell.append(detail);
+          evidenceMeta.append(cell);
+        }
+        evidence.append(evidenceTop, evidenceMeta);
+        if (domain.evidence_summary?.kind === "github_ci_exact_main") {
+          const summary = document.createElement("p");
+          summary.className = "lifecycle-meta";
+          const workflows = domain.evidence_summary.workflows.map((workflow) => `${workflow.name}: ${workflow.state}/${workflow.conclusion ?? "no conclusion"} · updated ${workflow.updated_at ?? "timestamp unavailable"}`).join(" · ");
+          summary.textContent = `Exact main ${domain.evidence_summary.main_head_sha} · ${workflows} · CI evidence does not establish overall project readiness.`;
+          evidence.append(summary);
+        }
+        domainList.append(evidence);
+      }
+      article.append(domainList);
+    }
     return article;
+  }));
+}
+
+function assertNotificationReadModel(data) {
+  if (data.schema !== "phil-ai-os-mission-control-notification-read-model" || data.version !== 1) throw new Error("Unexpected notification read model");
+  if (!["available", "unavailable", "not_configured"].includes(data.read_state) || !["fresh", "stale", "unknown"].includes(data.freshness) || !Array.isArray(data.items)) throw new Error("Invalid notification read state");
+  if (data.authority?.authority_effect !== "none" || data.authority?.mutation_authorized !== false || data.authority?.notification_send_authorized !== false) throw new Error("Notification projection must remain read only");
+  if (data.read_state !== "available" && (data.freshness !== "unknown" || data.items.length !== 0)) throw new Error("Unavailable notification data must remain empty and unknown");
+  if (data.read_state === "available" && !data.generated_at) throw new Error("Available notification data needs an observation time");
+  if (data.freshness !== "unknown" && !data.freshness_policy_version) throw new Error("Notification freshness requires a policy version");
+  for (const item of data.items) {
+    if (!item.event_id || !item.approval_id || !item.task_id || item.event_type !== "approval_pending" || item.channel !== "telegram" || !["pending", "leased", "retry_wait", "delivered", "dead_letter"].includes(item.state)) throw new Error("Invalid approval notification evidence");
+    if (!Number.isInteger(item.attempt_count) || item.attempt_count < 0) throw new Error("Invalid notification attempt count");
+  }
+}
+
+function renderNotificationReadModel(data) {
+  const list = document.querySelector("#notification-list");
+  const chip = document.querySelector("#notification-state-chip");
+  chip.textContent = pretty(data.read_state);
+  chip.className = data.read_state === "available" ? "state-chip safe" : "state-chip";
+  if (data.read_state !== "available") {
+    const empty = document.createElement("p");
+    empty.className = "load-state";
+    empty.textContent = data.read_state === "not_configured"
+      ? "The approval outbox read projection is not connected in this preview. Delivery and retry state are unavailable here."
+      : "The approval outbox source is unavailable. Delivery state is unknown.";
+    list.replaceChildren(empty);
+    return;
+  }
+  if (!data.items.length) {
+    const empty = document.createElement("p");
+    empty.className = "load-state";
+    empty.textContent = "No approval notification records were returned by the source.";
+    list.replaceChildren(empty);
+    return;
+  }
+  list.replaceChildren(...data.items.map((item) => {
+    const row = document.createElement("article");
+    row.className = "lifecycle";
+    const top = document.createElement("div");
+    top.className = "lifecycle-top";
+    const title = document.createElement("span");
+    title.className = "lifecycle-id";
+    title.textContent = `${text(item.event_id)} · ${pretty(item.state)}`;
+    const channel = document.createElement("span");
+    channel.className = "state-chip";
+    channel.textContent = text(item.channel);
+    top.append(title, channel);
+    const meta = document.createElement("div");
+    meta.className = "lifecycle-meta";
+    for (const [label, value] of [["Approval", item.approval_id], ["Task", item.task_id], ["Attempts", item.attempt_count], ["Updated", item.updated_at], ["Delivered", item.delivered_at ?? "not delivered"], ["Last error", item.last_error_code ?? "none"]]) {
+      const cell = document.createElement("span");
+      cell.textContent = label;
+      const detail = document.createElement("strong");
+      detail.textContent = text(value);
+      cell.append(detail);
+      meta.append(cell);
+    }
+    row.append(top, meta);
+    return row;
   }));
 }
 
@@ -365,7 +474,28 @@ function assertProjectReadiness(data) {
   if (data.schema !== "phil-ai-os-mission-control-project-readiness" || data.version !== 1 || data.status !== "read_only" || data.authority_effect !== "none" || !data.observed_at || !data.source) throw new Error("Unexpected project readiness projection");
   if (!Array.isArray(data.projects)) throw new Error("Project readiness must contain projects");
   for (const project of data.projects) {
-    if (project.mutation_authorized !== false || project.production_cutover_authorized !== false || project.customer_data_exposed !== false || project.evidence_state !== "contract_verified") throw new Error("Unsafe project readiness authority");
+    if (project.mutation_authorized !== false || project.production_cutover_authorized !== false || project.customer_data_exposed !== false || !["contract_verified", "source_observed", "partial", "unknown"].includes(project.evidence_state)) throw new Error("Unsafe project readiness authority");
+    if (project.domain_status !== undefined) {
+      if (!Array.isArray(project.domain_status)) throw new Error("Project domain status must be an array");
+      for (const domain of project.domain_status) {
+        if (!domain.source_id || !domain.candidate_system || !domain.authority_scope || !domain.source_state || !["green", "yellow", "red", "unknown"].includes(domain.status) || !["fresh", "stale", "unknown"].includes(domain.freshness) || !["not_defined", "proposed", "approved", "retired"].includes(domain.freshness_policy_status) || !["source_updated_at", "collected_at", "manual_observation_at", "unset"].includes(domain.freshness_timestamp_basis) || !domain.reason) throw new Error("Project domain status contract is invalid");
+        if (!Object.hasOwn(domain, "evidence_summary")) throw new Error("Project evidence summary field is required");
+        const summary = domain.evidence_summary;
+        if (summary !== null) {
+          const expectedWorkflows = ["Project State Observation CI", "Workflow Supply-Chain Policy CI"];
+          const summaryKeys = ["evidence_state", "expected_run_branch", "kind", "main_head_sha", "workflows"].sort();
+          if (domain.source_id !== "phil-ai-os.repository-ci" || domain.freshness !== "fresh" || Object.keys(summary).sort().join("|") !== summaryKeys.join("|") || summary.kind !== "github_ci_exact_main" || summary.evidence_state !== "observed" || summary.expected_run_branch !== "main" || !/^[0-9a-f]{40}$/.test(summary.main_head_sha ?? "") || !Array.isArray(summary.workflows) || summary.workflows.length !== expectedWorkflows.length) throw new Error("Only fresh exact-main CI evidence may carry a summary");
+          const workflowKeys = ["conclusion", "name", "state", "updated_at"].sort();
+          if (summary.workflows.some((workflow) => !workflow || typeof workflow !== "object" || Object.keys(workflow).sort().join("|") !== workflowKeys.join("|") || (workflow.updated_at !== null && (typeof workflow.updated_at !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(workflow.updated_at))))) throw new Error("CI evidence summary contains unsupported fields or timestamps");
+          const names = summary.workflows.map((workflow) => workflow.name);
+          if (expectedWorkflows.some((name, index) => names[index] !== name) || summary.workflows.some((workflow) => !["queued", "in_progress", "completed", "requested", "waiting", "pending"].includes(workflow.state) || (workflow.conclusion !== null && !["success", "failure", "neutral", "cancelled", "timed_out", "action_required", "stale", "skipped", "startup_failure"].includes(workflow.conclusion)))) throw new Error("CI evidence summary contains an unsupported workflow result");
+        }
+        if (domain.freshness !== "fresh" && domain.status !== "unknown") throw new Error("Stale or unclassified project evidence cannot assert a current domain status");
+        if (domain.freshness_policy_status !== "approved" && (domain.freshness !== "unknown" || domain.status !== "unknown" || domain.age_seconds != null || domain.freshness_policy_version != null || (domain.freshness_policy_status === "proposed" ? domain.freshness_timestamp_basis === "unset" : domain.freshness_timestamp_basis !== "unset"))) throw new Error("Project evidence without an approved freshness policy must remain unknown and unclassified");
+        if (domain.freshness_policy_status === "approved" && (!domain.freshness_policy_version || domain.freshness_timestamp_basis === "unset" || typeof domain.freshness_reason !== "string" || !domain.freshness_reason.trim())) throw new Error("Approved project policy requires version, timestamp basis, and freshness reason even when evidence is unknown");
+        if (["fresh", "stale"].includes(domain.freshness) && (domain.freshness_policy_status !== "approved" || !domain.observed_at || !domain.freshness_policy_version || !Number.isInteger(domain.age_seconds) || domain.age_seconds < 0 || !domain.source_reference || typeof domain.freshness_reason !== "string" || !domain.freshness_reason.trim())) throw new Error("Classified project status requires approved policy, provenance, and computed age");
+      }
+    }
   }
 }
 
@@ -430,25 +560,42 @@ function renderLiveAgentPosture(snapshot) {
   const model = snapshot.multi_agent ?? snapshot.agent_posture ?? {};
   const agents = Array.isArray(model.agents) ? model.agents : [];
   const handoffs = Array.isArray(model.handoffs) ? model.handoffs : [];
-  if (!agents.length && !handoffs.length) {
-    state.textContent = "not exposed";
+  const agentsAvailable = snapshot.agents_available === true;
+  const handoffsAvailable = snapshot.handoffs_available === true;
+  const agentsTruncated = snapshot.agents_truncated === true;
+  const handoffsTruncated = snapshot.handoffs_truncated === true;
+  const sourceGeneratedAt = typeof snapshot.source_generated_at === "string" ? snapshot.source_generated_at : null;
+  if (!agentsAvailable && !handoffsAvailable) {
+    state.textContent = "posture data unavailable · freshness not evaluated";
     state.className = "state-chip";
     const empty = document.createElement("p");
     empty.className = "load-state";
-    empty.textContent = "The authenticated snapshot does not expose the multi-agent projection yet.";
-    target.replaceChildren(empty);
+    empty.textContent = "The authenticated snapshot did not provide agent or handoff evidence.";
+    const rows = sourceGeneratedAt ? [empty, Object.assign(document.createElement("p"), { textContent: `Upstream snapshot generated · freshness not evaluated: ${sourceGeneratedAt}` })] : [empty];
+    target.replaceChildren(...rows);
     return;
   }
-  state.textContent = `${agents.length} agents · ${handoffs.length} handoffs`;
-  state.className = "state-chip safe";
-  const rows = [];
-  for (const agent of agents.slice(0, 6)) {
-    const id = text(agent.agent_id ?? "agent");
-    const readiness = text(agent.readiness?.state ?? "unknown");
-    const authority = text(agent.authority_ceiling ?? "unknown");
-    rows.push([id, `${readiness} · ceiling ${authority}`]);
+  const agentSummary = agentsAvailable ? `${agentsTruncated ? "at least " : ""}${agents.length} agents` : "agents unavailable";
+  const handoffSummary = handoffsAvailable ? `${handoffsTruncated ? "at least " : ""}${handoffs.length} handoffs` : "handoffs unavailable";
+  state.textContent = `${agentSummary} · ${handoffSummary} · freshness not evaluated`;
+  state.className = "state-chip";
+  const rows = sourceGeneratedAt ? [["Upstream snapshot generated · freshness not evaluated", sourceGeneratedAt]] : [];
+  if (agentsAvailable) {
+    for (const agent of agents.slice(0, 6)) {
+      const id = text(agent.agent_id ?? "unknown agent");
+      const readiness = displayAgentReadiness(agent, sourceGeneratedAt);
+      const authority = text(agent.authority_ceiling ?? "unknown");
+      rows.push([id, `${readiness} · ceiling ${authority}`]);
+      const presence = agent.presence ?? {};
+      const presenceState = ["fresh", "stale", "offline", "unknown"].includes(presence.state) ? presence.state : "unknown";
+      const presenceObservedAt = typeof presence.observed_at === "string" ? presence.observed_at : "not recorded";
+      const presenceAge = Number.isSafeInteger(presence.age_seconds) && presence.age_seconds >= 0
+        ? `${presence.age_seconds}s (source-reported)`
+        : "not recorded";
+      rows.push([`A7 presence · ${id}`, `${presenceState} · observed ${presenceObservedAt} · age ${presenceAge}`]);
+    }
   }
-  if (handoffs.length) rows.push(["Historical handoffs", `${handoffs.length} recorded`]);
+  if (handoffsAvailable && handoffs.length) rows.push(["Historical handoffs", `${handoffsTruncated ? "At least " : ""}${handoffs.length} recorded`]);
   target.replaceChildren(...rows.map(([label, value]) => {
     const row = document.createElement("div");
     row.className = "safety-row";
@@ -461,18 +608,66 @@ function renderLiveAgentPosture(snapshot) {
   }));
 }
 
-async function loadLiveAgentPosture(token) {
+function displayAgentReadiness(agent, sourceGeneratedAt) {
+  const registry = agent.registry ?? {};
+  const presence = agent.presence ?? {};
+  const workload = agent.workload ?? {};
+  const readiness = agent.readiness ?? {};
+  const evidenceComplete = [
+    agent.evidence_complete,
+    registry.evidence_complete,
+    presence.evidence_complete,
+    workload.evidence_complete,
+  ].every((value) => value === true)
+    && presence.identity_verified === true
+    && typeof presence.observed_at === "string"
+    && Number.isSafeInteger(presence.age_seconds)
+    && presence.age_seconds >= 0
+    && presence.age_seconds <= 120
+    && typeof sourceGeneratedAt === "string"
+    && Date.parse(presence.observed_at) <= Date.parse(sourceGeneratedAt)
+    && typeof registry.enabled === "boolean"
+    && typeof registry.assignable === "boolean"
+    && Number.isSafeInteger(workload.active_task_count)
+    && workload.active_task_count >= 0
+    && readiness.grants_authority === false;
+  if (!evidenceComplete) return "indeterminate · evidence incomplete";
+
+  const sourceState = readiness.state;
+  if (sourceState === "ready") {
+    const readyEvidence = registry.enabled === true
+      && registry.assignable === true
+      && presence.state === "fresh"
+      && workload.active_task_count === 0;
+    return readyEvidence ? "ready" : "indeterminate · conflicting evidence";
+  }
+  return typeof sourceState === "string" ? sourceState : "indeterminate";
+}
+
+async function loadLiveAgentPosture(token, epoch = liveSessionEpoch) {
   const headers = { Authorization: `Bearer ${token}` };
   try {
     const response = await fetch("/api/agent-posture", { cache: "no-store", headers });
+    if (epoch !== liveSessionEpoch || !liveSessionToken) return;
     if (response.status === 401) {
       document.querySelector("#live-control-disconnect").click();
       return;
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    renderLiveAgentPosture(await response.json());
+    const payload = await response.json();
+    if (epoch !== liveSessionEpoch || !liveSessionToken) return;
+    if (payload?.contract_version !== 2) {
+      renderLiveAgentPosture({});
+      const state = document.querySelector("#live-agent-posture-state");
+      state.textContent = "unsupported bridge contract";
+      return;
+    }
+    renderLiveAgentPosture(payload);
   } catch (_error) {
-    renderLiveAgentPosture({});
+    if (epoch === liveSessionEpoch && liveSessionToken) {
+      renderLiveAgentPosture({});
+      document.querySelector("#live-agent-posture-state").textContent = "bridge unavailable";
+    }
   }
 }
 function recordItems(payload) {
@@ -527,12 +722,13 @@ function renderLiveRecords(payload, listSelector, stateSelector, kind) {
   }));
 }
 
-async function loadLiveRecords(token) {
+async function loadLiveRecords(token, epoch = liveSessionEpoch) {
   const headers = { Authorization: `Bearer ${token}` };
   const results = await Promise.allSettled([
     fetch("/api/approvals", { cache: "no-store", headers }),
     fetch("/api/executions", { cache: "no-store", headers }),
   ]);
+  if (epoch !== liveSessionEpoch || !liveSessionToken) return;
   if (results.some((result) => result.status === "fulfilled" && result.value.status === 401)) {
     document.querySelector("#live-control-disconnect").click();
     document.querySelector("#live-control-state").textContent = "session expired";
@@ -543,7 +739,9 @@ async function loadLiveRecords(token) {
     const stateSelector = index === 0 ? "#live-approvals-state" : "#live-executions-state";
     const kind = index === 0 ? "approval" : "execution";
     if (result.status === "fulfilled" && result.value.ok) {
-      renderLiveRecords(await result.value.json(), listSelector, stateSelector, kind);
+      const payload = await result.value.json();
+      if (epoch !== liveSessionEpoch || !liveSessionToken) return;
+      renderLiveRecords(payload, listSelector, stateSelector, kind);
     } else {
       const state = document.querySelector(stateSelector);
       state.textContent = "unavailable";
@@ -557,12 +755,41 @@ function installLiveRecordsRefresh() {
   const button = document.querySelector("#live-records-refresh");
   button.addEventListener("click", async () => {
     if (!liveSessionToken) return;
+    const epoch = liveSessionEpoch;
     button.disabled = true;
     button.textContent = "Refreshing live records";
-    await loadLiveRecords(liveSessionToken);
-    button.textContent = "Refresh live records";
-    button.disabled = false;
+    await loadLiveRecords(liveSessionToken, epoch);
+    if (epoch === liveSessionEpoch) {
+      button.textContent = "Refresh live records";
+      button.disabled = !liveSessionToken;
+    }
   });
+}
+
+function clearAuthenticatedLiveView() {
+  document.querySelector("#conversation-message").disabled = true;
+  document.querySelector("#decision-request-button").disabled = true;
+  const refresh = document.querySelector("#live-records-refresh");
+  refresh.disabled = true;
+  refresh.textContent = "Refresh live records";
+  document.querySelector("#live-control-summary").replaceChildren();
+  renderLiveAgentPosture({});
+  document.querySelector("#live-records-refreshed").textContent = "Not refreshed";
+  for (const [listSelector, stateSelector, label] of [
+    ["#live-approvals-list", "#live-approvals-state", "approvals"],
+    ["#live-executions-list", "#live-executions-state", "executions"],
+  ]) {
+    const empty = document.createElement("p");
+    empty.className = "load-state";
+    empty.textContent = `Connect to load recent ${label}.`;
+    document.querySelector(listSelector).replaceChildren(empty);
+    const recordState = document.querySelector(stateSelector);
+    recordState.textContent = "not loaded";
+    recordState.className = "state-chip";
+  }
+  const conversationState = document.querySelector("#conversation-state");
+  conversationState.textContent = "sample only · no live chat";
+  conversationState.className = "state-chip safe";
 }
 
 function installLiveControlConnection() {
@@ -579,6 +806,12 @@ function installLiveControlConnection() {
       return;
     }
     button.disabled = true;
+    const epoch = ++liveSessionEpoch;
+    liveSessionToken = null;
+    if (liveRefreshTimer) clearInterval(liveRefreshTimer);
+    liveRefreshTimer = null;
+    clearAuthenticatedLiveView();
+    disconnect.disabled = true;
     state.textContent = "connecting";
     try {
       const response = await fetch("/api/snapshot", {
@@ -587,144 +820,69 @@ function installLiveControlConnection() {
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const snapshot = await response.json();
+      if (epoch !== liveSessionEpoch) return;
       renderLiveSummary(snapshot);
       liveSessionToken = token;
-      document.querySelector("#conversation-message").disabled = false;
-      document.querySelector("#decision-request-button").disabled = false;
       document.querySelector("#live-records-refresh").disabled = false;
       disconnect.disabled = false;
       state.textContent = "connected · read only";
       state.className = "state-chip safe";
-      const conversationState = document.querySelector("#conversation-state");
-      conversationState.textContent = "authenticated · read only";
-      conversationState.className = "state-chip safe";
       input.value = "";
-      loadLiveRecords(token);
-      loadLiveAgentPosture(token);
-      if (liveRefreshTimer) clearInterval(liveRefreshTimer);
+      loadLiveRecords(token, epoch);
+      loadLiveAgentPosture(token, epoch);
       liveRefreshTimer = setInterval(() => {
-        if (liveSessionToken) loadLiveRecords(liveSessionToken);
-        if (liveSessionToken) loadLiveAgentPosture(liveSessionToken);
+        if (liveSessionToken && epoch === liveSessionEpoch) loadLiveRecords(liveSessionToken, epoch);
+        if (liveSessionToken && epoch === liveSessionEpoch) loadLiveAgentPosture(liveSessionToken, epoch);
       }, 60_000);
     } catch (error) {
-      state.textContent = `connection failed · ${error.message}`;
+      if (epoch !== liveSessionEpoch) return;
+      state.textContent = error.message === "HTTP 403"
+        ? "read scope required · connection not established"
+        : `connection failed · ${error.message}`;
       state.className = "state-chip";
       liveSessionToken = null;
       if (liveRefreshTimer) clearInterval(liveRefreshTimer);
       liveRefreshTimer = null;
-      document.querySelector("#conversation-message").disabled = true;
-      document.querySelector("#decision-request-button").disabled = true;
-      document.querySelector("#live-records-refresh").disabled = true;
+      clearAuthenticatedLiveView();
       disconnect.disabled = true;
-      document.querySelector("#live-control-summary").replaceChildren();
-      document.querySelector("#live-records-refreshed").textContent = "Not refreshed";
     } finally {
       button.disabled = false;
     }
   });
   disconnect.addEventListener("click", () => {
+    liveSessionEpoch += 1;
     liveSessionToken = null;
     if (liveRefreshTimer) clearInterval(liveRefreshTimer);
     liveRefreshTimer = null;
     input.value = "";
-    document.querySelector("#conversation-message").disabled = true;
-    document.querySelector("#decision-request-button").disabled = true;
-    document.querySelector("#live-records-refresh").disabled = true;
+    clearAuthenticatedLiveView();
     disconnect.disabled = true;
-    document.querySelector("#live-control-summary").replaceChildren();
-    renderLiveAgentPosture({});
-    document.querySelector("#live-records-refreshed").textContent = "Not refreshed";
-    for (const [listSelector, stateSelector, label] of [
-      ["#live-approvals-list", "#live-approvals-state", "approvals"],
-      ["#live-executions-list", "#live-executions-state", "executions"],
-    ]) {
-      const empty = document.createElement("p");
-      empty.className = "load-state";
-      empty.textContent = `Connect to load recent ${label}.`;
-      document.querySelector(listSelector).replaceChildren(empty);
-      const recordState = document.querySelector(stateSelector);
-      recordState.textContent = "not loaded";
-      recordState.className = "state-chip";
-    }
     state.textContent = "disconnected";
     state.className = "state-chip";
-    document.querySelector("#conversation-state").textContent = "preview · disconnected";
-    document.querySelector("#conversation-state").className = "state-chip safe";
-  });
-}
-
-function installDecisionRequest() {
-  const form = document.querySelector("#conversation-composer");
-  const input = document.querySelector("#conversation-message");
-  const button = document.querySelector("#decision-request-button");
-  const state = document.querySelector("#conversation-state");
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const taskText = input.value.trim();
-    if (!liveSessionToken) {
-      state.textContent = "connect read-only first";
-      state.className = "state-chip";
-      return;
-    }
-    if (!taskText) {
-      state.textContent = "request text required";
-      state.className = "state-chip";
-      return;
-    }
-    button.disabled = true;
-    state.textContent = "recording decision request";
-    state.className = "state-chip";
-    try {
-      const response = await fetch("/api/decision-requests", {
-        method: "POST",
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${liveSessionToken}`,
-        },
-        body: JSON.stringify({
-          task_text: taskText,
-          conversation_id: "ceo-chief-of-staff",
-        }),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      input.value = "";
-      state.textContent = "decision request recorded · approval pending";
-      state.className = "state-chip safe";
-      await loadLiveRecords(liveSessionToken);
-    } catch (error) {
-      if (error.message === "HTTP 401") {
-        document.querySelector("#live-control-disconnect").click();
-        state.textContent = "session expired · reconnect required";
-        state.className = "state-chip";
-        return;
-      }
-      state.textContent = `request failed · ${error.message}`;
-      state.className = "state-chip";
-    } finally {
-      button.disabled = false;
-    }
   });
 }
 
 async function boot() {
   const state = document.querySelector("#load-state");
   try {
-    const [projectionResponse, channelResponse, conversationResponse, projectResponse] = await Promise.all([
+    const [projectionResponse, channelResponse, conversationResponse, projectResponse, notificationResponse] = await Promise.all([
       fetch("./fixture.json", { cache: "no-store" }),
       fetch("./channel-readiness.json", { cache: "no-store" }),
       fetch("./conversation.json", { cache: "no-store" }),
       fetch("./project-readiness.json", { cache: "no-store" }),
+      fetch("./notification-read-model.json", { cache: "no-store" }),
     ]);
     if (!projectionResponse.ok) throw new Error(`Projection fixture HTTP ${projectionResponse.status}`);
     if (!channelResponse.ok) throw new Error(`Channel readiness HTTP ${channelResponse.status}`);
     if (!conversationResponse.ok) throw new Error(`Conversation fixture HTTP ${conversationResponse.status}`);
     if (!projectResponse.ok) throw new Error(`Project readiness HTTP ${projectResponse.status}`);
-    const [data, channelData, conversationData, projectData] = await Promise.all([projectionResponse.json(), channelResponse.json(), conversationResponse.json(), projectResponse.json()]);
+    if (!notificationResponse.ok) throw new Error(`Notification projection HTTP ${notificationResponse.status}`);
+    const [data, channelData, conversationData, projectData, notificationData] = await Promise.all([projectionResponse.json(), channelResponse.json(), conversationResponse.json(), projectResponse.json(), notificationResponse.json()]);
     assertReadOnly(data);
     assertChannelReadiness(channelData);
     assertConversation(conversationData);
     assertProjectReadiness(projectData);
+    assertNotificationReadModel(notificationData);
     renderMetrics(data);
     renderTaskComposition(data);
     renderApproval(data);
@@ -733,20 +891,20 @@ async function boot() {
     renderControlPlane(data);
     renderChannelReadiness(channelData);
     renderProjectReadiness(projectData);
+    renderNotificationReadModel(notificationData);
     renderConversation(conversationData);
     renderLifecycles(data);
     renderSafety(data);
     renderPrivacy(data);
     document.querySelector("#authority-effect").textContent = `authority_effect: ${data.authority_effect}`;
     document.querySelector("#simulation-chip").textContent = data.automation.simulated_only ? "simulated only" : "unsafe";
-    state.textContent = `${data.operations.tasks} tasks · ${data.operations.tasks_awaiting_approval} awaiting approval · ${data.operations.tasks_ready_for_operator_review} ready for review`;
+    state.textContent = `SYNTHETIC FIXTURE · ${data.operations.tasks} sample tasks · ${data.operations.tasks_awaiting_approval} awaiting approval · ${data.operations.tasks_ready_for_operator_review} ready for review`;
   } catch (error) {
     state.textContent = `Fail-closed: ${error.message}`;
-    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#approval-list", "#approval-state-list", "#recovery-list", "#recovery-error-list", "#attention-list", "#control-plane-list", "#channel-readiness-list", "#conversation-thread", "#lifecycle-list", "#safety-list", "#privacy-grid"]) document.querySelector(selector)?.replaceChildren();
+    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#approval-list", "#approval-state-list", "#recovery-list", "#recovery-error-list", "#attention-list", "#control-plane-list", "#channel-readiness-list", "#conversation-thread", "#project-readiness-list", "#notification-list", "#lifecycle-list", "#safety-list", "#privacy-grid"]) document.querySelector(selector)?.replaceChildren();
   }
 }
 
 boot();
 installLiveControlConnection();
-installDecisionRequest();
 installLiveRecordsRefresh();
