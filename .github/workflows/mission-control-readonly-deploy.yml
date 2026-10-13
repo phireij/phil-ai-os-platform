@@ -123,7 +123,7 @@ jobs:
             if [[ "$PREFLIGHT_STARTED" == "true" ]]; then
               docker rm -f "$PREFLIGHT_CONTAINER" >/dev/null 2>&1 || true
             fi
-            if docker inspect "$PREVIOUS_CONTAINER" >/dev/null 2>&1; then
+            if [[ "$PREVIOUS_STAGED" == "true" ]] && docker inspect "$PREVIOUS_CONTAINER" >/dev/null 2>&1; then
               docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
               docker rename "$PREVIOUS_CONTAINER" "$CONTAINER"
               docker start "$CONTAINER" >/dev/null
