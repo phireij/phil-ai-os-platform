@@ -22,6 +22,11 @@ jobs:
       IMAGE_DIGEST: ${{ inputs.image_digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate immutable image digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
       - name: Configure SSH
         shell: bash
         run: |
@@ -30,6 +35,7 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
       - name: Deploy isolated bridge
+        id: deploy
         shell: bash
         run: |
           set -euo pipefail
@@ -37,6 +43,7 @@ jobs:
           scp -4 -P "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-public/activate-read-model-bridge.sh "$VPS_USER@$VPS_HOST:/tmp/activate-read-model-bridge.sh"
           ssh -4 -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" "chmod 700 /tmp/activate-read-model-bridge.sh && IMAGE_DIGEST='$IMAGE_DIGEST' CEO_TOKEN_FILE='/opt/phil-ai-os/secrets/mission_control_ceo_token' HOSTNAME='miscon.phireij.cloud' GITHUB_REPOSITORY='phireij/phil-ai-os-platform' bash /tmp/activate-read-model-bridge.sh"
       - name: Verify boundary
+        id: verify
         shell: bash
         run: |
           set -euo pipefail
@@ -45,6 +52,36 @@ jobs:
             test "$(curl -sk -X "$method" -o /dev/null -w '%{http_code}' https://miscon.phireij.cloud/api/agent-posture)" = 405
           done
           test "$(curl -kfsS https://miscon.phireij.cloud/api/healthz)" = '{"status":"ok","mode":"authenticated_control_plane","authority_effect":"none"}'
+      - name: Restore previous bridge if public verification fails
+        if: ${{ always() && steps.deploy.outcome == 'success' && steps.verify.outcome != 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          CONTAINER=phil-ai-os-mission-control-read-model-bridge
+          ROLLBACK="${CONTAINER}-rollback"
+          docker inspect "$ROLLBACK" >/dev/null
+          docker rm -f "$CONTAINER" >/dev/null
+          docker rename "$ROLLBACK" "$CONTAINER"
+          docker start "$CONTAINER" >/dev/null
+          test "$(docker inspect "$CONTAINER" --format '{{.State.Running}}')" = true
+          echo 'previous_bridge_restored=true'
+          REMOTE
+      - name: Remove previous bridge after successful verification
+        if: ${{ success() && steps.verify.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          ssh -4 -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          ROLLBACK=phil-ai-os-mission-control-read-model-bridge-rollback
+          test "$(docker inspect "$ROLLBACK" --format '{{.State.Running}}')" = false
+          docker rm "$ROLLBACK" >/dev/null
+          echo 'previous_bridge_removed_after_verification=true'
+          REMOTE
       - name: Cleanup
         if: always()
         shell: bash
