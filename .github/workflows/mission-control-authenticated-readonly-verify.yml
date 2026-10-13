@@ -1,0 +1,49 @@
+name: Mission Control Authenticated Read-only Verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_image_digest:
+        description: Immutable active bridge digest (sha256:...)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      EXPECTED_IMAGE_DIGEST: ${{ inputs.expected_image_digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate pinned target
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+      - name: Verify existing bridge and authenticated GETs without emitting data
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          TARGET="$VPS_USER@$VPS_HOST"
+          SSH=(ssh -4 -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$TARGET")
+          CONTAINER=phil-ai-os-mission-control-read-model-bridge
+          EXPECTED_IMAGE="ghcr.io/phireij/phil-ai-os-platform/mission-control-read-model-bridge@$EXPECTED_IMAGE_DIGEST"
+          ACTUAL_IMAGE="$("${SSH[@]}" "docker inspect $CONTAINER --format '{{.Config.Image}}'")"
+          test "$ACTUAL_IMAGE" = "$EXPECTED_IMAGE"
+          test "$("${SSH[@]}" "docker inspect $CONTAINER --format '{{.State.Running}}'")" = true
+          test "$("${SSH[@]}" "docker inspect $CONTAINER --format '{{.HostConfig.NetworkMode}}'")" = host
+          test "$("${SSH[@]}" "docker inspect $CONTAINER --format '{{.HostConfig.ReadonlyRootfs}}'")" = true
+          "${SSH[@]}" "docker exec -i $CONTAINER python3 -" < ops/mission-control-public/verify-authenticated-routes-readonly.py
