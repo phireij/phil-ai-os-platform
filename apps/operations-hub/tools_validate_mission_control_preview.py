@@ -212,8 +212,12 @@ def main() -> None:
         if value is not False:
             fail(f"privacy exposure must remain false: {field}")
 
-    if 'id="live-control-form"' not in html or 'id="conversation-composer"' not in html:
-        fail("authenticated CEO control surface is missing")
+    if 'id="live-control-form"' not in html:
+        fail("authenticated read-only CEO control surface is missing")
+    if '<textarea id="conversation-message"' not in html or 'id="decision-request-button" type="button" disabled' not in html:
+        fail("decision-request controls must remain visibly disabled in the read-only preview")
+    if "cannot create a decision request" not in html:
+        fail("read-only preview must disclose that decision requests cannot be created")
 
     forbidden_js = (
         r"XMLHttpRequest",
@@ -226,8 +230,10 @@ def main() -> None:
         if re.search(pattern, js, flags=re.IGNORECASE):
             fail(f"network write capability found: {pattern}")
 
-    if '"/api/decision-requests"' not in js or 'method: "POST"' not in js:
-        fail("governed CEO decision-request path is missing")
+    if "/api/decision-requests" in js or re.search(r"\bPOST\b", js, flags=re.IGNORECASE):
+        fail("read-only Mission Control UI must not contain a decision-request mutation path")
+    if "read scope required · connection not established" not in js:
+        fail("missing read scope must not be reported as an established connection")
 
     if 'fetch("./fixture.json"' not in js or 'fetch("./channel-readiness.json"' not in js:
         fail("preview must load both bounded local projections")
@@ -238,8 +244,8 @@ def main() -> None:
 
     print(
         "PHIL_AI_OS_MISSION_CONTROL_PREVIEW_GREEN "
-        "mode=read_only version=5 contract=v5 autonomy=A0 hermes=idle attention=read_only task_composition=read_only "
-        "approval=read_only decision_ids=false recovery=read_only channels=5 live_connectivity=false outbound_reply=false "
+        "mode=read_only version=5 contract=v5 autonomy=A0 attention=read_only task_composition=read_only "
+        "approval=read_only decision_ids=false recovery=read_only channels=5 hermes_fixture=idle live_connectivity=false outbound_reply=false "
         "simulated_only=true writes=false replies=false network_dispatch=false authority_effect=none"
     )
 
