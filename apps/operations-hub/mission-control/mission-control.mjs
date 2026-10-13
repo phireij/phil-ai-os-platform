@@ -639,9 +639,9 @@ function displayAgentReadiness(agent, sourceGeneratedAt) {
       && registry.assignable === true
       && presence.state === "fresh"
       && workload.active_task_count === 0;
-    return readyEvidence ? "ready" : "indeterminate · conflicting evidence";
+    return readyEvidence ? "source-reported ready · current freshness unknown" : "indeterminate · conflicting evidence";
   }
-  return typeof sourceState === "string" ? sourceState : "indeterminate";
+  return typeof sourceState === "string" ? `${sourceState} · current freshness unknown` : "indeterminate";
 }
 
 async function loadLiveAgentPosture(token, epoch = liveSessionEpoch) {

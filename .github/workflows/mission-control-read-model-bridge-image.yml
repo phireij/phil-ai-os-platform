@@ -6,6 +6,7 @@ on:
     paths:
       - 'Dockerfile.mission-control-read-model-bridge'
       - 'ops/mission-control-public/read-model-bridge.py'
+      - 'scripts/test_mission_control_agent_posture_bridge.py'
       - '.github/workflows/mission-control-read-model-bridge-image.yml'
   workflow_dispatch:
 
@@ -25,7 +26,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Validate bridge source
-        run: python3 -m py_compile ops/mission-control-public/read-model-bridge.py
+        run: |
+          python3 -m py_compile ops/mission-control-public/read-model-bridge.py
+          python3 scripts/test_mission_control_agent_posture_bridge.py
       - name: Build and publish immutable bridge image
         env:
           IMAGE: ghcr.io/${{ github.repository }}/mission-control-read-model-bridge

@@ -1,0 +1,44 @@
+name: Mission Control Posture v2 Contract CI
+
+on:
+  pull_request:
+    paths:
+      - 'ops/mission-control-public/read-model-bridge.py'
+      - 'contracts/mission-control/agent-posture-bridge-api.v2.json'
+      - 'contracts/mission-control/agent-posture-bridge-response.v2.schema.json'
+      - 'apps/operations-hub/mission-control/mission-control.mjs'
+      - 'scripts/test_mission_control_agent_posture_bridge.py'
+      - 'apps/operations-hub/tests/test_mission_control_posture_ui.mjs'
+      - '.github/workflows/mission-control-posture-v2-contract-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'ops/mission-control-public/read-model-bridge.py'
+      - 'contracts/mission-control/agent-posture-bridge-api.v2.json'
+      - 'contracts/mission-control/agent-posture-bridge-response.v2.schema.json'
+      - 'apps/operations-hub/mission-control/mission-control.mjs'
+      - 'scripts/test_mission_control_agent_posture_bridge.py'
+      - 'apps/operations-hub/tests/test_mission_control_posture_ui.mjs'
+      - '.github/workflows/mission-control-posture-v2-contract-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v6.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Check read-only bridge and UI behavior
+        run: |
+          python scripts/test_mission_control_agent_posture_bridge.py
+          node apps/operations-hub/tests/test_mission_control_posture_ui.mjs
+          python apps/operations-hub/tools_validate_mission_control_preview.py
