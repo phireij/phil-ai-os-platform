@@ -1,0 +1,34 @@
+{
+  "schema": "phil-ai-os-mission-control-agent-posture-api",
+  "version": 2,
+  "status": "workspace_contract_not_deployed",
+  "activation_authorized": false,
+  "authority_effect": "none",
+  "mutation_authorized": false,
+  "route": {
+    "method": "GET",
+    "path": "/api/agent-posture",
+    "authentication": "bearer CEO token",
+    "required_scope": "mission_control:read",
+    "success_response_schema": "contracts/mission-control/agent-posture-bridge-response.v2.schema.json"
+  },
+  "source_boundary": {
+    "upstream": "http://127.0.0.1:4881/api/read-model",
+    "redirects_followed": false,
+    "maximum_response_bytes": 1048576,
+    "maximum_agents": 32,
+    "agent_fields": ["agent_id", "authority_ceiling", "registry.enabled", "registry.assignable", "registry.evidence_complete", "presence.state", "presence.identity_verified", "presence.evidence_complete", "presence.observed_at", "presence.age_seconds", "workload.evidence_complete", "workload.active_task_count", "readiness.state", "readiness.reason", "readiness.grants_authority", "evidence_complete"],
+    "maximum_handoffs": 100,
+    "maximum_text_characters": 200,
+    "handoff_projection": "presence_only; identifiers, message text, and record payloads excluded",
+    "availability_fields": "agents_available and handoffs_available distinguish a source-provided empty list from absent or malformed source data",
+    "readiness_authority_flags": false
+  },
+  "responses": {
+    "200": "Bounded allowlist projection matching the v2 success response schema.",
+    "401": {"status": "unauthorized"},
+    "404": {"status": "not_found"},
+    "405": {"status": "mutation_not_available"},
+    "502": {"status": "read_model_unavailable"}
+  }
+}
