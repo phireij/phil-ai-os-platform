@@ -1,0 +1,50 @@
+name: Mission Control Conversation Storage Read-Only Preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: Immutable digest of the already-running CEO session image
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-control-conversation-storage-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+      IMAGE: ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
+      SESSION: phil-ai-os-mission-control-google-ceo-session
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Verify input shape and run isolated preflight against the existing session image
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          port="${VPS_PORT:-22}"
+          remote="$VPS_USER@$VPS_HOST"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          ssh "${ssh_opts[@]}" "$remote" "set -euo pipefail; test \"\$(docker inspect '$SESSION' --format '{{.State.Running}}')\" = true; test \"\$(docker inspect '$SESSION' --format '{{.Config.Image}}')\" = '$IMAGE@$IMAGE_DIGEST'; SECRET_VOLUME=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}'); [[ \"\$SECRET_VOLUME\" =~ ^phil-ai-os-mc-google-session-secret-[0-9]+-[0-9]+$ ]]; IMAGE='$IMAGE' IMAGE_DIGEST='$IMAGE_DIGEST' SECRET_VOLUME=\"\$SECRET_VOLUME\" bash -s" < ops/mission-control-identity/preflight-conversation-storage.sh
+          echo "conversation_storage_preflight_completed=true authority_effect=none existing_workloads_unchanged=true"

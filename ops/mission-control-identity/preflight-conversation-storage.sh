@@ -13,6 +13,7 @@ IMAGE=ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
 STATE_DIR=/var/lib/mission-control
 
 test "$(docker volume inspect "$SECRET_VOLUME" --format '{{.Name}}')" = "$SECRET_VOLUME"
+test "$(docker image inspect "$IMAGE@$IMAGE_DIGEST" --format '{{.Id}}')" != ''
 
 # The command runs with no network and a disposable tmpfs state directory.
 # It loads only the existing fail-closed configuration guard; it does not
