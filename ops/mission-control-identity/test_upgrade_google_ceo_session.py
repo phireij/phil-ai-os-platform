@@ -15,6 +15,8 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             "existing_secret_volume_preflight_failed",
             "candidate_container_start_failed",
             "candidate_container_not_running",
+            "google_ceo_session_upgrade_phase=candidate_container_health",
+            "google_ceo_session_upgrade_phase=stage_old_session",
         ):
             self.assertIn(marker, script)
         for prohibited in (
