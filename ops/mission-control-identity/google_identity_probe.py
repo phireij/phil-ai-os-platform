@@ -142,6 +142,41 @@ def _verified_subject(token: str, nonce: str, session: requests.Session) -> str:
     return subject
 
 
+def exchange_verified_subject(code: str, flow: PendingFlow, secret_file: object) -> str:
+    """Exchange one code and return only the verified Google subject."""
+    with requests.Session() as session:
+        session.trust_env = False
+        session.max_redirects = 0
+        client_secret = secret_file.read_text(encoding="utf-8").strip()  # type: ignore[attr-defined]
+        if not client_secret:
+            raise ValueError("secret_unavailable")
+        response = session.post(
+            TOKEN_URL,
+            data={
+                "client_id": CLIENT_ID,
+                "client_secret": client_secret,
+                "code": code,
+                "code_verifier": flow.verifier,
+                "grant_type": "authorization_code",
+                "redirect_uri": REDIRECT_URI,
+            },
+            timeout=(3, 5),
+            allow_redirects=False,
+            stream=True,
+        )
+        if response.status_code != 200:
+            raise ValueError("token_exchange_failed")
+        raw = response.raw.read(MAX_TOKEN_RESPONSE_BYTES + 1, decode_content=True)
+        response.close()
+        if len(raw) > MAX_TOKEN_RESPONSE_BYTES:
+            raise ValueError("token_response_too_large")
+        token_response = json.loads(raw)
+        token = token_response.get("id_token") if isinstance(token_response, dict) else None
+        if not isinstance(token, str):
+            raise ValueError("id_token_missing")
+        return _verified_subject(token, flow.nonce, session)
+
+
 class ProbeHandler(BaseHTTPRequestHandler):
     server_version = "MissionControlGoogleIdentityProbe/0.1"
 
@@ -222,38 +257,7 @@ class ProbeHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            with requests.Session() as session:
-                session.trust_env = False
-                session.max_redirects = 0
-                secret_file = self.server.secret_file  # type: ignore[attr-defined]
-                client_secret = secret_file.read_text(encoding="utf-8").strip()
-                if not client_secret:
-                    raise ValueError("secret_unavailable")
-                response = session.post(
-                    TOKEN_URL,
-                    data={
-                        "client_id": CLIENT_ID,
-                        "client_secret": client_secret,
-                        "code": code,
-                        "code_verifier": flow.verifier,
-                        "grant_type": "authorization_code",
-                        "redirect_uri": REDIRECT_URI,
-                    },
-                    timeout=(3, 5),
-                    allow_redirects=False,
-                    stream=True,
-                )
-                if response.status_code != 200:
-                    raise ValueError("token_exchange_failed")
-                raw = response.raw.read(MAX_TOKEN_RESPONSE_BYTES + 1, decode_content=True)
-                response.close()
-                if len(raw) > MAX_TOKEN_RESPONSE_BYTES:
-                    raise ValueError("token_response_too_large")
-                token_response = json.loads(raw)
-                token = token_response.get("id_token") if isinstance(token_response, dict) else None
-                if not isinstance(token, str):
-                    raise ValueError("id_token_missing")
-                subject = _verified_subject(token, flow.nonce, session)
+            subject = exchange_verified_subject(code, flow, self.server.secret_file)  # type: ignore[attr-defined]
         except Exception:
             # Neither the exception nor the authorization code may reach a log.
             self._send(HTTPStatus.BAD_GATEWAY, "Google sign-in could not be completed", cookie=clear_cookie)
