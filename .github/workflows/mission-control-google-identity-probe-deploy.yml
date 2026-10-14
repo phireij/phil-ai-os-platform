@@ -28,9 +28,6 @@ jobs:
       VPS_HOST: ${{ secrets.VPS_HOST }}
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_PORT: ${{ secrets.VPS_PORT }}
-      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-      CLIENT_SECRET: ${{ secrets.MISSION_CONTROL_GOOGLE_CLIENT_SECRET }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SOURCE_REVISION: ${{ inputs.source_revision }}
       IMAGE_DIGEST: ${{ inputs.image_digest }}
       IMAGE: ghcr.io/phireij/phil-ai-os-platform/mission-control-google-identity-probe
@@ -41,6 +38,8 @@ jobs:
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Verify exact-main image identity
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]
@@ -48,15 +47,19 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_REVISION"
-          test -n "$CLIENT_SECRET"
           printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
           manifest_digest="sha256:$(docker buildx imagetools inspect "$IMAGE:$SOURCE_REVISION" --raw | sha256sum | cut -d' ' -f1)"
           test "$manifest_digest" = "$IMAGE_DIGEST"
           echo "source_revision=$SOURCE_REVISION image=$IMAGE@$IMAGE_DIGEST digest_match=true"
       - name: Stage secret and activate isolated probe
         shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          CLIENT_SECRET: ${{ secrets.MISSION_CONTROL_GOOGLE_CLIENT_SECRET }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          test -n "$CLIENT_SECRET"
           port="${VPS_PORT:-22}"
           volume="phil-ai-os-mc-google-probe-secret-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           config="/tmp/phil-ai-os-mc-google-probe-ghcr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
