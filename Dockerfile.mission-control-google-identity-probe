@@ -1,0 +1,11 @@
+FROM python:3.12-alpine
+
+WORKDIR /srv
+RUN pip install --no-cache-dir --disable-pip-version-check google-auth==2.62.0 requests==2.34.2 \
+    && addgroup -S -g 10002 app \
+    && adduser -S -D -u 10002 -G app app
+COPY ops/mission-control-identity/google_oidc_config.py /srv/google_oidc_config.py
+COPY ops/mission-control-identity/google_identity_probe.py /srv/google_identity_probe.py
+USER app
+EXPOSE 8092
+ENTRYPOINT ["python3", "/srv/google_identity_probe.py"]
