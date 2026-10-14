@@ -1,0 +1,111 @@
+name: Mission Control Google CEO Session Isolated Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_revision:
+        description: Exact current main commit that published the image
+        required: true
+        type: string
+      image_digest:
+        description: Immutable CEO session image digest (sha256:...)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: mission-control-google-identity-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      SOURCE_REVISION: ${{ inputs.source_revision }}
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+      IMAGE: ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Verify exact-main session image identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_REVISION"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          manifest_digest="sha256:$(docker buildx imagetools inspect "$IMAGE:$SOURCE_REVISION" --raw | sha256sum | cut -d' ' -f1)"
+          test "$manifest_digest" = "$IMAGE_DIGEST"
+          echo "source_revision=$SOURCE_REVISION image=$IMAGE@$IMAGE_DIGEST digest_match=true"
+      - name: Stage protected files and replace isolated probe
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          CLIENT_SECRET: ${{ secrets.MISSION_CONTROL_GOOGLE_CLIENT_SECRET }}
+          CEO_BINDING: ${{ secrets.MISSION_CONTROL_CEO_BINDING }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CLIENT_SECRET"
+          test -n "$CEO_BINDING"
+          test "$(curl --silent --show-error --fail --max-time 10 https://miscon.phireij.cloud/auth/google/healthz)" = 'probe_ready;authority_effect=none'
+          port="${VPS_PORT:-22}"
+          volume="phil-ai-os-mc-google-session-secret-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          config="/tmp/phil-ai-os-mc-google-session-ghcr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          probe=phil-ai-os-mission-control-google-identity-probe
+          session=phil-ai-os-mission-control-google-ceo-session
+          handoff_completed=false
+          volume_created=false
+          ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          remote="$VPS_USER@$VPS_HOST"
+          rollback() {
+            status=$?
+            trap - ERR HUP INT TERM
+            if [[ "$handoff_completed" == true ]]; then
+              ssh "${ssh_opts[@]}" "$remote" "docker rm -f '$session' >/dev/null 2>&1 || true; if docker inspect '$probe-rollback' >/dev/null 2>&1; then docker rename '$probe-rollback' '$probe' && docker start '$probe' >/dev/null; fi" || true
+            fi
+            if [[ "$volume_created" == true ]]; then
+              ssh "${ssh_opts[@]}" "$remote" "docker volume rm '$volume' >/dev/null 2>&1 || true" || true
+            fi
+            ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' docker logout ghcr.io >/dev/null 2>&1 || true; rm -f '$config/config.json' /tmp/activate-google-ceo-session.sh; rmdir '$config' >/dev/null 2>&1 || true" || true
+            echo "google_ceo_session_deploy_failed status=$status rollback_attempted=$handoff_completed" >&2
+            exit "$status"
+          }
+          trap rollback ERR
+          trap 'false' HUP INT TERM
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          scp -4 -P "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-identity/activate-google-ceo-session.sh "$remote:/tmp/activate-google-ceo-session.sh"
+          printf '%s' "$GH_TOKEN" | ssh "${ssh_opts[@]}" "$remote" "mkdir -m 700 -p '$config' && DOCKER_CONFIG='$config' docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin" >/dev/null
+          ssh "${ssh_opts[@]}" "$remote" "if docker volume inspect '$volume' >/dev/null 2>&1; then echo 'Refusing preexisting secret volume' >&2; exit 1; fi; docker volume create '$volume' >/dev/null"
+          volume_created=true
+          printf '%s' "$CLIENT_SECRET" | ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' docker run --rm -i --network none --user 0:0 --entrypoint /bin/sh --mount type=volume,src='$volume',dst=/run/secrets '$IMAGE@$IMAGE_DIGEST' -c 'umask 077; cat > /run/secrets/client_secret; chown 10003:10003 /run/secrets/client_secret; chmod 400 /run/secrets/client_secret; test -s /run/secrets/client_secret'" >/dev/null
+          printf '%s' "$CEO_BINDING" | ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' docker run --rm -i --network none --user 0:0 --entrypoint /bin/sh --mount type=volume,src='$volume',dst=/run/secrets '$IMAGE@$IMAGE_DIGEST' -c 'umask 077; cat > /run/secrets/ceo_binding; chown 10003:10003 /run/secrets/ceo_binding; chmod 400 /run/secrets/ceo_binding; test -s /run/secrets/ceo_binding'" >/dev/null
+          ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/activate-google-ceo-session.sh && DOCKER_CONFIG='$config' IMAGE_DIGEST='$IMAGE_DIGEST' SECRET_VOLUME='$volume' HOSTNAME='miscon.phireij.cloud' bash /tmp/activate-google-ceo-session.sh"
+          handoff_completed=true
+          test "$(curl --silent --show-error --fail --max-time 10 https://miscon.phireij.cloud/auth/google/healthz)" = 'session_ready;conversation_authority=none'
+          test "$(curl --silent --show-error --max-time 10 -o /dev/null -w '%{http_code}' https://miscon.phireij.cloud/auth/google/session)" = 401
+          for method in PUT PATCH DELETE; do
+            test "$(curl --silent --show-error --max-time 10 -X "$method" -o /dev/null -w '%{http_code}' https://miscon.phireij.cloud/auth/google/healthz)" = 405
+          done
+          test "$(curl --silent --show-error --max-time 10 -X POST -o /dev/null -w '%{http_code}' https://miscon.phireij.cloud/auth/google/healthz)" = 405
+          redirect="$(curl --silent --show-error --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}' https://miscon.phireij.cloud/auth/google/start)"
+          [[ "$redirect" == '302 https://accounts.google.com/o/oauth2/v2/auth?'* ]]
+          trap - ERR HUP INT TERM
+          ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' docker logout ghcr.io >/dev/null 2>&1 || true; rm -f '$config/config.json' /tmp/activate-google-ceo-session.sh; rmdir '$config' >/dev/null 2>&1 || true"
+          echo "public_session_health=200 unauthenticated_session=401 mutation_methods=405 google_start_redirect=302 image=$IMAGE@$IMAGE_DIGEST existing_workloads_unchanged=true conversation_authority=none"

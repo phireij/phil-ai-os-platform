@@ -17,7 +17,7 @@ permissions:
   packages: read
 
 concurrency:
-  group: mission-control-google-identity-probe-deploy
+  group: mission-control-google-identity-deploy
   cancel-in-progress: false
 
 jobs:

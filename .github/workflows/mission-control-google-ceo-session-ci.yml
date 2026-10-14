@@ -7,6 +7,7 @@ on:
       - 'ops/mission-control-identity/**'
       - '.github/workflows/mission-control-google-ceo-session-ci.yml'
       - '.github/workflows/mission-control-google-ceo-session-image.yml'
+      - '.github/workflows/mission-control-google-ceo-session-deploy.yml'
   push:
     branches: [main]
     paths:
@@ -14,6 +15,7 @@ on:
       - 'ops/mission-control-identity/**'
       - '.github/workflows/mission-control-google-ceo-session-ci.yml'
       - '.github/workflows/mission-control-google-ceo-session-image.yml'
+      - '.github/workflows/mission-control-google-ceo-session-deploy.yml'
   workflow_dispatch:
 
 permissions:
