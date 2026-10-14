@@ -1,0 +1,38 @@
+name: Mission Control Google Identity Probe CI
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile.mission-control-google-identity-probe'
+      - 'ops/mission-control-identity/**'
+      - '.github/workflows/mission-control-google-identity-probe-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile.mission-control-google-identity-probe'
+      - 'ops/mission-control-identity/**'
+      - '.github/workflows/mission-control-google-identity-probe-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify offline OAuth boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/mission-control-google-probe-venv
+          source /tmp/mission-control-google-probe-venv/bin/activate
+          python3 -m pip install --disable-pip-version-check google-auth==2.62.0 requests==2.34.2
+          python3 ops/mission-control-identity/test_google_identity_probe.py
+      - name: Build inactive probe image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --file Dockerfile.mission-control-google-identity-probe --tag mission-control-google-identity-probe:review .

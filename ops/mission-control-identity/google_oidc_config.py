@@ -67,8 +67,8 @@ def _protected_file(variable: str) -> Path:
             raise GoogleOidcConfigurationError("google_oidc_protected_file_invalid")
         if details.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
             raise GoogleOidcConfigurationError("google_oidc_protected_file_permissions")
-        if details.st_size == 0:
-            raise GoogleOidcConfigurationError("google_oidc_protected_file_empty")
+        if details.st_size == 0 or details.st_size > 4096:
+            raise GoogleOidcConfigurationError("google_oidc_protected_file_size_invalid")
     except OSError as exc:
         raise GoogleOidcConfigurationError("google_oidc_protected_file_unavailable") from exc
     return path
