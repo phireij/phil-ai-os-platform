@@ -104,10 +104,24 @@ def main() -> None:
     js = (PREVIEW / "mission-control.mjs").read_text(encoding="utf-8")
     fixture = json.loads((PREVIEW / "fixture.json").read_text(encoding="utf-8"))
     channel_readiness = json.loads((PREVIEW / "channel-readiness.json").read_text(encoding="utf-8"))
+    governed_proposals = json.loads((PREVIEW / "governed-proposals.json").read_text(encoding="utf-8"))
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
 
     _validate_contract_alignment(contract, fixture)
     _validate_channel_readiness(channel_readiness)
+    if governed_proposals.get("schema") != "phil-ai-os-mission-control-governed-proposals-preview" or governed_proposals.get("version") != 1:
+        fail("governed-proposals preview schema drift")
+    if governed_proposals.get("live") is not False or governed_proposals.get("authority_effect") != "none":
+        fail("governed-proposals preview must remain non-live and non-authorizing")
+    for proposal in governed_proposals.get("proposals", []):
+        if proposal.get("proposal_state") != "draft" or proposal.get("authority_effect") != "none":
+            fail("governed-proposal state or authority drift")
+        for field in ("assignment_id", "decision_id"):
+            if proposal.get(field) is not None:
+                fail(f"governed-proposal {field} must remain null in the local draft fixture")
+        for field in ("execution_authorized", "mutation_authorized"):
+            if proposal.get(field) is not False:
+                fail(f"governed-proposal {field} must remain false")
 
     if fixture.get("schema") != "phil-ai-os-mission-control-lifecycle-projection":
         fail("projection schema drift")
@@ -249,6 +263,8 @@ def main() -> None:
 
     if 'fetch("./fixture.json"' not in js or 'fetch("./channel-readiness.json"' not in js:
         fail("preview must load both bounded local projections")
+    if 'fetch("./governed-proposals.json"' not in js or "assertGovernedProposals" not in js:
+        fail("preview must validate the governed-proposals fixture")
     if "cache: \"no-store\"" not in js:
         fail("preview projections must avoid stale caching")
     if "assertReadOnly" not in js or "assertChannelReadiness" not in js:

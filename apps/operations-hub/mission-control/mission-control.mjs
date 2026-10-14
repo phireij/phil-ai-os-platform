@@ -531,6 +531,45 @@ function renderConversation(data) {
   }));
 }
 
+function assertGovernedProposals(data) {
+  if (data?.schema !== "phil-ai-os-mission-control-governed-proposals-preview" || data.version !== 1) throw new Error("Unexpected governed-proposals preview schema");
+  if (data.live !== false || data.authority_effect !== "none" || !Array.isArray(data.proposals)) throw new Error("Governed-proposals preview must remain non-live and non-authorizing");
+  for (const proposal of data.proposals) {
+    if (!proposal.proposal_id || !proposal.conversation_id || !proposal.source_message_id || proposal.proposal_state !== "draft") throw new Error("Governed proposal correlation invalid");
+    if (proposal.authority_effect !== "none" || proposal.assignment_id !== null || proposal.execution_authorized !== false || proposal.mutation_authorized !== false) throw new Error("Governed proposal authority boundary invalid");
+    if (proposal.decision !== null || proposal.decision_id !== null) throw new Error("Sample draft must not imply a recorded CEO decision");
+  }
+}
+
+function renderGovernedProposals(data) {
+  const target = document.querySelector("#governed-proposals-list");
+  target.replaceChildren(...data.proposals.map((proposal) => {
+    const article = document.createElement("article");
+    article.className = "lifecycle";
+    const top = document.createElement("div");
+    top.className = "lifecycle-top";
+    const label = document.createElement("span");
+    label.className = "lifecycle-id";
+    label.textContent = proposal.proposal_id;
+    const chip = document.createElement("span");
+    chip.className = "state-chip safe";
+    chip.textContent = "draft · no authority";
+    top.append(label, chip);
+    const meta = document.createElement("div");
+    meta.className = "lifecycle-meta";
+    for (const [name, value] of [["Conversation", proposal.conversation_id], ["CEO decision", "not recorded"], ["Assignment / execution", "disabled"]]) {
+      const cell = document.createElement("span");
+      cell.textContent = name;
+      const strong = document.createElement("strong");
+      strong.textContent = value;
+      cell.append(strong);
+      meta.append(cell);
+    }
+    article.append(top, meta);
+    return article;
+  }));
+}
+
 function conversationIdempotencyKey(prefix) {
   const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `${prefix}-${random}`;
@@ -1071,24 +1110,27 @@ function installLiveControlConnection() {
 async function boot() {
   const state = document.querySelector("#load-state");
   try {
-    const [projectionResponse, channelResponse, conversationResponse, projectResponse, notificationResponse] = await Promise.all([
+    const [projectionResponse, channelResponse, conversationResponse, projectResponse, notificationResponse, proposalsResponse] = await Promise.all([
       fetch("./fixture.json", { cache: "no-store" }),
       fetch("./channel-readiness.json", { cache: "no-store" }),
       fetch("./conversation.json", { cache: "no-store" }),
       fetch("./project-readiness.json", { cache: "no-store" }),
       fetch("./notification-read-model.json", { cache: "no-store" }),
+      fetch("./governed-proposals.json", { cache: "no-store" }),
     ]);
     if (!projectionResponse.ok) throw new Error(`Projection fixture HTTP ${projectionResponse.status}`);
     if (!channelResponse.ok) throw new Error(`Channel readiness HTTP ${channelResponse.status}`);
     if (!conversationResponse.ok) throw new Error(`Conversation fixture HTTP ${conversationResponse.status}`);
     if (!projectResponse.ok) throw new Error(`Project readiness HTTP ${projectResponse.status}`);
     if (!notificationResponse.ok) throw new Error(`Notification projection HTTP ${notificationResponse.status}`);
-    const [data, channelData, conversationData, projectData, notificationData] = await Promise.all([projectionResponse.json(), channelResponse.json(), conversationResponse.json(), projectResponse.json(), notificationResponse.json()]);
+    if (!proposalsResponse.ok) throw new Error(`Governed-proposals preview HTTP ${proposalsResponse.status}`);
+    const [data, channelData, conversationData, projectData, notificationData, proposalsData] = await Promise.all([projectionResponse.json(), channelResponse.json(), conversationResponse.json(), projectResponse.json(), notificationResponse.json(), proposalsResponse.json()]);
     assertReadOnly(data);
     assertChannelReadiness(channelData);
     assertConversation(conversationData);
     assertProjectReadiness(projectData);
     assertNotificationReadModel(notificationData);
+    assertGovernedProposals(proposalsData);
     renderMetrics(data);
     renderTaskComposition(data);
     renderApproval(data);
@@ -1100,6 +1142,7 @@ async function boot() {
     renderNotificationReadModel(notificationData);
     sampleConversation = conversationData;
     if (conversationSession?.conversation_authority !== true) renderConversation(conversationData);
+    renderGovernedProposals(proposalsData);
     renderLifecycles(data);
     renderSafety(data);
     renderPrivacy(data);
@@ -1108,7 +1151,7 @@ async function boot() {
     state.textContent = `SYNTHETIC FIXTURE · ${data.operations.tasks} sample tasks · ${data.operations.tasks_awaiting_approval} awaiting approval · ${data.operations.tasks_ready_for_operator_review} ready for review`;
   } catch (error) {
     state.textContent = `Fail-closed: ${error.message}`;
-    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#approval-list", "#approval-state-list", "#recovery-list", "#recovery-error-list", "#attention-list", "#control-plane-list", "#channel-readiness-list", "#conversation-thread", "#project-readiness-list", "#notification-list", "#lifecycle-list", "#safety-list", "#privacy-grid"]) document.querySelector(selector)?.replaceChildren();
+    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#approval-list", "#approval-state-list", "#recovery-list", "#recovery-error-list", "#attention-list", "#control-plane-list", "#channel-readiness-list", "#conversation-thread", "#governed-proposals-list", "#project-readiness-list", "#notification-list", "#lifecycle-list", "#safety-list", "#privacy-grid"]) document.querySelector(selector)?.replaceChildren();
   }
 }
 
