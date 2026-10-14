@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "enabled": false,
+  "issuer": "https://accounts.google.com",
+  "redirect_uri": "https://miscon.phireij.cloud/auth/google/callback",
+  "client_id": "531519060424-c2n6uclfuko18tubr9ejs9o2fhf8s4c1.apps.googleusercontent.com",
+  "ceo_subject": null,
+  "conversation_scope": "mission_control:conversation"
+}

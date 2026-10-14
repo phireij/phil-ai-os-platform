@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phireij.cloud/contracts/mission-control/google-oidc-session.v1.schema.json",
+  "title": "Inactive Google OIDC CEO session configuration",
+  "description": "Non-secret configuration contract. Conformance never authorizes a live route, storage, or provider call.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "enabled", "issuer", "redirect_uri", "client_id", "ceo_subject", "conversation_scope"],
+  "properties": {
+    "version": {"const": "1"},
+    "enabled": {"const": false},
+    "issuer": {"const": "https://accounts.google.com"},
+    "redirect_uri": {"const": "https://miscon.phireij.cloud/auth/google/callback"},
+    "client_id": {"type": "string", "pattern": "^[A-Za-z0-9-]+\\.apps\\.googleusercontent\\.com$"},
+    "ceo_subject": {"type": "null"},
+    "conversation_scope": {"const": "mission_control:conversation"}
+  }
+}
