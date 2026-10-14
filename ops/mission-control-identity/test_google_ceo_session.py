@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import http.client
+import io
 import json
 import tempfile
 import threading
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
@@ -158,11 +160,14 @@ class SessionHttpChecks(unittest.TestCase):
         self.assertEqual(self.request("PUT", "/auth/google/logout")[0], 405)
 
         state, flow_cookie = self.start_flow()
-        with patch("google_ceo_session.exchange_verified_subject", side_effect=RuntimeError("sensitive-test-marker")):
+        captured = io.StringIO()
+        with redirect_stderr(captured), patch("google_ceo_session.exchange_verified_subject", side_effect=RuntimeError("sensitive-test-marker")):
             status, _headers, body = self.request("GET", f"/auth/google/callback?state={state}&code=sensitive-test-code", {"Cookie": flow_cookie})
         self.assertEqual(status, 502)
         self.assertNotIn(b"sensitive-test-marker", body)
         self.assertNotIn(b"sensitive-test-code", body)
+        self.assertNotIn("sensitive-test-marker", captured.getvalue())
+        self.assertNotIn("sensitive-test-code", captured.getvalue())
 
 
 if __name__ == "__main__":

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from typing import Callable
 from urllib.parse import urlsplit
 
 from google_identity_probe import (
@@ -54,7 +55,7 @@ class LiveSession:
 
 
 class SessionStore:
-    def __init__(self, clock: object = time.monotonic) -> None:
+    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
         self._lock = threading.Lock()
         self._sessions: dict[bytes, LiveSession] = {}
@@ -72,7 +73,7 @@ class SessionStore:
 
     def issue(self) -> tuple[str, LiveSession] | None:
         with self._lock:
-            now = self._clock()  # type: ignore[operator]
+            now = self._clock()
             self._expire(now)
             if len(self._sessions) >= MAX_SESSIONS:
                 return None
@@ -86,7 +87,7 @@ class SessionStore:
         if digest is None:
             return None
         with self._lock:
-            now = self._clock()  # type: ignore[operator]
+            now = self._clock()
             self._expire(now)
             item = self._sessions.get(digest)
             if item is not None:
