@@ -589,6 +589,121 @@ class ConversationStore:
             rows = self._live.connection.execute("SELECT * FROM task_proposals WHERE conversation_id=? AND owner_digest=? ORDER BY created_at,proposal_id LIMIT ?", (conversation_id, self._owner, limit)).fetchall()
         return [self._proposal_result(row) for row in rows]
 
+    def list_audit_timeline(self, conversation_id: str, limit: int = 50, cursor: int = 0) -> dict[str, Any]:
+        """Return identifier-only audit events for one owner-bound conversation.
+
+        Events are correlated exclusively through persisted foreign-key
+        relationships.  This read model deliberately excludes conversation
+        bodies, decision rationales, and any claim about unavailable external
+        sources.
+        """
+        if not ID_PATTERN.fullmatch(conversation_id):
+            raise ConversationRequestError("not_found", 404)
+        if limit < 1 or limit > MAX_PAGE_SIZE or cursor < 0 or cursor > 100_000:
+            raise ConversationRequestError("invalid_limit", 400)
+        with self._lock:
+            self._purge_if_due_locked(int(time.time()))
+            owned = self._live.connection.execute(
+                "SELECT created_at FROM conversations WHERE conversation_id=? AND owner_digest=?",
+                (conversation_id, self._owner),
+            ).fetchone()
+            if owned is None:
+                raise ConversationRequestError("not_found", 404)
+            messages = self._live.connection.execute(
+                "SELECT message_id,created_at FROM messages WHERE conversation_id=? ORDER BY created_at,message_id",
+                (conversation_id,),
+            ).fetchall()
+            proposals = self._live.connection.execute(
+                "SELECT proposal_id,source_message_id,project_id,created_at FROM task_proposals "
+                "WHERE conversation_id=? AND owner_digest=? ORDER BY created_at,proposal_id",
+                (conversation_id, self._owner),
+            ).fetchall()
+            decisions = self._live.connection.execute(
+                "SELECT d.decision_id,d.proposal_id,d.decision,d.decided_at FROM ceo_decisions d "
+                "JOIN task_proposals p ON p.proposal_id=d.proposal_id "
+                "WHERE p.conversation_id=? AND d.owner_digest=? ORDER BY d.decided_at,d.decision_id",
+                (conversation_id, self._owner),
+            ).fetchall()
+
+        events: list[dict[str, Any]] = [
+            {
+                "event_id": f"conversation:{conversation_id}",
+                "event_type": "conversation_created",
+                "occurred_at": _iso(owned["created_at"]),
+                "source": "conversation_store.conversations",
+                "correlation": {"conversation_id": conversation_id},
+                "authority_effect": "none",
+            }
+        ]
+        events.extend(
+            {
+                "event_id": f"message:{row['message_id']}",
+                "event_type": "ceo_message_submitted",
+                "occurred_at": _iso(row["created_at"]),
+                "source": "conversation_store.messages",
+                "correlation": {"conversation_id": conversation_id, "message_id": row["message_id"]},
+                "authority_effect": "none",
+            }
+            for row in messages
+        )
+        events.extend(
+            {
+                "event_id": f"proposal:{row['proposal_id']}",
+                "event_type": "task_proposal_drafted",
+                "occurred_at": _iso(row["created_at"]),
+                "source": "conversation_store.task_proposals",
+                "correlation": {
+                    "conversation_id": conversation_id,
+                    "message_id": row["source_message_id"],
+                    "proposal_id": row["proposal_id"],
+                    "project_id": row["project_id"],
+                },
+                "authority_effect": "none",
+            }
+            for row in proposals
+        )
+        events.extend(
+            {
+                "event_id": f"decision:{row['decision_id']}",
+                "event_type": "ceo_decision_recorded",
+                "occurred_at": _iso(row["decided_at"]),
+                "source": "conversation_store.ceo_decisions",
+                "correlation": {
+                    "conversation_id": conversation_id,
+                    "proposal_id": row["proposal_id"],
+                    "decision_id": row["decision_id"],
+                    "decision": row["decision"],
+                },
+                "authority_effect": "none",
+            }
+            for row in decisions
+        )
+        event_order = {
+            "conversation_created": 0,
+            "ceo_message_submitted": 1,
+            "task_proposal_drafted": 2,
+            "ceo_decision_recorded": 3,
+        }
+        events.sort(key=lambda event: (event["occurred_at"], event_order[event["event_type"]], event["event_id"]))
+        page = events[cursor : cursor + limit]
+        next_cursor = str(cursor + len(page)) if cursor + len(page) < len(events) else None
+        return {
+            "conversation_id": conversation_id,
+            "events": page,
+            "next_cursor": next_cursor,
+            "source_coverage": [
+                {"source": "conversation_store.conversations", "status": "available"},
+                {"source": "conversation_store.messages", "status": "available"},
+                {"source": "conversation_store.task_proposals", "status": "available"},
+                {"source": "conversation_store.ceo_decisions", "status": "available"},
+                {"source": "notification_outbox", "status": "not_configured"},
+                {"source": "task_assignment", "status": "not_available"},
+                {"source": "task_execution", "status": "not_available"},
+                {"source": "provider_runtime", "status": "not_available"},
+            ],
+            "authority_effect": "none",
+        }
+
     def record_task_decision(self, proposal_id: str, idempotency_key: str, request_body: bytes) -> dict[str, Any]:
         if not ID_PATTERN.fullmatch(proposal_id):
             raise ConversationRequestError("not_found", 404)

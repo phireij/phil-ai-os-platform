@@ -1,0 +1,20 @@
+{
+  "schema": "phil-ai-os-mission-control-audit-timeline-read-api",
+  "version": 1,
+  "status": "design_only_inactive",
+  "activation_authorized": false,
+  "authority_effect": "none",
+  "route": {
+    "method": "GET",
+    "path": "/api/conversations/{conversation_id}/audit-timeline?limit={1..100}&cursor={0..100000}",
+    "authentication": "CEO session",
+    "result_schema": "contracts/mission-control/audit-timeline-read-model.v1.schema.json"
+  },
+  "invariants": {
+    "ownership": "The conversation must belong to the CEO principal derived from the validated session.",
+    "correlation": "Events are joined only through persisted identifiers and foreign-key relationships, never matching text or timestamps.",
+    "content_exclusion": "Conversation bodies and decision rationales are excluded from this read model.",
+    "missing_sources": "Each unsupported source is returned with an explicit non-available status; no absence is represented as success.",
+    "authority": "The route is read-only and cannot authorize assignment, execution, mutation, a provider request, or an external action."
+  }
+}

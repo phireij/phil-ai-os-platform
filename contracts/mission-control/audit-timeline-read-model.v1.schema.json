@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/audit-timeline-read-model.v1.schema.json",
+  "title": "Mission Control identifier-only audit timeline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["conversation_id", "events", "next_cursor", "source_coverage", "authority_effect"],
+  "properties": {
+    "conversation_id": {"type": "string", "minLength": 16, "maxLength": 200},
+    "events": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event_id", "event_type", "occurred_at", "source", "correlation", "authority_effect"],
+        "properties": {
+          "event_id": {"type": "string", "minLength": 1, "maxLength": 250},
+          "event_type": {"enum": ["conversation_created", "ceo_message_submitted", "task_proposal_drafted", "ceo_decision_recorded"]},
+          "occurred_at": {"type": "string", "format": "date-time"},
+          "source": {"enum": ["conversation_store.conversations", "conversation_store.messages", "conversation_store.task_proposals", "conversation_store.ceo_decisions"]},
+          "correlation": {"type": "object", "additionalProperties": {"type": ["string", "null"]}},
+          "authority_effect": {"const": "none"}
+        }
+      }
+    },
+    "next_cursor": {"type": ["string", "null"], "pattern": "^[0-9]+$"},
+    "source_coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "status"],
+        "properties": {
+          "source": {"enum": ["conversation_store.conversations", "conversation_store.messages", "conversation_store.task_proposals", "conversation_store.ceo_decisions", "notification_outbox", "task_assignment", "task_execution", "provider_runtime"]},
+          "status": {"enum": ["available", "not_configured", "not_available"]}
+        }
+      }
+    },
+    "authority_effect": {"const": "none"}
+  }
+}

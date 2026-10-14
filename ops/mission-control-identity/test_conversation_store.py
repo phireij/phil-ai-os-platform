@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -101,6 +102,21 @@ class ConversationStoreChecks(unittest.TestCase):
         self.assertFalse(decision["mutation_authorized"])
         with self.assertRaisesRegex(ConversationRequestError, "decision_already_recorded"):
             store.record_task_decision(proposal["proposal_id"], "decision-proposal-0002", b'{"decision":"rejected","rationale":"No.","expires_at":"2030-01-01T00:00:00Z"}')
+
+        timeline = store.list_audit_timeline(conversation["conversation_id"])
+        self.assertEqual(
+            ["conversation_created", "ceo_message_submitted", "task_proposal_drafted", "ceo_decision_recorded"],
+            [event["event_type"] for event in timeline["events"]],
+        )
+        self.assertEqual("none", timeline["authority_effect"])
+        self.assertNotIn("prepare a bounded draft", json.dumps(timeline))
+        self.assertNotIn("Proceed only through a later gate.", json.dumps(timeline))
+        coverage = {entry["source"]: entry["status"] for entry in timeline["source_coverage"]}
+        self.assertEqual("not_configured", coverage["notification_outbox"])
+        self.assertEqual("not_available", coverage["task_execution"])
+        first_page = store.list_audit_timeline(conversation["conversation_id"], limit=1)
+        self.assertEqual("1", first_page["next_cursor"])
+        self.assertEqual("ceo_message_submitted", store.list_audit_timeline(conversation["conversation_id"], limit=1, cursor=1)["events"][0]["event_type"])
 
     def test_retention_and_durable_deletion_marker_prevent_reappearance(self) -> None:
         now = 2_000_000_000
