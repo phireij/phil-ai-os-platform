@@ -37,9 +37,21 @@ trap 'restore_and_exit 130' INT
 trap 'restore_and_exit 143' TERM
 
 echo 'google_ceo_session_upgrade_phase=initial_container_guard'
-if docker inspect "$ROLLBACK" >/dev/null 2>&1 || docker inspect "$PREFLIGHT" >/dev/null 2>&1; then
-  echo 'Refusing upgrade: rollback or preflight container already exists' >&2
+if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
+  echo 'Refusing upgrade: rollback container already exists' >&2
   exit 1
+fi
+if docker inspect "$PREFLIGHT" >/dev/null 2>&1; then
+  echo 'google_ceo_session_upgrade_phase=stale_preflight_identity'
+  if [[ "$(docker inspect "$PREFLIGHT" --format '{{.HostConfig.NetworkMode}}')" != none ]] || \
+     [[ "$(docker inspect "$PREFLIGHT" --format '{{.HostConfig.ReadonlyRootfs}}')" != true ]] || \
+     [[ "$(docker inspect "$PREFLIGHT" --format '{{.HostConfig.RestartPolicy.Name}}')" != no ]] || \
+     [[ "$(docker inspect "$PREFLIGHT" --format '{{index .Config.Labels "traefik.enable"}}')" != false ]]; then
+    echo 'google_ceo_session_upgrade_blocked=stale_preflight_identity_mismatch rollback_attempted=false' >&2
+    exit 1
+  fi
+  echo 'google_ceo_session_upgrade_phase=stale_preflight_cleanup'
+  docker rm -f "$PREFLIGHT" >/dev/null
 fi
 echo 'google_ceo_session_upgrade_phase=existing_session_running'
 test "$(docker inspect "$SESSION" --format '{{.State.Running}}')" = true
