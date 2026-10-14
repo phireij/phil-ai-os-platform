@@ -58,10 +58,11 @@ jobs:
         run: |
           set -euo pipefail
           port="${VPS_PORT:-22}"
-          volume="phil-ai-os-mc-google-probe-secret-${GITHUB_RUN_ID}"
-          config="/tmp/phil-ai-os-mc-google-probe-ghcr-${GITHUB_RUN_ID}"
+          volume="phil-ai-os-mc-google-probe-secret-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          config="/tmp/phil-ai-os-mc-google-probe-ghcr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           container=phil-ai-os-mission-control-google-identity-probe
           activated=false
+          volume_created=false
           ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
           remote="$VPS_USER@$VPS_HOST"
           rollback() {
@@ -70,7 +71,9 @@ jobs:
             if [[ "$activated" == true ]]; then
               ssh "${ssh_opts[@]}" "$remote" "docker rm -f '$container' >/dev/null 2>&1 || true; if docker inspect '$container-rollback' >/dev/null 2>&1; then docker rename '$container-rollback' '$container' && docker start '$container' >/dev/null; fi" || true
             fi
-            ssh "${ssh_opts[@]}" "$remote" "docker volume rm '$volume' >/dev/null 2>&1 || true" || true
+            if [[ "$volume_created" == true ]]; then
+              ssh "${ssh_opts[@]}" "$remote" "docker volume rm '$volume' >/dev/null 2>&1 || true" || true
+            fi
             ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' docker logout ghcr.io >/dev/null 2>&1 || true; rm -f '$config/config.json' /tmp/activate-google-identity-probe.sh; rmdir '$config' >/dev/null 2>&1 || true" || true
             echo "google_probe_deploy_failed status=$status rollback_attempted=$activated" >&2
             exit "$status"
@@ -82,7 +85,8 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           scp -4 -P "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-identity/activate-google-identity-probe.sh "$remote:/tmp/activate-google-identity-probe.sh"
           printf '%s' "$GH_TOKEN" | ssh "${ssh_opts[@]}" "$remote" "mkdir -m 700 -p '$config' && DOCKER_CONFIG='$config' docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin" >/dev/null
-          ssh "${ssh_opts[@]}" "$remote" "docker volume create '$volume' >/dev/null"
+          ssh "${ssh_opts[@]}" "$remote" "if docker volume inspect '$volume' >/dev/null 2>&1; then echo 'Refusing preexisting secret volume' >&2; exit 1; fi; docker volume create '$volume' >/dev/null"
+          volume_created=true
           printf '%s' "$CLIENT_SECRET" | ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' docker run --rm -i --network none --user 0:0 --entrypoint /bin/sh --mount type=volume,src='$volume',dst=/run/secrets '$IMAGE@$IMAGE_DIGEST' -c 'umask 077; cat > /run/secrets/client_secret; chown 10002:10002 /run/secrets/client_secret; chmod 400 /run/secrets/client_secret; test -s /run/secrets/client_secret'" >/dev/null
           ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/activate-google-identity-probe.sh && DOCKER_CONFIG='$config' IMAGE_DIGEST='$IMAGE_DIGEST' SECRET_VOLUME='$volume' HOSTNAME='miscon.phireij.cloud' bash /tmp/activate-google-identity-probe.sh"
           activated=true

@@ -5,7 +5,7 @@ set -euo pipefail
 : "${SECRET_VOLUME:?Set the per-run protected Docker secret volume}"
 : "${HOSTNAME:?Set the Mission Control hostname}"
 [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
-[[ "$SECRET_VOLUME" =~ ^phil-ai-os-mc-google-probe-secret-[0-9]+$ ]]
+[[ "$SECRET_VOLUME" =~ ^phil-ai-os-mc-google-probe-secret-[0-9]+-[0-9]+$ ]]
 test "$HOSTNAME" = miscon.phireij.cloud
 
 IMAGE="ghcr.io/phireij/phil-ai-os-platform/mission-control-google-identity-probe"
