@@ -90,6 +90,6 @@ jobs:
           for method in POST PUT PATCH DELETE; do
             test "$(curl --silent --show-error --max-time 10 -X "$method" -o /dev/null -w '%{http_code}' https://miscon.phireij.cloud/auth/google/healthz)" = 405
           done
-          ssh "${ssh_opts[@]}" "$remote" "docker rm -f '$container-rollback' >/dev/null 2>&1 || true; DOCKER_CONFIG='$config' docker logout ghcr.io >/dev/null 2>&1 || true; rm -f '$config/config.json' /tmp/activate-google-identity-probe.sh; rmdir '$config' >/dev/null 2>&1 || true"
           trap - ERR HUP INT TERM
+          ssh "${ssh_opts[@]}" "$remote" "docker rm -f '$container-rollback' >/dev/null 2>&1 || true; DOCKER_CONFIG='$config' docker logout ghcr.io >/dev/null 2>&1 || true; rm -f '$config/config.json' /tmp/activate-google-identity-probe.sh; rmdir '$config' >/dev/null 2>&1 || true"
           echo "public_probe_health=200 mutation_methods=405 image=$IMAGE@$IMAGE_DIGEST existing_workloads_unchanged=true"
