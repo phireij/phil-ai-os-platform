@@ -11,6 +11,10 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             "rollback_retained=true",
             "existing_workloads_unchanged=true",
             "MISSION_CONTROL_GOOGLE_OIDC_ENABLED=true",
+            "replacement_image_pull_failed",
+            "existing_secret_volume_preflight_failed",
+            "candidate_container_start_failed",
+            "candidate_container_not_running",
         ):
             self.assertIn(marker, script)
         for prohibited in (
