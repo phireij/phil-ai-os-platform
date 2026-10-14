@@ -7,6 +7,7 @@ on:
       - 'ops/mission-control-identity/**'
       - '.github/workflows/mission-control-google-ceo-session-ci.yml'
       - '.github/workflows/mission-control-google-ceo-session-image.yml'
+      - '.github/workflows/mission-control-google-ceo-session-deploy.yml'
   push:
     branches: [main]
     paths:
@@ -14,6 +15,7 @@ on:
       - 'ops/mission-control-identity/**'
       - '.github/workflows/mission-control-google-ceo-session-ci.yml'
       - '.github/workflows/mission-control-google-ceo-session-image.yml'
+      - '.github/workflows/mission-control-google-ceo-session-deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -34,6 +36,7 @@ jobs:
           python3 -m pip install --disable-pip-version-check google-auth==2.62.0 requests==2.34.2
           python3 ops/mission-control-identity/test_google_identity_probe.py
           python3 ops/mission-control-identity/test_google_ceo_session.py
+          bash -n ops/mission-control-identity/activate-google-ceo-session.sh
       - name: Build inactive CEO session image
         shell: bash
         run: |
