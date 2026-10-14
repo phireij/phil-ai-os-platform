@@ -42,6 +42,10 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
         for prohibited in ("docker volume create", "MISSION_CONTROL_CONVERSATION_ENABLED=true"):
             self.assertNotIn(prohibited, workflow)
 
+    def test_session_image_includes_conversation_store_dependency(self) -> None:
+        dockerfile = (Path(__file__).parents[2] / "Dockerfile.mission-control-google-ceo-session").read_text(encoding="utf-8")
+        self.assertIn("COPY ops/mission-control-identity/proposal_evidence.py /srv/proposal_evidence.py", dockerfile)
+
 
 if __name__ == "__main__":
     unittest.main()
