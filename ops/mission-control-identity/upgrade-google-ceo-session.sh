@@ -67,7 +67,10 @@ print('google_ceo_session_route_collision=none')
 PY
 
 BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}' | awk -F'|' -v s="$SESSION" '$1 != s' | sort)"
-docker pull "$IMAGE@$IMAGE_DIGEST" >/dev/null
+if ! docker pull "$IMAGE@$IMAGE_DIGEST" >/dev/null; then
+  echo 'google_ceo_session_upgrade_blocked=replacement_image_pull_failed rollback_attempted=false' >&2
+  exit 1
+fi
 
 OIDC_ENV=(
   --env 'MISSION_CONTROL_GOOGLE_OIDC_ENABLED=true'
@@ -78,20 +81,29 @@ OIDC_ENV=(
   --env 'MISSION_CONTROL_GOOGLE_CEO_SUBJECT_FILE=/run/secrets/ceo_binding'
 )
 
-docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
   --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
-  -c 'test "$(stat -c "%u:%a" /run/secrets/client_secret)" = "10003:400" && test "$(stat -c "%u:%a" /run/secrets/ceo_binding)" = "10003:400" && test -s /run/secrets/client_secret && test -s /run/secrets/ceo_binding'
+  -c 'test "$(stat -c "%u:%a" /run/secrets/client_secret)" = "10003:400" && test "$(stat -c "%u:%a" /run/secrets/ceo_binding)" = "10003:400" && test -s /run/secrets/client_secret && test -s /run/secrets/ceo_binding'; then
+  echo 'google_ceo_session_upgrade_blocked=existing_secret_volume_preflight_failed rollback_attempted=false' >&2
+  exit 1
+fi
 
 PREFLIGHT_STARTED=true
-docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+if ! docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --tmpfs /tmp:rw,noexec,nosuid,size=16m \
   "${OIDC_ENV[@]}" \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
   --label 'traefik.enable=false' \
-  "$IMAGE@$IMAGE_DIGEST" >/dev/null
+  "$IMAGE@$IMAGE_DIGEST" >/dev/null; then
+  echo 'google_ceo_session_upgrade_blocked=candidate_container_start_failed rollback_attempted=false' >&2
+  exit 1
+fi
 sleep 2
-test "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" = true
+if [[ "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" != true ]]; then
+  echo 'google_ceo_session_upgrade_blocked=candidate_container_not_running rollback_attempted=false' >&2
+  exit 1
+fi
 docker rm -f "$PREFLIGHT" >/dev/null
 PREFLIGHT_STARTED=false
 
