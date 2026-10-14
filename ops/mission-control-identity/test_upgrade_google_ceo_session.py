@@ -17,6 +17,9 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             "candidate_container_not_running",
             "google_ceo_session_upgrade_phase=candidate_container_health",
             "google_ceo_session_upgrade_phase=stage_old_session",
+            "google_ceo_session_upgrade_phase=initial_container_guard",
+            "google_ceo_session_upgrade_phase=existing_session_secret_volume",
+            "google_ceo_session_upgrade_phase=route_collision_guard",
         ):
             self.assertIn(marker, script)
         for prohibited in (

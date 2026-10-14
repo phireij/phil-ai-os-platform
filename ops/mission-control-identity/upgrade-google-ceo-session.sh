@@ -36,17 +36,24 @@ trap 'restore_and_exit 129' HUP
 trap 'restore_and_exit 130' INT
 trap 'restore_and_exit 143' TERM
 
+echo 'google_ceo_session_upgrade_phase=initial_container_guard'
 if docker inspect "$ROLLBACK" >/dev/null 2>&1 || docker inspect "$PREFLIGHT" >/dev/null 2>&1; then
   echo 'Refusing upgrade: rollback or preflight container already exists' >&2
   exit 1
 fi
+echo 'google_ceo_session_upgrade_phase=existing_session_running'
 test "$(docker inspect "$SESSION" --format '{{.State.Running}}')" = true
+echo 'google_ceo_session_upgrade_phase=existing_session_image'
 test "$(docker inspect "$SESSION" --format '{{.Config.Image}}')" = "$IMAGE@$CURRENT_IMAGE_DIGEST"
+echo 'google_ceo_session_upgrade_phase=existing_session_network'
 test "$(docker inspect "$SESSION" --format '{{.HostConfig.NetworkMode}}')" = bridge
+echo 'google_ceo_session_upgrade_phase=existing_session_read_only'
 test "$(docker inspect "$SESSION" --format '{{.HostConfig.ReadonlyRootfs}}')" = true
+echo 'google_ceo_session_upgrade_phase=existing_session_secret_volume'
 SECRET_VOLUME="$(docker inspect "$SESSION" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets"}}{{.Name}}{{end}}{{end}}')"
 [[ "$SECRET_VOLUME" =~ ^phil-ai-os-mc-google-session-secret-[0-9]+-[0-9]+$ ]]
 
+echo 'google_ceo_session_upgrade_phase=route_collision_guard'
 python3 - "$SESSION" "$HOSTNAME" <<'PY'
 import json
 import subprocess
