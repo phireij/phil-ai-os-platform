@@ -34,6 +34,7 @@ jobs:
           python3 -m pip install --disable-pip-version-check google-auth==2.62.0 requests==2.34.2
           python3 ops/mission-control-identity/test_google_identity_probe.py
           python3 ops/mission-control-identity/test_google_ceo_session.py
+          python3 ops/mission-control-identity/test_conversation_store.py
       - name: Publish pinned image and report digest
         shell: bash
         env:
