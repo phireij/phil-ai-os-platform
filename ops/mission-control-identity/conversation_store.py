@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from proposal_evidence import EvidenceReferenceVerifier, EvidenceVerificationError
 
 
 MAGIC = b"PHIL-MC-CONVERSATION-STATE-V1\x00"
@@ -50,6 +51,16 @@ class ConversationConfig:
     state_file: Path
     deletion_ledger_file: Path
     key_file: Path
+
+    @property
+    def evidence_manifest_file(self) -> Path | None:
+        raw = os.environ.get("MISSION_CONTROL_EVIDENCE_MANIFEST_FILE", "")
+        if not raw:
+            return None
+        path = Path(raw)
+        if not path.is_absolute() or path.is_symlink() or not path.is_file() or path.stat().st_mode & 0o077:
+            raise ConversationConfigurationError("evidence_manifest_invalid")
+        return path
 
     @classmethod
     def from_environment(cls) -> ConversationConfig | None:
@@ -299,6 +310,11 @@ class ConversationStore:
     def __init__(self, config: ConversationConfig, issuer: str, subject: str) -> None:
         self._key = load_key(config.key_file)
         self._owner = owner_digest(_derived_key(self._key, b"owner"), issuer, subject)
+        manifest = config.evidence_manifest_file
+        try:
+            self._evidence_verifier = EvidenceReferenceVerifier.from_file(manifest, _derived_key(self._key, b"evidence-manifest")) if manifest else None
+        except EvidenceVerificationError as exc:
+            raise ConversationConfigurationError(str(exc)) from exc
         self._lock = threading.Lock()
         self._live = EncryptedSnapshot(config.state_file, _derived_key(self._key, b"live"), _initialize_live)
         self._ledger = EncryptedSnapshot(config.deletion_ledger_file, _derived_key(self._key, b"ledger"), _initialize_ledger)
@@ -537,8 +553,7 @@ class ConversationStore:
             "authority_effect": "none",
         }
 
-    @staticmethod
-    def _proposal_payload(request_body: bytes) -> dict[str, Any]:
+    def _proposal_payload(self, request_body: bytes) -> dict[str, Any]:
         try:
             value = json.loads(request_body)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -554,11 +569,13 @@ class ConversationStore:
         refs = value["source_evidence_refs"]
         if not isinstance(refs, list) or len(refs) > 20 or len(set(refs)) != len(refs) or any(not isinstance(item, str) or not item or len(item) > 500 for item in refs):
             raise ConversationRequestError("invalid_request", 400)
-        # Evidence-reference authorization remains an activation gate. The
-        # inactive store can persist an empty list but never claims a supplied
-        # reference was verified against a project read model.
         if refs:
-            raise ConversationRequestError("evidence_reference_verification_unavailable", 503)
+            if self._evidence_verifier is None:
+                raise ConversationRequestError("evidence_reference_verification_unavailable", 503)
+            try:
+                self._evidence_verifier.verify(value["project_id"], refs)
+            except EvidenceVerificationError as exc:
+                raise ConversationRequestError(str(exc), 422) from exc
         return value
 
     def _proposal_result(self, row: sqlite3.Row) -> dict[str, Any]:
@@ -587,7 +604,7 @@ class ConversationStore:
             before = self._live.connection.serialize()
             try:
                 with self._live.connection:
-                    self._live.connection.execute("INSERT INTO task_proposals VALUES (?,?,?,?,?,'general',?,?,?,?,?,?, 'none',NULL,NULL,0,0)", (proposal_id, self._owner, conversation_id, value["source_message_id"], value["project_id"], value["scope"], value["expected_result"], value["required_authority"], assessment, json.dumps([]), now))
+                    self._live.connection.execute("INSERT INTO task_proposals VALUES (?,?,?,?,?,'general',?,?,?,?,?,?, 'none',NULL,NULL,0,0)", (proposal_id, self._owner, conversation_id, value["source_message_id"], value["project_id"], value["scope"], value["expected_result"], value["required_authority"], assessment, json.dumps(value["source_evidence_refs"]), now))
                     row = self._live.connection.execute("SELECT * FROM task_proposals WHERE proposal_id=?", (proposal_id,)).fetchone()
                     result = self._proposal_result(row)
                     self._live.connection.execute("INSERT INTO idempotency_results VALUES (?,?,?,?,?,?,?)", (self._owner, operation, key_hash, self._request_hash(normalized), json.dumps(result), conversation_id, now))
