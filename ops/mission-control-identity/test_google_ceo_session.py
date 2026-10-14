@@ -101,7 +101,7 @@ class SessionHttpChecks(unittest.TestCase):
         denied, headers, body = self.sign_in("different-subject")
         self.assertEqual(denied, 403)
         self.assertNotIn(SESSION_COOKIE.encode(), body)
-        self.assertFalse(any(value.startswith(SESSION_COOKIE + "=") for key, value in headers if key.lower() == "set-cookie"))
+        self.assertTrue(any(value.startswith(SESSION_COOKIE + "=; ") and "Max-Age=0" in value for key, value in headers if key.lower() == "set-cookie"))
 
         status, headers, body = self.sign_in()
         self.assertEqual(status, 200)
