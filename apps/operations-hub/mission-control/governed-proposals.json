@@ -1,0 +1,22 @@
+{
+  "schema": "phil-ai-os-mission-control-governed-proposals-preview",
+  "version": 1,
+  "live": false,
+  "authority_effect": "none",
+  "proposals": [
+    {
+      "proposal_id": "preview-proposal-001",
+      "conversation_id": "preview-ceo-chief-of-staff",
+      "source_message_id": "preview-message-001",
+      "project_id": "phil-ai-os",
+      "proposal_state": "draft",
+      "required_authority": "A1",
+      "decision": null,
+      "decision_id": null,
+      "assignment_id": null,
+      "execution_authorized": false,
+      "mutation_authorized": false,
+      "authority_effect": "none"
+    }
+  ]
+}

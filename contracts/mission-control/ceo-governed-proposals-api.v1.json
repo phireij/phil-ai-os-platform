@@ -1,0 +1,43 @@
+{
+  "schema": "phil-ai-os-mission-control-ceo-governed-proposals-api",
+  "version": 1,
+  "status": "design_only_inactive",
+  "activation_authorized": false,
+  "authority_effect": "none",
+  "scope": "CEO-owned task proposal drafts and attributable CEO decisions",
+  "routes": {
+    "create_proposal_draft": {
+      "method": "POST",
+      "path": "/api/conversations/{conversation_id}/task-proposals",
+      "authentication": "CEO session",
+      "required_headers": ["X-CSRF-Token", "Idempotency-Key"],
+      "request_schema": "contracts/mission-control/ceo-task-proposal-create.schema.json",
+      "result_schema": "contracts/mission-control/ceo-task-proposal.schema.json"
+    },
+    "record_ceo_decision": {
+      "method": "POST",
+      "path": "/api/task-proposals/{proposal_id}/decisions",
+      "authentication": "CEO session",
+      "required_headers": ["X-CSRF-Token", "Idempotency-Key"],
+      "request_schema": "contracts/mission-control/ceo-task-decision-create.schema.json",
+      "result_schema": "contracts/mission-control/ceo-task-decision.schema.json"
+    }
+  },
+  "invariants": {
+    "ownership": "Derive ownership solely from the validated CEO session; identifiers are not credentials.",
+    "source_message": "A proposal source_message_id must identify a CEO-authored message in the caller-owned conversation.",
+    "proposal_state": "Draft only; proposal contents do not authorize any action.",
+    "decision_immutability": "At most one decision may be recorded for a proposal; replacement or editing requires a separate future governance design.",
+    "decision_expiry": "Reject decisions with an expiry at or before the server evaluation time; record both decision time and expiry.",
+    "decision_scope": "Persist the proposal project and required authority as the decision scope; do not accept a caller-selected scope.",
+    "separate_authority_gate": "An approved decision has authority_effect none and must not create an assignment, execution, mutation, queue, provider request, or external action. Assignment and execution remain disabled pending separately authorized routes and gates."
+  },
+  "activation_gates": [
+    "Validated CEO session and owner binding",
+    "Selected persistent store with encryption, retention, backup, and restore controls",
+    "Approved idempotency, rate-limit, and cursor policy values",
+    "Immutable evidence-reference authorization in the selected project read model",
+    "Security and recovery acceptance proving no decision causes assignment or execution"
+  ]
+}
+

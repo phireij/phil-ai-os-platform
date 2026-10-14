@@ -6,6 +6,7 @@ from .mission_control_projection import (
     build_mission_control_lifecycle_projection,
 )
 from .mission_control_control_plane import MissionControlControlPlane, MissionControlControlPlaneError
+from .mission_control_governed_proposals import GovernedProposalError, GovernedProposalStore
 from .normalizer import (
     InMemoryDeduplicator,
     NormalizationError,
@@ -79,6 +80,8 @@ __all__ = [
     "MissionControlProjectionError",
     "MissionControlControlPlane",
     "MissionControlControlPlaneError",
+    "GovernedProposalError",
+    "GovernedProposalStore",
     "MockChannelAdapter",
     "NormalizationError",
     "OperationsDashboardError",

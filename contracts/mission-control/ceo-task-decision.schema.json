@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/ceo-task-decision.schema.json",
+  "title": "Mission Control attributable CEO task-proposal decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision_id", "proposal_id", "decision", "rationale", "decided_at", "expires_at", "decision_scope", "authority_effect", "assignment_id", "execution_authorized", "mutation_authorized"],
+  "properties": {
+    "decision_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "proposal_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "decision": {"enum": ["approved", "rejected"]},
+    "rationale": {"type": "string", "minLength": 1, "maxLength": 5000},
+    "decided_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "decision_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_id", "required_authority"],
+      "properties": {
+        "project_id": {"enum": ["phil-ai-os", "rubys-cake-delights-hq", "kcfc-portal"]},
+        "required_authority": {"enum": ["none", "A0", "A1", "L2", "L3"]}
+      }
+    },
+    "authority_effect": {"const": "none"},
+    "assignment_id": {"type": "null"},
+    "execution_authorized": {"const": false},
+    "mutation_authorized": {"const": false}
+  }
+}
+

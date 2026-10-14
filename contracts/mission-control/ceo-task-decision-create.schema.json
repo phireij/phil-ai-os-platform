@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/ceo-task-decision-create.schema.json",
+  "title": "Mission Control CEO task-proposal decision request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision", "rationale", "expires_at"],
+  "properties": {
+    "decision": {"enum": ["approved", "rejected"]},
+    "rationale": {"type": "string", "minLength": 1, "maxLength": 5000},
+    "expires_at": {"type": "string", "format": "date-time"}
+  }
+}
+
