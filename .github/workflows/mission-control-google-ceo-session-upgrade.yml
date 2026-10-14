@@ -1,0 +1,86 @@
+name: Mission Control Google CEO Session Controlled Upgrade
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_revision:
+        description: Exact current main commit that published the replacement image
+        required: true
+        type: string
+      image_digest:
+        description: Immutable replacement CEO-session image digest (sha256:...)
+        required: true
+        type: string
+      current_image_digest:
+        description: Immutable digest of the currently running CEO-session image
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: mission-control-google-identity-deploy
+  cancel-in-progress: false
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      SOURCE_REVISION: ${{ inputs.source_revision }}
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+      CURRENT_IMAGE_DIGEST: ${{ inputs.current_image_digest }}
+      IMAGE: ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Verify exact-main replacement image identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$CURRENT_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "$IMAGE_DIGEST" != "$CURRENT_IMAGE_DIGEST"
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_REVISION"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          manifest_digest="sha256:$(docker buildx imagetools inspect "$IMAGE:$SOURCE_REVISION" --raw | sha256sum | cut -d' ' -f1)"
+          test "$manifest_digest" = "$IMAGE_DIGEST"
+          echo "source_revision=$SOURCE_REVISION image=$IMAGE@$IMAGE_DIGEST digest_match=true"
+      - name: Replace only the isolated CEO session and retain rollback
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_SSH_KEY"
+          port="${VPS_PORT:-22}"
+          remote="$VPS_USER@$VPS_HOST"
+          config="/tmp/phil-ai-os-mc-google-session-upgrade-ghcr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          cleanup() {
+            ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' docker logout ghcr.io >/dev/null 2>&1 || true; rm -f '$config/config.json' /tmp/upgrade-google-ceo-session.sh; rmdir '$config' >/dev/null 2>&1 || true" || true
+          }
+          trap cleanup EXIT
+          scp -4 -P "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-identity/upgrade-google-ceo-session.sh "$remote:/tmp/upgrade-google-ceo-session.sh"
+          printf '%s' "$GH_TOKEN" | ssh "${ssh_opts[@]}" "$remote" "mkdir -m 700 -p '$config' && DOCKER_CONFIG='$config' docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin" >/dev/null
+          ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/upgrade-google-ceo-session.sh && DOCKER_CONFIG='$config' IMAGE_DIGEST='$IMAGE_DIGEST' CURRENT_IMAGE_DIGEST='$CURRENT_IMAGE_DIGEST' HOSTNAME='miscon.phireij.cloud' bash /tmp/upgrade-google-ceo-session.sh"
+          test "$(curl --silent --show-error --fail --max-time 10 https://miscon.phireij.cloud/auth/google/healthz)" = 'session_ready;conversation_authority=none'
+          test "$(curl --silent --show-error --max-time 10 -o /dev/null -w '%{http_code}' https://miscon.phireij.cloud/auth/google/session)" = 401
+          redirect="$(curl --silent --show-error --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}' https://miscon.phireij.cloud/auth/google/start)"
+          [[ "$redirect" == '302 https://accounts.google.com/o/oauth2/v2/auth?'* ]]
+          echo "public_session_health=200 unauthenticated_session=401 google_start_redirect=302 existing_workloads_unchanged=true conversation_authority=none"
