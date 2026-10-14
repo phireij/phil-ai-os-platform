@@ -167,6 +167,8 @@ class SessionHandler(ProbeHandler):
             self._list_messages(path.path.split("/")[3], path.query)
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/task-proposals", path.path):
             self._list_task_proposals(path.path.split("/")[3], path.query)
+        elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/audit-timeline", path.path):
+            self._list_audit_timeline(path.path.split("/")[3], path.query)
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/responses/[A-Za-z0-9_-]{16,200}", path.path) and not path.query:
             parts = path.path.split("/")
             self._response_state(parts[3], parts[5])
@@ -249,6 +251,24 @@ class SessionHandler(ProbeHandler):
         except ValueError as exc:
             raise ConversationRequestError("invalid_limit", 400) from exc
 
+    def _audit_query(self, query: str) -> tuple[int, int]:
+        if not query:
+            return 50, 0
+        try:
+            values = parse_qs(query, keep_blank_values=True, strict_parsing=True)
+        except ValueError as exc:
+            raise ConversationRequestError("invalid_query", 400) from exc
+        if not set(values).issubset({"limit", "cursor"}) or any(len(value) != 1 for value in values.values()):
+            raise ConversationRequestError("invalid_query", 400)
+        try:
+            limit = int(values.get("limit", ["50"])[0])
+            cursor = int(values.get("cursor", ["0"])[0])
+        except ValueError as exc:
+            raise ConversationRequestError("invalid_query", 400) from exc
+        if limit < 1 or limit > 100 or cursor < 0 or cursor > 100_000:
+            raise ConversationRequestError("invalid_query", 400)
+        return limit, cursor
+
     def _conversation_error(self, error: ConversationRequestError) -> None:
         self._send(
             HTTPStatus(error.status),
@@ -301,6 +321,9 @@ class SessionHandler(ProbeHandler):
         self._send(HTTPStatus.OK, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
 
     def _list_task_proposals(self, conversation_id: str, query: str) -> None:
+        if self.server.conversations is None:  # type: ignore[attr-defined]
+            self._send(HTTPStatus.NOT_FOUND, "Not found")
+            return
         if self._conversation_session() is None:
             self._send(HTTPStatus.UNAUTHORIZED, '{"error":"unauthorized"}', content_type="application/json; charset=utf-8")
             return
@@ -309,6 +332,20 @@ class SessionHandler(ProbeHandler):
         except ConversationRequestError as error:
             self._conversation_error(error); return
         self._send(HTTPStatus.OK, json.dumps({"proposals": proposals, "next_cursor": None, "authority_effect": "none"}, separators=(",", ":")), content_type="application/json; charset=utf-8")
+
+    def _list_audit_timeline(self, conversation_id: str, query: str) -> None:
+        if self.server.conversations is None:  # type: ignore[attr-defined]
+            self._send(HTTPStatus.NOT_FOUND, "Not found")
+            return
+        if self._conversation_session() is None:
+            self._send(HTTPStatus.UNAUTHORIZED, '{"error":"unauthorized"}', content_type="application/json; charset=utf-8")
+            return
+        try:
+            result = self.server.conversations.list_audit_timeline(conversation_id, *self._audit_query(query))  # type: ignore[attr-defined]
+        except ConversationRequestError as error:
+            self._conversation_error(error)
+            return
+        self._send(HTTPStatus.OK, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
 
     def do_POST(self) -> None:
         path = urlsplit(self.path)

@@ -235,6 +235,14 @@ class SessionHttpChecks(unittest.TestCase):
         )
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body)["messages"][0]["body"], "synthetic confidential marker")
+        status, _, body = self.request(
+            "GET", f"/api/conversations/{conversation_id}/audit-timeline?limit=100", {"Cookie": cookie}
+        )
+        self.assertEqual(status, 200)
+        timeline = json.loads(body)
+        self.assertEqual("none", timeline["authority_effect"])
+        self.assertNotIn("synthetic confidential marker", body.decode())
+        self.assertEqual("not_configured", {item["source"]: item["status"] for item in timeline["source_coverage"]}["notification_outbox"])
         self.assertEqual(
             self.request(
                 "DELETE",
