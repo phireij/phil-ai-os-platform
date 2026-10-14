@@ -1,0 +1,169 @@
+"""Offline checks for the inactive, CEO-bound session boundary."""
+
+from __future__ import annotations
+
+import http.client
+import json
+import tempfile
+import threading
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
+
+from google_ceo_session import (
+    ABSOLUTE_SECONDS,
+    IDLE_SECONDS,
+    SESSION_COOKIE,
+    SessionHandler,
+    SessionStore,
+    load_ceo_subject,
+)
+from google_identity_probe import FlowStore
+from http.server import ThreadingHTTPServer
+
+
+HOST = "miscon.phireij.cloud"
+
+
+class SessionStoreChecks(unittest.TestCase):
+    def test_idle_absolute_expiry_and_revocation(self) -> None:
+        now = [100.0]
+        store = SessionStore(clock=lambda: now[0])
+        token, _item = store.issue()  # type: ignore[misc]
+        self.assertIsNotNone(store.get(token))
+        now[0] += IDLE_SECONDS + 1
+        self.assertIsNone(store.get(token))
+
+        token, _item = store.issue()  # type: ignore[misc]
+        now[0] += IDLE_SECONDS - 1
+        self.assertIsNotNone(store.get(token))
+        now[0] += IDLE_SECONDS - 1
+        self.assertIsNotNone(store.get(token))
+        now[0] += ABSOLUTE_SECONDS
+        self.assertIsNone(store.get(token))
+
+        token, _item = store.issue()  # type: ignore[misc]
+        store.revoke(token)
+        self.assertIsNone(store.get(token))
+        token, _item = store.issue()  # type: ignore[misc]
+        store.revoke_all()
+        self.assertIsNone(store.get(token))
+
+    def test_binding_requires_exact_issuer_and_subject(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "binding"
+            path.write_text("https://accounts.google.com|123456789012345678901\n", encoding="utf-8")
+            self.assertEqual(load_ceo_subject(path), "123456789012345678901")
+            for value in ("https://evil.example|123456789012345678901", "https://accounts.google.com|", "https://accounts.google.com|abc|extra"):
+                path.write_text(value, encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    load_ceo_subject(path)
+
+
+class SessionHttpChecks(unittest.TestCase):
+    def setUp(self) -> None:
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), SessionHandler)
+        self.server.flows = FlowStore()  # type: ignore[attr-defined]
+        self.server.sessions = SessionStore()  # type: ignore[attr-defined]
+        self.server.secret_file = Path("/unused-synthetic-secret")  # type: ignore[attr-defined]
+        self.server.ceo_subject = "synthetic-ceo-subject"  # type: ignore[attr-defined]
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    def tearDown(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=5)
+
+    def request(self, method: str, path: str, headers: dict[str, str] | None = None) -> tuple[int, list[tuple[str, str]], bytes]:
+        connection = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+        connection.request(method, path, headers={"Host": HOST, **(headers or {})})
+        response = connection.getresponse()
+        result = response.status, response.getheaders(), response.read()
+        connection.close()
+        return result
+
+    def start_flow(self) -> tuple[str, str]:
+        status, headers, _ = self.request("GET", "/auth/google/start")
+        self.assertEqual(status, 302)
+        location = dict(headers)["Location"]
+        state = parse_qs(urlsplit(location).query)["state"][0]
+        flow_cookie = next(value.split(";", 1)[0] for key, value in headers if key.lower() == "set-cookie")
+        return state, flow_cookie
+
+    def sign_in(self, subject: str = "synthetic-ceo-subject") -> tuple[int, list[tuple[str, str]], bytes]:
+        state, flow_cookie = self.start_flow()
+        with patch("google_ceo_session.exchange_verified_subject", return_value=subject):
+            return self.request("GET", f"/auth/google/callback?state={state}&code=synthetic-code", {"Cookie": flow_cookie})
+
+    def test_exact_subject_issues_hardened_cookie_without_conversation_authority(self) -> None:
+        denied, headers, body = self.sign_in("different-subject")
+        self.assertEqual(denied, 403)
+        self.assertNotIn(SESSION_COOKIE.encode(), body)
+        self.assertFalse(any(value.startswith(SESSION_COOKIE + "=") for key, value in headers if key.lower() == "set-cookie"))
+
+        status, headers, body = self.sign_in()
+        self.assertEqual(status, 200)
+        self.assertIn(b"No conversation access is active", body)
+        cookies = [value for key, value in headers if key.lower() == "set-cookie"]
+        session_cookie = next(value for value in cookies if value.startswith(SESSION_COOKIE + "="))
+        self.assertIn("; Path=/; Secure; HttpOnly; SameSite=Lax", session_cookie)
+        self.assertNotIn("Domain=", session_cookie)
+        self.assertNotIn("Max-Age=", session_cookie)
+        token_cookie = session_cookie.split(";", 1)[0]
+
+        status, _, body = self.request("GET", "/auth/google/session", {"Cookie": token_cookie})
+        self.assertEqual(status, 200)
+        payload = json.loads(body)
+        self.assertTrue(payload["authenticated"])
+        self.assertFalse(payload["conversation_authority"])
+        self.assertEqual(payload["scope"], "mission_control:session")
+        self.assertGreater(len(payload["csrf_token"]), 32)
+
+    def test_logout_requires_exact_origin_and_csrf_then_revokes(self) -> None:
+        status, headers, _ = self.sign_in()
+        self.assertEqual(status, 200)
+        cookie = next(value.split(";", 1)[0] for key, value in headers if key.lower() == "set-cookie" and value.startswith(SESSION_COOKIE + "="))
+        status, _, body = self.request("GET", "/auth/google/session", {"Cookie": cookie})
+        self.assertEqual(status, 200)
+        csrf = json.loads(body)["csrf_token"]
+        self.assertEqual(self.request("POST", "/auth/google/logout", {"Cookie": cookie, "X-MC-CSRF": csrf})[0], 403)
+        self.assertEqual(self.request("POST", "/auth/google/logout", {"Cookie": cookie, "Origin": "https://evil.example", "X-MC-CSRF": csrf})[0], 403)
+        self.assertEqual(self.request("POST", "/auth/google/logout", {"Cookie": cookie, "Origin": "https://miscon.phireij.cloud", "X-MC-CSRF": "wrong"})[0], 403)
+        self.assertEqual(self.request("GET", "/auth/google/session", {"Cookie": cookie})[0], 200)
+        status, headers, _ = self.request("POST", "/auth/google/logout", {"Cookie": cookie, "Origin": "https://miscon.phireij.cloud", "X-MC-CSRF": csrf})
+        self.assertEqual(status, 200)
+        self.assertTrue(any("Max-Age=0" in value for key, value in headers if key.lower() == "set-cookie"))
+        self.assertEqual(self.request("GET", "/auth/google/session", {"Cookie": cookie})[0], 401)
+
+    def test_new_sign_in_with_wrong_account_revokes_previous_session(self) -> None:
+        status, headers, _ = self.sign_in()
+        self.assertEqual(status, 200)
+        cookie = next(value.split(";", 1)[0] for key, value in headers if key.lower() == "set-cookie" and value.startswith(SESSION_COOKIE + "="))
+        state, flow_cookie = self.start_flow()
+        with patch("google_ceo_session.exchange_verified_subject", return_value="different-subject"):
+            status, headers, _ = self.request("GET", f"/auth/google/callback?state={state}&code=synthetic-code", {"Cookie": flow_cookie + "; " + cookie})
+        self.assertEqual(status, 403)
+        self.assertTrue(any(value.startswith(SESSION_COOKIE + "=;") for key, value in headers if key.lower() == "set-cookie"))
+        self.assertEqual(self.request("GET", "/auth/google/session", {"Cookie": cookie})[0], 401)
+
+    def test_replay_host_methods_and_errors_fail_closed(self) -> None:
+        state, flow_cookie = self.start_flow()
+        with patch("google_ceo_session.exchange_verified_subject", return_value="synthetic-ceo-subject"):
+            self.assertEqual(self.request("GET", f"/auth/google/callback?state={state}&code=synthetic-code", {"Cookie": flow_cookie})[0], 200)
+            self.assertEqual(self.request("GET", f"/auth/google/callback?state={state}&code=synthetic-code", {"Cookie": flow_cookie})[0], 401)
+        self.assertEqual(self.request("GET", "/auth/google/session", {"Host": "evil.example"})[0], 400)
+        self.assertEqual(self.request("POST", "/auth/google/session")[0], 405)
+        self.assertEqual(self.request("PUT", "/auth/google/logout")[0], 405)
+
+        state, flow_cookie = self.start_flow()
+        with patch("google_ceo_session.exchange_verified_subject", side_effect=RuntimeError("sensitive-test-marker")):
+            status, _headers, body = self.request("GET", f"/auth/google/callback?state={state}&code=sensitive-test-code", {"Cookie": flow_cookie})
+        self.assertEqual(status, 502)
+        self.assertNotIn(b"sensitive-test-marker", body)
+        self.assertNotIn(b"sensitive-test-code", body)
+
+
+if __name__ == "__main__":
+    unittest.main()
