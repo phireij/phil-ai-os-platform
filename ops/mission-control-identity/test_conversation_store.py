@@ -86,6 +86,22 @@ class ConversationStoreChecks(unittest.TestCase):
                 store.create_conversation("create-conversation-0003", b"{}")
         self.assertEqual(store.list_conversations(), before)
 
+    def test_governed_proposal_and_decision_are_owner_bound_and_non_authorizing(self) -> None:
+        store = self.store()
+        conversation = store.create_conversation("create-conversation-0091", b"{}")
+        message = store.submit_message(conversation["conversation_id"], "submit-conversation-0091", b'{"body":"prepare a bounded draft"}')
+        proposal_body = ("{" + f'"source_message_id":"{message["message_id"]}","project_id":"phil-ai-os","task_class":"general","scope":"Review one bounded artifact.","expected_result":"A review note.","required_authority":"A1","source_evidence_refs":[]' + "}").encode()
+        proposal = store.create_task_proposal(conversation["conversation_id"], "proposal-conversation-0001", proposal_body)
+        self.assertEqual("draft", proposal["proposal_state"])
+        self.assertFalse(proposal["execution_authorized"])
+        self.assertIsNone(proposal["assignment_id"])
+        self.assertEqual(proposal, store.create_task_proposal(conversation["conversation_id"], "proposal-conversation-0001", proposal_body))
+        decision = store.record_task_decision(proposal["proposal_id"], "decision-proposal-0001", b'{"decision":"approved","rationale":"Proceed only through a later gate.","expires_at":"2030-01-01T00:00:00Z"}')
+        self.assertEqual({"project_id": "phil-ai-os", "required_authority": "A1"}, decision["decision_scope"])
+        self.assertFalse(decision["mutation_authorized"])
+        with self.assertRaisesRegex(ConversationRequestError, "decision_already_recorded"):
+            store.record_task_decision(proposal["proposal_id"], "decision-proposal-0002", b'{"decision":"rejected","rationale":"No.","expires_at":"2030-01-01T00:00:00Z"}')
+
     def test_retention_and_durable_deletion_marker_prevent_reappearance(self) -> None:
         now = 2_000_000_000
         with patch("conversation_store.time.time", return_value=now):

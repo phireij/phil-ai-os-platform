@@ -165,6 +165,8 @@ class SessionHandler(ProbeHandler):
             self._list_conversations(path.query)
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/messages", path.path):
             self._list_messages(path.path.split("/")[3], path.query)
+        elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/task-proposals", path.path):
+            self._list_task_proposals(path.path.split("/")[3], path.query)
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/responses/[A-Za-z0-9_-]{16,200}", path.path) and not path.query:
             parts = path.path.split("/")
             self._response_state(parts[3], parts[5])
@@ -298,6 +300,16 @@ class SessionHandler(ProbeHandler):
             return
         self._send(HTTPStatus.OK, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
 
+    def _list_task_proposals(self, conversation_id: str, query: str) -> None:
+        if self._conversation_session() is None:
+            self._send(HTTPStatus.UNAUTHORIZED, '{"error":"unauthorized"}', content_type="application/json; charset=utf-8")
+            return
+        try:
+            proposals = self.server.conversations.list_task_proposals(conversation_id, self._query_limit(query))  # type: ignore[attr-defined]
+        except ConversationRequestError as error:
+            self._conversation_error(error); return
+        self._send(HTTPStatus.OK, json.dumps({"proposals": proposals, "next_cursor": None, "authority_effect": "none"}, separators=(",", ":")), content_type="application/json; charset=utf-8")
+
     def do_POST(self) -> None:
         path = urlsplit(self.path)
         if self.headers.get("Host") != "miscon.phireij.cloud":
@@ -313,6 +325,12 @@ class SessionHandler(ProbeHandler):
         if match and not path.query:
             self._submit_message(match.group(1))
             return
+        match = re.fullmatch(r"/api/conversations/([A-Za-z0-9_-]{16,200})/task-proposals", path.path)
+        if match and not path.query:
+            self._create_task_proposal(match.group(1)); return
+        match = re.fullmatch(r"/api/task-proposals/([A-Za-z0-9_-]{16,200})/decisions", path.path)
+        if match and not path.query:
+            self._record_task_decision(match.group(1)); return
         self._send(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed")
 
     def _authorized_write(self, maximum_body: int) -> tuple[LiveSession, bytes] | None:
@@ -366,6 +384,26 @@ class SessionHandler(ProbeHandler):
             self._conversation_error(error)
             return
         self._send(HTTPStatus.ACCEPTED, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
+
+    def _create_task_proposal(self, conversation_id: str) -> None:
+        authorized = self._authorized_write(30_000)
+        if authorized is None: return
+        _item, body = authorized
+        try:
+            result = self.server.conversations.create_task_proposal(conversation_id, self.headers.get("Idempotency-Key", ""), body)  # type: ignore[attr-defined]
+        except ConversationRequestError as error:
+            self._conversation_error(error); return
+        self._send(HTTPStatus.CREATED, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
+
+    def _record_task_decision(self, proposal_id: str) -> None:
+        authorized = self._authorized_write(8_000)
+        if authorized is None: return
+        _item, body = authorized
+        try:
+            result = self.server.conversations.record_task_decision(proposal_id, self.headers.get("Idempotency-Key", ""), body)  # type: ignore[attr-defined]
+        except ConversationRequestError as error:
+            self._conversation_error(error); return
+        self._send(HTTPStatus.CREATED, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
 
     def _logout(self) -> None:
         path = urlsplit(self.path)
