@@ -1,0 +1,102 @@
+name: Mission Control Google Identity Probe Isolated Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_revision:
+        description: Exact current main commit that published the image
+        required: true
+        type: string
+      image_digest:
+        description: Immutable image digest (sha256:...)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: mission-control-google-identity-probe-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      SOURCE_REVISION: ${{ inputs.source_revision }}
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+      IMAGE: ghcr.io/phireij/phil-ai-os-platform/mission-control-google-identity-probe
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Verify exact-main image identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_REVISION"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          manifest_digest="sha256:$(docker buildx imagetools inspect "$IMAGE:$SOURCE_REVISION" --raw | sha256sum | cut -d' ' -f1)"
+          test "$manifest_digest" = "$IMAGE_DIGEST"
+          echo "source_revision=$SOURCE_REVISION image=$IMAGE@$IMAGE_DIGEST digest_match=true"
+      - name: Stage secret and activate isolated probe
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          CLIENT_SECRET: ${{ secrets.MISSION_CONTROL_GOOGLE_CLIENT_SECRET }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CLIENT_SECRET"
+          port="${VPS_PORT:-22}"
+          volume="phil-ai-os-mc-google-probe-secret-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          config="/tmp/phil-ai-os-mc-google-probe-ghcr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          container=phil-ai-os-mission-control-google-identity-probe
+          activated=false
+          volume_created=false
+          ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          remote="$VPS_USER@$VPS_HOST"
+          rollback() {
+            status=$?
+            trap - ERR HUP INT TERM
+            if [[ "$activated" == true ]]; then
+              ssh "${ssh_opts[@]}" "$remote" "docker rm -f '$container' >/dev/null 2>&1 || true; if docker inspect '$container-rollback' >/dev/null 2>&1; then docker rename '$container-rollback' '$container' && docker start '$container' >/dev/null; fi" || true
+            fi
+            if [[ "$volume_created" == true ]]; then
+              ssh "${ssh_opts[@]}" "$remote" "docker volume rm '$volume' >/dev/null 2>&1 || true" || true
+            fi
+            ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' docker logout ghcr.io >/dev/null 2>&1 || true; rm -f '$config/config.json' /tmp/activate-google-identity-probe.sh; rmdir '$config' >/dev/null 2>&1 || true" || true
+            echo "google_probe_deploy_failed status=$status rollback_attempted=$activated" >&2
+            exit "$status"
+          }
+          trap rollback ERR
+          trap 'false' HUP INT TERM
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          scp -4 -P "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-identity/activate-google-identity-probe.sh "$remote:/tmp/activate-google-identity-probe.sh"
+          printf '%s' "$GH_TOKEN" | ssh "${ssh_opts[@]}" "$remote" "mkdir -m 700 -p '$config' && DOCKER_CONFIG='$config' docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin" >/dev/null
+          ssh "${ssh_opts[@]}" "$remote" "if docker volume inspect '$volume' >/dev/null 2>&1; then echo 'Refusing preexisting secret volume' >&2; exit 1; fi; docker volume create '$volume' >/dev/null"
+          volume_created=true
+          printf '%s' "$CLIENT_SECRET" | ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' docker run --rm -i --network none --user 0:0 --entrypoint /bin/sh --mount type=volume,src='$volume',dst=/run/secrets '$IMAGE@$IMAGE_DIGEST' -c 'umask 077; cat > /run/secrets/client_secret; chown 10002:10002 /run/secrets/client_secret; chmod 400 /run/secrets/client_secret; test -s /run/secrets/client_secret'" >/dev/null
+          ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/activate-google-identity-probe.sh && DOCKER_CONFIG='$config' IMAGE_DIGEST='$IMAGE_DIGEST' SECRET_VOLUME='$volume' HOSTNAME='miscon.phireij.cloud' bash /tmp/activate-google-identity-probe.sh"
+          activated=true
+          test "$(curl --silent --show-error --fail --max-time 10 https://miscon.phireij.cloud/auth/google/healthz)" = 'probe_ready;authority_effect=none'
+          for method in POST PUT PATCH DELETE; do
+            test "$(curl --silent --show-error --max-time 10 -X "$method" -o /dev/null -w '%{http_code}' https://miscon.phireij.cloud/auth/google/healthz)" = 405
+          done
+          trap - ERR HUP INT TERM
+          ssh "${ssh_opts[@]}" "$remote" "docker rm -f '$container-rollback' >/dev/null 2>&1 || true; DOCKER_CONFIG='$config' docker logout ghcr.io >/dev/null 2>&1 || true; rm -f '$config/config.json' /tmp/activate-google-identity-probe.sh; rmdir '$config' >/dev/null 2>&1 || true"
+          echo "public_probe_health=200 mutation_methods=405 image=$IMAGE@$IMAGE_DIGEST existing_workloads_unchanged=true"
