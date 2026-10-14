@@ -18,6 +18,10 @@ class HostingerConversationStoragePreflightWorkflowChecks(unittest.TestCase):
             "preflight-conversation-storage.sh",
             "authority_effect=none",
             "existing_workloads_unchanged=true",
+            "session_missing",
+            "session_not_running",
+            "session_image_digest_mismatch",
+            "session_secret_volume_unavailable",
         ):
             self.assertIn(marker, workflow)
         for prohibited in (

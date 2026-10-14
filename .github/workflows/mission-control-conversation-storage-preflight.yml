@@ -46,5 +46,28 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
-          ssh "${ssh_opts[@]}" "$remote" "set -euo pipefail; test \"\$(docker inspect '$SESSION' --format '{{.State.Running}}')\" = true; test \"\$(docker inspect '$SESSION' --format '{{.Config.Image}}')\" = '$IMAGE@$IMAGE_DIGEST'; SECRET_VOLUME=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}'); [[ \"\$SECRET_VOLUME\" =~ ^phil-ai-os-mc-google-session-secret-[0-9]+-[0-9]+$ ]]; IMAGE='$IMAGE' IMAGE_DIGEST='$IMAGE_DIGEST' SECRET_VOLUME=\"\$SECRET_VOLUME\" bash -s" < ops/mission-control-identity/preflight-conversation-storage.sh
+          remote_command="set -euo pipefail
+          if ! running=\$(docker inspect '$SESSION' --format '{{.State.Running}}'); then
+            echo 'conversation_storage_preflight_blocked=session_missing authority_effect=none storage_initialized=false' >&2
+            exit 1
+          fi
+          if [[ \"\$running\" != true ]]; then
+            echo 'conversation_storage_preflight_blocked=session_not_running authority_effect=none storage_initialized=false' >&2
+            exit 1
+          fi
+          if ! session_image=\$(docker inspect '$SESSION' --format '{{.Config.Image}}'); then
+            echo 'conversation_storage_preflight_blocked=session_image_unavailable authority_effect=none storage_initialized=false' >&2
+            exit 1
+          fi
+          if [[ \"\$session_image\" != '$IMAGE@$IMAGE_DIGEST' ]]; then
+            echo 'conversation_storage_preflight_blocked=session_image_digest_mismatch authority_effect=none storage_initialized=false' >&2
+            exit 1
+          fi
+          SECRET_VOLUME=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}')
+          if [[ ! \"\$SECRET_VOLUME\" =~ ^phil-ai-os-mc-google-session-secret-[0-9]+-[0-9]+$ ]]; then
+            echo 'conversation_storage_preflight_blocked=session_secret_volume_unavailable authority_effect=none storage_initialized=false' >&2
+            exit 1
+          fi
+          IMAGE='$IMAGE' IMAGE_DIGEST='$IMAGE_DIGEST' SECRET_VOLUME=\"\$SECRET_VOLUME\" bash -s"
+          ssh "${ssh_opts[@]}" "$remote" "$remote_command" < ops/mission-control-identity/preflight-conversation-storage.sh
           echo "conversation_storage_preflight_completed=true authority_effect=none existing_workloads_unchanged=true"
