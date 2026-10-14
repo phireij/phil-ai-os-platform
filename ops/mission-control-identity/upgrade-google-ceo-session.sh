@@ -67,6 +67,7 @@ print('google_ceo_session_route_collision=none')
 PY
 
 BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}' | awk -F'|' -v s="$SESSION" '$1 != s' | sort)"
+echo 'google_ceo_session_upgrade_phase=replacement_image_pull'
 if ! docker pull "$IMAGE@$IMAGE_DIGEST" >/dev/null; then
   echo 'google_ceo_session_upgrade_blocked=replacement_image_pull_failed rollback_attempted=false' >&2
   exit 1
@@ -81,6 +82,7 @@ OIDC_ENV=(
   --env 'MISSION_CONTROL_GOOGLE_CEO_SUBJECT_FILE=/run/secrets/ceo_binding'
 )
 
+echo 'google_ceo_session_upgrade_phase=existing_secret_volume_preflight'
 if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
   --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
@@ -90,6 +92,7 @@ if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --secu
 fi
 
 PREFLIGHT_STARTED=true
+echo 'google_ceo_session_upgrade_phase=candidate_container_start'
 if ! docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --tmpfs /tmp:rw,noexec,nosuid,size=16m \
   "${OIDC_ENV[@]}" \
@@ -100,18 +103,22 @@ if ! docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL
   exit 1
 fi
 sleep 2
+echo 'google_ceo_session_upgrade_phase=candidate_container_health'
 if [[ "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" != true ]]; then
   echo 'google_ceo_session_upgrade_blocked=candidate_container_not_running rollback_attempted=false' >&2
   exit 1
 fi
+echo 'google_ceo_session_upgrade_phase=candidate_container_cleanup'
 docker rm -f "$PREFLIGHT" >/dev/null
 PREFLIGHT_STARTED=false
 
+echo 'google_ceo_session_upgrade_phase=stage_old_session'
 docker stop "$SESSION" >/dev/null
 docker rename "$SESSION" "$ROLLBACK"
 OLD_STAGED=true
 
 SESSION_STARTED=true
+echo 'google_ceo_session_upgrade_phase=start_replacement_session'
 docker run -d --name "$SESSION" --restart unless-stopped --network bridge \
   --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --tmpfs /tmp:rw,noexec,nosuid,size=16m \
@@ -128,6 +135,7 @@ docker run -d --name "$SESSION" --restart unless-stopped --network bridge \
   --label 'traefik.http.services.mission-control-google-ceo-session.loadbalancer.server.port=8093' \
   "$IMAGE@$IMAGE_DIGEST" >/dev/null
 sleep 5
+echo 'google_ceo_session_upgrade_phase=verify_replacement_session'
 test "$(docker inspect "$SESSION" --format '{{.State.Running}}')" = true
 test "$(docker inspect "$SESSION" --format '{{.Config.Image}}')" = "$IMAGE@$IMAGE_DIGEST"
 test "$(docker inspect "$SESSION" --format '{{.HostConfig.NetworkMode}}')" = bridge
