@@ -19,7 +19,13 @@ from http import HTTPStatus
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
+
+from conversation_store import (
+    ConversationConfig,
+    ConversationRequestError,
+    ConversationStore,
+)
 
 from google_identity_probe import (
     COOKIE_NAME as FLOW_COOKIE,
@@ -153,7 +159,15 @@ class SessionHandler(ProbeHandler):
         elif path.path == "/auth/google/session" and not path.query:
             self._session()
         elif path.path == "/auth/google/healthz" and not path.query:
-            self._send(HTTPStatus.OK, "session_ready;conversation_authority=none")
+            authority = "enabled" if self.server.conversations is not None else "none"  # type: ignore[attr-defined]
+            self._send(HTTPStatus.OK, f"session_ready;conversation_authority={authority}")
+        elif path.path == "/api/conversations":
+            self._list_conversations(path.query)
+        elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/messages", path.path):
+            self._list_messages(path.path.split("/")[3], path.query)
+        elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/responses/[A-Za-z0-9_-]{16,200}", path.path) and not path.query:
+            parts = path.path.split("/")
+            self._response_state(parts[3], parts[5])
         else:
             self._send(HTTPStatus.NOT_FOUND, "Not found")
 
@@ -200,20 +214,157 @@ class SessionHandler(ProbeHandler):
             return
         body = json.dumps({
             "authenticated": True,
-            "scope": "mission_control:session",
-            "conversation_authority": False,
+            "scope": "mission_control:conversation" if self.server.conversations is not None else "mission_control:session",  # type: ignore[attr-defined]
+            "conversation_authority": self.server.conversations is not None,  # type: ignore[attr-defined]
             "idle_seconds": IDLE_SECONDS,
             "absolute_seconds": ABSOLUTE_SECONDS,
             "csrf_token": item.csrf_token,
         }, separators=(",", ":"))
         self._send(HTTPStatus.OK, body, content_type="application/json; charset=utf-8")
 
+    def _conversation_session(self) -> LiveSession | None:
+        if self.server.conversations is None:  # type: ignore[attr-defined]
+            return None
+        token = _session_cookie(self.headers.get("Cookie", ""))
+        return self.server.sessions.get(token)  # type: ignore[attr-defined]
+
+    def _query_limit(self, query: str) -> int:
+        if not query:
+            return 50
+        try:
+            values = parse_qs(query, keep_blank_values=True, strict_parsing=True)
+        except ValueError as exc:
+            raise ConversationRequestError("invalid_query", 400) from exc
+        if set(values) != {"limit"} or len(values["limit"]) != 1:
+            raise ConversationRequestError("invalid_query", 400)
+        try:
+            return int(values["limit"][0])
+        except ValueError as exc:
+            raise ConversationRequestError("invalid_limit", 400) from exc
+
+    def _conversation_error(self, error: ConversationRequestError) -> None:
+        self._send(
+            HTTPStatus(error.status),
+            json.dumps({"error": error.code}, separators=(",", ":")),
+            content_type="application/json; charset=utf-8",
+        )
+
+    def _list_conversations(self, query: str) -> None:
+        if self.server.conversations is None:  # type: ignore[attr-defined]
+            self._send(HTTPStatus.NOT_FOUND, "Not found")
+            return
+        if self._conversation_session() is None:
+            self._send(HTTPStatus.UNAUTHORIZED, '{"error":"unauthorized"}', content_type="application/json; charset=utf-8")
+            return
+        try:
+            conversations = self.server.conversations.list_conversations(self._query_limit(query))  # type: ignore[attr-defined]
+        except ConversationRequestError as error:
+            self._conversation_error(error)
+            return
+        body = json.dumps({"conversations": conversations, "next_cursor": None}, separators=(",", ":"))
+        self._send(HTTPStatus.OK, body, content_type="application/json; charset=utf-8")
+
+    def _list_messages(self, conversation_id: str, query: str) -> None:
+        if self.server.conversations is None:  # type: ignore[attr-defined]
+            self._send(HTTPStatus.NOT_FOUND, "Not found")
+            return
+        if self._conversation_session() is None:
+            self._send(HTTPStatus.UNAUTHORIZED, '{"error":"unauthorized"}', content_type="application/json; charset=utf-8")
+            return
+        try:
+            messages = self.server.conversations.list_messages(conversation_id, self._query_limit(query))  # type: ignore[attr-defined]
+        except ConversationRequestError as error:
+            self._conversation_error(error)
+            return
+        body = json.dumps({"conversation_id": conversation_id, "messages": messages, "next_cursor": None}, separators=(",", ":"))
+        self._send(HTTPStatus.OK, body, content_type="application/json; charset=utf-8")
+
+    def _response_state(self, conversation_id: str, message_id: str) -> None:
+        if self.server.conversations is None:  # type: ignore[attr-defined]
+            self._send(HTTPStatus.NOT_FOUND, "Not found")
+            return
+        if self._conversation_session() is None:
+            self._send(HTTPStatus.UNAUTHORIZED, '{"error":"unauthorized"}', content_type="application/json; charset=utf-8")
+            return
+        try:
+            result = self.server.conversations.get_response_state(conversation_id, message_id)  # type: ignore[attr-defined]
+        except ConversationRequestError as error:
+            self._conversation_error(error)
+            return
+        self._send(HTTPStatus.OK, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
+
     def do_POST(self) -> None:
         path = urlsplit(self.path)
         if self.headers.get("Host") != "miscon.phireij.cloud":
             self._send(HTTPStatus.BAD_REQUEST, "Invalid host")
             return
-        if path.path != "/auth/google/logout" or path.query:
+        if path.path == "/auth/google/logout" and not path.query:
+            self._logout()
+            return
+        if path.path == "/api/conversations" and not path.query:
+            self._create_conversation()
+            return
+        match = re.fullmatch(r"/api/conversations/([A-Za-z0-9_-]{16,200})/messages", path.path)
+        if match and not path.query:
+            self._submit_message(match.group(1))
+            return
+        self._send(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed")
+
+    def _authorized_write(self, maximum_body: int) -> tuple[LiveSession, bytes] | None:
+        if self.server.conversations is None:  # type: ignore[attr-defined]
+            self._send(HTTPStatus.NOT_FOUND, "Not found")
+            return None
+        if self.headers.get("Origin") != ORIGIN or self.headers.get("Transfer-Encoding"):
+            self._send(HTTPStatus.FORBIDDEN, "Request not authorized")
+            return None
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self._send(HTTPStatus.BAD_REQUEST, "Invalid request")
+            return None
+        if content_length < 0 or content_length > maximum_body:
+            self._send(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "Request too large")
+            return None
+        if content_length and self.headers.get("Content-Type") != "application/json":
+            self._send(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "Unsupported media type")
+            return None
+        token = _session_cookie(self.headers.get("Cookie", ""))
+        item = self.server.sessions.get(token)  # type: ignore[attr-defined]
+        supplied = self.headers.get("X-MC-CSRF", "")
+        if item is None or len(supplied) > 128 or not hmac.compare_digest(item.csrf_token, supplied):
+            self._send(HTTPStatus.FORBIDDEN, "Request not authorized")
+            return None
+        return item, self.rfile.read(content_length)
+
+    def _create_conversation(self) -> None:
+        authorized = self._authorized_write(2)
+        if authorized is None:
+            return
+        _item, body = authorized
+        try:
+            result = self.server.conversations.create_conversation(self.headers.get("Idempotency-Key", ""), body)  # type: ignore[attr-defined]
+        except ConversationRequestError as error:
+            self._conversation_error(error)
+            return
+        self._send(HTTPStatus.CREATED, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
+
+    def _submit_message(self, conversation_id: str) -> None:
+        authorized = self._authorized_write(80_000)
+        if authorized is None:
+            return
+        _item, body = authorized
+        try:
+            result = self.server.conversations.submit_message(  # type: ignore[attr-defined]
+                conversation_id, self.headers.get("Idempotency-Key", ""), body
+            )
+        except ConversationRequestError as error:
+            self._conversation_error(error)
+            return
+        self._send(HTTPStatus.ACCEPTED, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
+
+    def _logout(self) -> None:
+        path = urlsplit(self.path)
+        if path.query:
             self._send(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed")
             return
         if self.headers.get("Origin") != ORIGIN or self.headers.get("Transfer-Encoding") or self.headers.get("Content-Length", "0") != "0":
@@ -229,15 +380,40 @@ class SessionHandler(ProbeHandler):
         clear = f"{SESSION_COOKIE}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0"
         self._send(HTTPStatus.OK, "Signed out", cookie=clear)
 
+    def do_DELETE(self) -> None:
+        path = urlsplit(self.path)
+        if self.headers.get("Host") != "miscon.phireij.cloud":
+            self._send(HTTPStatus.BAD_REQUEST, "Invalid host")
+            return
+        match = re.fullmatch(r"/api/conversations/([A-Za-z0-9_-]{16,200})", path.path)
+        if not match or path.query:
+            self._send(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed")
+            return
+        authorized = self._authorized_write(0)
+        if authorized is None:
+            return
+        try:
+            self.server.conversations.delete_conversation(match.group(1))  # type: ignore[attr-defined]
+        except ConversationRequestError as error:
+            self._conversation_error(error)
+            return
+        self._send(HTTPStatus.NO_CONTENT, "")
+
 
 def main() -> None:
     config = GoogleOidcConfig.from_environment()
     subject = load_ceo_subject(config.ceo_subject_file)
+    conversation_config = ConversationConfig.from_environment()
     server = ThreadingHTTPServer(("0.0.0.0", 8093), SessionHandler)
     server.flows = FlowStore()  # type: ignore[attr-defined]
     server.sessions = SessionStore()  # type: ignore[attr-defined]
     server.secret_file = config.client_secret_file  # type: ignore[attr-defined]
     server.ceo_subject = subject  # type: ignore[attr-defined]
+    server.conversations = (  # type: ignore[attr-defined]
+        ConversationStore(conversation_config, config.issuer, subject)
+        if conversation_config is not None
+        else None
+    )
     server.serve_forever()
 
 

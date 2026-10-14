@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
+from conversation_store import ConversationConfig, ConversationStore
 from google_ceo_session import (
     ABSOLUTE_SECONDS,
     IDLE_SECONDS,
@@ -70,6 +71,8 @@ class SessionHttpChecks(unittest.TestCase):
         self.server.sessions = SessionStore()  # type: ignore[attr-defined]
         self.server.secret_file = Path("/unused-synthetic-secret")  # type: ignore[attr-defined]
         self.server.ceo_subject = "synthetic-ceo-subject"  # type: ignore[attr-defined]
+        self.server.conversations = None  # type: ignore[attr-defined]
+        self.temp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
@@ -77,10 +80,17 @@ class SessionHttpChecks(unittest.TestCase):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=5)
+        self.temp.cleanup()
 
-    def request(self, method: str, path: str, headers: dict[str, str] | None = None) -> tuple[int, list[tuple[str, str]], bytes]:
+    def request(
+        self,
+        method: str,
+        path: str,
+        headers: dict[str, str] | None = None,
+        body: bytes | None = None,
+    ) -> tuple[int, list[tuple[str, str]], bytes]:
         connection = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
-        connection.request(method, path, headers={"Host": HOST, **(headers or {})})
+        connection.request(method, path, body=body, headers={"Host": HOST, **(headers or {})})
         response = connection.getresponse()
         result = response.status, response.getheaders(), response.read()
         connection.close()
@@ -168,6 +178,80 @@ class SessionHttpChecks(unittest.TestCase):
         self.assertNotIn(b"sensitive-test-code", body)
         self.assertNotIn("sensitive-test-marker", captured.getvalue())
         self.assertNotIn("sensitive-test-code", captured.getvalue())
+
+    def test_conversation_routes_are_disabled_then_require_session_origin_and_csrf(self) -> None:
+        self.assertEqual(self.request("GET", "/api/conversations")[0], 404)
+        root = Path(self.temp.name)
+        key = root / "key"
+        key.write_text("11" * 32, encoding="ascii")
+        self.server.conversations = ConversationStore(  # type: ignore[attr-defined]
+            ConversationConfig(root / "state", root / "ledger", key),
+            "https://accounts.google.com",
+            "synthetic-ceo-subject",
+        )
+        status, headers, _ = self.sign_in()
+        self.assertEqual(status, 200)
+        cookie = next(
+            value.split(";", 1)[0]
+            for name, value in headers
+            if name.lower() == "set-cookie" and value.startswith(SESSION_COOKIE + "=")
+        )
+        status, _, body = self.request("GET", "/auth/google/session", {"Cookie": cookie})
+        session = json.loads(body)
+        self.assertEqual(status, 200)
+        self.assertTrue(session["conversation_authority"])
+        self.assertEqual(session["scope"], "mission_control:conversation")
+        csrf = session["csrf_token"]
+
+        request_headers = {
+            "Cookie": cookie,
+            "Content-Type": "application/json",
+            "Idempotency-Key": "create-conversation-0001",
+            "X-MC-CSRF": csrf,
+        }
+        self.assertEqual(self.request("POST", "/api/conversations", request_headers, b"{}")[0], 403)
+        request_headers["Origin"] = "https://miscon.phireij.cloud"
+        status, _, body = self.request("POST", "/api/conversations", request_headers, b"{}")
+        self.assertEqual(status, 201)
+        conversation_id = json.loads(body)["conversation_id"]
+
+        message_headers = {
+            **request_headers,
+            "Idempotency-Key": "submit-conversation-0001",
+        }
+        status, _, body = self.request(
+            "POST",
+            f"/api/conversations/{conversation_id}/messages",
+            message_headers,
+            b'{"body":"synthetic confidential marker"}',
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(json.loads(body)["error_code"], "runtime_unavailable")
+        status, _, body = self.request(
+            "GET", f"/api/conversations/{conversation_id}/messages", {"Cookie": cookie}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["messages"][0]["body"], "synthetic confidential marker")
+        self.assertEqual(
+            self.request(
+                "DELETE",
+                f"/api/conversations/{conversation_id}",
+                {**request_headers, "X-MC-CSRF": "wrong"},
+            )[0],
+            403,
+        )
+        self.assertEqual(
+            self.request(
+                "DELETE", f"/api/conversations/{conversation_id}", request_headers
+            )[0],
+            204,
+        )
+        self.assertEqual(
+            self.request(
+                "GET", f"/api/conversations/{conversation_id}/messages", {"Cookie": cookie}
+            )[0],
+            404,
+        )
 
 
 if __name__ == "__main__":

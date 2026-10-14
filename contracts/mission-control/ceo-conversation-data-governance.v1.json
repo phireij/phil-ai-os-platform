@@ -1,0 +1,46 @@
+{
+  "schema": "phil-ai-os-mission-control-ceo-conversation-data-governance",
+  "version": 1,
+  "status": "approved_design_inactive",
+  "activation_authorized": false,
+  "authority_effect": "none",
+  "data_owner": "CEO",
+  "data_classification": "confidential; may contain user-supplied sensitive data",
+  "scope": "CEO and Chief of Staff text conversation records only",
+  "controls": {
+    "caller_identity": "exact protected Google issuer and subject binding",
+    "session_scope": "mission_control:conversation",
+    "raw_message_logging": false,
+    "browser_persistent_storage": false,
+    "live_storage": "SQLite held in process memory; only an authenticated encrypted snapshot may be persisted",
+    "live_encryption": "AES-256-GCM with a unique random nonce per snapshot",
+    "key_source": "owner-only protected file; master key is not stored in the database or logs",
+    "key_separation": "independent HMAC-derived live-store and deletion-ledger encryption keys",
+    "key_ownership_and_rotation": "requires approval before activation",
+    "retention_duration": "P90D",
+    "retention_policy_version": "ceo-conversation-retention.v1",
+    "retention_policy_approved_by": "CEO",
+    "retention_policy_approved_at": "2026-10-13",
+    "deletion_behavior": "Immediately remove the caller-owned live conversation and retain an encrypted owner-bound deletion marker for restore suppression.",
+    "backup_maximum_age": "P35D",
+    "backup_format": "single AES-256-GCM authenticated envelope with a separately derived backup key and authenticated creation time",
+    "restore_behavior": "Replay protected deletion markers and retention before restored records may be served.",
+    "restore_activation": "quarantine output only; live replacement requires a separate reviewed operator action",
+    "legal_hold": "disabled unless separately authorized"
+  },
+  "operational_boundaries": {
+    "control_plane_database_reuse_authorized": false,
+    "provider_enabled": false,
+    "provider_tools_enabled": false,
+    "message_content_may_authorize_execution": false,
+    "hermes_dependency": false,
+    "customer_or_project_application_access": false
+  },
+  "remaining_activation_gates": [
+    "Approve encryption-key owner, recovery custodian, and rotation policy",
+    "Verify owner isolation, idempotency, retention, deletion, encrypted backup expiry, and quarantined restore",
+    "Approve and deploy a dedicated persistent volume and backup location",
+    "Verify the exact production image, route, rollback, and unchanged existing workloads",
+    "Complete a controlled CEO persistence and reconnect check"
+  ]
+}

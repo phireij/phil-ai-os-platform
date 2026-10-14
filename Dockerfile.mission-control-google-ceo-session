@@ -6,6 +6,8 @@ RUN pip install --no-cache-dir --disable-pip-version-check google-auth==2.62.0 r
     && adduser -S -D -u 10003 -G app app
 COPY ops/mission-control-identity/google_oidc_config.py /srv/google_oidc_config.py
 COPY ops/mission-control-identity/google_identity_probe.py /srv/google_identity_probe.py
+COPY ops/mission-control-identity/conversation_store.py /srv/conversation_store.py
+COPY ops/mission-control-identity/conversation_recovery.py /srv/conversation_recovery.py
 COPY ops/mission-control-identity/google_ceo_session.py /srv/google_ceo_session.py
 USER app
 EXPOSE 8093
