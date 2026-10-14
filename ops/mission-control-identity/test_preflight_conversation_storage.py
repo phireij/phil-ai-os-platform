@@ -15,6 +15,9 @@ class ConversationStoragePreflightChecks(unittest.TestCase):
             self.assertIn(marker, script)
         self.assertNotIn("docker start", script)
         self.assertNotIn("--restart", script)
+        self.assertIn("docker image inspect", script)
+        self.assertNotIn("docker pull", script)
+        self.assertNotIn("docker volume create", script)
 
 
 if __name__ == "__main__":
