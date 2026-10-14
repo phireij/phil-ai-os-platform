@@ -47,7 +47,7 @@ jobs:
           html = Path("apps/operations-hub/mission-control/index.html").read_text()
           module = Path("apps/operations-hub/mission-control/mission-control.mjs").read_text()
           required_labels = (
-              "Chief of Staff sample exchange",
+              "Chief of Staff conversation",
               "sample only · no live chat",
               "Sample workload",
               "Sample agent posture",
@@ -57,8 +57,11 @@ jobs:
           missing = [label for label in required_labels if label not in html]
           if missing:
               raise SystemExit(f"Mission Control UI is missing required sample labels: {missing}")
-          if "/api/decision-requests" in module or re.search(r"\bPOST\b", module, re.IGNORECASE):
-              raise SystemExit("Mission Control read-only UI contains a mutation request path")
+          if "/api/decision-requests" in module or module.count('method: "POST"') != 3:
+              raise SystemExit("Mission Control UI contains an unapproved mutation request path")
+          guards = ('conversationSession?.conversation_authority', '"X-MC-CSRF": conversationSession.csrf_token', '"Idempotency-Key": conversationIdempotencyKey', 'credentials: "same-origin"')
+          if any(guard not in module for guard in guards) or any(name in module for name in ("localStorage", "sessionStorage", "indexedDB")):
+              raise SystemExit("Mission Control conversation write guards are incomplete")
           PY
           printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker buildx build \
@@ -236,7 +239,7 @@ jobs:
           with urlopen(base + "/mission-control.mjs", timeout=10) as response:
               module = response.read().decode("utf-8")
           required_labels = (
-              "Chief of Staff sample exchange",
+              "Chief of Staff conversation",
               "sample only · no live chat",
               "Sample workload",
               "Sample agent posture",
@@ -246,12 +249,15 @@ jobs:
           missing = [label for label in required_labels if label not in html]
           if missing:
               raise SystemExit(f"Public UI is missing required sample labels: {missing}")
-          if "/api/decision-requests" in module or re.search(r"\bPOST\b", module, re.IGNORECASE):
-              raise SystemExit("Public UI contains a mutation request path")
+          if "/api/decision-requests" in module or module.count('method: "POST"') != 3:
+              raise SystemExit("Public UI contains an unapproved mutation request path")
+          guards = ('conversationSession?.conversation_authority', '"X-MC-CSRF": conversationSession.csrf_token', '"Idempotency-Key": conversationIdempotencyKey', 'credentials: "same-origin"')
+          if any(guard not in module for guard in guards) or any(name in module for name in ("localStorage", "sessionStorage", "indexedDB")):
+              raise SystemExit("Public conversation write guards are incomplete")
           PY
           test "$(curl -ksS -o /dev/null -w '%{http_code}' -X POST https://$HOSTNAME/)" = "405"
           test "$(curl -ksS -o /dev/null -w '%{http_code}' https://$HOSTNAME/../../etc/passwd)" = "404"
-          echo "HTTPS, healthz, synthetic UI labels, no client mutation path, mutation denial, and traversal denial verified." >> "$GITHUB_STEP_SUMMARY"
+          echo "HTTPS, healthz, synthetic UI labels, bounded conversation guards, root mutation denial, and traversal denial verified." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Restore previous UI after failed deployment verification
         if: ${{ failure() && steps.verify.outcome == 'failure' }}

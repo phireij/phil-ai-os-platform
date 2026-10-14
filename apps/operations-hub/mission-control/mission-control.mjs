@@ -32,6 +32,10 @@ const controlPlaneFields = [
 let liveSessionToken = null;
 let liveRefreshTimer = null;
 let liveSessionEpoch = 0;
+let conversationSession = null;
+let activeConversationId = null;
+let sampleConversation = null;
+let conversationEpoch = 0;
 
 function text(value) {
   return String(value ?? "—");
@@ -527,6 +531,208 @@ function renderConversation(data) {
   }));
 }
 
+function conversationIdempotencyKey(prefix) {
+  const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${random}`;
+}
+
+function setConversationState(label, safe = false) {
+  const state = document.querySelector("#conversation-state");
+  state.textContent = label;
+  state.className = safe ? "state-chip safe" : "state-chip";
+}
+
+function setConversationControls(enabled) {
+  document.querySelector("#conversation-message").disabled = !enabled;
+  document.querySelector("#decision-request-button").disabled = !enabled;
+  document.querySelector("#conversation-new").disabled = !conversationSession?.conversation_authority;
+  document.querySelector("#conversation-sign-out").disabled = !conversationSession?.authenticated;
+  document.querySelector("#conversation-sign-in").disabled = Boolean(conversationSession?.authenticated);
+}
+
+function renderConversationMessages(messages) {
+  renderConversation({ messages });
+  if (!messages.length) {
+    const empty = document.createElement("p");
+    empty.className = "load-state";
+    empty.textContent = "No messages in this conversation.";
+    document.querySelector("#conversation-thread").replaceChildren(empty);
+  }
+}
+
+function resetConversationView(message = "sample only · no live chat") {
+  conversationSession = null;
+  activeConversationId = null;
+  conversationEpoch += 1;
+  if (sampleConversation) renderConversation(sampleConversation);
+  setConversationState(message, true);
+  setConversationControls(false);
+  const textarea = document.querySelector("#conversation-message");
+  textarea.value = "";
+  textarea.placeholder = "Conversation storage is not active.";
+  document.querySelector("#conversation-message-label").textContent = "CEO message (storage inactive)";
+  document.querySelector("#conversation-note").textContent = "The transcript above is a local sample. Google sign-in can verify your CEO session, but message storage remains unavailable until its separately reviewed service is activated. Conversation text can never authorize delegation or execution.";
+}
+
+async function conversationRequest(path, options = {}) {
+  const response = await fetch(path, { cache: "no-store", credentials: "same-origin", ...options });
+  if (response.status === 401) {
+    resetConversationView("session expired");
+    throw new Error("session expired");
+  }
+  return response;
+}
+
+async function loadConversationMessages(conversationId, epoch = conversationEpoch) {
+  const response = await conversationRequest(`/api/conversations/${encodeURIComponent(conversationId)}/messages?limit=100`);
+  if (!response.ok) throw new Error(`messages HTTP ${response.status}`);
+  const payload = await response.json();
+  if (epoch !== conversationEpoch || conversationId !== activeConversationId || !Array.isArray(payload.messages)) return;
+  renderConversationMessages(payload.messages);
+}
+
+async function loadConversationSession() {
+  const epoch = ++conversationEpoch;
+  const response = await fetch("/auth/google/session", { cache: "no-store", credentials: "same-origin" });
+  if (epoch !== conversationEpoch) return;
+  if (!response.ok) {
+    resetConversationView(response.status === 401 ? "sign-in available" : "session unavailable");
+    return;
+  }
+  const session = await response.json();
+  if (session.authenticated !== true || typeof session.csrf_token !== "string") {
+    resetConversationView("session unavailable");
+    return;
+  }
+  conversationSession = session;
+  setConversationControls(false);
+  if (session.conversation_authority !== true) {
+    setConversationState("signed in · storage inactive", true);
+    document.querySelector("#conversation-note").textContent = "CEO identity is verified. Conversation storage is not activated, and this sample cannot authorize actions.";
+    return;
+  }
+  setConversationState("signed in · conversation storage active", true);
+  document.querySelector("#conversation-message-label").textContent = "CEO message";
+  document.querySelector("#conversation-message").placeholder = "Write a message for the Chief of Staff record.";
+  document.querySelector("#conversation-note").textContent = "Messages are retained under the approved CEO data policy. Responses may remain unavailable while the provider runtime is disabled. Message text cannot authorize delegation or execution.";
+  const conversations = await conversationRequest("/api/conversations?limit=100");
+  if (!conversations.ok) throw new Error(`conversations HTTP ${conversations.status}`);
+  const payload = await conversations.json();
+  if (epoch !== conversationEpoch || !Array.isArray(payload.conversations)) return;
+  activeConversationId = payload.conversations.at(-1)?.conversation_id ?? null;
+  if (activeConversationId) {
+    setConversationControls(true);
+    await loadConversationMessages(activeConversationId, epoch);
+  } else {
+    renderConversationMessages([]);
+    setConversationControls(false);
+  }
+}
+
+function installConversationConnection() {
+  const signIn = document.querySelector("#conversation-sign-in");
+  const signOut = document.querySelector("#conversation-sign-out");
+  const create = document.querySelector("#conversation-new");
+  const send = document.querySelector("#decision-request-button");
+  const textarea = document.querySelector("#conversation-message");
+
+  signIn.addEventListener("click", () => {
+    const popup = window.open("/auth/google/start", "mission-control-google-sign-in", "popup,width=520,height=720");
+    if (!popup) {
+      setConversationState("allow sign-in popup");
+      return;
+    }
+    setConversationState("waiting for Google sign-in");
+    const started = Date.now();
+    const poll = window.setInterval(async () => {
+      if (Date.now() - started > 120_000) {
+        window.clearInterval(poll);
+        setConversationState("sign-in timed out");
+        return;
+      }
+      try {
+        const response = await fetch("/auth/google/session", { cache: "no-store", credentials: "same-origin" });
+        if (response.ok) {
+          window.clearInterval(poll);
+          popup.close();
+          await loadConversationSession();
+        } else if (popup.closed) {
+          window.clearInterval(poll);
+          setConversationState("sign-in cancelled");
+        }
+      } catch {
+        if (popup.closed) window.clearInterval(poll);
+      }
+    }, 1000);
+  });
+
+  signOut.addEventListener("click", async () => {
+    if (!conversationSession?.csrf_token) return;
+    signOut.disabled = true;
+    try {
+      const response = await conversationRequest("/auth/google/logout", {
+        method: "POST",
+        headers: { "X-MC-CSRF": conversationSession.csrf_token },
+      });
+      if (!response.ok) throw new Error(`logout HTTP ${response.status}`);
+      resetConversationView("signed out");
+    } catch (error) {
+      setConversationState(`sign-out failed · ${error.message}`);
+      setConversationControls(Boolean(activeConversationId));
+    }
+  });
+
+  create.addEventListener("click", async () => {
+    if (!conversationSession?.conversation_authority) return;
+    create.disabled = true;
+    try {
+      const response = await conversationRequest("/api/conversations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": conversationIdempotencyKey("create"),
+          "X-MC-CSRF": conversationSession.csrf_token,
+        },
+        body: "{}",
+      });
+      if (!response.ok) throw new Error(`create HTTP ${response.status}`);
+      activeConversationId = (await response.json()).conversation_id;
+      renderConversationMessages([]);
+      setConversationControls(true);
+      textarea.focus();
+    } catch (error) {
+      setConversationState(`create unavailable · ${error.message}`);
+      setConversationControls(Boolean(activeConversationId));
+    }
+  });
+
+  send.addEventListener("click", async () => {
+    const body = textarea.value.trim();
+    if (!body || !activeConversationId || !conversationSession?.conversation_authority) return;
+    send.disabled = true;
+    try {
+      const response = await conversationRequest(`/api/conversations/${encodeURIComponent(activeConversationId)}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": conversationIdempotencyKey("submit"),
+          "X-MC-CSRF": conversationSession.csrf_token,
+        },
+        body: JSON.stringify({ body }),
+      });
+      if (!response.ok) throw new Error(`message HTTP ${response.status}`);
+      textarea.value = "";
+      await loadConversationMessages(activeConversationId);
+    } catch (error) {
+      setConversationState(`message unavailable · ${error.message}`);
+    } finally {
+      setConversationControls(Boolean(activeConversationId));
+    }
+  });
+
+  loadConversationSession().catch((error) => setConversationState(`session unavailable · ${error.message}`));
+}
+
 function renderLiveSummary(snapshot) {
   const target = document.querySelector("#live-control-summary");
   const runtime = snapshot.runtime ?? {};
@@ -892,7 +1098,8 @@ async function boot() {
     renderChannelReadiness(channelData);
     renderProjectReadiness(projectData);
     renderNotificationReadModel(notificationData);
-    renderConversation(conversationData);
+    sampleConversation = conversationData;
+    if (conversationSession?.conversation_authority !== true) renderConversation(conversationData);
     renderLifecycles(data);
     renderSafety(data);
     renderPrivacy(data);
@@ -908,3 +1115,4 @@ async function boot() {
 boot();
 installLiveControlConnection();
 installLiveRecordsRefresh();
+installConversationConnection();

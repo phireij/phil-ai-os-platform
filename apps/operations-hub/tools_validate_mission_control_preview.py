@@ -216,8 +216,8 @@ def main() -> None:
         fail("authenticated read-only CEO control surface is missing")
     if '<textarea id="conversation-message"' not in html or 'id="decision-request-button" type="button" disabled' not in html:
         fail("decision-request controls must remain visibly disabled in the read-only preview")
-    if "cannot create a decision request" not in html:
-        fail("read-only preview must disclose that decision requests cannot be created")
+    if "Conversation text can never authorize delegation or execution" not in html:
+        fail("conversation UI must disclose its non-authorizing boundary")
 
     forbidden_js = (
         r"XMLHttpRequest",
@@ -230,8 +230,20 @@ def main() -> None:
         if re.search(pattern, js, flags=re.IGNORECASE):
             fail(f"network write capability found: {pattern}")
 
-    if "/api/decision-requests" in js or re.search(r"\bPOST\b", js, flags=re.IGNORECASE):
+    if "/api/decision-requests" in js:
         fail("read-only Mission Control UI must not contain a decision-request mutation path")
+    if js.count('method: "POST"') != 3:
+        fail("only sign-out, conversation creation, and message storage POSTs are allowed")
+    required_conversation_guards = (
+        'conversationSession?.conversation_authority',
+        '"X-MC-CSRF": conversationSession.csrf_token',
+        '"Idempotency-Key": conversationIdempotencyKey',
+        'credentials: "same-origin"',
+    )
+    if any(guard not in js for guard in required_conversation_guards):
+        fail("conversation writes must remain identity, CSRF, idempotency, and same-origin guarded")
+    if any(name in js for name in ("localStorage", "sessionStorage", "indexedDB")):
+        fail("conversation state must not use browser-persistent storage")
     if "read scope required · connection not established" not in js:
         fail("missing read scope must not be reported as an established connection")
 

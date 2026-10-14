@@ -30,16 +30,21 @@
 
     <section class="panel conversation-panel" aria-labelledby="conversation-title">
       <div class="panel-head">
-        <div><p class="eyebrow">CEO control plane</p><h2 id="conversation-title">Chief of Staff sample exchange</h2></div>
+        <div><p class="eyebrow">CEO control plane</p><h2 id="conversation-title">Chief of Staff conversation</h2></div>
         <span id="conversation-state" class="state-chip safe">sample only · no live chat</span>
+      </div>
+      <div class="conversation-session-actions">
+        <button id="conversation-sign-in" type="button">Sign in with Google</button>
+        <button id="conversation-new" type="button" disabled>New conversation</button>
+        <button id="conversation-sign-out" type="button" disabled>Sign out</button>
       </div>
       <div id="conversation-thread" class="conversation-thread" aria-live="polite"></div>
       <div class="conversation-composer">
-        <label for="conversation-message">Decision request submission (disabled)</label>
-        <textarea id="conversation-message" rows="3" placeholder="Request submission is disabled in this read-only preview." disabled></textarea>
-        <button id="decision-request-button" type="button" disabled>Unavailable in read-only preview</button>
+        <label id="conversation-message-label" for="conversation-message">CEO message (storage inactive)</label>
+        <textarea id="conversation-message" rows="3" maxlength="20000" placeholder="Conversation storage is not active." disabled></textarea>
+        <button id="decision-request-button" type="button" disabled>Send message</button>
       </div>
-      <p class="operator-note compact">The transcript above is a local sample, not a live chat. This read-only preview cannot create a decision request, return an agent reply, delegate work, or execute actions.</p>
+      <p id="conversation-note" class="operator-note compact">The transcript above is a local sample. Google sign-in can verify your CEO session, but message storage remains unavailable until its separately reviewed service is activated. Conversation text can never authorize delegation or execution.</p>
     </section>
 
     <section class="panel live-control-panel" aria-labelledby="live-control-title">
