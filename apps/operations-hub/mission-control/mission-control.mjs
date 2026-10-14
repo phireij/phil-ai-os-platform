@@ -34,6 +34,7 @@ let liveRefreshTimer = null;
 let liveSessionEpoch = 0;
 let conversationSession = null;
 let activeConversationId = null;
+let sampleGovernedProposals = null;
 let sampleConversation = null;
 let conversationEpoch = 0;
 
@@ -541,7 +542,7 @@ function assertGovernedProposals(data) {
   }
 }
 
-function renderGovernedProposals(data) {
+function renderGovernedProposals(data, { live = false } = {}) {
   const target = document.querySelector("#governed-proposals-list");
   target.replaceChildren(...data.proposals.map((proposal) => {
     const article = document.createElement("article");
@@ -553,11 +554,11 @@ function renderGovernedProposals(data) {
     label.textContent = proposal.proposal_id;
     const chip = document.createElement("span");
     chip.className = "state-chip safe";
-    chip.textContent = "draft · no authority";
+    chip.textContent = live ? "stored draft · no authority" : "draft · no authority";
     top.append(label, chip);
     const meta = document.createElement("div");
     meta.className = "lifecycle-meta";
-    for (const [name, value] of [["Conversation", proposal.conversation_id], ["CEO decision", "not recorded"], ["Assignment / execution", "disabled"]]) {
+    for (const [name, value] of [["Conversation", proposal.conversation_id], ["CEO decision", proposal.decision_id ? "recorded · no authority" : "not recorded"], ["Assignment / execution", "disabled"]]) {
       const cell = document.createElement("span");
       cell.textContent = name;
       const strong = document.createElement("strong");
@@ -568,6 +569,20 @@ function renderGovernedProposals(data) {
     article.append(top, meta);
     return article;
   }));
+}
+
+async function loadGovernedProposals(conversationId, epoch = conversationEpoch) {
+  const response = await conversationRequest(`/api/conversations/${encodeURIComponent(conversationId)}/task-proposals?limit=100`);
+  if (!response.ok) throw new Error(`task proposals HTTP ${response.status}`);
+  const payload = await response.json();
+  if (epoch !== conversationEpoch || conversationId !== activeConversationId || !Array.isArray(payload.proposals) || payload.authority_effect !== "none") return;
+  for (const proposal of payload.proposals) {
+    if (proposal.assignment_id !== null || proposal.execution_authorized !== false || proposal.mutation_authorized !== false || proposal.authority_effect !== "none") throw new Error("Unsafe governed-proposal response");
+  }
+  renderGovernedProposals({ proposals: payload.proposals }, { live: true });
+  const state = document.querySelector("#governed-proposals-state");
+  state.textContent = `${payload.proposals.length} stored draft${payload.proposals.length === 1 ? "" : "s"} · no authority`;
+  state.className = "state-chip safe";
 }
 
 function conversationIdempotencyKey(prefix) {
@@ -604,6 +619,8 @@ function resetConversationView(message = "sample only · no live chat") {
   activeConversationId = null;
   conversationEpoch += 1;
   if (sampleConversation) renderConversation(sampleConversation);
+  if (sampleGovernedProposals) renderGovernedProposals(sampleGovernedProposals);
+  document.querySelector("#governed-proposals-state").textContent = "sample only · no authority";
   setConversationState(message, true);
   setConversationControls(false);
   const textarea = document.querySelector("#conversation-message");
@@ -662,6 +679,7 @@ async function loadConversationSession() {
   if (activeConversationId) {
     setConversationControls(true);
     await loadConversationMessages(activeConversationId, epoch);
+    await loadGovernedProposals(activeConversationId, epoch);
   } else {
     renderConversationMessages([]);
     setConversationControls(false);
@@ -1142,6 +1160,7 @@ async function boot() {
     renderNotificationReadModel(notificationData);
     sampleConversation = conversationData;
     if (conversationSession?.conversation_authority !== true) renderConversation(conversationData);
+    sampleGovernedProposals = proposalsData;
     renderGovernedProposals(proposalsData);
     renderLifecycles(data);
     renderSafety(data);
