@@ -1,0 +1,19 @@
+{
+  "schema": "phil-ai-os-mission-control-notification-read-api",
+  "version": 1,
+  "status": "design_only_inactive",
+  "activation_authorized": false,
+  "authority_effect": "none",
+  "route": {
+    "method": "GET",
+    "path": "/api/notifications?limit={1..100}&cursor={0..100000}",
+    "authentication": "CEO session",
+    "result_schema": "contracts/mission-control/notification-read-model.v1.schema.json"
+  },
+  "invariants": {
+    "read_only": "The route reads local outbox records only and does not attempt delivery, retry, escalation, or external messaging.",
+    "ownership": "Records are scoped solely to the CEO principal derived from the validated session.",
+    "content_exclusion": "Decision rationales and conversation bodies are excluded.",
+    "authority": "A notification record has authority_effect none and cannot assign, execute, mutate, or invoke a provider."
+  }
+}

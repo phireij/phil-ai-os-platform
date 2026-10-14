@@ -163,6 +163,8 @@ class SessionHandler(ProbeHandler):
             self._send(HTTPStatus.OK, f"session_ready;conversation_authority={authority}")
         elif path.path == "/api/conversations":
             self._list_conversations(path.query)
+        elif path.path == "/api/notifications":
+            self._list_notifications(path.query)
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/messages", path.path):
             self._list_messages(path.path.split("/")[3], path.query)
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/task-proposals", path.path):
@@ -342,6 +344,20 @@ class SessionHandler(ProbeHandler):
             return
         try:
             result = self.server.conversations.list_audit_timeline(conversation_id, *self._audit_query(query))  # type: ignore[attr-defined]
+        except ConversationRequestError as error:
+            self._conversation_error(error)
+            return
+        self._send(HTTPStatus.OK, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
+
+    def _list_notifications(self, query: str) -> None:
+        if self.server.conversations is None:  # type: ignore[attr-defined]
+            self._send(HTTPStatus.NOT_FOUND, "Not found")
+            return
+        if self._conversation_session() is None:
+            self._send(HTTPStatus.UNAUTHORIZED, '{"error":"unauthorized"}', content_type="application/json; charset=utf-8")
+            return
+        try:
+            result = self.server.conversations.list_notifications(*self._audit_query(query))  # type: ignore[attr-defined]
         except ConversationRequestError as error:
             self._conversation_error(error)
             return
