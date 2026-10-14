@@ -199,9 +199,14 @@ class SessionHandler(ProbeHandler):
             return
         token, _item = issued
         session_cookie = f"{SESSION_COOKIE}={token}; Path=/; Secure; HttpOnly; SameSite=Lax"
+        conversation_status = (
+            "Conversation storage is available in the Mission Control window."
+            if self.server.conversations is not None  # type: ignore[attr-defined]
+            else "No conversation access is active."
+        )
         body = (
             "<!doctype html><html><head><title>CEO session</title></head><body>"
-            "<h1>CEO sign-in complete</h1><p>No conversation access is active.</p>"
+            f"<h1>CEO sign-in complete</h1><p>{conversation_status}</p>"
             "</body></html>"
         )
         self._send(HTTPStatus.OK, body, cookies=(clear_flow, session_cookie))

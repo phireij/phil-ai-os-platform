@@ -201,6 +201,9 @@ class SessionHttpChecks(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(session["conversation_authority"])
         self.assertEqual(session["scope"], "mission_control:conversation")
+        status, _, callback_body = self.sign_in()
+        self.assertEqual(status, 200)
+        self.assertIn(b"Conversation storage is available", callback_body)
         csrf = session["csrf_token"]
 
         request_headers = {

@@ -9,6 +9,7 @@ on:
       - 'apps/operations-hub/mission-control/mission-control.mjs'
       - 'scripts/test_mission_control_agent_posture_bridge.py'
       - 'apps/operations-hub/tests/test_mission_control_posture_ui.mjs'
+      - 'apps/operations-hub/tests/test_mission_control_conversation_ui.mjs'
       - '.github/workflows/mission-control-posture-v2-contract-ci.yml'
   push:
     branches:
@@ -20,6 +21,7 @@ on:
       - 'apps/operations-hub/mission-control/mission-control.mjs'
       - 'scripts/test_mission_control_agent_posture_bridge.py'
       - 'apps/operations-hub/tests/test_mission_control_posture_ui.mjs'
+      - 'apps/operations-hub/tests/test_mission_control_conversation_ui.mjs'
       - '.github/workflows/mission-control-posture-v2-contract-ci.yml'
 
 permissions:
@@ -41,4 +43,5 @@ jobs:
         run: |
           python scripts/test_mission_control_agent_posture_bridge.py
           node apps/operations-hub/tests/test_mission_control_posture_ui.mjs
+          node apps/operations-hub/tests/test_mission_control_conversation_ui.mjs
           python apps/operations-hub/tools_validate_mission_control_preview.py
