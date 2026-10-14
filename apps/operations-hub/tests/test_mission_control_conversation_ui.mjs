@@ -11,6 +11,8 @@ for (const id of [
   "conversation-sign-out",
   "conversation-message",
   "decision-request-button",
+  "conversation-lifecycle-state",
+  "conversation-lifecycle-list",
 ]) {
   assert.match(html, new RegExp(`id=["']${id}["']`), `${id} must exist`);
 }
@@ -29,6 +31,10 @@ assert.match(moduleSource, /conversationSession\?\.conversation_authority/);
 assert.match(moduleSource, /"X-MC-CSRF": conversationSession\.csrf_token/);
 assert.match(moduleSource, /"Idempotency-Key": conversationIdempotencyKey/);
 assert.match(moduleSource, /runtime_unavailable|Responses may remain unavailable/);
+assert.match(moduleSource, /audit-timeline\?limit=100/);
+assert.match(moduleSource, /\/api\/notifications\?limit=100/);
+assert.match(moduleSource, /transport_status !== "not_configured"/);
+assert.match(moduleSource, /"body" in event|"rationale" in event/);
 
 const start = moduleSource.indexOf("function conversationIdempotencyKey(prefix) {");
 const end = moduleSource.indexOf("\nfunction setConversationState", start);

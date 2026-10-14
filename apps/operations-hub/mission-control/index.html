@@ -56,6 +56,15 @@
       <p class="operator-note compact">This local example shows correlation only. A proposal draft and any later CEO decision do not assign work, authorize execution, mutate a system, or call a provider.</p>
     </section>
 
+    <section class="panel" aria-labelledby="conversation-lifecycle-title">
+      <div class="panel-head">
+        <div><p class="eyebrow">Conversation evidence</p><h2 id="conversation-lifecycle-title">Audit and notification state</h2></div>
+        <span id="conversation-lifecycle-state" class="state-chip safe">storage inactive · no authority</span>
+      </div>
+      <div id="conversation-lifecycle-list" class="lifecycle-list" aria-live="polite"><p class="load-state">Audit and notification records appear only when separately activated encrypted conversation storage is available.</p></div>
+      <p class="operator-note compact">This panel is read-only. It excludes conversation text and decision rationale; notification transport, retry, escalation, assignment, and execution remain disabled.</p>
+    </section>
+
     <section class="panel live-control-panel" aria-labelledby="live-control-title">
       <div class="panel-head">
       <div><p class="eyebrow">Authenticated control plane</p><h2 id="live-control-title">Read-only platform connection</h2></div>

@@ -585,6 +585,64 @@ async function loadGovernedProposals(conversationId, epoch = conversationEpoch) 
   state.className = "state-chip safe";
 }
 
+function renderConversationLifecycle(timeline, notifications) {
+  const target = document.querySelector("#conversation-lifecycle-list");
+  const events = timeline.events.map((event) => [event.event_type, event.occurred_at, event.source]);
+  const notificationRows = notifications.notifications.map((notification) => [notification.kind, notification.delivery_state, notification.created_at]);
+  const rows = [...events, ...notificationRows];
+  if (!rows.length) {
+    const empty = document.createElement("p");
+    empty.className = "load-state";
+    empty.textContent = "No identifier-only audit or notification records exist for this CEO conversation.";
+    target.replaceChildren(empty);
+  } else {
+    target.replaceChildren(...rows.map(([kind, status, detail]) => {
+      const item = document.createElement("article");
+      item.className = "lifecycle";
+      const top = document.createElement("div");
+      top.className = "lifecycle-top";
+      const label = document.createElement("span");
+      label.className = "lifecycle-id";
+      label.textContent = pretty(kind);
+      const chip = document.createElement("span");
+      chip.className = "state-chip safe";
+      chip.textContent = pretty(status);
+      top.append(label, chip);
+      const observed = document.createElement("p");
+      observed.className = "load-state";
+      observed.textContent = text(detail);
+      item.append(top, observed);
+      return item;
+    }));
+  }
+  const state = document.querySelector("#conversation-lifecycle-state");
+  state.textContent = `${timeline.events.length} audit event${timeline.events.length === 1 ? "" : "s"} · ${notifications.notifications.length} local notification${notifications.notifications.length === 1 ? "" : "s"} · no authority`;
+  state.className = "state-chip safe";
+}
+
+function assertConversationLifecycle(timeline, notifications, conversationId) {
+  if (timeline?.conversation_id !== conversationId || timeline.authority_effect !== "none" || !Array.isArray(timeline.events) || !Array.isArray(timeline.source_coverage)) throw new Error("Invalid audit timeline response");
+  if (notifications?.authority_effect !== "none" || notifications.transport_status !== "not_configured" || !Array.isArray(notifications.notifications)) throw new Error("Invalid notification outbox response");
+  for (const event of timeline.events) {
+    if (!event.event_id || !event.event_type || !event.occurred_at || !event.source || event.authority_effect !== "none" || !event.correlation || "body" in event || "rationale" in event) throw new Error("Unsafe audit event response");
+  }
+  for (const notification of notifications.notifications) {
+    if (!notification.notification_id || notification.delivery_state !== "not_configured" || notification.attempt_count !== 0 || notification.authority_effect !== "none" || "body" in notification || "rationale" in notification) throw new Error("Unsafe notification outbox response");
+  }
+}
+
+async function loadConversationLifecycle(conversationId, epoch = conversationEpoch) {
+  const [timelineResponse, notificationsResponse] = await Promise.all([
+    conversationRequest(`/api/conversations/${encodeURIComponent(conversationId)}/audit-timeline?limit=100`),
+    conversationRequest("/api/notifications?limit=100"),
+  ]);
+  if (!timelineResponse.ok || !notificationsResponse.ok) throw new Error(`conversation lifecycle HTTP ${timelineResponse.status}/${notificationsResponse.status}`);
+  const [timeline, notifications] = await Promise.all([timelineResponse.json(), notificationsResponse.json()]);
+  if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
+  assertConversationLifecycle(timeline, notifications, conversationId);
+  renderConversationLifecycle(timeline, notifications);
+}
+
 function conversationIdempotencyKey(prefix) {
   const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `${prefix}-${random}`;
@@ -621,6 +679,8 @@ function resetConversationView(message = "sample only · no live chat") {
   if (sampleConversation) renderConversation(sampleConversation);
   if (sampleGovernedProposals) renderGovernedProposals(sampleGovernedProposals);
   document.querySelector("#governed-proposals-state").textContent = "sample only · no authority";
+  document.querySelector("#conversation-lifecycle-state").textContent = "storage inactive · no authority";
+  document.querySelector("#conversation-lifecycle-list").replaceChildren(Object.assign(document.createElement("p"), { className: "load-state", textContent: "Audit and notification records appear only when separately activated encrypted conversation storage is available." }));
   setConversationState(message, true);
   setConversationControls(false);
   const textarea = document.querySelector("#conversation-message");
@@ -680,6 +740,7 @@ async function loadConversationSession() {
     setConversationControls(true);
     await loadConversationMessages(activeConversationId, epoch);
     await loadGovernedProposals(activeConversationId, epoch);
+    await loadConversationLifecycle(activeConversationId, epoch);
   } else {
     renderConversationMessages([]);
     setConversationControls(false);
@@ -1170,7 +1231,7 @@ async function boot() {
     state.textContent = `SYNTHETIC FIXTURE · ${data.operations.tasks} sample tasks · ${data.operations.tasks_awaiting_approval} awaiting approval · ${data.operations.tasks_ready_for_operator_review} ready for review`;
   } catch (error) {
     state.textContent = `Fail-closed: ${error.message}`;
-    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#approval-list", "#approval-state-list", "#recovery-list", "#recovery-error-list", "#attention-list", "#control-plane-list", "#channel-readiness-list", "#conversation-thread", "#governed-proposals-list", "#project-readiness-list", "#notification-list", "#lifecycle-list", "#safety-list", "#privacy-grid"]) document.querySelector(selector)?.replaceChildren();
+    for (const selector of ["#metric-grid", "#task-source-list", "#task-type-list", "#approval-list", "#approval-state-list", "#recovery-list", "#recovery-error-list", "#attention-list", "#control-plane-list", "#channel-readiness-list", "#conversation-thread", "#governed-proposals-list", "#conversation-lifecycle-list", "#project-readiness-list", "#notification-list", "#lifecycle-list", "#safety-list", "#privacy-grid"]) document.querySelector(selector)?.replaceChildren();
   }
 }
 
