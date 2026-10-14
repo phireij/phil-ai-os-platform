@@ -11,6 +11,7 @@ class ConversationStoragePreflightChecks(unittest.TestCase):
             "storage_initialized=false",
             "MISSION_CONTROL_CONVERSATION_ENABLED=true",
             "conversation_key",
+            "uid=10003,gid=10003",
         ):
             self.assertIn(marker, script)
         self.assertNotIn("docker start", script)

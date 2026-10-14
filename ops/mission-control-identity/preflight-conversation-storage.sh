@@ -19,7 +19,7 @@ test "$(docker image inspect "$IMAGE@$IMAGE_DIGEST" --format '{{.Id}}')" != ''
 # It loads only the existing fail-closed configuration guard; it does not
 # initialize ConversationStore, call an identity provider, or persist data.
 docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
-  --tmpfs "$STATE_DIR:rw,noexec,nosuid,size=16m,mode=0700" \
+  --tmpfs "$STATE_DIR:rw,noexec,nosuid,size=16m,mode=0700,uid=10003,gid=10003" \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
   --env 'MISSION_CONTROL_CONVERSATION_ENABLED=true' \
   --env "MISSION_CONTROL_CONVERSATION_STATE_FILE=$STATE_DIR/conversations.enc" \
