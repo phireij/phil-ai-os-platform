@@ -202,6 +202,21 @@ def _initialize_live(connection: sqlite3.Connection) -> None:
             execution_authorized INTEGER NOT NULL CHECK(execution_authorized=0),
             mutation_authorized INTEGER NOT NULL CHECK(mutation_authorized=0)
         );
+        CREATE TABLE IF NOT EXISTS notification_outbox (
+            notification_id TEXT PRIMARY KEY,
+            owner_digest BLOB NOT NULL,
+            decision_id TEXT NOT NULL UNIQUE REFERENCES ceo_decisions(decision_id) ON DELETE CASCADE,
+            proposal_id TEXT NOT NULL REFERENCES task_proposals(proposal_id) ON DELETE CASCADE,
+            kind TEXT NOT NULL CHECK(kind='ceo_decision_recorded'),
+            priority TEXT NOT NULL CHECK(priority IN ('low','medium','high','critical')),
+            delivery_state TEXT NOT NULL CHECK(delivery_state='not_configured'),
+            attempt_count INTEGER NOT NULL CHECK(attempt_count=0),
+            created_at INTEGER NOT NULL,
+            last_attempt_at INTEGER,
+            authority_effect TEXT NOT NULL CHECK(authority_effect='none')
+        );
+        CREATE INDEX IF NOT EXISTS notification_outbox_owner_order
+            ON notification_outbox(owner_digest, created_at, notification_id);
         """
     )
 
@@ -696,11 +711,44 @@ class ConversationStore:
                 {"source": "conversation_store.messages", "status": "available"},
                 {"source": "conversation_store.task_proposals", "status": "available"},
                 {"source": "conversation_store.ceo_decisions", "status": "available"},
-                {"source": "notification_outbox", "status": "not_configured"},
+                {"source": "notification_outbox", "status": "available"},
                 {"source": "task_assignment", "status": "not_available"},
                 {"source": "task_execution", "status": "not_available"},
                 {"source": "provider_runtime", "status": "not_available"},
             ],
+            "authority_effect": "none",
+        }
+
+    def list_notifications(self, limit: int = 50, cursor: int = 0) -> dict[str, Any]:
+        """List local outbox state only; this method never delivers a notification."""
+        if limit < 1 or limit > MAX_PAGE_SIZE or cursor < 0 or cursor > 100_000:
+            raise ConversationRequestError("invalid_query", 400)
+        with self._lock:
+            self._purge_if_due_locked(int(time.time()))
+            rows = self._live.connection.execute(
+                "SELECT notification_id,decision_id,proposal_id,kind,priority,delivery_state,attempt_count,created_at,last_attempt_at "
+                "FROM notification_outbox WHERE owner_digest=? ORDER BY created_at,notification_id LIMIT ? OFFSET ?",
+                (self._owner, limit + 1, cursor),
+            ).fetchall()
+        page = rows[:limit]
+        return {
+            "notifications": [
+                {
+                    "notification_id": row["notification_id"],
+                    "kind": row["kind"],
+                    "priority": row["priority"],
+                    "decision_id": row["decision_id"],
+                    "proposal_id": row["proposal_id"],
+                    "delivery_state": row["delivery_state"],
+                    "attempt_count": row["attempt_count"],
+                    "created_at": _iso(row["created_at"]),
+                    "last_attempt_at": _iso(row["last_attempt_at"]) if row["last_attempt_at"] is not None else None,
+                    "authority_effect": "none",
+                }
+                for row in page
+            ],
+            "next_cursor": str(cursor + len(page)) if len(rows) > limit else None,
+            "transport_status": "not_configured",
             "authority_effect": "none",
         }
 
@@ -729,6 +777,10 @@ class ConversationStore:
             try:
                 with self._live.connection:
                     self._live.connection.execute("INSERT INTO ceo_decisions VALUES (?,?,?,?,?,?,?,?, 'none',NULL,0,0)", (result["decision_id"], proposal_id, self._owner, result["decision"], result["rationale"], now, int(expiry.timestamp()), json.dumps(result["decision_scope"])))
+                    self._live.connection.execute(
+                        "INSERT INTO notification_outbox VALUES (?,?,?,?,?,'medium','not_configured',0,?,NULL,'none')",
+                        (self._identifier("notification"), self._owner, result["decision_id"], proposal_id, "ceo_decision_recorded", now),
+                    )
                     self._live.connection.execute("INSERT INTO idempotency_results VALUES (?,?,?,?,?,?,?)", (self._owner, operation, key_hash, self._request_hash(normalized), json.dumps(result), proposal_id, now))
                 self._live.persist()
             except Exception:

@@ -242,7 +242,12 @@ class SessionHttpChecks(unittest.TestCase):
         timeline = json.loads(body)
         self.assertEqual("none", timeline["authority_effect"])
         self.assertNotIn("synthetic confidential marker", body.decode())
-        self.assertEqual("not_configured", {item["source"]: item["status"] for item in timeline["source_coverage"]}["notification_outbox"])
+        self.assertEqual("available", {item["source"]: item["status"] for item in timeline["source_coverage"]}["notification_outbox"])
+        status, _, body = self.request("GET", "/api/notifications?limit=100", {"Cookie": cookie})
+        self.assertEqual(status, 200)
+        notifications = json.loads(body)
+        self.assertEqual("not_configured", notifications["transport_status"])
+        self.assertEqual([], notifications["notifications"])
         self.assertEqual(
             self.request(
                 "DELETE",

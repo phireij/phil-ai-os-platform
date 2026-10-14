@@ -112,11 +112,19 @@ class ConversationStoreChecks(unittest.TestCase):
         self.assertNotIn("prepare a bounded draft", json.dumps(timeline))
         self.assertNotIn("Proceed only through a later gate.", json.dumps(timeline))
         coverage = {entry["source"]: entry["status"] for entry in timeline["source_coverage"]}
-        self.assertEqual("not_configured", coverage["notification_outbox"])
+        self.assertEqual("available", coverage["notification_outbox"])
         self.assertEqual("not_available", coverage["task_execution"])
         first_page = store.list_audit_timeline(conversation["conversation_id"], limit=1)
         self.assertEqual("1", first_page["next_cursor"])
         self.assertEqual("ceo_message_submitted", store.list_audit_timeline(conversation["conversation_id"], limit=1, cursor=1)["events"][0]["event_type"])
+        notifications = store.list_notifications()
+        self.assertEqual("not_configured", notifications["transport_status"])
+        self.assertEqual(1, len(notifications["notifications"]))
+        notification = notifications["notifications"][0]
+        self.assertEqual("ceo_decision_recorded", notification["kind"])
+        self.assertEqual("not_configured", notification["delivery_state"])
+        self.assertEqual(0, notification["attempt_count"])
+        self.assertNotIn("Proceed only through a later gate.", json.dumps(notifications))
 
     def test_retention_and_durable_deletion_marker_prevent_reappearance(self) -> None:
         now = 2_000_000_000
