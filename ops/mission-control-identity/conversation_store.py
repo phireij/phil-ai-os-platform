@@ -15,6 +15,7 @@ import secrets
 import sqlite3
 import threading
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,8 @@ RETENTION_SECONDS = 90 * 24 * 60 * 60
 DELETION_MARKER_SECONDS = 90 * 24 * 60 * 60
 MAX_MESSAGE_CHARACTERS = 20_000
 MAX_PAGE_SIZE = 100
+MAX_PROPOSAL_SCOPE = 20_000
+MAX_EXPECTED_RESULT = 5_000
 ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{16,200}")
 IDEMPOTENCY_PATTERN = re.compile(r"[A-Za-z0-9._~-]{16,128}")
 
@@ -163,6 +166,41 @@ def _initialize_live(connection: sqlite3.Connection) -> None:
             resource_id TEXT NOT NULL,
             created_at INTEGER NOT NULL,
             PRIMARY KEY(owner_digest, operation, idempotency_hash)
+        );
+        CREATE TABLE IF NOT EXISTS task_proposals (
+            proposal_id TEXT PRIMARY KEY,
+            owner_digest BLOB NOT NULL,
+            conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+            source_message_id TEXT NOT NULL REFERENCES messages(message_id),
+            project_id TEXT NOT NULL,
+            task_class TEXT NOT NULL CHECK(task_class='general'),
+            scope TEXT NOT NULL,
+            expected_result TEXT NOT NULL,
+            required_authority TEXT NOT NULL,
+            authority_assessment TEXT NOT NULL,
+            source_evidence_refs TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            authority_effect TEXT NOT NULL CHECK(authority_effect='none'),
+            assigned_agent_id TEXT,
+            assignment_id TEXT,
+            execution_authorized INTEGER NOT NULL CHECK(execution_authorized=0),
+            mutation_authorized INTEGER NOT NULL CHECK(mutation_authorized=0)
+        );
+        CREATE INDEX IF NOT EXISTS task_proposals_owner_order
+            ON task_proposals(owner_digest, conversation_id, created_at, proposal_id);
+        CREATE TABLE IF NOT EXISTS ceo_decisions (
+            decision_id TEXT PRIMARY KEY,
+            proposal_id TEXT NOT NULL UNIQUE REFERENCES task_proposals(proposal_id) ON DELETE CASCADE,
+            owner_digest BLOB NOT NULL,
+            decision TEXT NOT NULL CHECK(decision IN ('approved','rejected')),
+            rationale TEXT NOT NULL,
+            decided_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL,
+            decision_scope TEXT NOT NULL,
+            authority_effect TEXT NOT NULL CHECK(authority_effect='none'),
+            assignment_id TEXT,
+            execution_authorized INTEGER NOT NULL CHECK(execution_authorized=0),
+            mutation_authorized INTEGER NOT NULL CHECK(mutation_authorized=0)
         );
         """
     )
@@ -483,6 +521,104 @@ class ConversationStore:
             "error_code": row["error_code"],
             "authority_effect": "none",
         }
+
+    @staticmethod
+    def _proposal_payload(request_body: bytes) -> dict[str, Any]:
+        try:
+            value = json.loads(request_body)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ConversationRequestError("invalid_request", 400) from exc
+        required = {"source_message_id", "project_id", "task_class", "scope", "expected_result", "required_authority", "source_evidence_refs"}
+        if not isinstance(value, dict) or set(value) != required:
+            raise ConversationRequestError("invalid_request", 400)
+        if (not ID_PATTERN.fullmatch(value["source_message_id"]) or value["project_id"] not in {"phil-ai-os", "rubys-cake-delights-hq", "kcfc-portal"} or value["task_class"] != "general" or value["required_authority"] not in {"none", "A0", "A1", "L2", "L3"}):
+            raise ConversationRequestError("invalid_request", 400)
+        for name, maximum in (("scope", MAX_PROPOSAL_SCOPE), ("expected_result", MAX_EXPECTED_RESULT)):
+            if not isinstance(value[name], str) or not value[name].strip() or len(value[name]) > maximum:
+                raise ConversationRequestError("invalid_request", 400)
+        refs = value["source_evidence_refs"]
+        if not isinstance(refs, list) or len(refs) > 20 or len(set(refs)) != len(refs) or any(not isinstance(item, str) or not item or len(item) > 500 for item in refs):
+            raise ConversationRequestError("invalid_request", 400)
+        # Evidence-reference authorization remains an activation gate. The
+        # inactive store can persist an empty list but never claims a supplied
+        # reference was verified against a project read model.
+        if refs:
+            raise ConversationRequestError("evidence_reference_verification_unavailable", 503)
+        return value
+
+    def _proposal_result(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {"proposal_id": row["proposal_id"], "conversation_id": row["conversation_id"], "source_message_id": row["source_message_id"], "project_id": row["project_id"], "task_class": "general", "scope": row["scope"], "expected_result": row["expected_result"], "required_authority": row["required_authority"], "authority_assessment": row["authority_assessment"], "proposal_state": "draft", "source_evidence_refs": json.loads(row["source_evidence_refs"]), "created_at": _iso(row["created_at"]), "approval_id": None, "assigned_agent_id": None, "assignment_id": None, "execution_authorized": False, "mutation_authorized": False, "authority_effect": "none"}
+
+    def create_task_proposal(self, conversation_id: str, idempotency_key: str, request_body: bytes) -> dict[str, Any]:
+        if not ID_PATTERN.fullmatch(conversation_id):
+            raise ConversationRequestError("not_found", 404)
+        value = self._proposal_payload(request_body)
+        normalized = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        now, key_hash = int(time.time()), self._idempotency(idempotency_key)
+        operation = f"proposal:{conversation_id}"
+        with self._lock:
+            self._purge_if_due_locked(now)
+            owned = self._live.connection.execute("SELECT 1 FROM conversations WHERE conversation_id=? AND owner_digest=?", (conversation_id, self._owner)).fetchone()
+            source = self._live.connection.execute("SELECT 1 FROM messages WHERE message_id=? AND conversation_id=? AND sender='ceo'", (value["source_message_id"], conversation_id)).fetchone()
+            if not owned or not source:
+                raise ConversationRequestError("not_found", 404)
+            existing = self._live.connection.execute("SELECT request_hash,response_json FROM idempotency_results WHERE owner_digest=? AND operation=? AND idempotency_hash=?", (self._owner, operation, key_hash)).fetchone()
+            if existing:
+                if not hmac.compare_digest(existing["request_hash"], self._request_hash(normalized)):
+                    raise ConversationRequestError("idempotency_conflict", 409)
+                return json.loads(existing["response_json"])
+            proposal_id = self._identifier("proposal")
+            assessment = "within_current_a0" if value["required_authority"] == "none" else "requires_governance"
+            before = self._live.connection.serialize()
+            try:
+                with self._live.connection:
+                    self._live.connection.execute("INSERT INTO task_proposals VALUES (?,?,?,?,?,'general',?,?,?,?,?,?, 'none',NULL,NULL,0,0)", (proposal_id, self._owner, conversation_id, value["source_message_id"], value["project_id"], value["scope"], value["expected_result"], value["required_authority"], assessment, json.dumps([]), now))
+                    row = self._live.connection.execute("SELECT * FROM task_proposals WHERE proposal_id=?", (proposal_id,)).fetchone()
+                    result = self._proposal_result(row)
+                    self._live.connection.execute("INSERT INTO idempotency_results VALUES (?,?,?,?,?,?,?)", (self._owner, operation, key_hash, self._request_hash(normalized), json.dumps(result), conversation_id, now))
+                self._live.persist()
+            except Exception:
+                self._live.connection.deserialize(before)
+                raise
+            return result
+
+    def list_task_proposals(self, conversation_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        if not ID_PATTERN.fullmatch(conversation_id) or limit < 1 or limit > MAX_PAGE_SIZE:
+            raise ConversationRequestError("not_found", 404)
+        with self._lock:
+            rows = self._live.connection.execute("SELECT * FROM task_proposals WHERE conversation_id=? AND owner_digest=? ORDER BY created_at,proposal_id LIMIT ?", (conversation_id, self._owner, limit)).fetchall()
+        return [self._proposal_result(row) for row in rows]
+
+    def record_task_decision(self, proposal_id: str, idempotency_key: str, request_body: bytes) -> dict[str, Any]:
+        if not ID_PATTERN.fullmatch(proposal_id):
+            raise ConversationRequestError("not_found", 404)
+        try:
+            value = json.loads(request_body)
+            expiry = datetime.fromisoformat(value.get("expires_at", "").replace("Z", "+00:00")).astimezone(timezone.utc)
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ConversationRequestError("invalid_request", 400) from exc
+        if not isinstance(value, dict) or set(value) != {"decision", "rationale", "expires_at"} or value["decision"] not in {"approved", "rejected"} or not isinstance(value["rationale"], str) or not value["rationale"].strip() or len(value["rationale"]) > 5000 or expiry.timestamp() <= time.time():
+            raise ConversationRequestError("invalid_request", 400)
+        normalized, now, key_hash = json.dumps(value, sort_keys=True, separators=(",", ":")).encode(), int(time.time()), self._idempotency(idempotency_key)
+        operation = f"decision:{proposal_id}"
+        with self._lock:
+            row = self._live.connection.execute("SELECT * FROM task_proposals WHERE proposal_id=? AND owner_digest=?", (proposal_id, self._owner)).fetchone()
+            if row is None: raise ConversationRequestError("not_found", 404)
+            existing = self._live.connection.execute("SELECT request_hash,response_json FROM idempotency_results WHERE owner_digest=? AND operation=? AND idempotency_hash=?", (self._owner, operation, key_hash)).fetchone()
+            if existing:
+                if not hmac.compare_digest(existing["request_hash"], self._request_hash(normalized)): raise ConversationRequestError("idempotency_conflict", 409)
+                return json.loads(existing["response_json"])
+            if self._live.connection.execute("SELECT 1 FROM ceo_decisions WHERE proposal_id=?", (proposal_id,)).fetchone(): raise ConversationRequestError("decision_already_recorded", 409)
+            result = {"decision_id": self._identifier("decision"), "proposal_id": proposal_id, "decision": value["decision"], "rationale": value["rationale"].strip(), "decided_at": _iso(now), "expires_at": value["expires_at"], "decision_scope": {"project_id": row["project_id"], "required_authority": row["required_authority"]}, "authority_effect": "none", "assignment_id": None, "execution_authorized": False, "mutation_authorized": False}
+            before = self._live.connection.serialize()
+            try:
+                with self._live.connection:
+                    self._live.connection.execute("INSERT INTO ceo_decisions VALUES (?,?,?,?,?,?,?,?, 'none',NULL,0,0)", (result["decision_id"], proposal_id, self._owner, result["decision"], result["rationale"], now, int(expiry.timestamp()), json.dumps(result["decision_scope"])))
+                    self._live.connection.execute("INSERT INTO idempotency_results VALUES (?,?,?,?,?,?,?)", (self._owner, operation, key_hash, self._request_hash(normalized), json.dumps(result), proposal_id, now))
+                self._live.persist()
+            except Exception:
+                self._live.connection.deserialize(before); raise
+            return result
 
     def delete_conversation(self, conversation_id: str) -> None:
         if not ID_PATTERN.fullmatch(conversation_id):
