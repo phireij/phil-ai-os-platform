@@ -67,8 +67,8 @@ try:
         handle.write(master_key.hex().encode("ascii") + b"\n")
         handle.flush()
         os.fsync(handle.fileno())
-    os.chown(key_path, 10003, 10003)
     os.chmod(key_path, 0o400)
+    os.chown(key_path, 10003, 10003)
 
     recovery_fd = os.open(recovery_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o400)
     created.append(recovery_path)
