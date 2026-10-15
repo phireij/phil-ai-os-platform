@@ -21,10 +21,12 @@ test "$(docker image inspect "$SESSION_IMAGE" --format '{{.Id}}')" != ''
 docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --user 10003:10003 \
   --mount "type=volume,src=$STATE_VOLUME,dst=/mnt/conversation-state,readonly" \
+  --mount "type=volume,src=$BACKUP_VOLUME,dst=/mnt/conversation-backup,readonly" \
   --entrypoint python3 "$SESSION_IMAGE" \
-  -c 'import stat
+  -c 'import re, stat, time
 from pathlib import Path
 from conversation_store import MAGIC
+from conversation_recovery import BACKUP_MAGIC, BACKUP_MAX_AGE_SECONDS
 
 for name in ("conversations.enc", "deletion-ledger.enc"):
     path = Path("/mnt/conversation-state/state") / name
@@ -32,4 +34,19 @@ for name in ("conversations.enc", "deletion-ledger.enc"):
     assert stat.S_ISREG(details.st_mode) and stat.S_IMODE(details.st_mode) == 0o600
     with path.open("rb") as handle:
         assert handle.read(len(MAGIC)) == MAGIC
-print("conversation_storage_monitor=green state_content_exposed=false network_access=false authority_effect=none")'
+backup_directory = Path("/mnt/conversation-backup/backups")
+directory_info = backup_directory.lstat()
+assert backup_directory.is_dir() and not backup_directory.is_symlink(), "conversation_backup_directory_invalid"
+assert stat.S_IMODE(directory_info.st_mode) == 0o700, "conversation_backup_directory_insecure"
+backups = sorted(path for path in backup_directory.iterdir() if not path.name.startswith("."))
+assert backups, "conversation_backup_missing"
+now = int(time.time())
+for path in backups:
+    assert re.fullmatch(r"conversation-[0-9]{8}T[0-9]{6}Z\\.enc", path.name), "conversation_backup_name_invalid"
+    info = path.lstat()
+    assert stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o600, "conversation_backup_file_insecure"
+    with path.open("rb") as handle:
+        assert handle.read(len(BACKUP_MAGIC)) == BACKUP_MAGIC, "conversation_backup_header_invalid"
+        created_at = int.from_bytes(handle.read(8), "big")
+    assert created_at <= now and now - created_at < BACKUP_MAX_AGE_SECONDS, "conversation_backup_expired"
+print(f"conversation_storage_monitor=green backup_inventory_count={len(backups)} state_content_exposed=false backup_content_exposed=false network_access=false authority_effect=none")'
