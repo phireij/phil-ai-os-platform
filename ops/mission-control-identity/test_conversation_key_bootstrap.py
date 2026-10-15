@@ -10,12 +10,16 @@ class ConversationKeyBootstrapChecks(unittest.TestCase):
             "--read-only",
             "--cap-drop ALL",
             "--cap-add CHOWN",
+            "--cap-add DAC_OVERRIDE",
             "conversation_key_bootstrap_completed=true",
             "recovery_package_pending_offline_retrieval=true",
             "storage_initialized=false",
             "conversation-key-recovery.v1.json",
+            "recovery_package_already_exists",
+            "recovery_package_verification_failed",
+            "recovery_package_repaired=",
             "os.O_EXCL",
-            "os.chmod(key_path, 0o400)\n    os.chown(key_path, 10003, 10003)",
+            "os.chmod(key_path, 0o400)\n        os.chown(key_path, 10003, 10003)",
             "os.chown(key_path, 10003, 10003)",
         ):
             self.assertIn(marker, script)
