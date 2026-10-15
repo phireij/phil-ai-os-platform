@@ -9,6 +9,7 @@ class ConversationKeyBootstrapChecks(unittest.TestCase):
             "--network none",
             "--read-only",
             "--cap-drop ALL",
+            "--cap-add CHOWN",
             "conversation_key_bootstrap_completed=true",
             "recovery_package_pending_offline_retrieval=true",
             "storage_initialized=false",
@@ -20,6 +21,7 @@ class ConversationKeyBootstrapChecks(unittest.TestCase):
             self.assertIn(marker, script)
         for prohibited in (
             "docker start",
+            "--privileged",
             "docker volume create",
             "docker volume rm",
             "MISSION_CONTROL_CONVERSATION_ENABLED=true",
