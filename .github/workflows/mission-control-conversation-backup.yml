@@ -1,0 +1,29 @@
+name: Mission Control Conversation Controlled Backup
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest: {description: Immutable active CEO-session image digest, required: true, type: string}
+      approved_backup: {description: Type APPROVE_CONVERSATION_BACKUP, required: true, type: string}
+permissions: {contents: read}
+concurrency: {group: mission-control-conversation-backup, cancel-in-progress: false}
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env: {VPS_HOST: ${{ secrets.VPS_HOST }}, VPS_USER: ${{ secrets.VPS_USER }}, VPS_PORT: ${{ secrets.VPS_PORT }}, IMAGE_DIGEST: ${{ inputs.image_digest }}, HOSTNAME: miscon.phireij.cloud, SESSION: phil-ai-os-mission-control-google-ceo-session}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {ref: main}
+      - name: Create explicitly approved encrypted backup
+        shell: bash
+        env: {VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}, APPROVED_BACKUP: ${{ inputs.approved_backup }} }
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; test "$APPROVED_BACKUP" = APPROVE_CONVERSATION_BACKUP; test -n "$VPS_SSH_KEY"
+          port="${VPS_PORT:-22}"; remote="$VPS_USER@$VPS_HOST"; install -m 700 -d ~/.ssh; printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519; chmod 600 ~/.ssh/id_ed25519
+          opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          cleanup(){ ssh "${opts[@]}" "$remote" 'rm -f /tmp/create-conversation-backup.sh' || true; }; trap cleanup EXIT
+          scp -4 -P "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-identity/create-conversation-backup.sh "$remote:/tmp/create-conversation-backup.sh"
+          ssh "${opts[@]}" "$remote" "chmod 700 /tmp/create-conversation-backup.sh && IMAGE_DIGEST='$IMAGE_DIGEST' SECRET_VOLUME=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}') STATE_VOLUME=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/var/lib/mission-control\"}}{{.Name}}{{end}}{{end}}') BACKUP_VOLUME=phil-ai-os-mission-control-conversation-backup-v1 bash /tmp/create-conversation-backup.sh"
+          test "$(curl --fail-with-body --silent --show-error --max-time 15 "https://$HOSTNAME/auth/google/healthz")" = 'session_ready;conversation_authority=enabled'
+          echo 'conversation_backup_workflow_completed=true public_health=green live_state_replaced=false'
