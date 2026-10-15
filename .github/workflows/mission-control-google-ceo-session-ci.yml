@@ -16,6 +16,7 @@ on:
       - '.github/workflows/mission-control-conversation-quarantined-restore.yml'
       - '.github/workflows/mission-control-conversation-recovery-package-removal.yml'
       - '.github/workflows/mission-control-conversation-storage-monitor.yml'
+      - '.github/workflows/mission-control-conversation-backup.yml'
   push:
     branches: [main]
     paths:
@@ -32,6 +33,7 @@ on:
       - '.github/workflows/mission-control-conversation-quarantined-restore.yml'
       - '.github/workflows/mission-control-conversation-recovery-package-removal.yml'
       - '.github/workflows/mission-control-conversation-storage-monitor.yml'
+      - '.github/workflows/mission-control-conversation-backup.yml'
   workflow_dispatch:
 
 permissions:
@@ -61,6 +63,7 @@ jobs:
           python3 ops/mission-control-identity/test_exercise_conversation_quarantined_restore.py
           python3 ops/mission-control-identity/test_remove_conversation_recovery_package.py
           python3 ops/mission-control-identity/test_monitor_conversation_storage.py
+          python3 ops/mission-control-identity/test_create_conversation_backup.py
           python3 ops/mission-control-identity/test_upgrade_google_ceo_session.py
           bash -n ops/mission-control-identity/activate-google-ceo-session.sh
           bash -n ops/mission-control-identity/preflight-conversation-storage.sh
@@ -71,6 +74,7 @@ jobs:
           bash -n ops/mission-control-identity/exercise-conversation-quarantined-restore.sh
           bash -n ops/mission-control-identity/remove-conversation-recovery-package.sh
           bash -n ops/mission-control-identity/monitor-conversation-storage.sh
+          bash -n ops/mission-control-identity/create-conversation-backup.sh
       - name: Build inactive CEO session image
         shell: bash
         run: |
