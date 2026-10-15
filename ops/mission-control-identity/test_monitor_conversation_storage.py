@@ -12,6 +12,12 @@ class ConversationStorageMonitorChecks(unittest.TestCase):
             "--user 10003:10003",
             "conversations.enc",
             "deletion-ledger.enc",
+            "dst=/mnt/conversation-backup,readonly",
+            "BACKUP_MAGIC",
+            "BACKUP_MAX_AGE_SECONDS",
+            "conversation_backup_missing",
+            "conversation_backup_expired",
+            "backup_content_exposed=false",
             "state_content_exposed=false",
             "authority_effect=none",
         ):
@@ -24,6 +30,9 @@ class ConversationStorageMonitorChecks(unittest.TestCase):
             "docker volume rm",
             "docker pull",
             "--privileged",
+            "unlink(",
+            "os.remove",
+            "os.unlink",
         ):
             self.assertNotIn(prohibited, script)
 

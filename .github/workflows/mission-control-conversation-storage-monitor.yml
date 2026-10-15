@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: mission-control-conversation-storage-monitor
+  group: mission-control-conversation-backup
   cancel-in-progress: false
 
 jobs:
