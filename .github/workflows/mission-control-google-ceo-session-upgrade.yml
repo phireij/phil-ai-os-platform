@@ -57,7 +57,7 @@ jobs:
           manifest_digest="sha256:$(docker buildx imagetools inspect "$IMAGE:$SOURCE_REVISION" --raw | sha256sum | cut -d' ' -f1)"
           test "$manifest_digest" = "$IMAGE_DIGEST"
           echo "source_revision=$SOURCE_REVISION image=$IMAGE@$IMAGE_DIGEST digest_match=true"
-      - name: Replace only the isolated CEO session and retain rollback
+      - name: Replace the CEO session while preserving encrypted conversation storage and rollback
         shell: bash
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -79,8 +79,8 @@ jobs:
           scp -4 -P "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-identity/upgrade-google-ceo-session.sh "$remote:/tmp/upgrade-google-ceo-session.sh"
           printf '%s' "$GH_TOKEN" | ssh "${ssh_opts[@]}" "$remote" "mkdir -m 700 -p '$config' && DOCKER_CONFIG='$config' docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin" >/dev/null
           ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/upgrade-google-ceo-session.sh && DOCKER_CONFIG='$config' IMAGE_DIGEST='$IMAGE_DIGEST' CURRENT_IMAGE_DIGEST='$CURRENT_IMAGE_DIGEST' HOSTNAME='miscon.phireij.cloud' bash /tmp/upgrade-google-ceo-session.sh"
-          test "$(curl --silent --show-error --fail --max-time 10 https://miscon.phireij.cloud/auth/google/healthz)" = 'session_ready;conversation_authority=none'
+          test "$(curl --silent --show-error --fail --max-time 10 https://miscon.phireij.cloud/auth/google/healthz)" = 'session_ready;conversation_authority=enabled'
           test "$(curl --silent --show-error --max-time 10 -o /dev/null -w '%{http_code}' https://miscon.phireij.cloud/auth/google/session)" = 401
           redirect="$(curl --silent --show-error --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}' https://miscon.phireij.cloud/auth/google/start)"
           [[ "$redirect" == '302 https://accounts.google.com/o/oauth2/v2/auth?'* ]]
-          echo "public_session_health=200 unauthenticated_session=401 google_start_redirect=302 existing_workloads_unchanged=true conversation_authority=none"
+          echo "public_session_health=200 unauthenticated_session=401 google_start_redirect=302 existing_workloads_unchanged=true encrypted_storage_preserved=true conversation_authority=enabled"
