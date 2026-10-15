@@ -14,6 +14,7 @@ class ConversationKeyBootstrapChecks(unittest.TestCase):
             "storage_initialized=false",
             "conversation-key-recovery.v1.json",
             "os.O_EXCL",
+            "os.chmod(key_path, 0o400)\n    os.chown(key_path, 10003, 10003)",
             "os.chown(key_path, 10003, 10003)",
         ):
             self.assertIn(marker, script)
