@@ -37,6 +37,9 @@ class ConversationStorageActivationChecks(unittest.TestCase):
             "conversation_authority=enabled",
             "provider_authority=none",
             "task_authority=none",
+            "PathPrefix(\\`/api/conversations\\`)",
+            "PathPrefix(\\`/api/notifications\\`)",
+            "PathPrefix(\\`/api/task-proposals\\`)",
         ):
             self.assertIn(marker, script)
         for prohibited in (
@@ -48,6 +51,7 @@ class ConversationStorageActivationChecks(unittest.TestCase):
             "os.chown(path",
             "docker logs --details",
             "-printf",
+            "PathPrefix(\\`/api\\`)",
         ):
             self.assertNotIn(prohibited, script)
 
