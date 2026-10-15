@@ -60,9 +60,28 @@ SECRET_VOLUME="$(docker inspect "$SESSION" --format '{{range .Mounts}}{{if eq .D
 test "$(docker volume inspect "$SECRET_VOLUME" --format '{{.Name}}')" = "$SECRET_VOLUME"
 
 echo 'conversation_storage_activation_phase=volume_nonexistence_guard'
-if docker volume inspect "$STATE_VOLUME" >/dev/null 2>&1 || docker volume inspect "$BACKUP_VOLUME" >/dev/null 2>&1; then
-  echo 'conversation_storage_activation_blocked=conversation_volume_already_exists' >&2
+STATE_VOLUME_EXISTS=false
+BACKUP_VOLUME_EXISTS=false
+docker volume inspect "$STATE_VOLUME" >/dev/null 2>&1 && STATE_VOLUME_EXISTS=true
+docker volume inspect "$BACKUP_VOLUME" >/dev/null 2>&1 && BACKUP_VOLUME_EXISTS=true
+if [[ "$STATE_VOLUME_EXISTS" != "$BACKUP_VOLUME_EXISTS" ]]; then
+  echo 'conversation_storage_activation_blocked=conversation_volume_pair_mismatch' >&2
   exit 1
+fi
+if [[ "$STATE_VOLUME_EXISTS" == true ]]; then
+  # A prior failed attempt may have created both volumes before any session
+  # replacement. Reuse them only when each is proven empty, so no state or
+  # recovery material can be overwritten.
+  for volume in "$STATE_VOLUME" "$BACKUP_VOLUME"; do
+    if ! docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --user 0:0 \
+      --mount "type=volume,src=$volume,dst=/mnt/activation-volume,readonly" \
+      --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
+      -c 'test -z "$(find /mnt/activation-volume -mindepth 1 -print -quit)"'; then
+      echo 'conversation_storage_activation_blocked=conversation_volume_already_exists' >&2
+      exit 1
+    fi
+  done
+  echo 'conversation_storage_activation_volume_retry=verified_empty'
 fi
 
 echo 'conversation_storage_activation_phase=route_collision_guard'
@@ -109,11 +128,13 @@ if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --secu
 fi
 
 echo 'conversation_storage_activation_phase=create_dedicated_volumes'
-docker volume create "$STATE_VOLUME" >/dev/null
-docker volume create "$BACKUP_VOLUME" >/dev/null
+if [[ "$STATE_VOLUME_EXISTS" == false ]]; then
+  docker volume create "$STATE_VOLUME" >/dev/null
+  docker volume create "$BACKUP_VOLUME" >/dev/null
+fi
 
 echo 'conversation_storage_activation_phase=state_volume_ownership'
-docker run --rm --network none --read-only --cap-drop ALL --cap-add CHOWN --security-opt no-new-privileges:true --user 0:0 \
+docker run --rm --network none --read-only --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --security-opt no-new-privileges:true --user 0:0 \
   --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR" \
   --entrypoint python3 "$IMAGE@$IMAGE_DIGEST" \
   -c 'import os; path="/var/lib/mission-control"; os.chown(path, 10003, 10003); os.chmod(path, 0o700); metadata=os.stat(path); assert metadata.st_uid == 10003 and metadata.st_gid == 10003 and (metadata.st_mode & 0o777) == 0o700'
