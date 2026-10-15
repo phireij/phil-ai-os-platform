@@ -41,6 +41,28 @@ class ConversationStoreChecks(unittest.TestCase):
     def store(self, subject: str = SUBJECT) -> ConversationStore:
         return ConversationStore(self.config, ISSUER, subject)
 
+    @staticmethod
+    def _record_decision(store: ConversationStore, suffix: str) -> dict:
+        conversation = store.create_conversation(f"create-notification-{suffix}", b"{}")
+        message = store.submit_message(
+            conversation["conversation_id"], f"submit-notification-{suffix}", b'{"body":"bounded notification test"}'
+        )
+        proposal = store.create_task_proposal(
+            conversation["conversation_id"],
+            f"proposal-notification-{suffix}",
+            (
+                "{" + f'"source_message_id":"{message["message_id"]}",'
+                '"project_id":"phil-ai-os","task_class":"general",'
+                '"scope":"Review one bounded artifact.","expected_result":"A review note.",'
+                '"required_authority":"A1","source_evidence_refs":[]}'
+            ).encode(),
+        )
+        return store.record_task_decision(
+            proposal["proposal_id"],
+            f"decision-notification-{suffix}",
+            b'{"decision":"approved","rationale":"Bounded notification-only test.","expires_at":"2035-01-01T00:00:00Z"}',
+        )
+
     def test_disabled_by_default_and_protected_configuration_fail_closed(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
             self.assertIsNone(ConversationConfig.from_environment())
@@ -169,6 +191,72 @@ class ConversationStoreChecks(unittest.TestCase):
         self.assertEqual("not_configured", notification["delivery_state"])
         self.assertEqual(0, notification["attempt_count"])
         self.assertNotIn("Proceed only through a later gate.", json.dumps(notifications))
+
+    def test_enabled_delivery_is_identifier_only_retries_once_then_dead_letters(self) -> None:
+        now = 1_900_000_000
+        with patch("conversation_store.time.time", return_value=now):
+            store = ConversationStore(
+                self.config, ISSUER, SUBJECT, notification_delivery_enabled=True
+            )
+            decision = self._record_decision(store, "0001")
+        notifications = store.list_notifications()
+        self.assertEqual("enabled", notifications["transport_status"])
+        self.assertEqual("pending", notifications["notifications"][0]["delivery_state"])
+
+        delivered: list[dict] = []
+        self.assertTrue(store.dispatch_one_notification(delivered.append, now=now, retry_seconds=900))
+        self.assertEqual(1, len(delivered))
+        self.assertEqual(decision["decision_id"], delivered[0]["decision_id"])
+        self.assertNotIn("Bounded notification-only test.", json.dumps(delivered))
+        self.assertEqual("delivered", store.list_notifications()["notifications"][0]["delivery_state"])
+
+        with patch("conversation_store.time.time", return_value=now + 1):
+            self._record_decision(store, "0002")
+
+        def fail(_notification: dict) -> None:
+            raise RuntimeError("synthetic delivery failure")
+
+        self.assertTrue(store.dispatch_one_notification(fail, now=now + 1, retry_seconds=900))
+        failed = store.list_notifications()["notifications"][1]
+        self.assertEqual("retry_wait", failed["delivery_state"])
+        self.assertEqual(1, failed["attempt_count"])
+        self.assertFalse(store.dispatch_one_notification(fail, now=now + 900, retry_seconds=900))
+        self.assertTrue(store.dispatch_one_notification(fail, now=now + 901, retry_seconds=900))
+        failed = store.list_notifications()["notifications"][1]
+        self.assertEqual("dead_letter", failed["delivery_state"])
+        self.assertEqual(2, failed["attempt_count"])
+
+    def test_existing_outbox_snapshot_migrates_without_retroactive_delivery(self) -> None:
+        original = self.store()
+        with patch("conversation_store.time.time", return_value=1_900_000_000):
+            self._record_decision(original, "0003")
+        original._live.connection.execute("DROP INDEX notification_outbox_delivery_order")
+        original._live.connection.execute("DROP INDEX notification_outbox_owner_order")
+        original._live.connection.execute("ALTER TABLE notification_outbox RENAME TO notification_outbox_new")
+        original._live.connection.executescript(
+            """
+            CREATE TABLE notification_outbox (
+                notification_id TEXT PRIMARY KEY,
+                owner_digest BLOB NOT NULL,
+                decision_id TEXT NOT NULL UNIQUE REFERENCES ceo_decisions(decision_id) ON DELETE CASCADE,
+                proposal_id TEXT NOT NULL REFERENCES task_proposals(proposal_id) ON DELETE CASCADE,
+                kind TEXT NOT NULL CHECK(kind='ceo_decision_recorded'),
+                priority TEXT NOT NULL CHECK(priority IN ('low','medium','high','critical')),
+                delivery_state TEXT NOT NULL CHECK(delivery_state='not_configured'),
+                attempt_count INTEGER NOT NULL CHECK(attempt_count=0),
+                created_at INTEGER NOT NULL,
+                last_attempt_at INTEGER,
+                authority_effect TEXT NOT NULL CHECK(authority_effect='none')
+            );
+            INSERT INTO notification_outbox SELECT notification_id,owner_digest,decision_id,proposal_id,kind,priority,delivery_state,attempt_count,created_at,last_attempt_at,authority_effect FROM notification_outbox_new;
+            DROP TABLE notification_outbox_new;
+            """
+        )
+        original._live.persist()
+        reopened = ConversationStore(self.config, ISSUER, SUBJECT, notification_delivery_enabled=True)
+        notification = reopened.list_notifications()["notifications"][0]
+        self.assertEqual("not_configured", notification["delivery_state"])
+        self.assertFalse(reopened.dispatch_one_notification(lambda _item: None, now=1_900_000_001, retry_seconds=900))
 
     def test_retention_and_durable_deletion_marker_prevent_reappearance(self) -> None:
         now = 2_000_000_000

@@ -26,6 +26,12 @@ from conversation_store import (
     ConversationRequestError,
     ConversationStore,
 )
+from notification_delivery import (
+    NotificationConfigurationError,
+    NotificationDeliveryWorker,
+    TelegramDeliveryConfig,
+    TelegramTransport,
+)
 
 from google_identity_probe import (
     COOKIE_NAME as FLOW_COOKIE,
@@ -508,17 +514,41 @@ def main() -> None:
     config = GoogleOidcConfig.from_environment()
     subject = load_ceo_subject(config.ceo_subject_file)
     conversation_config = ConversationConfig.from_environment()
+    try:
+        delivery_config = TelegramDeliveryConfig.from_environment()
+    except NotificationConfigurationError as exc:
+        raise ValueError(str(exc)) from exc
+    if delivery_config is not None and conversation_config is None:
+        raise ValueError("telegram_delivery_requires_conversation_storage")
     server = ThreadingHTTPServer(("0.0.0.0", 8093), SessionHandler)
     server.flows = FlowStore()  # type: ignore[attr-defined]
     server.sessions = SessionStore()  # type: ignore[attr-defined]
     server.secret_file = config.client_secret_file  # type: ignore[attr-defined]
     server.ceo_subject = subject  # type: ignore[attr-defined]
     server.conversations = (  # type: ignore[attr-defined]
-        ConversationStore(conversation_config, config.issuer, subject)
+        ConversationStore(
+            conversation_config,
+            config.issuer,
+            subject,
+            notification_delivery_enabled=delivery_config is not None,
+        )
         if conversation_config is not None
         else None
     )
-    server.serve_forever()
+    worker = None
+    if delivery_config is not None and conversation_config is not None and not server.conversations._readonly_preflight:  # type: ignore[attr-defined]
+        worker = NotificationDeliveryWorker(
+            server.conversations,  # type: ignore[arg-type]
+            TelegramTransport(delivery_config),
+            retry_seconds=delivery_config.retry_seconds,
+            poll_seconds=delivery_config.poll_seconds,
+        )
+        worker.start()
+    try:
+        server.serve_forever()
+    finally:
+        if worker is not None:
+            worker.stop()
 
 
 if __name__ == "__main__":
