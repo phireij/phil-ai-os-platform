@@ -1,22 +1,43 @@
 name: Mission Control Conversation Controlled Backup
+
 on:
   workflow_dispatch:
     inputs:
-      image_digest: {description: Immutable active CEO-session image digest, required: true, type: string}
-      approved_backup: {description: Type APPROVE_CONVERSATION_BACKUP, required: true, type: string}
-permissions: {contents: read}
-concurrency: {group: mission-control-conversation-backup, cancel-in-progress: false}
+      image_digest:
+        description: Immutable active CEO-session image digest
+        required: true
+        type: string
+      approved_backup:
+        description: Type APPROVE_CONVERSATION_BACKUP
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-control-conversation-backup
+  cancel-in-progress: false
 jobs:
   backup:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env: {VPS_HOST: ${{ secrets.VPS_HOST }}, VPS_USER: ${{ secrets.VPS_USER }}, VPS_PORT: ${{ secrets.VPS_PORT }}, IMAGE_DIGEST: ${{ inputs.image_digest }}, HOSTNAME: miscon.phireij.cloud, SESSION: phil-ai-os-mission-control-google-ceo-session}
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+      HOSTNAME: miscon.phireij.cloud
+      SESSION: phil-ai-os-mission-control-google-ceo-session
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {ref: main}
+        with:
+          ref: main
       - name: Create explicitly approved encrypted backup
         shell: bash
-        env: {VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}, APPROVED_BACKUP: ${{ inputs.approved_backup }} }
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          APPROVED_BACKUP: ${{ inputs.approved_backup }}
         run: |
           set -euo pipefail
           [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; test "$APPROVED_BACKUP" = APPROVE_CONVERSATION_BACKUP; test -n "$VPS_SSH_KEY"
