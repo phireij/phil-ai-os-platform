@@ -71,18 +71,30 @@ if [[ "$STATE_VOLUME_EXISTS" != "$BACKUP_VOLUME_EXISTS" ]]; then
 fi
 if [[ "$STATE_VOLUME_EXISTS" == true ]]; then
   # A prior failed attempt may have created both volumes before any session
-  # replacement. Reuse them only when each is proven empty, so no state or
-  # recovery material can be overwritten.
-  for volume in "$STATE_VOLUME" "$BACKUP_VOLUME"; do
+  # replacement. Reuse them only when the backup is empty and the state
+  # volume is empty or contains exactly its empty seed directory.
+  if ! docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --user 0:0 \
+    --mount "type=volume,src=$BACKUP_VOLUME,dst=/mnt/activation-volume,readonly" \
+    --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
+    -c 'test -z "$(find /mnt/activation-volume -mindepth 1 -print -quit)"'; then
+    echo 'conversation_storage_activation_blocked=conversation_backup_volume_not_empty' >&2
+    exit 1
+  fi
+  if ! docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --user 0:0 \
+    --mount "type=volume,src=$STATE_VOLUME,dst=/mnt/activation-volume,readonly" \
+    --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
+    -c 'entries="$(find /mnt/activation-volume -mindepth 1 -maxdepth 1 -printf "%f\n")"; test "$entries" = state && test -d /mnt/activation-volume/state && test -z "$(find /mnt/activation-volume/state -mindepth 1 -print -quit)"'; then
+    # The first incomplete setup predates the seed directory. An entirely
+    # empty volume is also safe because no durable data has been written.
     if ! docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --user 0:0 \
-      --mount "type=volume,src=$volume,dst=/mnt/activation-volume,readonly" \
+      --mount "type=volume,src=$STATE_VOLUME,dst=/mnt/activation-volume,readonly" \
       --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
       -c 'test -z "$(find /mnt/activation-volume -mindepth 1 -print -quit)"'; then
       echo 'conversation_storage_activation_blocked=conversation_volume_already_exists' >&2
       exit 1
     fi
-  done
-  echo 'conversation_storage_activation_volume_retry=verified_empty'
+  fi
+  echo 'conversation_storage_activation_volume_retry=verified_empty_or_seed_only'
 fi
 
 echo 'conversation_storage_activation_phase=route_collision_guard'
@@ -135,10 +147,10 @@ if [[ "$STATE_VOLUME_EXISTS" == false ]]; then
 fi
 
 echo 'conversation_storage_activation_phase=state_volume_ownership'
-docker run --rm --network none --read-only --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --security-opt no-new-privileges:true --user 0:0 \
+docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --user 0:0 \
   --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR" \
   --entrypoint python3 "$IMAGE@$IMAGE_DIGEST" \
-  -c 'import os; path="/var/lib/mission-control/state"; os.mkdir(path, 0o700); os.chown(path, 10003, 10003); os.chmod(path, 0o700); metadata=os.stat(path); assert metadata.st_uid == 10003 and metadata.st_gid == 10003 and (metadata.st_mode & 0o777) == 0o700'
+  -c 'import os; path="/var/lib/mission-control/state"; os.makedirs(path, mode=0o1777, exist_ok=True); os.chmod(path, 0o1777); metadata=os.stat(path); assert metadata.st_mode & 0o7777 == 0o1777'
 
 PREFLIGHT_STARTED=true
 echo 'conversation_storage_activation_phase=candidate_storage_initialization'

@@ -9,15 +9,15 @@ class ConversationStorageActivationChecks(unittest.TestCase):
             "--network none",
             "--read-only",
             "--cap-drop ALL",
-            "--cap-add CHOWN",
-            "--cap-add DAC_OVERRIDE",
             "no-new-privileges:true",
             "conversation_storage_activation_phase=initial_container_guard",
             "conversation_volume_already_exists",
-            "conversation_storage_activation_volume_retry=verified_empty",
+            "conversation_storage_activation_volume_retry=verified_empty_or_seed_only",
             "MISSION_CONTROL_CONVERSATION_KEY_FILE=/run/secrets/conversation_key",
             "STATE_DATA_DIR=$STATE_DIR/state",
             "MISSION_CONTROL_CONVERSATION_STATE_FILE=$STATE_DATA_DIR/conversations.enc",
+            "os.makedirs(path, mode=0o1777, exist_ok=True)",
+            "os.chmod(path, 0o1777)",
             "STATE_VOLUME=phil-ai-os-mission-control-conversation-state-v1",
             "BACKUP_VOLUME=phil-ai-os-mission-control-conversation-backup-v1",
             "MISSION_CONTROL_CONVERSATION_ENABLED=true",
@@ -34,6 +34,7 @@ class ConversationStorageActivationChecks(unittest.TestCase):
             "docker pull",
             "OPENAI_API_KEY",
             "MISSION_CONTROL_PROVIDER",
+            "os.chown(path",
         ):
             self.assertNotIn(prohibited, script)
 
