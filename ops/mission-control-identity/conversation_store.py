@@ -88,8 +88,12 @@ def _absolute_state_path(variable: str) -> Path:
     parent = path.parent
     if not parent.is_dir() or parent.is_symlink():
         raise ConversationConfigurationError("conversation_state_parent_invalid")
-    mode = parent.stat().st_mode & 0o777
-    if mode & 0o077:
+    mode = parent.stat().st_mode & 0o7777
+    # The normal persistent-state parent is private (0700). Hostinger's
+    # user-namespaced Docker volume root cannot be chowned by the container,
+    # so a dedicated sticky subdirectory (01777) is the sole supported
+    # compatibility exception. Snapshot files remain encrypted and 0600.
+    if mode != 0o1777 and mode & 0o077:
         raise ConversationConfigurationError("conversation_state_parent_permissions")
     return path
 

@@ -48,6 +48,29 @@ class ConversationStoreChecks(unittest.TestCase):
             with self.assertRaises(ConversationConfigurationError):
                 ConversationConfig.from_environment()
 
+    @unittest.skipIf(os.name == "nt", "POSIX permissions are required")
+    def test_exact_sticky_volume_parent_is_the_only_non_private_exception(self) -> None:
+        sticky = self.root / "sticky-volume-state"
+        sticky.mkdir(mode=0o1777)
+        os.chmod(sticky, 0o1777)
+        environment = {
+            "MISSION_CONTROL_CONVERSATION_ENABLED": "true",
+            "MISSION_CONTROL_CONVERSATION_STATE_FILE": str(sticky / "state.enc"),
+            "MISSION_CONTROL_CONVERSATION_DELETION_LEDGER_FILE": str(sticky / "ledger.enc"),
+            "MISSION_CONTROL_CONVERSATION_KEY_FILE": str(self.key),
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            self.assertIsNotNone(ConversationConfig.from_environment())
+
+        insecure = self.root / "insecure-state"
+        insecure.mkdir(mode=0o777)
+        os.chmod(insecure, 0o777)
+        environment["MISSION_CONTROL_CONVERSATION_STATE_FILE"] = str(insecure / "state.enc")
+        environment["MISSION_CONTROL_CONVERSATION_DELETION_LEDGER_FILE"] = str(insecure / "ledger.enc")
+        with patch.dict(os.environ, environment, clear=True):
+            with self.assertRaisesRegex(ConversationConfigurationError, "parent_permissions"):
+                ConversationConfig.from_environment()
+
     def test_encrypted_persistence_idempotency_and_owner_isolation(self) -> None:
         store = self.store()
         created = store.create_conversation("create-conversation-0001", b"{}")
