@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+# Controlled activation of encrypted conversation storage for the existing CEO
+# session. The previous session remains available as a stopped rollback.
+set -euo pipefail
+
+: "${IMAGE_DIGEST:?Set the immutable digest of the active CEO-session image}"
+: "${HOSTNAME:?Set the Mission Control hostname}"
+[[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+test "$HOSTNAME" = miscon.phireij.cloud
+
+IMAGE=ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
+SESSION=phil-ai-os-mission-control-google-ceo-session
+ROLLBACK="${SESSION}-storage-rollback"
+PREFLIGHT="${SESSION}-storage-preflight"
+STATE_VOLUME=phil-ai-os-mission-control-conversation-state-v1
+BACKUP_VOLUME=phil-ai-os-mission-control-conversation-backup-v1
+STATE_DIR=/var/lib/mission-control
+PREFLIGHT_STARTED=false
+OLD_STAGED=false
+SESSION_STARTED=false
+
+restore_and_exit() {
+  local status="$1"
+  trap - ERR HUP INT TERM
+  if [[ "$PREFLIGHT_STARTED" == true ]]; then docker rm -f "$PREFLIGHT" >/dev/null 2>&1 || true; fi
+  if [[ "$SESSION_STARTED" == true ]]; then docker rm -f "$SESSION" >/dev/null 2>&1 || true; fi
+  if [[ "$OLD_STAGED" == true ]] && docker inspect "$ROLLBACK" >/dev/null 2>&1; then
+    docker rename "$ROLLBACK" "$SESSION" || true
+    docker start "$SESSION" >/dev/null || true
+  fi
+  echo "conversation_storage_activation_failed status=$status rollback_attempted=$OLD_STAGED" >&2
+  exit "$status"
+}
+trap 'restore_and_exit "$?"' ERR
+trap 'restore_and_exit 129' HUP
+trap 'restore_and_exit 130' INT
+trap 'restore_and_exit 143' TERM
+
+echo 'conversation_storage_activation_phase=initial_container_guard'
+if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
+  echo 'conversation_storage_activation_blocked=storage_rollback_already_exists' >&2
+  exit 1
+fi
+if docker inspect "$PREFLIGHT" >/dev/null 2>&1; then
+  echo 'conversation_storage_activation_blocked=storage_preflight_already_exists' >&2
+  exit 1
+fi
+
+echo 'conversation_storage_activation_phase=existing_session_guard'
+test "$(docker inspect "$SESSION" --format '{{.State.Running}}')" = true
+test "$(docker inspect "$SESSION" --format '{{.Config.Image}}')" = "$IMAGE@$IMAGE_DIGEST"
+test "$(docker inspect "$SESSION" --format '{{.HostConfig.NetworkMode}}')" = bridge
+test "$(docker inspect "$SESSION" --format '{{.HostConfig.ReadonlyRootfs}}')" = true
+if docker inspect "$SESSION" --format '{{range .Mounts}}{{if eq .Destination "/var/lib/mission-control"}}{{.Name}}{{end}}{{end}}' | grep -q .; then
+  echo 'conversation_storage_activation_blocked=session_already_has_state_mount' >&2
+  exit 1
+fi
+SECRET_VOLUME="$(docker inspect "$SESSION" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets"}}{{.Name}}{{end}}{{end}}')"
+[[ "$SECRET_VOLUME" =~ ^phil-ai-os-mc-google-session-secret-[0-9]+-[0-9]+$ ]]
+test "$(docker volume inspect "$SECRET_VOLUME" --format '{{.Name}}')" = "$SECRET_VOLUME"
+
+echo 'conversation_storage_activation_phase=volume_nonexistence_guard'
+if docker volume inspect "$STATE_VOLUME" >/dev/null 2>&1 || docker volume inspect "$BACKUP_VOLUME" >/dev/null 2>&1; then
+  echo 'conversation_storage_activation_blocked=conversation_volume_already_exists' >&2
+  exit 1
+fi
+
+echo 'conversation_storage_activation_phase=route_collision_guard'
+python3 - "$SESSION" "$HOSTNAME" <<'PY'
+import json
+import subprocess
+import sys
+
+session, hostname = sys.argv[1:]
+for name in subprocess.check_output(['docker', 'ps', '--format', '{{.Names}}'], text=True).splitlines():
+    if name == session:
+        continue
+    item = json.loads(subprocess.check_output(['docker', 'inspect', name], text=True))[0]
+    for key, rule in ((item.get('Config') or {}).get('Labels') or {}).items():
+        if key.startswith('traefik.http.routers.') and key.endswith('.rule') and hostname in rule and '/auth/google' in rule:
+            raise SystemExit('conversation_storage_activation_route_collision')
+print('conversation_storage_activation_route_collision=none')
+PY
+
+BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}' | awk -F'|' -v s="$SESSION" '$1 != s' | sort)"
+
+OIDC_ENV=(
+  --env 'MISSION_CONTROL_GOOGLE_OIDC_ENABLED=true'
+  --env 'MISSION_CONTROL_GOOGLE_OIDC_ISSUER=https://accounts.google.com'
+  --env 'MISSION_CONTROL_GOOGLE_REDIRECT_URI=https://miscon.phireij.cloud/auth/google/callback'
+  --env 'MISSION_CONTROL_GOOGLE_CLIENT_ID=531519060424-c2n6uclfuko18tubr9ejs9o2fhf8s4c1.apps.googleusercontent.com'
+  --env 'MISSION_CONTROL_GOOGLE_CLIENT_SECRET_FILE=/run/secrets/client_secret'
+  --env 'MISSION_CONTROL_GOOGLE_CEO_SUBJECT_FILE=/run/secrets/ceo_binding'
+)
+CONVERSATION_ENV=(
+  --env 'MISSION_CONTROL_CONVERSATION_ENABLED=true'
+  --env "MISSION_CONTROL_CONVERSATION_STATE_FILE=$STATE_DIR/conversations.enc"
+  --env "MISSION_CONTROL_CONVERSATION_DELETION_LEDGER_FILE=$STATE_DIR/deletion-ledger.enc"
+  --env 'MISSION_CONTROL_CONVERSATION_KEY_FILE=/run/secrets/conversation_key'
+)
+
+echo 'conversation_storage_activation_phase=secret_volume_preflight'
+if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
+  --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
+  -c 'test "$(stat -c "%u:%a" /run/secrets/client_secret)" = "10003:400" && test "$(stat -c "%u:%a" /run/secrets/ceo_binding)" = "10003:400" && test "$(stat -c "%u:%a" /run/secrets/conversation_key)" = "10003:400" && test -s /run/secrets/client_secret && test -s /run/secrets/ceo_binding && test -s /run/secrets/conversation_key'; then
+  echo 'conversation_storage_activation_blocked=secret_volume_preflight_failed' >&2
+  exit 1
+fi
+
+echo 'conversation_storage_activation_phase=create_dedicated_volumes'
+docker volume create "$STATE_VOLUME" >/dev/null
+docker volume create "$BACKUP_VOLUME" >/dev/null
+
+echo 'conversation_storage_activation_phase=state_volume_ownership'
+docker run --rm --network none --read-only --cap-drop ALL --cap-add CHOWN --security-opt no-new-privileges:true --user 0:0 \
+  --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR" \
+  --entrypoint python3 "$IMAGE@$IMAGE_DIGEST" \
+  -c 'import os; path="/var/lib/mission-control"; os.chown(path, 10003, 10003); os.chmod(path, 0o700); metadata=os.stat(path); assert metadata.st_uid == 10003 and metadata.st_gid == 10003 and (metadata.st_mode & 0o777) == 0o700'
+
+PREFLIGHT_STARTED=true
+echo 'conversation_storage_activation_phase=candidate_storage_initialization'
+docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+  "${OIDC_ENV[@]}" "${CONVERSATION_ENV[@]}" \
+  --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
+  --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR" \
+  --label 'traefik.enable=false' \
+  "$IMAGE@$IMAGE_DIGEST" >/dev/null
+sleep 2
+echo 'conversation_storage_activation_phase=candidate_storage_health'
+test "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" = true
+echo 'conversation_storage_activation_phase=candidate_storage_cleanup'
+docker rm -f "$PREFLIGHT" >/dev/null
+PREFLIGHT_STARTED=false
+
+echo 'conversation_storage_activation_phase=stage_old_session'
+docker stop "$SESSION" >/dev/null
+docker rename "$SESSION" "$ROLLBACK"
+OLD_STAGED=true
+
+SESSION_STARTED=true
+echo 'conversation_storage_activation_phase=start_storage_enabled_session'
+docker run -d --name "$SESSION" --restart unless-stopped --network bridge \
+  --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+  "${OIDC_ENV[@]}" "${CONVERSATION_ENV[@]}" \
+  --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
+  --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR" \
+  --label 'traefik.enable=true' \
+  --label 'traefik.docker.network=bridge' \
+  --label "traefik.http.routers.mission-control-google-ceo-session.rule=Host(\`$HOSTNAME\`) && PathPrefix(\`/auth/google\`)" \
+  --label 'traefik.http.routers.mission-control-google-ceo-session.priority=120' \
+  --label 'traefik.http.routers.mission-control-google-ceo-session.entrypoints=websecure' \
+  --label 'traefik.http.routers.mission-control-google-ceo-session.tls=true' \
+  --label 'traefik.http.routers.mission-control-google-ceo-session.tls.certresolver=letsencrypt' \
+  --label 'traefik.http.routers.mission-control-google-ceo-session.service=mission-control-google-ceo-session' \
+  --label 'traefik.http.services.mission-control-google-ceo-session.loadbalancer.server.port=8093' \
+  "$IMAGE@$IMAGE_DIGEST" >/dev/null
+sleep 5
+
+echo 'conversation_storage_activation_phase=verify_storage_enabled_session'
+test "$(docker inspect "$SESSION" --format '{{.State.Running}}')" = true
+test "$(docker inspect "$SESSION" --format '{{.Config.Image}}')" = "$IMAGE@$IMAGE_DIGEST"
+test "$(docker inspect "$SESSION" --format '{{.HostConfig.NetworkMode}}')" = bridge
+test "$(docker inspect "$SESSION" --format '{{.HostConfig.ReadonlyRootfs}}')" = true
+test "$(docker inspect "$SESSION" --format '{{range .Mounts}}{{if eq .Destination "/var/lib/mission-control"}}{{.Name}}{{end}}{{end}}')" = "$STATE_VOLUME"
+AFTER="$(docker ps --format '{{.Names}}|{{.Image}}' | awk -F'|' -v s="$SESSION" '$1 != s' | sort)"
+test "$BEFORE" = "$AFTER"
+
+trap - ERR HUP INT TERM
+echo "conversation_storage_activated=true state_volume=$STATE_VOLUME backup_volume=$BACKUP_VOLUME existing_workloads_unchanged=true rollback_retained=true conversation_authority=enabled provider_authority=none task_authority=none"

@@ -11,6 +11,7 @@ on:
       - '.github/workflows/mission-control-google-ceo-session-upgrade.yml'
       - '.github/workflows/mission-control-conversation-storage-preflight.yml'
       - '.github/workflows/mission-control-conversation-key-bootstrap.yml'
+      - '.github/workflows/mission-control-conversation-storage-activate.yml'
   push:
     branches: [main]
     paths:
@@ -22,6 +23,7 @@ on:
       - '.github/workflows/mission-control-google-ceo-session-upgrade.yml'
       - '.github/workflows/mission-control-conversation-storage-preflight.yml'
       - '.github/workflows/mission-control-conversation-key-bootstrap.yml'
+      - '.github/workflows/mission-control-conversation-storage-activate.yml'
   workflow_dispatch:
 
 permissions:
@@ -46,11 +48,13 @@ jobs:
           python3 ops/mission-control-identity/test_preflight_conversation_storage.py
           python3 ops/mission-control-identity/test_hostinger_conversation_storage_preflight_workflow.py
           python3 ops/mission-control-identity/test_conversation_key_bootstrap.py
+          python3 ops/mission-control-identity/test_activate_conversation_storage.py
           python3 ops/mission-control-identity/test_upgrade_google_ceo_session.py
           bash -n ops/mission-control-identity/activate-google-ceo-session.sh
           bash -n ops/mission-control-identity/preflight-conversation-storage.sh
           bash -n ops/mission-control-identity/upgrade-google-ceo-session.sh
           bash -n ops/mission-control-identity/bootstrap-conversation-key.sh
+          bash -n ops/mission-control-identity/activate-conversation-storage.sh
       - name: Build inactive CEO session image
         shell: bash
         run: |

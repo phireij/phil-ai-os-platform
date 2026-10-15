@@ -1,0 +1,61 @@
+name: Mission Control Conversation Storage Activation
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: Immutable digest of the already-running CEO session image
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-control-conversation-storage-activate
+  cancel-in-progress: false
+
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+      HOSTNAME: miscon.phireij.cloud
+      SESSION: phil-ai-os-mission-control-google-ceo-session
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Activate encrypted storage with rollback and public-boundary checks
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          port="${VPS_PORT:-22}"
+          remote="$VPS_USER@$VPS_HOST"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          cleanup() {
+            ssh "${ssh_opts[@]}" "$remote" "rm -f /tmp/activate-conversation-storage.sh" || true
+          }
+          trap cleanup EXIT
+          scp -4 -P "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-identity/activate-conversation-storage.sh "$remote:/tmp/activate-conversation-storage.sh"
+          ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/activate-conversation-storage.sh && IMAGE_DIGEST='$IMAGE_DIGEST' HOSTNAME='$HOSTNAME' bash /tmp/activate-conversation-storage.sh"
+          health="$(curl --fail-with-body --silent --show-error --max-time 15 "https://$HOSTNAME/auth/google/healthz")"
+          test "$health" = 'session_ready;conversation_authority=enabled'
+          unauth_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 "https://$HOSTNAME/auth/google/session")"
+          test "$unauth_status" = 401
+          redirect_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 "https://$HOSTNAME/auth/google/start")"
+          test "$redirect_status" = 302
+          echo 'storage_activation_workflow_completed=true conversation_authority=enabled public_health=green unauthenticated_session=401 google_start=302'
