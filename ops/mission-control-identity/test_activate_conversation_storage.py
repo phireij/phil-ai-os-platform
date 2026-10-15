@@ -26,6 +26,8 @@ class ConversationStorageActivationChecks(unittest.TestCase):
             "BACKUP_VOLUME=phil-ai-os-mission-control-conversation-backup-v1",
             "MISSION_CONTROL_CONVERSATION_ENABLED=true",
             "conversation_storage_activated=true",
+            "conversation_storage_activation_blocked=candidate_storage_not_running",
+            "docker logs --tail 20",
             "rollback_retained=true",
             "conversation_authority=enabled",
             "provider_authority=none",
@@ -39,6 +41,7 @@ class ConversationStorageActivationChecks(unittest.TestCase):
             "OPENAI_API_KEY",
             "MISSION_CONTROL_PROVIDER",
             "os.chown(path",
+            "docker logs --details",
             "-printf",
         ):
             self.assertNotIn(prohibited, script)
