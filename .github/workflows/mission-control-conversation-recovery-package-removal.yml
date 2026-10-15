@@ -1,0 +1,63 @@
+name: Mission Control Recovery Package Removal
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: Immutable digest of the already-running CEO session image
+        required: true
+        type: string
+      approved_removal:
+        description: Type exactly REMOVE_HOSTINGER_RECOVERY_PACKAGE
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-control-conversation-recovery-package-removal
+  cancel-in-progress: false
+
+jobs:
+  remove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+      HOSTNAME: miscon.phireij.cloud
+      SESSION: phil-ai-os-mission-control-google-ceo-session
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Remove only the owner-confirmed on-host recovery package
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          APPROVED_REMOVAL: ${{ inputs.approved_removal }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "$APPROVED_REMOVAL" = 'REMOVE_HOSTINGER_RECOVERY_PACKAGE'
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          port="${VPS_PORT:-22}"
+          remote="$VPS_USER@$VPS_HOST"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          cleanup() {
+            ssh "${ssh_opts[@]}" "$remote" 'rm -f /tmp/remove-conversation-recovery-package.sh' || true
+          }
+          trap cleanup EXIT
+          scp -4 -P "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-identity/remove-conversation-recovery-package.sh "$remote:/tmp/remove-conversation-recovery-package.sh"
+          ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/remove-conversation-recovery-package.sh && IMAGE_DIGEST='$IMAGE_DIGEST' SECRET_VOLUME=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}') bash /tmp/remove-conversation-recovery-package.sh"
+          health="$(curl --fail-with-body --silent --show-error --max-time 15 "https://$HOSTNAME/auth/google/healthz")"
+          test "$health" = 'session_ready;conversation_authority=enabled'
+          echo 'conversation_recovery_package_removal_workflow_completed=true public_health=green live_key_retained=true state_unchanged=true'
