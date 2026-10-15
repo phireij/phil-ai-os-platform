@@ -38,8 +38,23 @@ trap 'restore_and_exit 143' TERM
 
 echo 'google_ceo_session_upgrade_phase=initial_container_guard'
 if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
-  echo 'Refusing upgrade: rollback container already exists' >&2
-  exit 1
+  echo 'google_ceo_session_upgrade_phase=prior_rollback_identity'
+  CURRENT_SECRET_VOLUME="$(docker inspect "$SESSION" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets"}}{{.Name}}{{end}}{{end}}')"
+  ROLLBACK_SECRET_VOLUME="$(docker inspect "$ROLLBACK" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets"}}{{.Name}}{{end}}{{end}}')"
+  ROLLBACK_IMAGE="$(docker inspect "$ROLLBACK" --format '{{.Config.Image}}')"
+  if [[ "$(docker inspect "$ROLLBACK" --format '{{.State.Running}}')" != false ]] || \
+     [[ "$(docker inspect "$ROLLBACK" --format '{{.HostConfig.NetworkMode}}')" != bridge ]] || \
+     [[ "$(docker inspect "$ROLLBACK" --format '{{.HostConfig.ReadonlyRootfs}}')" != true ]] || \
+     [[ "$(docker inspect "$ROLLBACK" --format '{{.HostConfig.RestartPolicy.Name}}')" != unless-stopped ]] || \
+     [[ "$(docker inspect "$ROLLBACK" --format '{{index .Config.Labels "traefik.enable"}}')" != true ]] || \
+     [[ "$(docker inspect "$ROLLBACK" --format '{{index .Config.Labels "traefik.http.routers.mission-control-google-ceo-session.service"}}')" != mission-control-google-ceo-session ]] || \
+     [[ "$ROLLBACK_SECRET_VOLUME" != "$CURRENT_SECRET_VOLUME" ]] || \
+     [[ ! "$ROLLBACK_IMAGE" =~ ^ghcr\.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session@sha256:[0-9a-f]{64}$ ]]; then
+    echo 'google_ceo_session_upgrade_blocked=prior_rollback_identity_mismatch rollback_attempted=false' >&2
+    exit 1
+  fi
+  echo 'google_ceo_session_upgrade_phase=prior_rollback_replacement'
+  docker rm "$ROLLBACK" >/dev/null
 fi
 if docker inspect "$PREFLIGHT" >/dev/null 2>&1; then
   echo 'google_ceo_session_upgrade_phase=stale_preflight_identity'
