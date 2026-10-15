@@ -83,7 +83,7 @@ if [[ "$STATE_VOLUME_EXISTS" == true ]]; then
   if ! docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --user 0:0 \
     --mount "type=volume,src=$STATE_VOLUME,dst=/mnt/activation-volume,readonly" \
     --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
-    -c 'entries="$(find /mnt/activation-volume -mindepth 1 -maxdepth 1 -printf "%f\n")"; test "$entries" = state && test -d /mnt/activation-volume/state && test -z "$(find /mnt/activation-volume/state -mindepth 1 -print -quit)"'; then
+    -c 'entries="$(find /mnt/activation-volume -mindepth 1 -maxdepth 1 -print)"; test "$entries" = /mnt/activation-volume/state && test -d /mnt/activation-volume/state && test -z "$(find /mnt/activation-volume/state -mindepth 1 -print -quit)"'; then
     # The first incomplete setup predates the seed directory. An entirely
     # empty volume is also safe because no durable data has been written.
     if ! docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --user 0:0 \
