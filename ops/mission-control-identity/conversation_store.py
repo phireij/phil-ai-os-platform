@@ -217,23 +217,59 @@ def _initialize_live(connection: sqlite3.Connection) -> None:
             execution_authorized INTEGER NOT NULL CHECK(execution_authorized=0),
             mutation_authorized INTEGER NOT NULL CHECK(mutation_authorized=0)
         );
-        CREATE TABLE IF NOT EXISTS notification_outbox (
+        """
+    )
+    _initialize_notification_outbox(connection)
+
+
+def _create_notification_outbox(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        """
+        CREATE TABLE notification_outbox (
             notification_id TEXT PRIMARY KEY,
             owner_digest BLOB NOT NULL,
             decision_id TEXT NOT NULL UNIQUE REFERENCES ceo_decisions(decision_id) ON DELETE CASCADE,
             proposal_id TEXT NOT NULL REFERENCES task_proposals(proposal_id) ON DELETE CASCADE,
             kind TEXT NOT NULL CHECK(kind='ceo_decision_recorded'),
             priority TEXT NOT NULL CHECK(priority IN ('low','medium','high','critical')),
-            delivery_state TEXT NOT NULL CHECK(delivery_state='not_configured'),
-            attempt_count INTEGER NOT NULL CHECK(attempt_count=0),
+            delivery_state TEXT NOT NULL CHECK(delivery_state IN ('not_configured','pending','in_flight','retry_wait','delivered','dead_letter')),
+            attempt_count INTEGER NOT NULL CHECK(attempt_count >= 0 AND attempt_count <= 2),
             created_at INTEGER NOT NULL,
             last_attempt_at INTEGER,
+            next_attempt_at INTEGER,
+            last_error TEXT,
             authority_effect TEXT NOT NULL CHECK(authority_effect='none')
         );
-        CREATE INDEX IF NOT EXISTS notification_outbox_owner_order
+        CREATE INDEX notification_outbox_owner_order
             ON notification_outbox(owner_digest, created_at, notification_id);
+        CREATE INDEX notification_outbox_delivery_order
+            ON notification_outbox(owner_digest, delivery_state, next_attempt_at, created_at, notification_id);
         """
     )
+
+
+def _initialize_notification_outbox(connection: sqlite3.Connection) -> None:
+    current = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='notification_outbox'"
+    ).fetchone()
+    if current is None:
+        _create_notification_outbox(connection)
+        return
+    # Snapshots created before MC-015 only permit `not_configured` and zero
+    # attempts.  Preserve their rows exactly, without retroactively queuing a
+    # notification, then replace the restrictive schema atomically.
+    if "'pending'" not in (current["sql"] or ""):
+        with connection:
+            connection.execute("DROP INDEX IF EXISTS notification_outbox_owner_order")
+            connection.execute("ALTER TABLE notification_outbox RENAME TO notification_outbox_legacy")
+            _create_notification_outbox(connection)
+            connection.execute(
+                "INSERT INTO notification_outbox "
+                "(notification_id,owner_digest,decision_id,proposal_id,kind,priority,delivery_state,attempt_count,created_at,last_attempt_at,next_attempt_at,last_error,authority_effect) "
+                "SELECT notification_id,owner_digest,decision_id,proposal_id,kind,priority,delivery_state,attempt_count,created_at,last_attempt_at,NULL,NULL,authority_effect "
+                "FROM notification_outbox_legacy"
+            )
+            connection.execute("DROP TABLE notification_outbox_legacy")
 
 
 def _initialize_ledger(connection: sqlite3.Connection) -> None:
@@ -311,7 +347,14 @@ def _atomic_write_private(path: Path, encoded: bytes, *, overwrite: bool) -> Non
 
 
 class ConversationStore:
-    def __init__(self, config: ConversationConfig, issuer: str, subject: str) -> None:
+    def __init__(
+        self,
+        config: ConversationConfig,
+        issuer: str,
+        subject: str,
+        *,
+        notification_delivery_enabled: bool = False,
+    ) -> None:
         readonly_preflight = os.environ.get("MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT", "")
         if readonly_preflight not in {"", "true"}:
             raise ConversationConfigurationError("conversation_readonly_preflight_invalid")
@@ -324,6 +367,7 @@ class ConversationStore:
         except EvidenceVerificationError as exc:
             raise ConversationConfigurationError(str(exc)) from exc
         self._lock = threading.Lock()
+        self._notification_delivery_enabled = notification_delivery_enabled
         self._live = EncryptedSnapshot(config.state_file, _derived_key(self._key, b"live"), _initialize_live)
         self._ledger = EncryptedSnapshot(config.deletion_ledger_file, _derived_key(self._key, b"ledger"), _initialize_ledger)
         self._last_purge = 0
@@ -757,7 +801,7 @@ class ConversationStore:
         with self._lock:
             self._purge_if_due_locked(int(time.time()))
             rows = self._live.connection.execute(
-                "SELECT notification_id,decision_id,proposal_id,kind,priority,delivery_state,attempt_count,created_at,last_attempt_at "
+                "SELECT notification_id,decision_id,proposal_id,kind,priority,delivery_state,attempt_count,created_at,last_attempt_at,next_attempt_at "
                 "FROM notification_outbox WHERE owner_digest=? ORDER BY created_at,notification_id LIMIT ? OFFSET ?",
                 (self._owner, limit + 1, cursor),
             ).fetchall()
@@ -774,12 +818,13 @@ class ConversationStore:
                     "attempt_count": row["attempt_count"],
                     "created_at": _iso(row["created_at"]),
                     "last_attempt_at": _iso(row["last_attempt_at"]) if row["last_attempt_at"] is not None else None,
+                    "next_attempt_at": _iso(row["next_attempt_at"]) if row["next_attempt_at"] is not None else None,
                     "authority_effect": "none",
                 }
                 for row in page
             ],
             "next_cursor": str(cursor + len(page)) if len(rows) > limit else None,
-            "transport_status": "not_configured",
+            "transport_status": "enabled" if self._notification_delivery_enabled else "not_configured",
             "authority_effect": "none",
         }
 
@@ -809,14 +854,107 @@ class ConversationStore:
                 with self._live.connection:
                     self._live.connection.execute("INSERT INTO ceo_decisions VALUES (?,?,?,?,?,?,?,?, 'none',NULL,0,0)", (result["decision_id"], proposal_id, self._owner, result["decision"], result["rationale"], now, int(expiry.timestamp()), json.dumps(result["decision_scope"])))
                     self._live.connection.execute(
-                        "INSERT INTO notification_outbox VALUES (?,?,?,?,?,'medium','not_configured',0,?,NULL,'none')",
-                        (self._identifier("notification"), self._owner, result["decision_id"], proposal_id, "ceo_decision_recorded", now),
+                        "INSERT INTO notification_outbox "
+                        "(notification_id,owner_digest,decision_id,proposal_id,kind,priority,delivery_state,attempt_count,created_at,last_attempt_at,next_attempt_at,last_error,authority_effect) "
+                        "VALUES (?,?,?,?,?,'medium',?,0,?,NULL,?,NULL,'none')",
+                        (
+                            self._identifier("notification"), self._owner, result["decision_id"], proposal_id,
+                            "ceo_decision_recorded",
+                            "pending" if self._notification_delivery_enabled else "not_configured",
+                            now,
+                            now if self._notification_delivery_enabled else None,
+                        ),
                     )
                     self._live.connection.execute("INSERT INTO idempotency_results VALUES (?,?,?,?,?,?,?)", (self._owner, operation, key_hash, self._request_hash(normalized), json.dumps(result), proposal_id, now))
                 self._live.persist()
             except Exception:
                 self._live.connection.deserialize(before); raise
             return result
+
+    def dispatch_one_notification(
+        self,
+        deliver: Any,
+        *,
+        now: int,
+        retry_seconds: int,
+    ) -> bool:
+        """Attempt one explicitly enabled identifier-only delivery.
+
+        The outbox is claimed and persisted before network I/O.  An interrupted
+        in-flight claim is dead-lettered rather than retried, avoiding a
+        duplicate message when a process stops after Telegram accepted it.
+        """
+        if not self._notification_delivery_enabled:
+            return False
+        if retry_seconds != 15 * 60:
+            raise ConversationConfigurationError("notification_retry_interval_invalid")
+        notification: dict[str, Any] | None = None
+        with self._lock:
+            self._purge_if_due_locked(now)
+            before = self._live.connection.serialize()
+            try:
+                interrupted = False
+                with self._live.connection:
+                    interrupted_row = self._live.connection.execute(
+                        "SELECT notification_id FROM notification_outbox WHERE owner_digest=? AND delivery_state='in_flight' "
+                        "ORDER BY last_attempt_at,notification_id LIMIT 1",
+                        (self._owner,),
+                    ).fetchone()
+                    if interrupted_row is not None:
+                        self._live.connection.execute(
+                            "UPDATE notification_outbox SET delivery_state='dead_letter',next_attempt_at=NULL,last_error='delivery_interrupted' "
+                            "WHERE notification_id=? AND owner_digest=? AND delivery_state='in_flight'",
+                            (interrupted_row["notification_id"], self._owner),
+                        )
+                        interrupted = True
+                    else:
+                        row = self._live.connection.execute(
+                            "SELECT notification_id,decision_id,proposal_id,kind,priority,attempt_count FROM notification_outbox "
+                            "WHERE owner_digest=? AND (delivery_state='pending' OR (delivery_state='retry_wait' AND next_attempt_at<=?)) "
+                            "ORDER BY created_at,notification_id LIMIT 1",
+                            (self._owner, now),
+                        ).fetchone()
+                        if row is not None:
+                            attempts = int(row["attempt_count"]) + 1
+                            self._live.connection.execute(
+                                "UPDATE notification_outbox SET delivery_state='in_flight',attempt_count=?,last_attempt_at=?,next_attempt_at=NULL,last_error=NULL "
+                                "WHERE notification_id=? AND owner_digest=?",
+                                (attempts, now, row["notification_id"], self._owner),
+                            )
+                            notification = dict(row)
+                            notification["attempt_count"] = attempts
+                if not interrupted and notification is None:
+                    return False
+                self._live.persist()
+                if interrupted:
+                    return True
+            except Exception:
+                self._live.connection.deserialize(before)
+                raise
+
+        try:
+            deliver(notification)
+        except Exception:
+            outcome = "retry_wait" if notification["attempt_count"] == 1 else "dead_letter"
+            next_attempt = now + retry_seconds if outcome == "retry_wait" else None
+            error = "delivery_failed"
+        else:
+            outcome, next_attempt, error = "delivered", None, None
+
+        with self._lock:
+            before = self._live.connection.serialize()
+            try:
+                with self._live.connection:
+                    self._live.connection.execute(
+                        "UPDATE notification_outbox SET delivery_state=?,next_attempt_at=?,last_error=? "
+                        "WHERE notification_id=? AND owner_digest=? AND delivery_state='in_flight'",
+                        (outcome, next_attempt, error, notification["notification_id"], self._owner),
+                    )
+                self._live.persist()
+            except Exception:
+                self._live.connection.deserialize(before)
+                raise
+        return True
 
     def delete_conversation(self, conversation_id: str) -> None:
         if not ID_PATTERN.fullmatch(conversation_id):
