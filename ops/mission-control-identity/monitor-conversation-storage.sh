@@ -42,7 +42,7 @@ backups = sorted(path for path in backup_directory.iterdir() if not path.name.st
 assert backups, "conversation_backup_missing"
 now = int(time.time())
 for path in backups:
-    assert re.fullmatch(r"conversation-[0-9]{8}T[0-9]{6}Z\\.enc", path.name), "conversation_backup_name_invalid"
+    assert re.fullmatch(r"conversation-[0-9]{8}T[0-9]{6}Z\.enc", path.name), "conversation_backup_name_invalid"
     info = path.lstat()
     assert stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o600, "conversation_backup_file_insecure"
     with path.open("rb") as handle:

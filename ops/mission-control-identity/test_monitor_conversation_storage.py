@@ -35,6 +35,8 @@ class ConversationStorageMonitorChecks(unittest.TestCase):
             "os.unlink",
         ):
             self.assertNotIn(prohibited, script)
+        self.assertIn(r'Z\.enc", path.name)', script)
+        self.assertNotIn(r'Z\\.enc", path.name)', script)
 
     def test_workflow_is_scheduled_and_checks_isolation_and_public_boundary(self) -> None:
         workflow = (
