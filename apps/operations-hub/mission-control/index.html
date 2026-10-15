@@ -53,6 +53,30 @@
         <span id="governed-proposals-state" class="state-chip safe">sample only · no authority</span>
       </div>
       <div id="governed-proposals-list" class="lifecycle-list" aria-live="polite"></div>
+      <form id="governed-proposal-form" class="conversation-composer" hidden>
+        <label for="proposal-source-message">CEO source message</label>
+        <select id="proposal-source-message" required disabled></select>
+        <label for="proposal-project">Project</label>
+        <select id="proposal-project" required disabled><option value="phil-ai-os">Phil AI OS</option><option value="rubys-cake-delights-hq">Ruby's Cake Delights HQ</option><option value="kcfc-portal">KCFC Portal</option></select>
+        <label for="proposal-scope">Bounded scope</label>
+        <textarea id="proposal-scope" rows="2" maxlength="4000" required disabled></textarea>
+        <label for="proposal-result">Expected result</label>
+        <textarea id="proposal-result" rows="2" maxlength="4000" required disabled></textarea>
+        <label for="proposal-authority">Required authority</label>
+        <select id="proposal-authority" required disabled><option value="none">none</option><option value="A0">A0</option><option value="A1">A1</option><option value="L2">L2</option><option value="L3">L3</option></select>
+        <button id="proposal-create" type="submit" disabled>Record proposal draft</button>
+      </form>
+      <form id="governed-decision-form" class="conversation-composer" hidden>
+        <label for="decision-proposal">Proposal draft</label>
+        <select id="decision-proposal" required disabled></select>
+        <label for="decision-value">CEO decision</label>
+        <select id="decision-value" required disabled><option value="approved">Approved</option><option value="rejected">Rejected</option></select>
+        <label for="decision-rationale">Rationale</label>
+        <textarea id="decision-rationale" rows="2" maxlength="5000" required disabled></textarea>
+        <label for="decision-expiry">Decision expiry</label>
+        <input id="decision-expiry" type="datetime-local" required disabled>
+        <button id="decision-record" type="submit" disabled>Record CEO decision</button>
+      </form>
       <p class="operator-note compact">This local example shows correlation only. A proposal draft and any later CEO decision do not assign work, authorize execution, mutate a system, or call a provider.</p>
     </section>
 

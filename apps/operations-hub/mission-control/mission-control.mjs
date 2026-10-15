@@ -37,6 +37,9 @@ let activeConversationId = null;
 let sampleGovernedProposals = null;
 let sampleConversation = null;
 let conversationEpoch = 0;
+let activeConversationMessages = [];
+let activeGovernedProposals = [];
+let recordedDecisionProposalIds = new Set();
 
 function text(value) {
   return String(value ?? "—");
@@ -580,6 +583,8 @@ async function loadGovernedProposals(conversationId, epoch = conversationEpoch) 
     if (proposal.assignment_id !== null || proposal.execution_authorized !== false || proposal.mutation_authorized !== false || proposal.authority_effect !== "none") throw new Error("Unsafe governed-proposal response");
   }
   renderGovernedProposals({ proposals: payload.proposals }, { live: true });
+  activeGovernedProposals = payload.proposals;
+  syncGovernedControls();
   const state = document.querySelector("#governed-proposals-state");
   state.textContent = `${payload.proposals.length} stored draft${payload.proposals.length === 1 ? "" : "s"} · no authority`;
   state.className = "state-chip safe";
@@ -640,6 +645,10 @@ async function loadConversationLifecycle(conversationId, epoch = conversationEpo
   const [timeline, notifications] = await Promise.all([timelineResponse.json(), notificationsResponse.json()]);
   if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
   assertConversationLifecycle(timeline, notifications, conversationId);
+  recordedDecisionProposalIds = new Set(timeline.events
+    .filter((event) => event.event_type === "ceo_decision_recorded")
+    .map((event) => event.correlation.proposal_id));
+  syncGovernedControls();
   renderConversationLifecycle(timeline, notifications);
 }
 
@@ -660,9 +669,33 @@ function setConversationControls(enabled) {
   document.querySelector("#conversation-new").disabled = !conversationSession?.conversation_authority;
   document.querySelector("#conversation-sign-out").disabled = !conversationSession?.authenticated;
   document.querySelector("#conversation-sign-in").disabled = Boolean(conversationSession?.authenticated);
+  syncGovernedControls();
+}
+
+function syncGovernedControls() {
+  const enabled = Boolean(conversationSession?.conversation_authority && activeConversationId);
+  const proposalForm = document.querySelector("#governed-proposal-form");
+  const decisionForm = document.querySelector("#governed-decision-form");
+  proposalForm.hidden = !enabled;
+  decisionForm.hidden = !enabled;
+  const proposalSource = document.querySelector("#proposal-source-message");
+  const ceoMessages = activeConversationMessages.filter((message) => message.sender === "ceo");
+  proposalSource.replaceChildren(...ceoMessages.map((message) => new Option(`CEO message · ${new Date(message.created_at).toLocaleString()}`, message.message_id)));
+  const undecided = activeGovernedProposals.filter((proposal) => !recordedDecisionProposalIds.has(proposal.proposal_id));
+  const decisionProposal = document.querySelector("#decision-proposal");
+  decisionProposal.replaceChildren(...undecided.map((proposal) => new Option(proposal.proposal_id, proposal.proposal_id)));
+  for (const selector of ["#proposal-source-message", "#proposal-project", "#proposal-scope", "#proposal-result", "#proposal-authority"]) {
+    document.querySelector(selector).disabled = !enabled;
+  }
+  document.querySelector("#proposal-create").disabled = !enabled || ceoMessages.length === 0;
+  for (const selector of ["#decision-proposal", "#decision-value", "#decision-rationale", "#decision-expiry"]) {
+    document.querySelector(selector).disabled = !enabled;
+  }
+  document.querySelector("#decision-record").disabled = !enabled || undecided.length === 0;
 }
 
 function renderConversationMessages(messages) {
+  activeConversationMessages = messages;
   renderConversation({ messages });
   if (!messages.length) {
     const empty = document.createElement("p");
@@ -670,12 +703,16 @@ function renderConversationMessages(messages) {
     empty.textContent = "No messages in this conversation.";
     document.querySelector("#conversation-thread").replaceChildren(empty);
   }
+  syncGovernedControls();
 }
 
 function resetConversationView(message = "sample only · no live chat") {
   conversationSession = null;
   activeConversationId = null;
   conversationEpoch += 1;
+  activeConversationMessages = [];
+  activeGovernedProposals = [];
+  recordedDecisionProposalIds = new Set();
   if (sampleConversation) renderConversation(sampleConversation);
   if (sampleGovernedProposals) renderGovernedProposals(sampleGovernedProposals);
   document.querySelector("#governed-proposals-state").textContent = "sample only · no authority";
@@ -845,6 +882,83 @@ function installConversationConnection() {
       setConversationState(`message unavailable · ${error.message}`);
     } finally {
       setConversationControls(Boolean(activeConversationId));
+    }
+  });
+
+  document.querySelector("#governed-proposal-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!activeConversationId || !conversationSession?.conversation_authority) return;
+    const sourceMessageId = document.querySelector("#proposal-source-message").value;
+    const scope = document.querySelector("#proposal-scope").value.trim();
+    const expectedResult = document.querySelector("#proposal-result").value.trim();
+    if (!sourceMessageId || !scope || !expectedResult) return;
+    const button = document.querySelector("#proposal-create");
+    button.disabled = true;
+    try {
+      const response = await conversationRequest(`/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": conversationIdempotencyKey("proposal"),
+          "X-MC-CSRF": conversationSession.csrf_token,
+        },
+        body: JSON.stringify({
+          source_message_id: sourceMessageId,
+          project_id: document.querySelector("#proposal-project").value,
+          task_class: "general",
+          scope,
+          expected_result: expectedResult,
+          required_authority: document.querySelector("#proposal-authority").value,
+          source_evidence_refs: [],
+        }),
+      });
+      if (!response.ok) throw new Error(`proposal HTTP ${response.status}`);
+      document.querySelector("#proposal-scope").value = "";
+      document.querySelector("#proposal-result").value = "";
+      await loadGovernedProposals(activeConversationId);
+      await loadConversationLifecycle(activeConversationId);
+      setConversationState("proposal draft recorded · no authority", true);
+    } catch (error) {
+      setConversationState(`proposal unavailable · ${error.message}`);
+    } finally {
+      syncGovernedControls();
+    }
+  });
+
+  document.querySelector("#governed-decision-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!conversationSession?.conversation_authority) return;
+    const proposalId = document.querySelector("#decision-proposal").value;
+    const rationale = document.querySelector("#decision-rationale").value.trim();
+    const expiryValue = document.querySelector("#decision-expiry").value;
+    const expiry = new Date(expiryValue);
+    if (!proposalId || !rationale || !expiryValue || Number.isNaN(expiry.valueOf()) || expiry <= new Date()) return;
+    const button = document.querySelector("#decision-record");
+    button.disabled = true;
+    try {
+      const response = await conversationRequest(`/api/task-proposals/${encodeURIComponent(proposalId)}/decisions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": conversationIdempotencyKey("decision"),
+          "X-MC-CSRF": conversationSession.csrf_token,
+        },
+        body: JSON.stringify({
+          decision: document.querySelector("#decision-value").value,
+          rationale,
+          expires_at: expiry.toISOString(),
+        }),
+      });
+      if (!response.ok) throw new Error(`decision HTTP ${response.status}`);
+      document.querySelector("#decision-rationale").value = "";
+      document.querySelector("#decision-expiry").value = "";
+      await loadGovernedProposals(activeConversationId);
+      await loadConversationLifecycle(activeConversationId);
+      setConversationState("CEO decision recorded · no authority", true);
+    } catch (error) {
+      setConversationState(`decision unavailable · ${error.message}`);
+    } finally {
+      syncGovernedControls();
     }
   });
 

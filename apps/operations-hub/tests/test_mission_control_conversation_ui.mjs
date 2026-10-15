@@ -11,6 +11,12 @@ for (const id of [
   "conversation-sign-out",
   "conversation-message",
   "decision-request-button",
+  "governed-proposal-form",
+  "proposal-source-message",
+  "proposal-create",
+  "governed-decision-form",
+  "decision-proposal",
+  "decision-record",
   "conversation-lifecycle-state",
   "conversation-lifecycle-list",
 ]) {
@@ -22,7 +28,7 @@ assert.match(html, /id="conversation-message"[^>]*maxlength="20000"[^>]*disabled
 assert.match(html, /id="decision-request-button"[^>]*disabled/);
 assert.match(html, /Conversation text can never authorize delegation or execution/);
 
-assert.equal((moduleSource.match(/method: "POST"/g) ?? []).length, 3);
+assert.equal((moduleSource.match(/method: "POST"/g) ?? []).length, 5);
 assert.doesNotMatch(moduleSource, /method: "(?:PUT|PATCH|DELETE)"/);
 assert.doesNotMatch(moduleSource, /localStorage|sessionStorage|indexedDB/);
 assert.doesNotMatch(moduleSource, /innerHTML|insertAdjacentHTML|document\.write/);
@@ -35,6 +41,10 @@ assert.match(moduleSource, /audit-timeline\?limit=100/);
 assert.match(moduleSource, /\/api\/notifications\?limit=100/);
 assert.match(moduleSource, /transport_status !== "not_configured"/);
 assert.match(moduleSource, /"body" in event|"rationale" in event/);
+assert.match(moduleSource, /source_evidence_refs: \[\]/);
+assert.match(moduleSource, /proposal draft recorded · no authority/);
+assert.match(moduleSource, /CEO decision recorded · no authority/);
+assert.match(moduleSource, /assignment_id !== null \|\| proposal\.execution_authorized !== false/);
 
 const start = moduleSource.indexOf("function conversationIdempotencyKey(prefix) {");
 const end = moduleSource.indexOf("\nfunction setConversationState", start);

@@ -246,8 +246,16 @@ def main() -> None:
 
     if "/api/decision-requests" in js:
         fail("read-only Mission Control UI must not contain a decision-request mutation path")
-    if js.count('method: "POST"') != 3:
-        fail("only sign-out, conversation creation, and message storage POSTs are allowed")
+    if js.count('method: "POST"') != 5:
+        fail("only sign-out, conversation, message, governed-proposal, and CEO-decision POSTs are allowed")
+    for endpoint in (
+        "/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals",
+        "/api/task-proposals/${encodeURIComponent(proposalId)}/decisions",
+    ):
+        if endpoint not in js:
+            fail("governed-record UI endpoint missing")
+    if "source_evidence_refs: []" not in js or "proposal draft recorded · no authority" not in js or "CEO decision recorded · no authority" not in js:
+        fail("governed-record UI must stay evidence-empty and non-authorizing")
     required_conversation_guards = (
         'conversationSession?.conversation_authority',
         '"X-MC-CSRF": conversationSession.csrf_token',
@@ -274,7 +282,7 @@ def main() -> None:
         "PHIL_AI_OS_MISSION_CONTROL_PREVIEW_GREEN "
         "mode=read_only version=5 contract=v5 autonomy=A0 attention=read_only task_composition=read_only "
         "approval=read_only decision_ids=false recovery=read_only channels=5 hermes_fixture=idle live_connectivity=false outbound_reply=false "
-        "simulated_only=true writes=false replies=false network_dispatch=false authority_effect=none"
+        "simulated_only=true ceo_record_writes_only=true replies=false network_dispatch=false authority_effect=none"
     )
 
 
