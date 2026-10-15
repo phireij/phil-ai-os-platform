@@ -15,6 +15,7 @@ PREFLIGHT="${SESSION}-storage-preflight"
 STATE_VOLUME=phil-ai-os-mission-control-conversation-state-v1
 BACKUP_VOLUME=phil-ai-os-mission-control-conversation-backup-v1
 STATE_DIR=/var/lib/mission-control
+STATE_DATA_DIR=$STATE_DIR/state
 PREFLIGHT_STARTED=false
 OLD_STAGED=false
 SESSION_STARTED=false
@@ -113,8 +114,8 @@ OIDC_ENV=(
 )
 CONVERSATION_ENV=(
   --env 'MISSION_CONTROL_CONVERSATION_ENABLED=true'
-  --env "MISSION_CONTROL_CONVERSATION_STATE_FILE=$STATE_DIR/conversations.enc"
-  --env "MISSION_CONTROL_CONVERSATION_DELETION_LEDGER_FILE=$STATE_DIR/deletion-ledger.enc"
+  --env "MISSION_CONTROL_CONVERSATION_STATE_FILE=$STATE_DATA_DIR/conversations.enc"
+  --env "MISSION_CONTROL_CONVERSATION_DELETION_LEDGER_FILE=$STATE_DATA_DIR/deletion-ledger.enc"
   --env 'MISSION_CONTROL_CONVERSATION_KEY_FILE=/run/secrets/conversation_key'
 )
 
@@ -137,7 +138,7 @@ echo 'conversation_storage_activation_phase=state_volume_ownership'
 docker run --rm --network none --read-only --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --security-opt no-new-privileges:true --user 0:0 \
   --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR" \
   --entrypoint python3 "$IMAGE@$IMAGE_DIGEST" \
-  -c 'import os; path="/var/lib/mission-control"; os.chown(path, 10003, 10003); os.chmod(path, 0o700); metadata=os.stat(path); assert metadata.st_uid == 10003 and metadata.st_gid == 10003 and (metadata.st_mode & 0o777) == 0o700'
+  -c 'import os; path="/var/lib/mission-control/state"; os.mkdir(path, 0o700); os.chown(path, 10003, 10003); os.chmod(path, 0o700); metadata=os.stat(path); assert metadata.st_uid == 10003 and metadata.st_gid == 10003 and (metadata.st_mode & 0o777) == 0o700'
 
 PREFLIGHT_STARTED=true
 echo 'conversation_storage_activation_phase=candidate_storage_initialization'

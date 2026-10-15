@@ -16,6 +16,8 @@ class ConversationStorageActivationChecks(unittest.TestCase):
             "conversation_volume_already_exists",
             "conversation_storage_activation_volume_retry=verified_empty",
             "MISSION_CONTROL_CONVERSATION_KEY_FILE=/run/secrets/conversation_key",
+            "STATE_DATA_DIR=$STATE_DIR/state",
+            "MISSION_CONTROL_CONVERSATION_STATE_FILE=$STATE_DATA_DIR/conversations.enc",
             "STATE_VOLUME=phil-ai-os-mission-control-conversation-state-v1",
             "BACKUP_VOLUME=phil-ai-os-mission-control-conversation-backup-v1",
             "MISSION_CONTROL_CONVERSATION_ENABLED=true",
