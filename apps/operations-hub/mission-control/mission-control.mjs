@@ -561,7 +561,8 @@ function renderGovernedProposals(data, { live = false } = {}) {
     top.append(label, chip);
     const meta = document.createElement("div");
     meta.className = "lifecycle-meta";
-    for (const [name, value] of [["Conversation", proposal.conversation_id], ["CEO decision", proposal.decision_id ? "recorded · no authority" : "not recorded"], ["Assignment / execution", "disabled"]]) {
+    const decisionRecorded = Boolean(proposal.decision_id) || recordedDecisionProposalIds.has(proposal.proposal_id);
+    for (const [name, value] of [["Conversation", proposal.conversation_id], ["CEO decision", decisionRecorded ? "recorded · no authority" : "not recorded"], ["Assignment / execution", "disabled"]]) {
       const cell = document.createElement("span");
       cell.textContent = name;
       const strong = document.createElement("strong");
@@ -648,6 +649,7 @@ async function loadConversationLifecycle(conversationId, epoch = conversationEpo
   recordedDecisionProposalIds = new Set(timeline.events
     .filter((event) => event.event_type === "ceo_decision_recorded")
     .map((event) => event.correlation.proposal_id));
+  renderGovernedProposals({ proposals: activeGovernedProposals }, { live: true });
   syncGovernedControls();
   renderConversationLifecycle(timeline, notifications);
 }

@@ -45,6 +45,8 @@ assert.match(moduleSource, /source_evidence_refs: \[\]/);
 assert.match(moduleSource, /proposal draft recorded · no authority/);
 assert.match(moduleSource, /CEO decision recorded · no authority/);
 assert.match(moduleSource, /assignment_id !== null \|\| proposal\.execution_authorized !== false/);
+assert.match(moduleSource, /recordedDecisionProposalIds\.has\(proposal\.proposal_id\)/);
+assert.match(moduleSource, /renderGovernedProposals\(\{ proposals: activeGovernedProposals \}, \{ live: true \}\);/);
 
 const start = moduleSource.indexOf("function conversationIdempotencyKey(prefix) {");
 const end = moduleSource.indexOf("\nfunction setConversationState", start);
