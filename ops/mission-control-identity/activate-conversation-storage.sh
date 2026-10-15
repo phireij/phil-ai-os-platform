@@ -45,12 +45,16 @@ fi
 if docker inspect "$PREFLIGHT" >/dev/null 2>&1; then
   echo 'conversation_storage_activation_phase=stale_preflight_identity'
   STALE_IMAGE="$(docker inspect "$PREFLIGHT" --format '{{.Config.Image}}')"
-  CURRENT_SESSION_IMAGE="$(docker inspect "$SESSION" --format '{{.Config.Image}}' 2>/dev/null || true)"
+  ACTIVE_SECRET_VOLUME="$(docker inspect "$SESSION" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets"}}{{.Name}}{{end}}{{end}}')"
+  STALE_SECRET_VOLUME="$(docker inspect "$PREFLIGHT" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets"}}{{.Name}}{{end}}{{end}}')"
+  STALE_STATE_VOLUME="$(docker inspect "$PREFLIGHT" --format '{{range .Mounts}}{{if eq .Destination "/var/lib/mission-control"}}{{.Name}}{{end}}{{end}}')"
   if [[ "$(docker inspect "$PREFLIGHT" --format '{{.HostConfig.NetworkMode}}')" != none ]] || \
      [[ "$(docker inspect "$PREFLIGHT" --format '{{.HostConfig.ReadonlyRootfs}}')" != true ]] || \
      [[ "$(docker inspect "$PREFLIGHT" --format '{{.HostConfig.RestartPolicy.Name}}')" != no ]] || \
      [[ "$(docker inspect "$PREFLIGHT" --format '{{index .Config.Labels "traefik.enable"}}')" != false ]] || \
-     { [[ "$STALE_IMAGE" != "$IMAGE@$IMAGE_DIGEST" ]] && [[ "$STALE_IMAGE" != "$CURRENT_SESSION_IMAGE" ]]; }; then
+     [[ "$STALE_SECRET_VOLUME" != "$ACTIVE_SECRET_VOLUME" ]] || \
+     [[ "$STALE_STATE_VOLUME" != "$STATE_VOLUME" ]] || \
+     [[ ! "$STALE_IMAGE" =~ ^ghcr\.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session@sha256:[0-9a-f]{64}$ ]]; then
     echo 'conversation_storage_activation_blocked=stale_preflight_identity_mismatch' >&2
     exit 1
   fi

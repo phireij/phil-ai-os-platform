@@ -16,6 +16,8 @@ class ConversationStorageActivationChecks(unittest.TestCase):
             "conversation_storage_activation_phase=stale_preflight_identity",
             "conversation_storage_activation_phase=stale_preflight_cleanup",
             "stale_preflight_identity_mismatch",
+            "STALE_SECRET_VOLUME",
+            "STALE_STATE_VOLUME",
             "conversation_volume_already_exists",
             "conversation_storage_activation_volume_retry=verified_empty_or_seed_only",
             "MISSION_CONTROL_CONVERSATION_KEY_FILE=/run/secrets/conversation_key",
