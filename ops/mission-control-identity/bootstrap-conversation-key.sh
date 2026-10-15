@@ -20,7 +20,7 @@ test "$(docker volume inspect "$SECRET_VOLUME" --format '{{.Name}}')" = "$SECRET
 # The package contains only the key encrypted with the CEO-provided recovery
 # passphrase. It is kept root-readable until the CEO retrieves it to offline
 # storage. Neither plaintext nor passphrase is written to a log or artifact.
-docker run --rm -i --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+docker run --rm -i --network none --read-only --cap-drop ALL --cap-add CHOWN --security-opt no-new-privileges:true \
   --user 0:0 \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets" \
   --entrypoint python3 "$IMAGE@$IMAGE_DIGEST" \
