@@ -21,7 +21,7 @@ test "$(docker volume inspect "$STATE_VOLUME" --format '{{.Name}}')" = "$STATE_V
 test "$(docker volume inspect "$BACKUP_VOLUME" --format '{{.Name}}')" = "$BACKUP_VOLUME"
 BACKUP_NAME="conversation-$(date -u +%Y%m%dT%H%M%SZ).enc"
 [[ "$BACKUP_NAME" =~ ^conversation-[0-9]{8}T[0-9]{6}Z\.enc$ ]]
-docker run --rm --network none --read-only --cap-drop ALL --cap-add FOWNER --security-opt no-new-privileges:true --user 0:0 \
+docker run --rm --network none --read-only --cap-drop ALL --cap-add FOWNER --cap-add CHOWN --security-opt no-new-privileges:true --user 0:0 \
   --mount "type=volume,src=$BACKUP_VOLUME,dst=/mnt/backup" --entrypoint python3 "$IMAGE@$IMAGE_DIGEST" \
   -c 'import os; path="/mnt/backup/backups"; os.makedirs(path, mode=0o700, exist_ok=True); os.chmod(path, 0o700); os.chown(path,10003,10003); assert os.stat(path).st_mode & 0o777 == 0o700'
 docker stop --time 20 "$SESSION" >/dev/null; PAUSED=true
