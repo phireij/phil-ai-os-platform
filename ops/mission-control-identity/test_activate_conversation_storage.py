@@ -18,6 +18,7 @@ class ConversationStorageActivationChecks(unittest.TestCase):
             "MISSION_CONTROL_CONVERSATION_STATE_FILE=$STATE_DATA_DIR/conversations.enc",
             "os.makedirs(path, mode=0o1777, exist_ok=True)",
             "os.chmod(path, 0o1777)",
+            "-maxdepth 1 -print",
             "STATE_VOLUME=phil-ai-os-mission-control-conversation-state-v1",
             "BACKUP_VOLUME=phil-ai-os-mission-control-conversation-backup-v1",
             "MISSION_CONTROL_CONVERSATION_ENABLED=true",
@@ -35,6 +36,7 @@ class ConversationStorageActivationChecks(unittest.TestCase):
             "OPENAI_API_KEY",
             "MISSION_CONTROL_PROVIDER",
             "os.chown(path",
+            "-printf",
         ):
             self.assertNotIn(prohibited, script)
 
