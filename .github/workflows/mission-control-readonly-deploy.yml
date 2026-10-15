@@ -57,8 +57,18 @@ jobs:
           missing = [label for label in required_labels if label not in html]
           if missing:
               raise SystemExit(f"Mission Control UI is missing required sample labels: {missing}")
-          if "/api/decision-requests" in module or module.count('method: "POST"') != 3:
+          if "/api/decision-requests" in module or module.count('method: "POST"') != 5:
               raise SystemExit("Mission Control UI contains an unapproved mutation request path")
+          governed_endpoints = (
+              "/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals",
+              "/api/task-proposals/${encodeURIComponent(proposalId)}/decisions",
+          )
+          if any(endpoint not in module for endpoint in governed_endpoints):
+              raise SystemExit("Mission Control UI governed-record endpoints are incomplete")
+          if "source_evidence_refs: []" not in module or "proposal draft recorded · no authority" not in module or "CEO decision recorded · no authority" not in module:
+              raise SystemExit("Mission Control UI governed-record boundary is incomplete")
+          if any(endpoint in module for endpoint in ("/api/tasks/", "/api/execution/")):
+              raise SystemExit("Mission Control UI contains an execution request path")
           guards = ('conversationSession?.conversation_authority', '"X-MC-CSRF": conversationSession.csrf_token', '"Idempotency-Key": conversationIdempotencyKey', 'credentials: "same-origin"')
           if any(guard not in module for guard in guards) or any(name in module for name in ("localStorage", "sessionStorage", "indexedDB")):
               raise SystemExit("Mission Control conversation write guards are incomplete")
