@@ -18,6 +18,9 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             "google_ceo_session_upgrade_phase=candidate_container_health",
             "google_ceo_session_upgrade_phase=stage_old_session",
             "google_ceo_session_upgrade_phase=initial_container_guard",
+            "google_ceo_session_upgrade_phase=prior_rollback_identity",
+            "google_ceo_session_upgrade_phase=prior_rollback_replacement",
+            "prior_rollback_identity_mismatch",
             "google_ceo_session_upgrade_phase=stale_preflight_identity",
             "google_ceo_session_upgrade_phase=stale_preflight_cleanup",
             "stale_preflight_identity_mismatch",
@@ -28,6 +31,7 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
         for prohibited in (
             "docker volume create",
             "docker rm -f \"$PREFLIGHT\" -v",
+            "docker rm -f \"$ROLLBACK\"",
             "MISSION_CONTROL_CONVERSATION_ENABLED=true",
             "conversation_key",
         ):
