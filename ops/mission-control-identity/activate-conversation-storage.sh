@@ -156,7 +156,13 @@ docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL --se
   "$IMAGE@$IMAGE_DIGEST" >/dev/null
 sleep 2
 echo 'conversation_storage_activation_phase=candidate_storage_health'
-test "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" = true
+if [[ "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" != true ]]; then
+  # The bounded logs contain only startup diagnostics from the local candidate;
+  # secrets and recovery material are never passed as command arguments.
+  docker logs --tail 20 "$PREFLIGHT" >&2 || true
+  echo 'conversation_storage_activation_blocked=candidate_storage_not_running' >&2
+  exit 1
+fi
 echo 'conversation_storage_activation_phase=candidate_storage_cleanup'
 docker rm -f "$PREFLIGHT" >/dev/null
 PREFLIGHT_STARTED=false
