@@ -1,0 +1,78 @@
+name: Mission Control Conversation Recovery Readiness Preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: Immutable digest of the already-running CEO session image
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-control-conversation-recovery-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+      IMAGE: ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
+      SESSION: phil-ai-os-mission-control-google-ceo-session
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Verify recovery topology without exercising restore
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          port="${VPS_PORT:-22}"
+          remote="$VPS_USER@$VPS_HOST"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          remote_command="set -euo pipefail
+          if ! running=\$(docker inspect '$SESSION' --format '{{.State.Running}}'); then
+            echo 'conversation_recovery_preflight_blocked=session_missing recovery_exercise=false' >&2
+            exit 1
+          fi
+          if [[ \"\$running\" != true ]]; then
+            echo 'conversation_recovery_preflight_blocked=session_not_running recovery_exercise=false' >&2
+            exit 1
+          fi
+          if ! session_image=\$(docker inspect '$SESSION' --format '{{.Config.Image}}'); then
+            echo 'conversation_recovery_preflight_blocked=session_image_unavailable recovery_exercise=false' >&2
+            exit 1
+          fi
+          if [[ \"\$session_image\" != '$IMAGE@$IMAGE_DIGEST' ]]; then
+            echo 'conversation_recovery_preflight_blocked=session_image_digest_mismatch recovery_exercise=false' >&2
+            exit 1
+          fi
+          SECRET_VOLUME=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}')
+          STATE_VOLUME=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/var/lib/mission-control\"}}{{.Name}}{{end}}{{end}}')
+          if [[ ! \"\$SECRET_VOLUME\" =~ ^phil-ai-os-mc-google-session-secret-[0-9]+-[0-9]+$ ]]; then
+            echo 'conversation_recovery_preflight_blocked=session_secret_volume_unavailable recovery_exercise=false' >&2
+            exit 1
+          fi
+          if [[ \"\$STATE_VOLUME\" != 'phil-ai-os-mission-control-conversation-state-v1' ]]; then
+            echo 'conversation_recovery_preflight_blocked=session_state_volume_unavailable recovery_exercise=false' >&2
+            exit 1
+          fi
+          IMAGE='$IMAGE' IMAGE_DIGEST='$IMAGE_DIGEST' SECRET_VOLUME=\"\$SECRET_VOLUME\" STATE_VOLUME=\"\$STATE_VOLUME\" BACKUP_VOLUME='phil-ai-os-mission-control-conversation-backup-v1' bash -s"
+          ssh "${ssh_opts[@]}" "$remote" "$remote_command" < ops/mission-control-identity/preflight-conversation-recovery.sh
+          echo 'conversation_recovery_preflight_completed=true recovery_exercise=false existing_workloads_unchanged=true'
