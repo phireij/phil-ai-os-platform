@@ -1,12 +1,12 @@
 # Mission Control conversation key policy proposal
 
-**Status:** proposed, inactive, and awaiting CEO approval. This document creates no key, secret, volume, credential, or deployment authority.
+**Status:** CEO-approved ownership policy, inactive pending guarded bootstrap and offline-recovery retrieval. This document creates no key, secret, volume, credential, or deployment authority.
 
 ## Recommended ownership
 
 - **Accountable owner:** CEO.
 - **Runtime custodian:** the Mission Control host's root-only deployment boundary.
-- **Recovery custodian:** CEO, using an existing private secret manager or encrypted offline vault selected by the CEO. No recovery material belongs in Git, chat, CI artifacts, application logs, or browser storage.
+- **Recovery custodian:** CEO, using an encrypted offline recovery package retained outside Hostinger after guarded bootstrap. No recovery material belongs in Git, chat, CI artifacts, application logs, or browser storage.
 
 This keeps business accountability with the data owner while limiting the running service to a mounted read-only key file. GitHub Actions may coordinate a reviewed deployment but should not retain the master conversation key.
 

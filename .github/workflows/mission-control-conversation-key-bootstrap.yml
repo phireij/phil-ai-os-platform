@@ -1,0 +1,56 @@
+name: Mission Control Conversation Key Bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: Immutable digest of the already-running CEO session image
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-control-conversation-key-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+      IMAGE: ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Bootstrap inactive conversation key and encrypted recovery package
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          RECOVERY_PASSPHRASE: ${{ secrets.MISSION_CONTROL_CONVERSATION_RECOVERY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          test -n "$RECOVERY_PASSPHRASE"
+          port="${VPS_PORT:-22}"
+          remote="$VPS_USER@$VPS_HOST"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          cleanup() {
+            ssh "${ssh_opts[@]}" "$remote" "rm -f /tmp/bootstrap-conversation-key.sh" || true
+          }
+          trap cleanup EXIT
+          scp -4 -P "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-identity/bootstrap-conversation-key.sh "$remote:/tmp/bootstrap-conversation-key.sh"
+          printf '%s\n' "$RECOVERY_PASSPHRASE" | ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/bootstrap-conversation-key.sh && IMAGE_DIGEST='$IMAGE_DIGEST' SECRET_VOLUME=\"\$(docker inspect phil-ai-os-mission-control-google-ceo-session --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}')\" bash /tmp/bootstrap-conversation-key.sh"
+          echo "conversation_key_bootstrap_workflow_completed=true recovery_package_pending_offline_retrieval=true storage_initialized=false authority_effect=none"
