@@ -312,6 +312,9 @@ def _atomic_write_private(path: Path, encoded: bytes, *, overwrite: bool) -> Non
 
 class ConversationStore:
     def __init__(self, config: ConversationConfig, issuer: str, subject: str) -> None:
+        readonly_preflight = os.environ.get("MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT", "")
+        if readonly_preflight not in {"", "true"}:
+            raise ConversationConfigurationError("conversation_readonly_preflight_invalid")
         self._key = load_key(config.key_file)
         self._owner = owner_digest(_derived_key(self._key, b"owner"), issuer, subject)
         manifest = config.evidence_manifest_file
@@ -324,7 +327,11 @@ class ConversationStore:
         self._ledger = EncryptedSnapshot(config.deletion_ledger_file, _derived_key(self._key, b"ledger"), _initialize_ledger)
         self._last_purge = 0
         with self._lock:
-            self._purge_locked(int(time.time()))
+            # A storage-preserving image upgrade starts an isolated, no-network
+            # candidate against the active encrypted volume. Its startup must
+            # decrypt and validate both snapshots without rewriting either.
+            if readonly_preflight != "true":
+                self._purge_locked(int(time.time()))
 
     @staticmethod
     def _identifier(prefix: str) -> str:

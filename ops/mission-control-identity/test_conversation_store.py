@@ -93,6 +93,27 @@ class ConversationStoreChecks(unittest.TestCase):
         with self.assertRaisesRegex(ConversationRequestError, "not_found"):
             other.list_messages(conversation_id)
 
+    def test_readonly_preflight_decrypts_without_rewriting_encrypted_state(self) -> None:
+        self.store()
+        before = (self.config.state_file.read_bytes(), self.config.deletion_ledger_file.read_bytes())
+        with patch.dict(
+            os.environ,
+            {"MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT": "true"},
+            clear=False,
+        ):
+            candidate = self.store()
+        self.assertEqual([], candidate.list_conversations())
+        self.assertEqual(before, (self.config.state_file.read_bytes(), self.config.deletion_ledger_file.read_bytes()))
+
+    def test_readonly_preflight_rejects_unrecognized_value(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT": "false"},
+            clear=False,
+        ):
+            with self.assertRaisesRegex(ConversationConfigurationError, "readonly_preflight_invalid"):
+                self.store()
+
     def test_conflicting_idempotency_and_failed_persistence_roll_back(self) -> None:
         store = self.store()
         created = store.create_conversation("create-conversation-0002", b"{}")

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Controlled replacement of the already-active CEO session. Conversation
-# storage is deliberately not configured by this rollout.
+# Controlled replacement of the already-active CEO session. The encrypted
+# conversation-state mount and its fail-closed configuration are required on
+# both the candidate and replacement: an upgrade must never silently remove
+# previously activated storage.
 set -euo pipefail
 
 : "${IMAGE_DIGEST:?Set the reviewed replacement image digest}"
@@ -15,6 +17,9 @@ IMAGE=ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
 SESSION=phil-ai-os-mission-control-google-ceo-session
 ROLLBACK="${SESSION}-rollback"
 PREFLIGHT="${SESSION}-preflight"
+STATE_VOLUME=phil-ai-os-mission-control-conversation-state-v1
+STATE_DIR=/var/lib/mission-control
+STATE_DATA_DIR=$STATE_DIR/state
 PREFLIGHT_STARTED=false
 OLD_STAGED=false
 SESSION_STARTED=false
@@ -41,6 +46,8 @@ if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
   echo 'google_ceo_session_upgrade_phase=prior_rollback_identity'
   CURRENT_SECRET_VOLUME="$(docker inspect "$SESSION" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets"}}{{.Name}}{{end}}{{end}}')"
   ROLLBACK_SECRET_VOLUME="$(docker inspect "$ROLLBACK" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets"}}{{.Name}}{{end}}{{end}}')"
+  CURRENT_STATE_VOLUME="$(docker inspect "$SESSION" --format '{{range .Mounts}}{{if eq .Destination "/var/lib/mission-control"}}{{.Name}}{{end}}{{end}}')"
+  ROLLBACK_STATE_VOLUME="$(docker inspect "$ROLLBACK" --format '{{range .Mounts}}{{if eq .Destination "/var/lib/mission-control"}}{{.Name}}{{end}}{{end}}')"
   ROLLBACK_IMAGE="$(docker inspect "$ROLLBACK" --format '{{.Config.Image}}')"
   if [[ "$(docker inspect "$ROLLBACK" --format '{{.State.Running}}')" != false ]] || \
      [[ "$(docker inspect "$ROLLBACK" --format '{{.HostConfig.NetworkMode}}')" != bridge ]] || \
@@ -49,6 +56,8 @@ if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
      [[ "$(docker inspect "$ROLLBACK" --format '{{index .Config.Labels "traefik.enable"}}')" != true ]] || \
      [[ "$(docker inspect "$ROLLBACK" --format '{{index .Config.Labels "traefik.http.routers.mission-control-google-ceo-session.service"}}')" != mission-control-google-ceo-session ]] || \
      [[ "$ROLLBACK_SECRET_VOLUME" != "$CURRENT_SECRET_VOLUME" ]] || \
+     [[ "$CURRENT_STATE_VOLUME" != "$STATE_VOLUME" ]] || \
+     [[ "$ROLLBACK_STATE_VOLUME" != "$STATE_VOLUME" ]] || \
      [[ ! "$ROLLBACK_IMAGE" =~ ^ghcr\.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session@sha256:[0-9a-f]{64}$ ]]; then
     echo 'google_ceo_session_upgrade_blocked=prior_rollback_identity_mismatch rollback_attempted=false' >&2
     exit 1
@@ -79,6 +88,18 @@ test "$(docker inspect "$SESSION" --format '{{.HostConfig.ReadonlyRootfs}}')" = 
 echo 'google_ceo_session_upgrade_phase=existing_session_secret_volume'
 SECRET_VOLUME="$(docker inspect "$SESSION" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets"}}{{.Name}}{{end}}{{end}}')"
 [[ "$SECRET_VOLUME" =~ ^phil-ai-os-mc-google-session-secret-[0-9]+-[0-9]+$ ]]
+echo 'google_ceo_session_upgrade_phase=existing_session_storage_mount'
+ACTIVE_STATE_VOLUME="$(docker inspect "$SESSION" --format '{{range .Mounts}}{{if eq .Destination "/var/lib/mission-control"}}{{.Name}}{{end}}{{end}}')"
+test "$ACTIVE_STATE_VOLUME" = "$STATE_VOLUME"
+echo 'google_ceo_session_upgrade_phase=existing_session_storage_configuration'
+ACTIVE_ENV="$(docker inspect "$SESSION" --format '{{range .Config.Env}}{{println .}}{{end}}')"
+for expected in \
+  'MISSION_CONTROL_CONVERSATION_ENABLED=true' \
+  "MISSION_CONTROL_CONVERSATION_STATE_FILE=$STATE_DATA_DIR/conversations.enc" \
+  "MISSION_CONTROL_CONVERSATION_DELETION_LEDGER_FILE=$STATE_DATA_DIR/deletion-ledger.enc" \
+  'MISSION_CONTROL_CONVERSATION_KEY_FILE=/run/secrets/conversation_key'; do
+  grep -Fx "$expected" <<<"$ACTIVE_ENV" >/dev/null
+done
 
 echo 'google_ceo_session_upgrade_phase=route_collision_guard'
 python3 - "$SESSION" "$HOSTNAME" <<'PY'
@@ -115,6 +136,16 @@ OIDC_ENV=(
   --env 'MISSION_CONTROL_GOOGLE_CLIENT_SECRET_FILE=/run/secrets/client_secret'
   --env 'MISSION_CONTROL_GOOGLE_CEO_SUBJECT_FILE=/run/secrets/ceo_binding'
 )
+CONVERSATION_ENV=(
+  --env 'MISSION_CONTROL_CONVERSATION_ENABLED=true'
+  --env "MISSION_CONTROL_CONVERSATION_STATE_FILE=$STATE_DATA_DIR/conversations.enc"
+  --env "MISSION_CONTROL_CONVERSATION_DELETION_LEDGER_FILE=$STATE_DATA_DIR/deletion-ledger.enc"
+  --env 'MISSION_CONTROL_CONVERSATION_KEY_FILE=/run/secrets/conversation_key'
+)
+CONVERSATION_PREFLIGHT_ENV=(
+  "${CONVERSATION_ENV[@]}"
+  --env 'MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT=true'
+)
 
 echo 'google_ceo_session_upgrade_phase=existing_secret_volume_preflight'
 if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
@@ -125,12 +156,22 @@ if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --secu
   exit 1
 fi
 
+echo 'google_ceo_session_upgrade_phase=existing_state_volume_preflight'
+if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR,readonly" \
+  --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
+  -c 'test -d /var/lib/mission-control/state && test -r /var/lib/mission-control/state/conversations.enc && test -r /var/lib/mission-control/state/deletion-ledger.enc'; then
+  echo 'google_ceo_session_upgrade_blocked=existing_state_volume_preflight_failed rollback_attempted=false' >&2
+  exit 1
+fi
+
 PREFLIGHT_STARTED=true
 echo 'google_ceo_session_upgrade_phase=candidate_container_start'
 if ! docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --tmpfs /tmp:rw,noexec,nosuid,size=16m \
-  "${OIDC_ENV[@]}" \
+  "${OIDC_ENV[@]}" "${CONVERSATION_PREFLIGHT_ENV[@]}" \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
+  --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR,readonly" \
   --label 'traefik.enable=false' \
   "$IMAGE@$IMAGE_DIGEST" >/dev/null; then
   echo 'google_ceo_session_upgrade_blocked=candidate_container_start_failed rollback_attempted=false' >&2
@@ -156,8 +197,9 @@ echo 'google_ceo_session_upgrade_phase=start_replacement_session'
 docker run -d --name "$SESSION" --restart unless-stopped --network bridge \
   --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --tmpfs /tmp:rw,noexec,nosuid,size=16m \
-  "${OIDC_ENV[@]}" \
+  "${OIDC_ENV[@]}" "${CONVERSATION_ENV[@]}" \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
+  --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR" \
   --label 'traefik.enable=true' \
   --label 'traefik.docker.network=bridge' \
   --label "traefik.http.routers.mission-control-google-ceo-session.rule=Host(\`$HOSTNAME\`) && PathPrefix(\`/auth/google\`)" \
@@ -174,8 +216,9 @@ test "$(docker inspect "$SESSION" --format '{{.State.Running}}')" = true
 test "$(docker inspect "$SESSION" --format '{{.Config.Image}}')" = "$IMAGE@$IMAGE_DIGEST"
 test "$(docker inspect "$SESSION" --format '{{.HostConfig.NetworkMode}}')" = bridge
 test "$(docker inspect "$SESSION" --format '{{.HostConfig.ReadonlyRootfs}}')" = true
+test "$(docker inspect "$SESSION" --format '{{range .Mounts}}{{if eq .Destination "/var/lib/mission-control"}}{{.Name}}{{end}}{{end}}')" = "$STATE_VOLUME"
 AFTER="$(docker ps --format '{{.Names}}|{{.Image}}' | awk -F'|' -v s="$SESSION" '$1 != s && $1 != "phil-ai-os-mission-control-google-ceo-session-rollback"' | sort)"
 test "$BEFORE" = "$AFTER"
 
 trap - ERR HUP INT TERM
-echo "google_ceo_session_upgraded=true image=$IMAGE@$IMAGE_DIGEST existing_workloads_unchanged=true rollback_retained=true conversation_authority=none"
+echo "google_ceo_session_upgraded=true image=$IMAGE@$IMAGE_DIGEST existing_workloads_unchanged=true rollback_retained=true state_volume=$STATE_VOLUME conversation_authority=enabled"

@@ -25,6 +25,16 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             "google_ceo_session_upgrade_phase=stale_preflight_cleanup",
             "stale_preflight_identity_mismatch",
             "google_ceo_session_upgrade_phase=existing_session_secret_volume",
+            "google_ceo_session_upgrade_phase=existing_session_storage_mount",
+            "google_ceo_session_upgrade_phase=existing_session_storage_configuration",
+            "google_ceo_session_upgrade_phase=existing_state_volume_preflight",
+            "existing_state_volume_preflight_failed",
+            "STATE_VOLUME=phil-ai-os-mission-control-conversation-state-v1",
+            "MISSION_CONTROL_CONVERSATION_ENABLED=true",
+            "MISSION_CONTROL_CONVERSATION_KEY_FILE=/run/secrets/conversation_key",
+            "MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT=true",
+            "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR,readonly",
+            "state_volume=$STATE_VOLUME",
             "google_ceo_session_upgrade_phase=route_collision_guard",
         ):
             self.assertIn(marker, script)
@@ -32,8 +42,6 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             "docker volume create",
             "docker rm -f \"$PREFLIGHT\" -v",
             "docker rm -f \"$ROLLBACK\"",
-            "MISSION_CONTROL_CONVERSATION_ENABLED=true",
-            "conversation_key",
         ):
             self.assertNotIn(prohibited, script)
 
@@ -49,7 +57,8 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             "current_image_digest:",
             "upgrade-google-ceo-session.sh",
             "rollback",
-            "conversation_authority=none",
+            "encrypted_storage_preserved=true",
+            "conversation_authority=enabled",
         ):
             self.assertIn(marker, workflow)
         for prohibited in ("docker volume create", "MISSION_CONTROL_CONVERSATION_ENABLED=true"):
