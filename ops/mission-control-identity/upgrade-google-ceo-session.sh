@@ -220,7 +220,7 @@ docker run -d --name "$SESSION" --restart unless-stopped --network bridge \
   --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR" \
   --label 'traefik.enable=true' \
   --label 'traefik.docker.network=bridge' \
-  --label "traefik.http.routers.mission-control-google-ceo-session.rule=Host(\`$HOSTNAME\`) && PathPrefix(\`/auth/google\`)" \
+  --label "traefik.http.routers.mission-control-google-ceo-session.rule=Host(\`$HOSTNAME\`) && (PathPrefix(\`/auth/google\`) || PathPrefix(\`/api/conversations\`) || PathPrefix(\`/api/notifications\`) || PathPrefix(\`/api/task-proposals\`))" \
   --label 'traefik.http.routers.mission-control-google-ceo-session.priority=120' \
   --label 'traefik.http.routers.mission-control-google-ceo-session.entrypoints=websecure' \
   --label 'traefik.http.routers.mission-control-google-ceo-session.tls=true' \

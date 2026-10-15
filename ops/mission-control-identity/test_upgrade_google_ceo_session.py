@@ -40,12 +40,16 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR,readonly",
             "state_volume=$STATE_VOLUME",
             "google_ceo_session_upgrade_phase=route_collision_guard",
+            "PathPrefix(\\`/api/conversations\\`)",
+            "PathPrefix(\\`/api/notifications\\`)",
+            "PathPrefix(\\`/api/task-proposals\\`)",
         ):
             self.assertIn(marker, script)
         for prohibited in (
             "docker volume create",
             "docker rm -f \"$PREFLIGHT\" -v",
             "docker rm -f \"$ROLLBACK\"",
+            "PathPrefix(\\`/api\\`)",
         ):
             self.assertNotIn(prohibited, script)
 
