@@ -213,9 +213,17 @@ class SessionHandler(ProbeHandler):
         body = (
             "<!doctype html><html><head><title>CEO session</title></head><body>"
             f"<h1>CEO sign-in complete</h1><p>{conversation_status}</p>"
-            "</body></html>"
+            "<p>Returning to Mission Control.</p></body></html>"
         )
-        self._send(HTTPStatus.OK, body, cookies=(clear_flow, session_cookie))
+        # A callback is only a transient handoff.  Return the browser to the
+        # same-origin control page after setting the host-only session cookie;
+        # no token, subject, or authorization code is placed in the URL.
+        self._send(
+            HTTPStatus.SEE_OTHER,
+            body,
+            location="/?ceo_session=active",
+            cookies=(clear_flow, session_cookie),
+        )
 
     def _session(self) -> None:
         token = _session_cookie(self.headers.get("Cookie", ""))

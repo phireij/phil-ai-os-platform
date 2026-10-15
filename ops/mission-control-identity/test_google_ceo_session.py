@@ -116,8 +116,9 @@ class SessionHttpChecks(unittest.TestCase):
         self.assertTrue(any(value.startswith(SESSION_COOKIE + "=; ") and "Max-Age=0" in value for key, value in headers if key.lower() == "set-cookie"))
 
         status, headers, body = self.sign_in()
-        self.assertEqual(status, 200)
+        self.assertEqual(status, 303)
         self.assertIn(b"No conversation access is active", body)
+        self.assertEqual(dict(headers)["Location"], "/?ceo_session=active")
         cookies = [value for key, value in headers if key.lower() == "set-cookie"]
         session_cookie = next(value for value in cookies if value.startswith(SESSION_COOKIE + "="))
         self.assertIn("; Path=/; Secure; HttpOnly; SameSite=Lax", session_cookie)
@@ -135,7 +136,7 @@ class SessionHttpChecks(unittest.TestCase):
 
     def test_logout_requires_exact_origin_and_csrf_then_revokes(self) -> None:
         status, headers, _ = self.sign_in()
-        self.assertEqual(status, 200)
+        self.assertEqual(status, 303)
         cookie = next(value.split(";", 1)[0] for key, value in headers if key.lower() == "set-cookie" and value.startswith(SESSION_COOKIE + "="))
         status, _, body = self.request("GET", "/auth/google/session", {"Cookie": cookie})
         self.assertEqual(status, 200)
@@ -151,7 +152,7 @@ class SessionHttpChecks(unittest.TestCase):
 
     def test_new_sign_in_with_wrong_account_revokes_previous_session(self) -> None:
         status, headers, _ = self.sign_in()
-        self.assertEqual(status, 200)
+        self.assertEqual(status, 303)
         cookie = next(value.split(";", 1)[0] for key, value in headers if key.lower() == "set-cookie" and value.startswith(SESSION_COOKIE + "="))
         state, flow_cookie = self.start_flow()
         with patch("google_ceo_session.exchange_verified_subject", return_value="different-subject"):
@@ -163,7 +164,7 @@ class SessionHttpChecks(unittest.TestCase):
     def test_replay_host_methods_and_errors_fail_closed(self) -> None:
         state, flow_cookie = self.start_flow()
         with patch("google_ceo_session.exchange_verified_subject", return_value="synthetic-ceo-subject"):
-            self.assertEqual(self.request("GET", f"/auth/google/callback?state={state}&code=synthetic-code", {"Cookie": flow_cookie})[0], 200)
+            self.assertEqual(self.request("GET", f"/auth/google/callback?state={state}&code=synthetic-code", {"Cookie": flow_cookie})[0], 303)
             self.assertEqual(self.request("GET", f"/auth/google/callback?state={state}&code=synthetic-code", {"Cookie": flow_cookie})[0], 401)
         self.assertEqual(self.request("GET", "/auth/google/session", {"Host": "evil.example"})[0], 400)
         self.assertEqual(self.request("POST", "/auth/google/session")[0], 405)
@@ -190,7 +191,7 @@ class SessionHttpChecks(unittest.TestCase):
             "synthetic-ceo-subject",
         )
         status, headers, _ = self.sign_in()
-        self.assertEqual(status, 200)
+        self.assertEqual(status, 303)
         cookie = next(
             value.split(";", 1)[0]
             for name, value in headers
@@ -202,7 +203,7 @@ class SessionHttpChecks(unittest.TestCase):
         self.assertTrue(session["conversation_authority"])
         self.assertEqual(session["scope"], "mission_control:conversation")
         status, _, callback_body = self.sign_in()
-        self.assertEqual(status, 200)
+        self.assertEqual(status, 303)
         self.assertIn(b"Conversation storage is available", callback_body)
         csrf = session["csrf_token"]
 
