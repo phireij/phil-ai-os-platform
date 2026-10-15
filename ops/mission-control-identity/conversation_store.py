@@ -315,6 +315,7 @@ class ConversationStore:
         readonly_preflight = os.environ.get("MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT", "")
         if readonly_preflight not in {"", "true"}:
             raise ConversationConfigurationError("conversation_readonly_preflight_invalid")
+        self._readonly_preflight = readonly_preflight == "true"
         self._key = load_key(config.key_file)
         self._owner = owner_digest(_derived_key(self._key, b"owner"), issuer, subject)
         manifest = config.evidence_manifest_file
@@ -330,7 +331,7 @@ class ConversationStore:
             # A storage-preserving image upgrade starts an isolated, no-network
             # candidate against the active encrypted volume. Its startup must
             # decrypt and validate both snapshots without rewriting either.
-            if readonly_preflight != "true":
+            if not self._readonly_preflight:
                 self._purge_locked(int(time.time()))
 
     @staticmethod
@@ -375,6 +376,8 @@ class ConversationStore:
         self._last_purge = now
 
     def _purge_if_due_locked(self, now: int) -> None:
+        if self._readonly_preflight:
+            return
         if now < self._last_purge or now - self._last_purge >= 3600:
             self._purge_locked(now)
 
