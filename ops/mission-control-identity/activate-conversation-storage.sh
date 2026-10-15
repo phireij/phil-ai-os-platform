@@ -43,8 +43,19 @@ if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
   exit 1
 fi
 if docker inspect "$PREFLIGHT" >/dev/null 2>&1; then
-  echo 'conversation_storage_activation_blocked=storage_preflight_already_exists' >&2
-  exit 1
+  echo 'conversation_storage_activation_phase=stale_preflight_identity'
+  STALE_IMAGE="$(docker inspect "$PREFLIGHT" --format '{{.Config.Image}}')"
+  CURRENT_SESSION_IMAGE="$(docker inspect "$SESSION" --format '{{.Config.Image}}' 2>/dev/null || true)"
+  if [[ "$(docker inspect "$PREFLIGHT" --format '{{.HostConfig.NetworkMode}}')" != none ]] || \
+     [[ "$(docker inspect "$PREFLIGHT" --format '{{.HostConfig.ReadonlyRootfs}}')" != true ]] || \
+     [[ "$(docker inspect "$PREFLIGHT" --format '{{.HostConfig.RestartPolicy.Name}}')" != no ]] || \
+     [[ "$(docker inspect "$PREFLIGHT" --format '{{index .Config.Labels "traefik.enable"}}')" != false ]] || \
+     { [[ "$STALE_IMAGE" != "$IMAGE@$IMAGE_DIGEST" ]] && [[ "$STALE_IMAGE" != "$CURRENT_SESSION_IMAGE" ]]; }; then
+    echo 'conversation_storage_activation_blocked=stale_preflight_identity_mismatch' >&2
+    exit 1
+  fi
+  echo 'conversation_storage_activation_phase=stale_preflight_cleanup'
+  docker rm -f "$PREFLIGHT" >/dev/null
 fi
 
 echo 'conversation_storage_activation_phase=existing_session_guard'
