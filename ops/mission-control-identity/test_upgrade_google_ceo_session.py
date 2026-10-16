@@ -76,6 +76,47 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
         dockerfile = (Path(__file__).parents[2] / "Dockerfile.mission-control-google-ceo-session").read_text(encoding="utf-8")
         self.assertIn("COPY ops/mission-control-identity/proposal_evidence.py /srv/proposal_evidence.py", dockerfile)
 
+    def test_same_image_restart_requires_the_explicit_reconfiguration_guard(self) -> None:
+        script = (Path(__file__).parent / "upgrade-google-ceo-session.sh").read_text(encoding="utf-8")
+        self.assertIn("MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION", script)
+        self.assertIn("same_image_without_reconfiguration_guard", script)
+        self.assertIn("reconfiguration_guard_requires_same_image", script)
+        self.assertIn("SAME_IMAGE_RECONFIGURATION=true", script)
+        self.assertIn("MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED=true", script)
+        self.assertIn("same_image_reconfiguration=${MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION:-false}", script)
+
+    def test_destination_rotation_is_limited_to_an_existing_chat_id_file(self) -> None:
+        installer = (Path(__file__).parent / "install-telegram-delivery-secrets.sh").read_text(encoding="utf-8")
+        for marker in (
+            "MISSION_CONTROL_TELEGRAM_SECRET_ROTATION",
+            'rotation not in {"", "chat_id"}',
+            "token_mismatch",
+            "rotation_requires_existing",
+            "os.replace(replacement, f\"{secret_dir}/chat_id\")",
+            "chat_id_rotated=true",
+        ):
+            self.assertIn(marker, installer)
+        self.assertNotIn("print(token", installer)
+        self.assertNotIn("print(chat", installer)
+
+    def test_destination_reconfiguration_is_manual_and_does_not_send(self) -> None:
+        workflow = (
+            Path(__file__).parents[2]
+            / ".github"
+            / "workflows"
+            / "mission-control-telegram-destination-reconfigure.yml"
+        ).read_text(encoding="utf-8")
+        for marker in (
+            "workflow_dispatch:",
+            "RECONFIGURE_TELEGRAM_DESTINATION",
+            "MISSION_CONTROL_TELEGRAM_SECRET_ROTATION=chat_id",
+            "MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION=true",
+            "CURRENT_IMAGE_DIGEST='$CURRENT_IMAGE_DIGEST'",
+            "controlled_test_not_dispatched=true",
+        ):
+            self.assertIn(marker, workflow)
+        self.assertNotIn("sendMessage", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
