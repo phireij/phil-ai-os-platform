@@ -41,6 +41,7 @@ assert.match(moduleSource, /audit-timeline\?limit=100/);
 assert.match(moduleSource, /\/api\/notifications\?limit=100/);
 assert.match(moduleSource, /\["not_configured", "enabled"\]\.includes\(notifications\.transport_status\)/);
 assert.match(moduleSource, /"pending", "in_flight", "retry_wait", "delivered", "dead_letter"/);
+assert.match(moduleSource, /notification\.last_error \?\? null/);
 assert.match(moduleSource, /"body" in event|"rationale" in event/);
 assert.match(moduleSource, /source_evidence_refs: \[\]/);
 assert.match(moduleSource, /proposal draft recorded · no authority/);

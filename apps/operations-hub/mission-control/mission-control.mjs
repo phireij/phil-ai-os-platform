@@ -607,7 +607,10 @@ async function loadGovernedProposals(conversationId, epoch = conversationEpoch) 
 function renderConversationLifecycle(timeline, notifications) {
   const target = document.querySelector("#conversation-lifecycle-list");
   const events = timeline.events.map((event) => [event.event_type, event.occurred_at, event.source]);
-  const notificationRows = notifications.notifications.map((notification) => [notification.kind, notification.delivery_state, notification.last_error ? `${notification.created_at} · last error: ${notification.last_error}` : notification.created_at]);
+  const notificationRows = notifications.notifications.map((notification) => {
+    const lastError = notification.last_error ?? null;
+    return [notification.kind, notification.delivery_state, lastError ? `${notification.created_at} · last error: ${lastError}` : notification.created_at];
+  });
   const rows = [...events, ...notificationRows];
   if (!rows.length) {
     const empty = document.createElement("p");
@@ -646,7 +649,8 @@ function assertConversationLifecycle(timeline, notifications, conversationId) {
     if (!event.event_id || !event.event_type || !event.occurred_at || !event.source || event.authority_effect !== "none" || !event.correlation || "body" in event || "rationale" in event) throw new Error("Unsafe audit event response");
   }
   for (const notification of notifications.notifications) {
-    if (!notification.notification_id || !["not_configured", "pending", "in_flight", "retry_wait", "delivered", "dead_letter"].includes(notification.delivery_state) || !Number.isInteger(notification.attempt_count) || notification.attempt_count < 0 || notification.attempt_count > 2 || ![null, "delivery_failed", "delivery_interrupted", "telegram_request_rejected", "telegram_rate_limited", "telegram_api_http_error", "telegram_transport_unavailable"].includes(notification.last_error) || notification.authority_effect !== "none" || "body" in notification || "rationale" in notification) throw new Error("Unsafe notification outbox response");
+    const lastError = notification.last_error ?? null;
+    if (!notification.notification_id || !["not_configured", "pending", "in_flight", "retry_wait", "delivered", "dead_letter"].includes(notification.delivery_state) || !Number.isInteger(notification.attempt_count) || notification.attempt_count < 0 || notification.attempt_count > 2 || ![null, "delivery_failed", "delivery_interrupted", "telegram_request_rejected", "telegram_rate_limited", "telegram_api_http_error", "telegram_transport_unavailable"].includes(lastError) || notification.authority_effect !== "none" || "body" in notification || "rationale" in notification) throw new Error("Unsafe notification outbox response");
   }
 }
 
