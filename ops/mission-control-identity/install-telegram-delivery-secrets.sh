@@ -9,8 +9,8 @@ set -euo pipefail
 [[ "$SECRET_VOLUME" =~ ^phil-ai-os-mc-google-session-secret-[0-9]+-[0-9]+$ ]]
 IMAGE=ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
 
-docker run --rm -i --network none --read-only --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --security-opt no-new-privileges:true \
-  --user 0:0 --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets" \
+docker run --rm -i --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --user 10003:10003 --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets" \
   --entrypoint python3 "$IMAGE@$IMAGE_DIGEST" -c '
 import os, re, sys
 token = sys.stdin.buffer.readline().rstrip(b"\r\n")
@@ -25,7 +25,7 @@ try:
   for path, value in paths:
     fd=os.open(path, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o400); created.append(path)
     with os.fdopen(fd, "wb") as handle: handle.write(value+b"\n"); handle.flush(); os.fsync(handle.fileno())
-    os.chown(path, 10003, 10003); os.chmod(path, 0o400)
+    os.chmod(path, 0o400)
   for path, _ in paths:
     details=os.lstat(path)
     if os.path.islink(path) or not os.path.isfile(path) or details.st_uid != 10003 or details.st_mode & 0o077: raise SystemExit("telegram_secret_installation_blocked=verification_failed")
