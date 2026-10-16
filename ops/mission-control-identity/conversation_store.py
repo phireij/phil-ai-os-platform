@@ -33,6 +33,12 @@ MAX_PROPOSAL_SCOPE = 20_000
 MAX_EXPECTED_RESULT = 5_000
 ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{16,200}")
 IDEMPOTENCY_PATTERN = re.compile(r"[A-Za-z0-9._~-]{16,128}")
+SAFE_NOTIFICATION_FAILURE_CODES = frozenset({
+    "telegram_request_rejected",
+    "telegram_rate_limited",
+    "telegram_api_http_error",
+    "telegram_transport_unavailable",
+})
 
 
 class ConversationConfigurationError(ValueError):
@@ -801,7 +807,7 @@ class ConversationStore:
         with self._lock:
             self._purge_if_due_locked(int(time.time()))
             rows = self._live.connection.execute(
-                "SELECT notification_id,decision_id,proposal_id,kind,priority,delivery_state,attempt_count,created_at,last_attempt_at,next_attempt_at "
+                "SELECT notification_id,decision_id,proposal_id,kind,priority,delivery_state,attempt_count,created_at,last_attempt_at,next_attempt_at,last_error "
                 "FROM notification_outbox WHERE owner_digest=? ORDER BY created_at,notification_id LIMIT ? OFFSET ?",
                 (self._owner, limit + 1, cursor),
             ).fetchall()
@@ -819,6 +825,7 @@ class ConversationStore:
                     "created_at": _iso(row["created_at"]),
                     "last_attempt_at": _iso(row["last_attempt_at"]) if row["last_attempt_at"] is not None else None,
                     "next_attempt_at": _iso(row["next_attempt_at"]) if row["next_attempt_at"] is not None else None,
+                    "last_error": row["last_error"],
                     "authority_effect": "none",
                 }
                 for row in page
@@ -934,10 +941,10 @@ class ConversationStore:
 
         try:
             deliver(notification)
-        except Exception:
+        except Exception as exc:
             outcome = "retry_wait" if notification["attempt_count"] == 1 else "dead_letter"
             next_attempt = now + retry_seconds if outcome == "retry_wait" else None
-            error = "delivery_failed"
+            error = str(exc) if str(exc) in SAFE_NOTIFICATION_FAILURE_CODES else "delivery_failed"
         else:
             outcome, next_attempt, error = "delivered", None, None
 
