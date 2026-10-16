@@ -23,7 +23,16 @@ directory = os.lstat(secret_dir)
 if os.path.islink(secret_dir) or not os.path.isdir(secret_dir) or (directory.st_mode & 0o7777) != 0o1733:
   raise SystemExit("telegram_secret_installation_blocked=directory_invalid")
 paths = [(f"{secret_dir}/bot_token", token), (f"{secret_dir}/chat_id", chat)]
-if any(os.path.lexists(path) for path, _ in paths): raise SystemExit("telegram_secret_installation_blocked=secret_already_exists")
+exists = [os.path.lexists(path) for path, _ in paths]
+if any(exists):
+  if not all(exists): raise SystemExit("telegram_secret_installation_blocked=partial_secret_state")
+  for path, _ in paths:
+    details = os.lstat(path)
+    if os.path.islink(path) or not os.path.isfile(path) or details.st_uid != 10003 or (details.st_mode & 0o7777) != 0o400 or details.st_size < 2 or details.st_size > 512:
+      raise SystemExit("telegram_secret_installation_blocked=existing_secret_invalid")
+  token=b""; chat=b""
+  print("telegram_secret_installation_completed=true reused_existing=true authority_effect=none")
+  raise SystemExit(0)
 created=[]
 try:
   for path, value in paths:
