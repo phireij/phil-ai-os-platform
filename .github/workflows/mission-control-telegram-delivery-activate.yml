@@ -68,6 +68,8 @@ jobs:
           printf '%s\n%s\n' "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" | ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/install-telegram-delivery-secrets.sh /tmp/upgrade-google-ceo-session.sh && IMAGE_DIGEST='$IMAGE_DIGEST' SECRET_VOLUME=\"\$(docker inspect phil-ai-os-mission-control-google-ceo-session --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}')\" bash /tmp/install-telegram-delivery-secrets.sh"
           config="/tmp/phil-ai-os-mc-telegram-ghcr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           printf '%s' "$GH_TOKEN" | ssh "${ssh_opts[@]}" "$remote" "mkdir -m 700 -p '$config' && DOCKER_CONFIG='$config' docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin" >/dev/null
-          ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' IMAGE_DIGEST='$IMAGE_DIGEST' CURRENT_IMAGE_DIGEST='$CURRENT_IMAGE_DIGEST' HOSTNAME=miscon.phireij.cloud MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED=true bash /tmp/upgrade-google-ceo-session.sh"
+          same_image_guard=""
+          if [[ "$IMAGE_DIGEST" == "$CURRENT_IMAGE_DIGEST" ]]; then same_image_guard="MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION=true "; fi
+          ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' IMAGE_DIGEST='$IMAGE_DIGEST' CURRENT_IMAGE_DIGEST='$CURRENT_IMAGE_DIGEST' HOSTNAME=miscon.phireij.cloud MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED=true MISSION_CONTROL_ALLOW_TELEGRAM_ENABLEMENT=true ${same_image_guard}bash /tmp/upgrade-google-ceo-session.sh"
           test "$(curl --silent --show-error --fail --max-time 15 https://miscon.phireij.cloud/auth/google/healthz)" = session_ready\;conversation_authority=enabled
           echo 'telegram_delivery_enabled=true controlled_test_pending=true authority_effect=none'
