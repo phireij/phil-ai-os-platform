@@ -1,0 +1,61 @@
+name: Mission Control Telegram Destination Reconfiguration
+
+on:
+  workflow_dispatch:
+    inputs:
+      current_image_digest:
+        description: Exact immutable digest of the active CEO-session image
+        required: true
+        type: string
+      confirmation:
+        description: Type RECONFIGURE_TELEGRAM_DESTINATION to replace the protected destination and restart the same image
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: mission-control-google-identity-deploy
+  cancel-in-progress: false
+
+jobs:
+  reconfigure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+      CURRENT_IMAGE_DIGEST: ${{ inputs.current_image_digest }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: Replace destination and restart the same storage-preserving image
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.MISSION_CONTROL_TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.MISSION_CONTROL_TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = RECONFIGURE_TELEGRAM_DESTINATION
+          [[ "$CURRENT_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY" && test -n "$TELEGRAM_BOT_TOKEN" && test -n "$TELEGRAM_CHAT_ID"
+          port="${VPS_PORT:-22}"; remote="$VPS_USER@$VPS_HOST"
+          install -m 700 -d ~/.ssh; printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519; chmod 600 ~/.ssh/id_ed25519
+          ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          config="/tmp/phil-ai-os-mc-telegram-reconfigure-ghcr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup() { ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' docker logout ghcr.io >/dev/null 2>&1 || true; rm -f '$config/config.json' /tmp/install-telegram-delivery-secrets.sh /tmp/upgrade-google-ceo-session.sh; rmdir '$config' >/dev/null 2>&1 || true" || true; }
+          trap cleanup EXIT
+          scp -4 -P "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-identity/install-telegram-delivery-secrets.sh ops/mission-control-identity/upgrade-google-ceo-session.sh "$remote:/tmp/"
+          printf '%s\n%s\n' "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" | ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/install-telegram-delivery-secrets.sh /tmp/upgrade-google-ceo-session.sh && IMAGE_DIGEST='$CURRENT_IMAGE_DIGEST' SECRET_VOLUME=\"\$(docker inspect phil-ai-os-mission-control-google-ceo-session --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}')\" MISSION_CONTROL_TELEGRAM_SECRET_ROTATION=chat_id bash /tmp/install-telegram-delivery-secrets.sh"
+          printf '%s' "$GH_TOKEN" | ssh "${ssh_opts[@]}" "$remote" "mkdir -m 700 -p '$config' && DOCKER_CONFIG='$config' docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin" >/dev/null
+          ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/upgrade-google-ceo-session.sh && DOCKER_CONFIG='$config' IMAGE_DIGEST='$CURRENT_IMAGE_DIGEST' CURRENT_IMAGE_DIGEST='$CURRENT_IMAGE_DIGEST' HOSTNAME=miscon.phireij.cloud MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED=true MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION=true bash /tmp/upgrade-google-ceo-session.sh"
+          test "$(curl --silent --show-error --fail --max-time 15 https://miscon.phireij.cloud/auth/google/healthz)" = session_ready\;conversation_authority=enabled
+          echo 'telegram_destination_reconfigured=true controlled_test_not_dispatched=true authority_effect=none'

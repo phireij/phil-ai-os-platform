@@ -11,7 +11,17 @@ set -euo pipefail
 [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
 [[ "$CURRENT_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
 test "$HOSTNAME" = miscon.phireij.cloud
-test "$IMAGE_DIGEST" != "$CURRENT_IMAGE_DIGEST"
+SAME_IMAGE_RECONFIGURATION=false
+if [[ "$IMAGE_DIGEST" == "$CURRENT_IMAGE_DIGEST" ]]; then
+  if [[ "${MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION:-}" != true ]]; then
+    echo 'google_ceo_session_upgrade_blocked=same_image_without_reconfiguration_guard rollback_attempted=false' >&2
+    exit 1
+  fi
+  SAME_IMAGE_RECONFIGURATION=true
+elif [[ -n "${MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION:-}" ]]; then
+  echo 'google_ceo_session_upgrade_blocked=reconfiguration_guard_requires_same_image rollback_attempted=false' >&2
+  exit 1
+fi
 
 IMAGE=ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
 SESSION=phil-ai-os-mission-control-google-ceo-session
@@ -118,6 +128,14 @@ for expected in \
   'MISSION_CONTROL_CONVERSATION_KEY_FILE=/run/secrets/conversation_key'; do
   grep -Fx "$expected" <<<"$ACTIVE_ENV" >/dev/null
 done
+if [[ "$SAME_IMAGE_RECONFIGURATION" == true ]]; then
+  for expected in \
+    'MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED=true' \
+    'MISSION_CONTROL_TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram/bot_token' \
+    'MISSION_CONTROL_TELEGRAM_CHAT_ID_FILE=/run/secrets/telegram/chat_id'; do
+    grep -Fx "$expected" <<<"$ACTIVE_ENV" >/dev/null
+  done
+fi
 
 echo 'google_ceo_session_upgrade_phase=route_collision_guard'
 python3 - "$SESSION" "$HOSTNAME" <<'PY'
@@ -257,4 +275,4 @@ AFTER="$(docker ps --format '{{.Names}}|{{.Image}}' | awk -F'|' -v s="$SESSION" 
 test "$BEFORE" = "$AFTER"
 
 trap - ERR HUP INT TERM
-echo "google_ceo_session_upgraded=true image=$IMAGE@$IMAGE_DIGEST existing_workloads_unchanged=true rollback_retained=true state_volume=$STATE_VOLUME conversation_authority=enabled"
+echo "google_ceo_session_upgraded=true image=$IMAGE@$IMAGE_DIGEST same_image_reconfiguration=${MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION:-false} existing_workloads_unchanged=true rollback_retained=true state_volume=$STATE_VOLUME conversation_authority=enabled"
