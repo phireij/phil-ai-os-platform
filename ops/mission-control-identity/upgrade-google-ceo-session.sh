@@ -168,8 +168,8 @@ TELEGRAM_ENV=()
 if [[ "${MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED:-}" == true ]]; then
   TELEGRAM_ENV=(
     --env 'MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED=true'
-    --env 'MISSION_CONTROL_TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram_bot_token'
-    --env 'MISSION_CONTROL_TELEGRAM_CHAT_ID_FILE=/run/secrets/telegram_chat_id'
+    --env 'MISSION_CONTROL_TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram/bot_token'
+    --env 'MISSION_CONTROL_TELEGRAM_CHAT_ID_FILE=/run/secrets/telegram/chat_id'
   )
 elif [[ -n "${MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED:-}" ]]; then
   echo 'google_ceo_session_upgrade_blocked=telegram_delivery_configuration_invalid rollback_attempted=false' >&2
@@ -187,7 +187,7 @@ fi
 if [[ "${MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED:-}" == true ]] && ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
   --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
-  -c 'test "$(stat -c "%u:%a" /run/secrets/telegram_bot_token)" = "10003:400" && test "$(stat -c "%u:%a" /run/secrets/telegram_chat_id)" = "10003:400" && test -s /run/secrets/telegram_bot_token && test -s /run/secrets/telegram_chat_id'; then
+  -c 'test "$(stat -c "%a" /run/secrets/telegram)" = "1733" && test "$(stat -c "%u:%a" /run/secrets/telegram/bot_token)" = "10003:400" && test "$(stat -c "%u:%a" /run/secrets/telegram/chat_id)" = "10003:400" && test -s /run/secrets/telegram/bot_token && test -s /run/secrets/telegram/chat_id'; then
   echo 'google_ceo_session_upgrade_blocked=telegram_secret_volume_preflight_failed rollback_attempted=false' >&2
   exit 1
 fi

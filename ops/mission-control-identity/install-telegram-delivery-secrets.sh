@@ -18,7 +18,11 @@ chat = sys.stdin.buffer.readline().rstrip(b"\r\n")
 if sys.stdin.buffer.readline(): raise SystemExit("telegram_secret_installation_blocked=unexpected_input")
 if not re.fullmatch(rb"[0-9]{6,16}:[A-Za-z0-9_-]{20,256}", token): raise SystemExit("telegram_secret_installation_blocked=token_invalid")
 if not re.fullmatch(rb"-?[0-9]{1,32}", chat) or chat == b"0": raise SystemExit("telegram_secret_installation_blocked=chat_invalid")
-paths = [("/run/secrets/telegram_bot_token", token), ("/run/secrets/telegram_chat_id", chat)]
+secret_dir = "/run/secrets/telegram"
+directory = os.lstat(secret_dir)
+if os.path.islink(secret_dir) or not os.path.isdir(secret_dir) or (directory.st_mode & 0o7777) != 0o1733:
+  raise SystemExit("telegram_secret_installation_blocked=directory_invalid")
+paths = [(f"{secret_dir}/bot_token", token), (f"{secret_dir}/chat_id", chat)]
 if any(os.path.lexists(path) for path, _ in paths): raise SystemExit("telegram_secret_installation_blocked=secret_already_exists")
 created=[]
 try:
