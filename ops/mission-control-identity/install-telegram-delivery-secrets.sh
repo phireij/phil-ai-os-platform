@@ -11,6 +11,7 @@ IMAGE=ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
 
 docker run --rm -i --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --user 10003:10003 --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets" \
+  --env "MISSION_CONTROL_TELEGRAM_SECRET_ROTATION=${MISSION_CONTROL_TELEGRAM_SECRET_ROTATION:-}" \
   --entrypoint python3 "$IMAGE@$IMAGE_DIGEST" -c '
 import hmac, os, re, sys
 token = sys.stdin.buffer.readline().rstrip(b"\r\n")

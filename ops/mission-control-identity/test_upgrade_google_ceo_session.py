@@ -89,6 +89,7 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
         installer = (Path(__file__).parent / "install-telegram-delivery-secrets.sh").read_text(encoding="utf-8")
         for marker in (
             "MISSION_CONTROL_TELEGRAM_SECRET_ROTATION",
+            "--env \"MISSION_CONTROL_TELEGRAM_SECRET_ROTATION=${MISSION_CONTROL_TELEGRAM_SECRET_ROTATION:-}\"",
             'rotation not in {"", "chat_id"}',
             "token_mismatch",
             "rotation_requires_existing",
