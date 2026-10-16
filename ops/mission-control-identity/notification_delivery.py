@@ -112,10 +112,16 @@ class TelegramTransport:
                 if response.status != 200:
                     raise NotificationTransportError("telegram_http_error")
                 result = json.loads(response.read(16_384).decode("utf-8"))
-        except (HTTPError, URLError, OSError, UnicodeError, json.JSONDecodeError) as exc:
+        except HTTPError as exc:
+            if exc.code in {400, 403, 404}:
+                raise NotificationTransportError("telegram_request_rejected") from exc
+            if exc.code == 429:
+                raise NotificationTransportError("telegram_rate_limited") from exc
+            raise NotificationTransportError("telegram_api_http_error") from exc
+        except (URLError, OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise NotificationTransportError("telegram_transport_unavailable") from exc
         if not isinstance(result, dict) or result.get("ok") is not True:
-            raise NotificationTransportError("telegram_rejected")
+            raise NotificationTransportError("telegram_request_rejected")
 
 
 class NotificationDeliveryWorker:

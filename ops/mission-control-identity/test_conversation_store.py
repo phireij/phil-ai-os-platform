@@ -214,17 +214,28 @@ class ConversationStoreChecks(unittest.TestCase):
             self._record_decision(store, "0002")
 
         def fail(_notification: dict) -> None:
-            raise RuntimeError("synthetic delivery failure")
+            raise RuntimeError("telegram_request_rejected")
 
         self.assertTrue(store.dispatch_one_notification(fail, now=now + 1, retry_seconds=900))
         failed = store.list_notifications()["notifications"][1]
         self.assertEqual("retry_wait", failed["delivery_state"])
         self.assertEqual(1, failed["attempt_count"])
+        self.assertEqual("telegram_request_rejected", failed["last_error"])
         self.assertFalse(store.dispatch_one_notification(fail, now=now + 900, retry_seconds=900))
         self.assertTrue(store.dispatch_one_notification(fail, now=now + 901, retry_seconds=900))
         failed = store.list_notifications()["notifications"][1]
         self.assertEqual("dead_letter", failed["delivery_state"])
         self.assertEqual(2, failed["attempt_count"])
+        self.assertEqual("telegram_request_rejected", failed["last_error"])
+
+        with patch("conversation_store.time.time", return_value=now + 902):
+            self._record_decision(store, "0004")
+
+        def unsafe_failure(_notification: dict) -> None:
+            raise RuntimeError("untrusted failure text")
+
+        self.assertTrue(store.dispatch_one_notification(unsafe_failure, now=now + 902, retry_seconds=900))
+        self.assertEqual("delivery_failed", store.list_notifications()["notifications"][-1]["last_error"])
 
     def test_existing_outbox_snapshot_migrates_without_retroactive_delivery(self) -> None:
         original = self.store()

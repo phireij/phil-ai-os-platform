@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from notification_delivery import (
     NotificationConfigurationError,
+    NotificationTransportError,
     TelegramDeliveryConfig,
     TelegramTransport,
 )
@@ -27,6 +28,12 @@ class _Response:
     @staticmethod
     def read(_limit: int) -> bytes:
         return b'{"ok":true,"result":{"message_id":1}}'
+
+
+class _RejectedResponse(_Response):
+    @staticmethod
+    def read(_limit: int) -> bytes:
+        return b'{"ok":false}'
 
 
 class TelegramDeliveryChecks(unittest.TestCase):
@@ -78,6 +85,24 @@ class TelegramDeliveryChecks(unittest.TestCase):
         self.assertIn(notification["decision_id"], body)
         self.assertIn(notification["proposal_id"], body)
         self.assertNotIn("rationale", body)
+
+    def test_transport_rejection_has_only_a_safe_category(self) -> None:
+        environment = {
+            "MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED": "true",
+            "MISSION_CONTROL_TELEGRAM_BOT_TOKEN_FILE": str(self.token),
+            "MISSION_CONTROL_TELEGRAM_CHAT_ID_FILE": str(self.chat),
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            config = TelegramDeliveryConfig.from_environment()
+        self.assertIsNotNone(config)
+        transport = TelegramTransport(config)
+        with patch("notification_delivery.urlopen", return_value=_RejectedResponse()):
+            with self.assertRaisesRegex(NotificationTransportError, "^telegram_request_rejected$"):
+                transport.send({
+                    "notification_id": "notification_abcdefghijklmno",
+                    "decision_id": "decision_abcdefghijklmno",
+                    "proposal_id": "proposal_abcdefghijklmno",
+                })
 
 
 if __name__ == "__main__":
