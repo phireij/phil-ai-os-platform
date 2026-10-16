@@ -628,12 +628,12 @@ function renderConversationLifecycle(timeline, notifications) {
 
 function assertConversationLifecycle(timeline, notifications, conversationId) {
   if (timeline?.conversation_id !== conversationId || timeline.authority_effect !== "none" || !Array.isArray(timeline.events) || !Array.isArray(timeline.source_coverage)) throw new Error("Invalid audit timeline response");
-  if (notifications?.authority_effect !== "none" || notifications.transport_status !== "not_configured" || !Array.isArray(notifications.notifications)) throw new Error("Invalid notification outbox response");
+  if (notifications?.authority_effect !== "none" || !["not_configured", "enabled"].includes(notifications.transport_status) || !Array.isArray(notifications.notifications)) throw new Error("Invalid notification outbox response");
   for (const event of timeline.events) {
     if (!event.event_id || !event.event_type || !event.occurred_at || !event.source || event.authority_effect !== "none" || !event.correlation || "body" in event || "rationale" in event) throw new Error("Unsafe audit event response");
   }
   for (const notification of notifications.notifications) {
-    if (!notification.notification_id || notification.delivery_state !== "not_configured" || notification.attempt_count !== 0 || notification.authority_effect !== "none" || "body" in notification || "rationale" in notification) throw new Error("Unsafe notification outbox response");
+    if (!notification.notification_id || !["not_configured", "pending", "in_flight", "retry_wait", "delivered", "dead_letter"].includes(notification.delivery_state) || !Number.isInteger(notification.attempt_count) || notification.attempt_count < 0 || notification.attempt_count > 2 || notification.authority_effect !== "none" || "body" in notification || "rationale" in notification) throw new Error("Unsafe notification outbox response");
   }
 }
 
