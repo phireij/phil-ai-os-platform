@@ -48,6 +48,10 @@ assert.match(moduleSource, /CEO decision recorded · no authority/);
 assert.match(moduleSource, /assignment_id !== null \|\| proposal\.execution_authorized !== false/);
 assert.match(moduleSource, /recordedDecisionProposalIds\.has\(proposal\.proposal_id\)/);
 assert.match(moduleSource, /renderGovernedProposals\(\{ proposals: activeGovernedProposals \}, \{ live: true \}\);/);
+assert.match(moduleSource, /\["Bounded scope", proposal\.scope\]/);
+assert.match(moduleSource, /\["Expected result", proposal\.expected_result\]/);
+assert.match(moduleSource, /typeof proposal\.scope !== "string"/);
+assert.match(moduleSource, /proposal\.scope\.slice\(0, 160\)/);
 
 const start = moduleSource.indexOf("function conversationIdempotencyKey(prefix) {");
 const end = moduleSource.indexOf("\nfunction setConversationState", start);
