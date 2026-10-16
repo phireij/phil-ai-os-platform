@@ -128,13 +128,18 @@ for expected in \
   'MISSION_CONTROL_CONVERSATION_KEY_FILE=/run/secrets/conversation_key'; do
   grep -Fx "$expected" <<<"$ACTIVE_ENV" >/dev/null
 done
-if [[ "$SAME_IMAGE_RECONFIGURATION" == true ]]; then
+ACTIVE_TELEGRAM_DELIVERY=false
+if grep -Fx 'MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED=true' <<<"$ACTIVE_ENV" >/dev/null; then
   for expected in \
     'MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED=true' \
     'MISSION_CONTROL_TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram/bot_token' \
     'MISSION_CONTROL_TELEGRAM_CHAT_ID_FILE=/run/secrets/telegram/chat_id'; do
     grep -Fx "$expected" <<<"$ACTIVE_ENV" >/dev/null
   done
+  ACTIVE_TELEGRAM_DELIVERY=true
+elif grep -q '^MISSION_CONTROL_TELEGRAM_' <<<"$ACTIVE_ENV"; then
+  echo 'google_ceo_session_upgrade_blocked=telegram_delivery_configuration_invalid rollback_attempted=false' >&2
+  exit 1
 fi
 
 echo 'google_ceo_session_upgrade_phase=route_collision_guard'
@@ -182,16 +187,28 @@ CONVERSATION_PREFLIGHT_ENV=(
   "${CONVERSATION_ENV[@]}"
   --env 'MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT=true'
 )
+REQUESTED_TELEGRAM_DELIVERY="${MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED:-}"
+if [[ -n "$REQUESTED_TELEGRAM_DELIVERY" && "$REQUESTED_TELEGRAM_DELIVERY" != true ]]; then
+  echo 'google_ceo_session_upgrade_blocked=telegram_delivery_configuration_invalid rollback_attempted=false' >&2
+  exit 1
+fi
+TELEGRAM_DELIVERY_ENABLED=false
+if [[ "$ACTIVE_TELEGRAM_DELIVERY" == true ]]; then
+  TELEGRAM_DELIVERY_ENABLED=true
+elif [[ "$REQUESTED_TELEGRAM_DELIVERY" == true ]]; then
+  if [[ "${MISSION_CONTROL_ALLOW_TELEGRAM_ENABLEMENT:-}" != true ]]; then
+    echo 'google_ceo_session_upgrade_blocked=telegram_enablement_guard_required rollback_attempted=false' >&2
+    exit 1
+  fi
+  TELEGRAM_DELIVERY_ENABLED=true
+fi
 TELEGRAM_ENV=()
-if [[ "${MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED:-}" == true ]]; then
+if [[ "$TELEGRAM_DELIVERY_ENABLED" == true ]]; then
   TELEGRAM_ENV=(
     --env 'MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED=true'
     --env 'MISSION_CONTROL_TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram/bot_token'
     --env 'MISSION_CONTROL_TELEGRAM_CHAT_ID_FILE=/run/secrets/telegram/chat_id'
   )
-elif [[ -n "${MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED:-}" ]]; then
-  echo 'google_ceo_session_upgrade_blocked=telegram_delivery_configuration_invalid rollback_attempted=false' >&2
-  exit 1
 fi
 
 echo 'google_ceo_session_upgrade_phase=existing_secret_volume_preflight'
@@ -202,7 +219,7 @@ if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --secu
   echo 'google_ceo_session_upgrade_blocked=existing_secret_volume_preflight_failed rollback_attempted=false' >&2
   exit 1
 fi
-if [[ "${MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED:-}" == true ]] && ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+if [[ "$TELEGRAM_DELIVERY_ENABLED" == true ]] && ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
   --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
   -c 'test "$(stat -c "%a" /run/secrets/telegram)" = "1733" && test "$(stat -c "%u:%a" /run/secrets/telegram/bot_token)" = "10003:400" && test "$(stat -c "%u:%a" /run/secrets/telegram/chat_id)" = "10003:400" && test -s /run/secrets/telegram/bot_token && test -s /run/secrets/telegram/chat_id'; then
@@ -275,4 +292,4 @@ AFTER="$(docker ps --format '{{.Names}}|{{.Image}}' | awk -F'|' -v s="$SESSION" 
 test "$BEFORE" = "$AFTER"
 
 trap - ERR HUP INT TERM
-echo "google_ceo_session_upgraded=true image=$IMAGE@$IMAGE_DIGEST same_image_reconfiguration=${MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION:-false} existing_workloads_unchanged=true rollback_retained=true state_volume=$STATE_VOLUME conversation_authority=enabled"
+echo "google_ceo_session_upgraded=true image=$IMAGE@$IMAGE_DIGEST same_image_reconfiguration=${MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION:-false} telegram_delivery_enabled=$TELEGRAM_DELIVERY_ENABLED existing_workloads_unchanged=true rollback_retained=true state_volume=$STATE_VOLUME conversation_authority=enabled"

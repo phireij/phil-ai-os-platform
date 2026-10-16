@@ -83,7 +83,29 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
         self.assertIn("reconfiguration_guard_requires_same_image", script)
         self.assertIn("SAME_IMAGE_RECONFIGURATION=true", script)
         self.assertIn("MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED=true", script)
+        self.assertIn("ACTIVE_TELEGRAM_DELIVERY=false", script)
+        self.assertIn("MISSION_CONTROL_ALLOW_TELEGRAM_ENABLEMENT", script)
+        self.assertIn("telegram_enablement_guard_required", script)
+        self.assertIn("telegram_delivery_enabled=$TELEGRAM_DELIVERY_ENABLED", script)
         self.assertIn("same_image_reconfiguration=${MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION:-false}", script)
+
+    def test_activation_reenables_delivery_with_an_explicit_same_image_guard(self) -> None:
+        workflow = (
+            Path(__file__).parents[2]
+            / ".github"
+            / "workflows"
+            / "mission-control-telegram-delivery-activate.yml"
+        ).read_text(encoding="utf-8")
+        for marker in (
+            'confirmation:',
+            'ENABLE_DEDICATED_TELEGRAM_TEST',
+            'MISSION_CONTROL_ALLOW_TELEGRAM_ENABLEMENT=true',
+            'if [[ "$IMAGE_DIGEST" == "$CURRENT_IMAGE_DIGEST" ]]',
+            'MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION=true',
+            'controlled_test_pending=true',
+        ):
+            self.assertIn(marker, workflow)
+        self.assertNotIn("sendMessage", workflow)
 
     def test_destination_rotation_is_limited_to_an_existing_chat_id_file(self) -> None:
         installer = (Path(__file__).parent / "install-telegram-delivery-secrets.sh").read_text(encoding="utf-8")
