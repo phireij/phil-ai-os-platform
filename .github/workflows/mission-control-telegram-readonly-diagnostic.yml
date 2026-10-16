@@ -1,0 +1,51 @@
+name: Mission Control Telegram Read-only Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type RUN_READONLY_TELEGRAM_DIAGNOSTIC to authorize getMe and getChat only
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-control-telegram-readonly-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      CONTAINER: phil-ai-os-mission-control-google-ceo-session
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: Run credential-safe read-only Telegram checks
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = RUN_READONLY_TELEGRAM_DIAGNOSTIC
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh_opts=(-4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          output="$RUNNER_TEMP/telegram-readonly-diagnostic.txt"
+          if ! ssh "${ssh_opts[@]}" "$VPS_USER@$VPS_HOST" "test \"\$(docker inspect '$CONTAINER' --format '{{.State.Running}}')\" = true && docker exec -i '$CONTAINER' python3 -" < ops/mission-control-identity/diagnose-telegram-delivery.py > "$output"; then
+            echo 'telegram_diagnostic=container_unavailable_or_execution_failed'
+            exit 0
+          fi
+          grep -Ex 'telegram_diagnostic=secret_files_unavailable|telegram_get_me=(credentials_accepted|credentials_rejected|api_http_error|transport_unavailable|unexpected_failure)|telegram_get_chat=(destination_accepted|destination_rejected|api_http_error|transport_unavailable|unexpected_failure|skipped)' "$output"
+          test "$(wc -l < "$output")" -le 2
