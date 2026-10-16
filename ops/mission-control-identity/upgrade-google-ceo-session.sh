@@ -164,6 +164,17 @@ CONVERSATION_PREFLIGHT_ENV=(
   "${CONVERSATION_ENV[@]}"
   --env 'MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT=true'
 )
+TELEGRAM_ENV=()
+if [[ "${MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED:-}" == true ]]; then
+  TELEGRAM_ENV=(
+    --env 'MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED=true'
+    --env 'MISSION_CONTROL_TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram_bot_token'
+    --env 'MISSION_CONTROL_TELEGRAM_CHAT_ID_FILE=/run/secrets/telegram_chat_id'
+  )
+elif [[ -n "${MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED:-}" ]]; then
+  echo 'google_ceo_session_upgrade_blocked=telegram_delivery_configuration_invalid rollback_attempted=false' >&2
+  exit 1
+fi
 
 echo 'google_ceo_session_upgrade_phase=existing_secret_volume_preflight'
 if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
@@ -171,6 +182,13 @@ if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --secu
   --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
   -c 'test "$(stat -c "%u:%a" /run/secrets/client_secret)" = "10003:400" && test "$(stat -c "%u:%a" /run/secrets/ceo_binding)" = "10003:400" && test -s /run/secrets/client_secret && test -s /run/secrets/ceo_binding'; then
   echo 'google_ceo_session_upgrade_blocked=existing_secret_volume_preflight_failed rollback_attempted=false' >&2
+  exit 1
+fi
+if [[ "${MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED:-}" == true ]] && ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
+  --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
+  -c 'test "$(stat -c "%u:%a" /run/secrets/telegram_bot_token)" = "10003:400" && test "$(stat -c "%u:%a" /run/secrets/telegram_chat_id)" = "10003:400" && test -s /run/secrets/telegram_bot_token && test -s /run/secrets/telegram_chat_id'; then
+  echo 'google_ceo_session_upgrade_blocked=telegram_secret_volume_preflight_failed rollback_attempted=false' >&2
   exit 1
 fi
 
@@ -187,7 +205,7 @@ PREFLIGHT_STARTED=true
 echo 'google_ceo_session_upgrade_phase=candidate_container_start'
 if ! docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --tmpfs /tmp:rw,noexec,nosuid,size=16m \
-  "${OIDC_ENV[@]}" "${CONVERSATION_PREFLIGHT_ENV[@]}" \
+  "${OIDC_ENV[@]}" "${CONVERSATION_PREFLIGHT_ENV[@]}" "${TELEGRAM_ENV[@]}" \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
   --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR,readonly" \
   --label 'traefik.enable=false' \
@@ -215,7 +233,7 @@ echo 'google_ceo_session_upgrade_phase=start_replacement_session'
 docker run -d --name "$SESSION" --restart unless-stopped --network bridge \
   --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --tmpfs /tmp:rw,noexec,nosuid,size=16m \
-  "${OIDC_ENV[@]}" "${CONVERSATION_ENV[@]}" \
+  "${OIDC_ENV[@]}" "${CONVERSATION_ENV[@]}" "${TELEGRAM_ENV[@]}" \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
   --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR" \
   --label 'traefik.enable=true' \
