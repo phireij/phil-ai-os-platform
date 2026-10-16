@@ -571,6 +571,19 @@ function renderGovernedProposals(data, { live = false } = {}) {
       meta.append(cell);
     }
     article.append(top, meta);
+    if (live) {
+      const details = document.createElement("div");
+      details.className = "lifecycle-meta";
+      for (const [name, value] of [["Bounded scope", proposal.scope], ["Expected result", proposal.expected_result]]) {
+        const cell = document.createElement("span");
+        cell.textContent = name;
+        const strong = document.createElement("strong");
+        strong.textContent = value;
+        cell.append(strong);
+        details.append(cell);
+      }
+      article.append(details);
+    }
     return article;
   }));
 }
@@ -581,7 +594,7 @@ async function loadGovernedProposals(conversationId, epoch = conversationEpoch) 
   const payload = await response.json();
   if (epoch !== conversationEpoch || conversationId !== activeConversationId || !Array.isArray(payload.proposals) || payload.authority_effect !== "none") return;
   for (const proposal of payload.proposals) {
-    if (proposal.assignment_id !== null || proposal.execution_authorized !== false || proposal.mutation_authorized !== false || proposal.authority_effect !== "none") throw new Error("Unsafe governed-proposal response");
+    if (proposal.assignment_id !== null || proposal.execution_authorized !== false || proposal.mutation_authorized !== false || proposal.authority_effect !== "none" || typeof proposal.scope !== "string" || !proposal.scope || typeof proposal.expected_result !== "string" || !proposal.expected_result) throw new Error("Unsafe governed-proposal response");
   }
   renderGovernedProposals({ proposals: payload.proposals }, { live: true });
   activeGovernedProposals = payload.proposals;
@@ -685,7 +698,7 @@ function syncGovernedControls() {
   proposalSource.replaceChildren(...ceoMessages.map((message) => new Option(`CEO message · ${new Date(message.created_at).toLocaleString()}`, message.message_id)));
   const undecided = activeGovernedProposals.filter((proposal) => !recordedDecisionProposalIds.has(proposal.proposal_id));
   const decisionProposal = document.querySelector("#decision-proposal");
-  decisionProposal.replaceChildren(...undecided.map((proposal) => new Option(proposal.proposal_id, proposal.proposal_id)));
+  decisionProposal.replaceChildren(...undecided.map((proposal) => new Option(`${proposal.proposal_id} · ${proposal.scope.slice(0, 160)}`, proposal.proposal_id)));
   for (const selector of ["#proposal-source-message", "#proposal-project", "#proposal-scope", "#proposal-result", "#proposal-authority"]) {
     document.querySelector(selector).disabled = !enabled;
   }
