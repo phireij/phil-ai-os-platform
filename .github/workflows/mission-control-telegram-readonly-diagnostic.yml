@@ -47,5 +47,5 @@ jobs:
             echo 'telegram_diagnostic=container_unavailable_or_execution_failed'
             exit 0
           fi
-          grep -Ex 'telegram_diagnostic=secret_files_unavailable|telegram_get_me=(credentials_accepted|credentials_rejected|api_http_error|transport_unavailable|unexpected_failure)|telegram_get_chat=(destination_accepted|destination_rejected|api_http_error|transport_unavailable|unexpected_failure|skipped)' "$output"
-          test "$(wc -l < "$output")" -le 2
+          grep -Ex 'telegram_diagnostic=secret_files_unavailable|telegram_get_me=(credentials_accepted|credentials_rejected|api_http_error|transport_unavailable|unexpected_failure)|telegram_get_chat=(destination_accepted|destination_rejected|api_http_error|transport_unavailable|unexpected_failure|skipped)|telegram_destination=(bot_self_destination|private_send_permission_unverified|group_send_permission_unverified|supergroup_send_permission_unverified|channel_send_permission_unverified|unknown)' "$output"
+          test "$(wc -l < "$output")" -le 3

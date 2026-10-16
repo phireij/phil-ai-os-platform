@@ -2,7 +2,7 @@
 
 **Purpose:** Living task list, phase deadlines, acceptance evidence, and schedule control for completing Phil AI OS Platform Mission Control.
 
-**Last updated:** 2026-10-16 JST
+**Last updated:** 2026-10-17 JST
 **Schedule status:** **VERY HIGH RISK — four-day stretch target; provider and end-to-end acceptance prerequisites remain unresolved**
 **Target operational acceptance:** **Tuesday, 20 October 2026 (JST)**
 **Scope:** Custom Phil AI OS Mission Control only. Ruby's Cake Delights application work remains deferred. No replacement open-source product is being adopted. Hermes and existing workloads must remain untouched.
@@ -10,6 +10,8 @@
 This is a working delivery baseline, not a guarantee. Dates are reviewed against verified deliverables, not files written or design completed. A milestone is complete only when its acceptance evidence exists in the intended environment. The existing Mission Control operational acceptance gate remains authoritative for what “operational” means.
 
 ## Current position
+
+- **MC-015 latest evidence (17 October JST):** PR #577 merged; approved activation [38925355453](https://github.com/phireij/phil-ai-os-platform/actions/runs/38925355453) deployed `sha256:1de0a257f0c79b9d4bd27b08c1d2d9f7934102ac1c0c2fd8fbef3944b2ac165d`, reported `telegram_delivery_enabled=true`, reused existing secrets, preserved encrypted state, and retained rollback. The controlled decision at `2026-10-16T15:40:14Z` progressed from pending to retry wait to dead letter with `telegram_request_rejected`; no receipt was reported. Acceptance remains incomplete. Next: extend the existing getMe/getChat-only diagnostic to distinguish the bot's own identity from the recipient and classify destination type without exposing identifiers. A successful getChat does not prove posting permission. No new test or replay is authorized by this diagnostic change.
 
 - Rough overall progress is not re-estimated here: the prior **about 30%** figure is obsolete after the active encrypted-storage rollout, while the remaining end-to-end acceptance evidence is still incomplete.
 - Latest verified Mission Control runtime revision is `aebca592b61ee9ad756d45b70cc3a4580edbb816`. On 15 October, owner-approved PRs [#541](https://github.com/phireij/phil-ai-os-platform/pull/541) and [#542](https://github.com/phireij/phil-ai-os-platform/pull/542) made the CEO-session upgrade storage-preserving and safely archived the legacy non-storage rollback. Owner-approved [#545](https://github.com/phireij/phil-ai-os-platform/pull/545) then corrected CEO conversation API routing. Controlled upgrade [38763577849](https://github.com/phireij/phil-ai-os-platform/actions/runs/38763577849) deployed `sha256:2571ff87a5a09468a2c2954aebe7b2dc96592b8d3bbf20c197fec789526e0ad5`, retained a storage-preserving rollback, reported existing workloads unchanged, and passed public health 200, unauthenticated session 401, Google-start 302, and `conversation_authority=enabled` checks. A real CEO browser session created, submitted, and refreshed its bounded acceptance record successfully. Encrypted conversation state is active on the protected volume.
