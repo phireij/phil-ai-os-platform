@@ -1,0 +1,73 @@
+name: Mission Control Dedicated Telegram Delivery Activation
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_revision:
+        description: Exact main commit that published the reviewed session image
+        required: true
+        type: string
+      image_digest:
+        description: Immutable replacement CEO-session image digest
+        required: true
+        type: string
+      current_image_digest:
+        description: Immutable digest currently running in production
+        required: true
+        type: string
+      confirmation:
+        description: Type ENABLE_DEDICATED_TELEGRAM_TEST to authorize installation, enablement, and one controlled test
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: mission-control-telegram-delivery-activation
+  cancel-in-progress: false
+
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+      CURRENT_IMAGE_DIGEST: ${{ inputs.current_image_digest }}
+      SOURCE_REVISION: ${{ inputs.source_revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Install dedicated secrets and enable delivery with preserved storage
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.MISSION_CONTROL_TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.MISSION_CONTROL_TELEGRAM_CHAT_ID }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = ENABLE_DEDICATED_TELEGRAM_TEST
+          [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$CURRENT_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test -n "$VPS_SSH_KEY" && test -n "$TELEGRAM_BOT_TOKEN" && test -n "$TELEGRAM_CHAT_ID"
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          port="${VPS_PORT:-22}"; remote="$VPS_USER@$VPS_HOST"
+          install -m 700 -d ~/.ssh; printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519; chmod 600 ~/.ssh/id_ed25519
+          ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          cleanup() { ssh "${ssh_opts[@]}" "$remote" 'rm -f /tmp/install-telegram-delivery-secrets.sh /tmp/upgrade-google-ceo-session.sh' || true; }
+          trap cleanup EXIT
+          scp -4 -P "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-identity/install-telegram-delivery-secrets.sh ops/mission-control-identity/upgrade-google-ceo-session.sh "$remote:/tmp/"
+          printf '%s\n%s\n' "$TELEGRAM_BOT_TOKEN" "$TELEGRAM_CHAT_ID" | ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/install-telegram-delivery-secrets.sh /tmp/upgrade-google-ceo-session.sh && IMAGE_DIGEST='$IMAGE_DIGEST' SECRET_VOLUME=\"\$(docker inspect phil-ai-os-mission-control-google-ceo-session --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}')\" bash /tmp/install-telegram-delivery-secrets.sh"
+          config="/tmp/phil-ai-os-mc-telegram-ghcr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf '%s' "$GH_TOKEN" | ssh "${ssh_opts[@]}" "$remote" "mkdir -m 700 -p '$config' && DOCKER_CONFIG='$config' docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin" >/dev/null
+          ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' IMAGE_DIGEST='$IMAGE_DIGEST' CURRENT_IMAGE_DIGEST='$CURRENT_IMAGE_DIGEST' HOSTNAME=miscon.phireij.cloud MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED=true bash /tmp/upgrade-google-ceo-session.sh"
+          test "$(curl --silent --show-error --fail --max-time 15 https://miscon.phireij.cloud/auth/google/healthz)" = session_ready\;conversation_authority=enabled
+          echo 'telegram_delivery_enabled=true controlled_test_pending=true authority_effect=none'
