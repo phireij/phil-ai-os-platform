@@ -15,6 +15,8 @@ This is a working delivery baseline, not a guarantee. Dates are reviewed against
 
 **MC-010 implementation authorized:** the owner approved conventional OpenAI API implementation with unchanged US$5/day, 4,000 input-token and 750 generated-token limits. Deployment and live calls remain separately gated. The inactive adapter and encrypted reservation/response lifecycle are in offline verification. Production startup does not construct the runtime; no credential, paid request, or deployment occurred. The provider assessment records remaining activation work.
 
+**Review evidence:** [PR #580](https://github.com/phireij/phil-ai-os-platform/pull/580) contains the dormant implementation. At implementation commit `79bed406`, all 14 provider tests passed locally; [Linux session tests and inactive image build](https://github.com/phireij/phil-ai-os-platform/actions/runs/38994139398), probe CI and workflow policy passed. Merge remains pending owner approval; this evidence is not live provider acceptance.
+
 This checkpoint supersedes older runtime and Telegram blocker summaries below; those describe historical evidence.
 
 - **MC-015 delivery acceptance passed:** destination reconfiguration [38985793120](https://github.com/phireij/phil-ai-os-platform/actions/runs/38985793120) retained active image `sha256:1de0a257f0c79b9d4bd27b08c1d2d9f7934102ac1c0c2fd8fbef3944b2ac165d`, encrypted state, enabled delivery, rollback, and unchanged workloads. Read-only diagnostic [38985877328](https://github.com/phireij/phil-ai-os-platform/actions/runs/38985877328) confirmed a private destination. The earlier wrong destination was the bot's own ID.
