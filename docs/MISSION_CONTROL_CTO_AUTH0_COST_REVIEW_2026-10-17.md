@@ -1,6 +1,6 @@
 # MC-021 — owner-only CTO connector identity and cost review
 
-**Decision state:** read-only assessment, not provider selection or setup. No Auth0 account, OAuth application, tunnel, runtime key, MCP endpoint, live source read, or production change is authorized by this document.
+**Decision state (owner, 17 October 2026):** Auth0 Free is selected for a **non-production identity proof**, with a hard **US$0/month Auth0-plan ceiling** and no automatic paid upgrade. This is provider selection only: the owner explicitly withheld approval to create an Auth0 account/tenant, credentials, or tunnel. No MCP endpoint, live source read, or production change is authorized.
 
 ## Verified starting point
 
@@ -32,7 +32,7 @@ OpenAI's [MCP authentication guidance](https://developers.openai.com/plugins/bui
 
 ## Recommended decision sequence
 
-1. Owner decides whether to **evaluate Auth0 Free as the identity provider** for this owner-only connector, with a **US$0/month Auth0-plan ceiling and no automatic paid upgrade**. This document is not approval to create an account. If selected, review Auth0 terms/data region and verify discovery, registration method, resource parameter, read scope, token validation, revocation, and subject mapping in a non-production proof.
+1. **Selected:** evaluate Auth0 Free as the identity provider for this owner-only connector, with a US$0/month Auth0-plan ceiling and no automatic paid upgrade. Offline fixture checks may be prepared without an account; they are not an Auth0 compatibility result. Before any real non-production proof, separately approve account/tenant creation and test credentials after reviewing current terms and data region. The proof must verify discovery, registration method, `resource` parameter, read scope, token validation, revocation, and subject mapping.
 2. Separately approve a private tunnel implementation plan: exact Platform organization/workspace, permission roles, restricted runtime key custody, isolated client host, no inbound route, fail-closed disconnect and rollback.
 3. Build and review the real MCP resource and verifier offline first. Distinguish protocol/discovery tests from authorization tests; use synthetic or test-only tokens and fixture data.
 4. Ask separately for credential creation, connection, any live source access, and deployment. No acceptance claim until an owner-authenticated read and wrong-owner/expired/revoked negatives pass on the exact candidate.
