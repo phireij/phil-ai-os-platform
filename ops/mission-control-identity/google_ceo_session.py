@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import re
 import secrets
 import threading
@@ -31,6 +32,11 @@ from notification_delivery import (
     NotificationDeliveryWorker,
     TelegramDeliveryConfig,
     TelegramTransport,
+)
+from provider_activation import (
+    ProviderActivationConfig,
+    ProviderResponseWorker,
+    acquire_provider_writer_lock,
 )
 
 from google_identity_probe import (
@@ -514,12 +520,25 @@ def main() -> None:
     config = GoogleOidcConfig.from_environment()
     subject = load_ceo_subject(config.ceo_subject_file)
     conversation_config = ConversationConfig.from_environment()
+    provider_config = ProviderActivationConfig.from_environment()
+    if provider_config is not None and conversation_config is None:
+        raise ValueError("provider_requires_conversation_storage")
     try:
         delivery_config = TelegramDeliveryConfig.from_environment()
     except NotificationConfigurationError as exc:
         raise ValueError(str(exc)) from exc
     if delivery_config is not None and conversation_config is None:
         raise ValueError("telegram_delivery_requires_conversation_storage")
+    provider_lock = acquire_provider_writer_lock(conversation_config.state_file) if provider_config and conversation_config else None
+    try:
+        _serve_session(config, subject, conversation_config, delivery_config, provider_config)
+    finally:
+        if provider_lock is not None:
+            os.close(provider_lock)
+
+
+def _serve_session(config, subject, conversation_config, delivery_config, provider_config) -> None:
+    provider_runtime = provider_config.runtime(int(time.time())) if provider_config else None
     server = ThreadingHTTPServer(("0.0.0.0", 8093), SessionHandler)
     server.flows = FlowStore()  # type: ignore[attr-defined]
     server.sessions = SessionStore()  # type: ignore[attr-defined]
@@ -531,11 +550,13 @@ def main() -> None:
             config.issuer,
             subject,
             notification_delivery_enabled=delivery_config is not None,
+            provider_runtime=provider_runtime,
         )
         if conversation_config is not None
         else None
     )
     worker = None
+    provider_worker = ProviderResponseWorker(server.conversations) if provider_runtime else None  # type: ignore[arg-type]
     if delivery_config is not None and conversation_config is not None and not server.conversations._readonly_preflight:  # type: ignore[attr-defined]
         worker = NotificationDeliveryWorker(
             server.conversations,  # type: ignore[arg-type]
@@ -543,12 +564,19 @@ def main() -> None:
             retry_seconds=delivery_config.retry_seconds,
             poll_seconds=delivery_config.poll_seconds,
         )
-        worker.start()
+    started = []
     try:
+        if worker is not None:
+            worker.start()
+            started.append(worker)
+        if provider_worker is not None:
+            provider_worker.start()
+            started.append(provider_worker)
         server.serve_forever()
     finally:
-        if worker is not None:
-            worker.stop()
+        for active_worker in reversed(started):
+            active_worker.stop()
+        server.server_close()
 
 
 if __name__ == "__main__":
