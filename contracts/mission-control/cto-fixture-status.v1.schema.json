@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "phil-ai-os://mission-control/cto-fixture-status.v1",
+  "title": "Offline-only MC-021 CTO status projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["project_id", "project_name", "projection_kind", "source_observed_at", "retrieved_at", "source_revision", "overall_status", "freshness", "source_coverage", "agent_posture", "authority_effect"],
+  "properties": {
+    "project_id": {"const": "phil-ai-os"},
+    "project_name": {"const": "Phil AI OS Platform"},
+    "projection_kind": {"const": "workspace_snapshot"},
+    "source_observed_at": {"type": "string", "format": "date-time"},
+    "retrieved_at": {"type": "string", "format": "date-time"},
+    "source_revision": {"type": "null"},
+    "overall_status": {"const": "unknown"},
+    "freshness": {"const": "unknown"},
+    "source_coverage": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_id", "source_status", "freshness", "freshness_policy_status", "observed_at"],
+        "properties": {
+          "source_id": {"type": "string", "pattern": "^phil-ai-os\\.[a-z0-9-]{1,64}$"},
+          "source_status": {"enum": ["unknown", "available", "not_available", "not_configured"]},
+          "freshness": {"enum": ["fresh", "stale", "unknown"]},
+          "freshness_policy_status": {"enum": ["approved", "proposed", "not_defined"]},
+          "observed_at": {"type": ["string", "null"], "format": "date-time"}
+        }
+      }
+    },
+    "agent_posture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["availability", "observed_at", "agents"],
+      "properties": {
+        "availability": {"enum": ["available", "unavailable"]},
+        "observed_at": {"type": ["string", "null"], "format": "date-time"},
+        "agents": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["agent_id", "presence_state", "readiness_state", "authority_ceiling"],
+            "properties": {
+              "agent_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,80}$"},
+              "presence_state": {"enum": ["fresh", "stale", "offline", "unknown"]},
+              "readiness_state": {"enum": ["unassignable", "busy", "ready", "stale", "offline", "indeterminate"]},
+              "authority_ceiling": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,40}$"}
+            }
+          }
+        }
+      }
+    },
+    "authority_effect": {"const": "none"}
+  }
+}
