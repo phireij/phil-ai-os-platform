@@ -15,6 +15,11 @@ on:
         description: Immutable digest of the currently running CEO-session image
         required: true
         type: string
+      configure_openai:
+        description: Stage protected OpenAI files without dispatching provider calls
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -35,6 +40,7 @@ jobs:
       SOURCE_REVISION: ${{ inputs.source_revision }}
       IMAGE_DIGEST: ${{ inputs.image_digest }}
       CURRENT_IMAGE_DIGEST: ${{ inputs.current_image_digest }}
+      CONFIGURE_OPENAI: ${{ inputs.configure_openai }}
       IMAGE: ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -82,7 +88,8 @@ jobs:
           trap cleanup EXIT
           scp -4 -P "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new ops/mission-control-identity/upgrade-google-ceo-session.sh "$remote:/tmp/upgrade-google-ceo-session.sh"
           printf '%s' "$GH_TOKEN" | ssh "${ssh_opts[@]}" "$remote" "mkdir -m 700 -p '$config' && DOCKER_CONFIG='$config' docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin" >/dev/null
-          ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/upgrade-google-ceo-session.sh && DOCKER_CONFIG='$config' IMAGE_DIGEST='$IMAGE_DIGEST' CURRENT_IMAGE_DIGEST='$CURRENT_IMAGE_DIGEST' HOSTNAME='miscon.phireij.cloud' bash /tmp/upgrade-google-ceo-session.sh"
+          [[ "$CONFIGURE_OPENAI" == true || "$CONFIGURE_OPENAI" == false ]]
+          ssh "${ssh_opts[@]}" "$remote" "chmod 700 /tmp/upgrade-google-ceo-session.sh && DOCKER_CONFIG='$config' IMAGE_DIGEST='$IMAGE_DIGEST' CURRENT_IMAGE_DIGEST='$CURRENT_IMAGE_DIGEST' HOSTNAME='miscon.phireij.cloud' MISSION_CONTROL_OPENAI_ENABLED='$CONFIGURE_OPENAI' MISSION_CONTROL_ALLOW_OPENAI_CONFIGURATION='$CONFIGURE_OPENAI' bash /tmp/upgrade-google-ceo-session.sh"
           test "$(curl --silent --show-error --fail --max-time 10 https://miscon.phireij.cloud/auth/google/healthz)" = 'session_ready;conversation_authority=enabled'
           test "$(curl --silent --show-error --max-time 10 -o /dev/null -w '%{http_code}' https://miscon.phireij.cloud/auth/google/session)" = 401
           redirect="$(curl --silent --show-error --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}' https://miscon.phireij.cloud/auth/google/start)"

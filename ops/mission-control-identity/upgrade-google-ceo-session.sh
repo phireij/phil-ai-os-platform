@@ -142,6 +142,23 @@ elif grep -q '^MISSION_CONTROL_TELEGRAM_' <<<"$ACTIVE_ENV"; then
   exit 1
 fi
 
+ACTIVE_OPENAI_CONFIGURATION=false
+if grep -Fx 'MISSION_CONTROL_OPENAI_ENABLED=true' <<<"$ACTIVE_ENV" >/dev/null; then
+  for expected in \
+    'MISSION_CONTROL_OPENAI_API_KEY_FILE=/run/secrets/openai/api_key' \
+    'MISSION_CONTROL_OPENAI_POLICY_FILE=/run/secrets/openai/policy.json'; do
+    grep -Fx "$expected" <<<"$ACTIVE_ENV" >/dev/null
+  done
+  ACTIVE_OPENAI_CONFIGURATION=true
+elif grep -q '^MISSION_CONTROL_OPENAI_' <<<"$ACTIVE_ENV"; then
+  echo 'google_ceo_session_upgrade_blocked=openai_configuration_invalid rollback_attempted=false' >&2
+  exit 1
+fi
+if grep -Fx 'MISSION_CONTROL_OPENAI_DISPATCH_ENABLED=true' <<<"$ACTIVE_ENV" >/dev/null; then
+  echo 'google_ceo_session_upgrade_blocked=active_provider_dispatch_requires_separate_upgrade_review rollback_attempted=false' >&2
+  exit 1
+fi
+
 echo 'google_ceo_session_upgrade_phase=route_collision_guard'
 python3 - "$SESSION" "$HOSTNAME" <<'PY'
 import json
@@ -211,6 +228,30 @@ if [[ "$TELEGRAM_DELIVERY_ENABLED" == true ]]; then
   )
 fi
 
+REQUESTED_OPENAI_CONFIGURATION="${MISSION_CONTROL_OPENAI_ENABLED:-false}"
+if [[ "$REQUESTED_OPENAI_CONFIGURATION" != true && "$REQUESTED_OPENAI_CONFIGURATION" != false ]]; then
+  echo 'google_ceo_session_upgrade_blocked=openai_configuration_invalid rollback_attempted=false' >&2
+  exit 1
+fi
+OPENAI_CONFIGURATION_ENABLED=false
+if [[ "$ACTIVE_OPENAI_CONFIGURATION" == true ]]; then
+  OPENAI_CONFIGURATION_ENABLED=true
+elif [[ "$REQUESTED_OPENAI_CONFIGURATION" == true ]]; then
+  if [[ "${MISSION_CONTROL_ALLOW_OPENAI_CONFIGURATION:-}" != true ]]; then
+    echo 'google_ceo_session_upgrade_blocked=openai_configuration_guard_required rollback_attempted=false' >&2
+    exit 1
+  fi
+  OPENAI_CONFIGURATION_ENABLED=true
+fi
+OPENAI_ENV=()
+if [[ "$OPENAI_CONFIGURATION_ENABLED" == true ]]; then
+  OPENAI_ENV=(
+    --env 'MISSION_CONTROL_OPENAI_ENABLED=true'
+    --env 'MISSION_CONTROL_OPENAI_API_KEY_FILE=/run/secrets/openai/api_key'
+    --env 'MISSION_CONTROL_OPENAI_POLICY_FILE=/run/secrets/openai/policy.json'
+  )
+fi
+
 echo 'google_ceo_session_upgrade_phase=existing_secret_volume_preflight'
 if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
@@ -224,6 +265,23 @@ if [[ "$TELEGRAM_DELIVERY_ENABLED" == true ]] && ! docker run --rm --network non
   --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
   -c 'test "$(stat -c "%a" /run/secrets/telegram)" = "1733" && test "$(stat -c "%u:%a" /run/secrets/telegram/bot_token)" = "10003:400" && test "$(stat -c "%u:%a" /run/secrets/telegram/chat_id)" = "10003:400" && test -s /run/secrets/telegram/bot_token && test -s /run/secrets/telegram/chat_id'; then
   echo 'google_ceo_session_upgrade_blocked=telegram_secret_volume_preflight_failed rollback_attempted=false' >&2
+  exit 1
+fi
+if [[ "$OPENAI_CONFIGURATION_ENABLED" == true ]] && ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
+  --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
+  -c 'test "$(stat -c "%a" /run/secrets/openai)" = "1733" && test "$(stat -c "%u:%a" /run/secrets/openai/api_key)" = "10003:400" && test "$(stat -c "%u:%a" /run/secrets/openai/policy.json)" = "10003:400" && test -s /run/secrets/openai/api_key && test -s /run/secrets/openai/policy.json'; then
+  echo 'google_ceo_session_upgrade_blocked=openai_secret_volume_preflight_failed rollback_attempted=false' >&2
+  exit 1
+fi
+if [[ "$OPENAI_CONFIGURATION_ENABLED" == true ]] && ! docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --env 'MISSION_CONTROL_OPENAI_ENABLED=true' \
+  --env 'MISSION_CONTROL_OPENAI_API_KEY_FILE=/run/secrets/openai/api_key' \
+  --env 'MISSION_CONTROL_OPENAI_POLICY_FILE=/run/secrets/openai/policy.json' \
+  --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
+  --entrypoint python3 "$IMAGE@$IMAGE_DIGEST" \
+  -c 'import time; from provider_activation import ProviderActivationConfig; ProviderActivationConfig.from_environment().runtime(int(time.time())); print("openai_configuration_valid=true network_access=false")'; then
+  echo 'google_ceo_session_upgrade_blocked=openai_configuration_validation_failed rollback_attempted=false' >&2
   exit 1
 fi
 
@@ -240,7 +298,7 @@ PREFLIGHT_STARTED=true
 echo 'google_ceo_session_upgrade_phase=candidate_container_start'
 if ! docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --tmpfs /tmp:rw,noexec,nosuid,size=16m \
-  "${OIDC_ENV[@]}" "${CONVERSATION_PREFLIGHT_ENV[@]}" "${TELEGRAM_ENV[@]}" \
+  "${OIDC_ENV[@]}" "${CONVERSATION_PREFLIGHT_ENV[@]}" "${TELEGRAM_ENV[@]}" "${OPENAI_ENV[@]}" \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
   --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR,readonly" \
   --label 'traefik.enable=false' \
@@ -268,7 +326,7 @@ echo 'google_ceo_session_upgrade_phase=start_replacement_session'
 docker run -d --name "$SESSION" --restart unless-stopped --network bridge \
   --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --tmpfs /tmp:rw,noexec,nosuid,size=16m \
-  "${OIDC_ENV[@]}" "${CONVERSATION_ENV[@]}" "${TELEGRAM_ENV[@]}" \
+  "${OIDC_ENV[@]}" "${CONVERSATION_ENV[@]}" "${TELEGRAM_ENV[@]}" "${OPENAI_ENV[@]}" \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
   --mount "type=volume,src=$STATE_VOLUME,dst=$STATE_DIR" \
   --label 'traefik.enable=true' \
@@ -292,4 +350,4 @@ AFTER="$(docker ps --format '{{.Names}}|{{.Image}}' | awk -F'|' -v s="$SESSION" 
 test "$BEFORE" = "$AFTER"
 
 trap - ERR HUP INT TERM
-echo "google_ceo_session_upgraded=true image=$IMAGE@$IMAGE_DIGEST same_image_reconfiguration=${MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION:-false} telegram_delivery_enabled=$TELEGRAM_DELIVERY_ENABLED existing_workloads_unchanged=true rollback_retained=true state_volume=$STATE_VOLUME conversation_authority=enabled"
+echo "google_ceo_session_upgraded=true image=$IMAGE@$IMAGE_DIGEST same_image_reconfiguration=${MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION:-false} telegram_delivery_enabled=$TELEGRAM_DELIVERY_ENABLED openai_configured=$OPENAI_CONFIGURATION_ENABLED openai_dispatch_enabled=false existing_workloads_unchanged=true rollback_retained=true state_volume=$STATE_VOLUME conversation_authority=enabled"

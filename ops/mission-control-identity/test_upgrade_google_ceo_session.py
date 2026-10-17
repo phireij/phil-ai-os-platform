@@ -72,6 +72,18 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
         for prohibited in ("docker volume create", "MISSION_CONTROL_CONVERSATION_ENABLED=true"):
             self.assertNotIn(prohibited, workflow)
 
+    def test_openai_configuration_and_dispatch_are_separate_gates(self) -> None:
+        script = (Path(__file__).parent / "upgrade-google-ceo-session.sh").read_text(encoding="utf-8")
+        workflow = (Path(__file__).parents[2] / ".github" / "workflows" /
+                    "mission-control-google-ceo-session-upgrade.yml").read_text(encoding="utf-8")
+        for marker in ("configure_openai:", "MISSION_CONTROL_ALLOW_OPENAI_CONFIGURATION",
+                       "openai_configuration_guard_required", "openai_secret_volume_preflight_failed",
+                       "openai_configuration_validation_failed", "openai_dispatch_enabled=false",
+                       "MISSION_CONTROL_OPENAI_API_KEY_FILE=/run/secrets/openai/api_key"):
+            self.assertIn(marker, script + workflow)
+        self.assertNotIn("--env 'MISSION_CONTROL_OPENAI_DISPATCH_ENABLED=true'", script)
+        self.assertNotIn("MISSION_CONTROL_OPENAI_DISPATCH_ENABLED=true", workflow)
+
     def test_session_image_includes_conversation_store_dependency(self) -> None:
         dockerfile = (Path(__file__).parents[2] / "Dockerfile.mission-control-google-ceo-session").read_text(encoding="utf-8")
         self.assertIn("COPY ops/mission-control-identity/proposal_evidence.py /srv/proposal_evidence.py", dockerfile)

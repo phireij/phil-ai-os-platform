@@ -529,16 +529,17 @@ def main() -> None:
         raise ValueError(str(exc)) from exc
     if delivery_config is not None and conversation_config is None:
         raise ValueError("telegram_delivery_requires_conversation_storage")
-    provider_lock = acquire_provider_writer_lock(conversation_config.state_file) if provider_config and conversation_config else None
+    provider_dispatch = os.environ.get("MISSION_CONTROL_OPENAI_DISPATCH_ENABLED") == "true"
+    provider_lock = acquire_provider_writer_lock(conversation_config.state_file) if provider_dispatch and conversation_config else None
     try:
-        _serve_session(config, subject, conversation_config, delivery_config, provider_config)
+        _serve_session(config, subject, conversation_config, delivery_config, provider_config, provider_dispatch)
     finally:
         if provider_lock is not None:
             os.close(provider_lock)
 
 
-def _serve_session(config, subject, conversation_config, delivery_config, provider_config) -> None:
-    provider_runtime = provider_config.runtime(int(time.time())) if provider_config else None
+def _serve_session(config, subject, conversation_config, delivery_config, provider_config, provider_dispatch) -> None:
+    provider_runtime = provider_config.runtime(int(time.time())) if provider_config and provider_dispatch else None
     server = ThreadingHTTPServer(("0.0.0.0", 8093), SessionHandler)
     server.flows = FlowStore()  # type: ignore[attr-defined]
     server.sessions = SessionStore()  # type: ignore[attr-defined]

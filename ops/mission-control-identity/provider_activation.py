@@ -40,6 +40,9 @@ class ProviderActivationConfig:
     @classmethod
     def from_environment(cls) -> ProviderActivationConfig | None:
         enabled = os.environ.get("MISSION_CONTROL_OPENAI_ENABLED", "")
+        dispatch = os.environ.get("MISSION_CONTROL_OPENAI_DISPATCH_ENABLED", "")
+        if dispatch not in {"", "false", "true"} or (dispatch == "true" and enabled != "true"):
+            raise ProviderConfigurationError("provider_dispatch_guard_invalid")
         if enabled in {"", "false"}:
             return None
         if enabled != "true":
