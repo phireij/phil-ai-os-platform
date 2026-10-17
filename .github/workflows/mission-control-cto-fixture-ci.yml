@@ -1,0 +1,28 @@
+name: Mission Control CTO Fixture CI
+
+on:
+  pull_request:
+    paths:
+      - 'apps/operations-hub/src/operations_hub/mission_control_cto_fixture.py'
+      - 'apps/operations-hub/tests/test_mission_control_cto_fixture.py'
+      - 'contracts/mission-control/cto-fixture-status.v1.schema.json'
+      - '.github/workflows/mission-control-cto-fixture-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/operations-hub/src/operations_hub/mission_control_cto_fixture.py'
+      - 'apps/operations-hub/tests/test_mission_control_cto_fixture.py'
+      - 'contracts/mission-control/cto-fixture-status.v1.schema.json'
+      - '.github/workflows/mission-control-cto-fixture-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-fixture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify fixture-only projection and closed schema
+        run: python3 -m unittest discover -s apps/operations-hub/tests -p test_mission_control_cto_fixture.py -v
