@@ -7,7 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import Mock, patch
 
 from provider_runtime import ProviderPolicy, ProviderRuntime, ProviderFailure, OpenAITransport, budget_day
-from conversation_store import ConversationStore
+from provider_activation import (ProviderActivationConfig, ProviderConfigurationError,
+                                 ProviderResponseWorker, acquire_provider_writer_lock)
+from conversation_store import ConversationStore, ConversationConfigurationError
 import test_conversation_store as fixtures
 from test_conversation_store import ISSUER, SUBJECT
 
@@ -31,6 +33,7 @@ class RuntimeChecks(unittest.TestCase):
         self.assertEqual(payload["max_output_tokens"], 750)
         self.assertEqual(payload["tools"], [])
         self.assertEqual(payload["tool_choice"], "none")
+        self.assertEqual(payload["reasoning"], {"effort": "none"})
         self.assertFalse(payload["store"])
         self.assertEqual(runtime.complete(payload), "Advisory only.")
         runtime.send.assert_called_once_with(payload, timeout_seconds=30, max_retries=0)
@@ -114,7 +117,7 @@ class StoreRuntimeChecks(unittest.TestCase):
 
     def test_unknown_budget_carries_to_next_day(self):
         runtime = RuntimeChecks().runtime()
-        runtime.policy = ProviderPolicy("reviewed-model", 1000000000, 1000000000, 4102444800)
+        runtime.policy = ProviderPolicy("reviewed-model", 500000000, 500000000, 4102444800)
         runtime.send.side_effect = TimeoutError()
         store = self.store(runtime)
         self.message(store, "one")
@@ -168,7 +171,7 @@ class StoreRuntimeChecks(unittest.TestCase):
 
     def test_atomic_budget_concurrent_dispatch(self):
         runtime = RuntimeChecks().runtime()
-        runtime.policy = ProviderPolicy("reviewed-model", 1000000000, 1000000000, 4102444800)
+        runtime.policy = ProviderPolicy("reviewed-model", 500000000, 500000000, 4102444800)
         store = self.store(runtime)
         self.message(store, "one")
         self.message(store, "two")
@@ -196,6 +199,68 @@ class StoreRuntimeChecks(unittest.TestCase):
         self.assertFalse(reopened.dispatch_one_response(now=int(time.time())))
         self.assertEqual(reopened.get_response_state(cid, message["message_id"])["state"], "failed")
         runtime.send.assert_called_once()
+
+    def test_older_snapshot_cannot_discard_spend_reservation(self):
+        runtime = RuntimeChecks().runtime()
+        store = self.store(runtime)
+        self.message(store)
+        older_snapshot = self.config.state_file.read_bytes()
+        store.dispatch_one_response(now=int(time.time()))
+        self.config.state_file.write_bytes(older_snapshot)
+        with self.assertRaisesRegex(ConversationConfigurationError, "provider_budget_anchor_mismatch"):
+            self.store(runtime)
+        self.assertEqual(older_snapshot, self.config.state_file.read_bytes())
+        runtime.send.assert_called_once()
+
+    def test_anchor_missing_after_attempt_blocks_provider_startup(self):
+        runtime = RuntimeChecks().runtime()
+        store = self.store(runtime)
+        self.message(store)
+        store.dispatch_one_response(now=int(time.time()))
+        self.config.state_file.with_name("provider-budget.anchor").unlink()
+        with self.assertRaisesRegex(ConversationConfigurationError, "provider_budget_anchor_missing"):
+            self.store(runtime)
+
+    def test_protected_config_disabled_and_candidate_networkless(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(ProviderActivationConfig.from_environment())
+        key = self.root / "provider-key"
+        policy = self.root / "provider-policy"
+        key.write_text("sk-" + "x" * 30, encoding="ascii")
+        policy.write_text(json.dumps({"model": "gpt-6-luna", "input_rate": 400000,
+                                      "output_rate": 2000000, "valid_until": int(time.time()) + 3600}), encoding="ascii")
+        if os.name != "nt":
+            os.chmod(key, 0o600)
+            os.chmod(policy, 0o600)
+        env = {"MISSION_CONTROL_OPENAI_ENABLED": "true",
+               "MISSION_CONTROL_OPENAI_API_KEY_FILE": str(key),
+               "MISSION_CONTROL_OPENAI_POLICY_FILE": str(policy)}
+        with patch.dict(os.environ, env, clear=True):
+            config = ProviderActivationConfig.from_environment()
+            self.assertEqual(config.runtime(int(time.time())).policy.model, "gpt-6-luna")
+        with patch.dict(os.environ, {**env, "MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT": "true"}, clear=True):
+            self.assertIsNone(ProviderActivationConfig.from_environment())
+        policy.write_text(json.dumps({"model": "gpt-6-luna", "input_rate": 100000,
+                                      "output_rate": 2000000, "valid_until": int(time.time()) + 3600}), encoding="ascii")
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(ProviderConfigurationError, "provider_policy_unverified"):
+                ProviderActivationConfig.from_environment().runtime(int(time.time()))
+
+    @unittest.skipUnless(os.name == "posix", "POSIX writer lock")
+    def test_one_writer_lock(self):
+        descriptor = acquire_provider_writer_lock(self.config.state_file)
+        try:
+            with self.assertRaisesRegex(ProviderConfigurationError, "provider_writer_lock_busy"):
+                acquire_provider_writer_lock(self.config.state_file)
+        finally:
+            os.close(descriptor)
+
+    def test_worker_dispatches_once_without_implicit_network(self):
+        store = Mock()
+        store.dispatch_one_response.return_value = True
+        worker = ProviderResponseWorker(store, clock=lambda: 123)
+        self.assertTrue(worker.run_once())
+        store.dispatch_one_response.assert_called_once_with(now=123)
 
 
 if __name__ == "__main__":

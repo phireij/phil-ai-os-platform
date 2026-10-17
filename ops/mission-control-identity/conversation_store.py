@@ -386,6 +386,7 @@ class ConversationStore:
         self._lock = threading.Lock()
         self._notification_delivery_enabled = notification_delivery_enabled
         self._provider_runtime = provider_runtime
+        self._provider_anchor_path = config.state_file.with_name("provider-budget.anchor") if provider_runtime is not None and not self._readonly_preflight else None
         self._live = EncryptedSnapshot(config.state_file, _derived_key(self._key, b"live"), _initialize_live)
         self._ledger = EncryptedSnapshot(config.deletion_ledger_file, _derived_key(self._key, b"ledger"), _initialize_ledger)
         self._last_purge = 0
@@ -394,10 +395,43 @@ class ConversationStore:
             # candidate against the active encrypted volume. Its startup must
             # decrypt and validate both snapshots without rewriting either.
             if not self._readonly_preflight:
+                if self._provider_anchor_path is not None:
+                    self._verify_provider_anchor_locked()
                 self._purge_locked(int(time.time()))
                 self._live.connection.execute("UPDATE response_states SET state='failed',completed_at=?,error_code='provider_outcome_unknown' WHERE state='responding'", (int(time.time()),))
                 self._live.connection.execute("UPDATE provider_attempts SET state='unknown' WHERE state='in_flight'")
                 self._live.persist()
+
+    def _provider_anchor_value_locked(self) -> bytes:
+        # Unlike the conversation snapshot, this file is excluded from the
+        # conversation recovery package. A restored older snapshot cannot
+        # silently discard previously reserved attempts.
+        rows = self._live.connection.execute(
+            "SELECT message_id,hex(owner_digest),budget_day,reserved_micro_usd FROM provider_attempts ORDER BY message_id"
+        ).fetchall()
+        payload = json.dumps([tuple(row) for row in rows], separators=(",", ":")).encode("ascii")
+        return hmac.new(_derived_key(self._key, b"provider-budget-anchor"), payload, hashlib.sha256).hexdigest().encode("ascii")
+
+    def _verify_provider_anchor_locked(self) -> None:
+        path = self._provider_anchor_path
+        assert path is not None
+        value = self._provider_anchor_value_locked()
+        if not path.exists():
+            count = self._live.connection.execute("SELECT COUNT(*) FROM provider_attempts").fetchone()[0]
+            if count:
+                raise ConversationConfigurationError("provider_budget_anchor_missing")
+            _atomic_write_private(path, value, overwrite=False)
+            return
+        details = path.lstat()
+        if path.is_symlink() or not path.is_file() or (os.name != "nt" and details.st_mode & 0o077) or details.st_size != len(value):
+            raise ConversationConfigurationError("provider_budget_anchor_invalid")
+        if not hmac.compare_digest(path.read_bytes(), value):
+            raise ConversationConfigurationError("provider_budget_anchor_mismatch")
+
+    def _write_provider_anchor_locked(self) -> None:
+        path = self._provider_anchor_path
+        assert path is not None
+        _atomic_write_private(path, self._provider_anchor_value_locked(), overwrite=True)
 
     @staticmethod
     def _identifier(prefix: str) -> str:
@@ -1019,6 +1053,7 @@ class ConversationStore:
                                               (row["message_id"], self._owner, budget_day(now), reserved, now))
                 self._live.connection.execute("UPDATE response_states SET state='responding',error_code=NULL WHERE message_id=?", (row["message_id"],))
                 self._live.persist()
+                self._write_provider_anchor_locked()
             except Exception:
                 self._live.connection.deserialize(before)
                 raise
@@ -1044,6 +1079,7 @@ class ConversationStore:
                 self._live.connection.execute("UPDATE response_states SET state=?,completed_at=?,error_code=? WHERE message_id=?",
                                               ("complete" if error is None else "failed", int(time.time()), error, row["message_id"]))
                 self._live.persist()
+                self._write_provider_anchor_locked()
             except Exception:
                 self._live.connection.deserialize(before)
                 raise

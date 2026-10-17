@@ -40,8 +40,9 @@ class ProviderPolicy:
             raise ProviderFailure("provider_policy_unverified")
 
     def reservation(self) -> int:
-        # Reserve the full allowed request, not an optimistic estimate or cache discount.
-        return (INPUT_LIMIT * self.input_rate + OUTPUT_LIMIT * self.output_rate + 999_999) // 1_000_000
+        # Conservatively allow one charged input-count call plus generation.
+        # Retain the full reservation after success or an uncertain outcome.
+        return (2 * INPUT_LIMIT * self.input_rate + OUTPUT_LIMIT * self.output_rate + 999_999) // 1_000_000
 
 
 class ProviderRuntime:
@@ -53,7 +54,8 @@ class ProviderRuntime:
         payload = {"model": self.policy.model, "instructions": INSTRUCTIONS,
                    "input": [{"role": "user", "content": body}],
                    "max_output_tokens": OUTPUT_LIMIT, "store": False,
-                   "stream": False, "tools": [], "tool_choice": "none"}
+                   "stream": False, "tools": [], "tool_choice": "none",
+                   "reasoning": {"effort": "none"}}
         return payload
 
     def complete(self, payload: dict) -> str:
@@ -144,7 +146,7 @@ class OpenAITransport:
 
     def count_input(self, payload: dict) -> int:
         result = self._post("/v1/responses/input_tokens",
-                            {k: payload[k] for k in ("model", "instructions", "input", "tools", "tool_choice")})
+                            {k: payload[k] for k in ("model", "instructions", "input", "tools", "tool_choice", "reasoning")})
         if result.get("object") != "response.input_tokens":
             raise ProviderFailure("provider_input_count_invalid")
         return result.get("input_tokens")
