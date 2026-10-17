@@ -55,6 +55,7 @@ jobs:
           python3 ops/mission-control-identity/test_google_identity_probe.py
           python3 ops/mission-control-identity/test_google_ceo_session.py
           python3 ops/mission-control-identity/test_conversation_store.py
+          python3 ops/mission-control-identity/test_provider_runtime.py
           python3 ops/mission-control-identity/test_notification_delivery.py
           python3 ops/mission-control-identity/test_diagnose_telegram_delivery.py
           python3 ops/mission-control-identity/test_preflight_conversation_storage.py

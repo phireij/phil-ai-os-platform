@@ -22,6 +22,7 @@ from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from proposal_evidence import EvidenceReferenceVerifier, EvidenceVerificationError
+from provider_runtime import ProviderRuntime, ProviderFailure, DAILY_MICRO_USD, budget_day
 
 
 MAGIC = b"PHIL-MC-CONVERSATION-STATE-V1\x00"
@@ -187,6 +188,15 @@ def _initialize_live(connection: sqlite3.Connection) -> None:
             resource_id TEXT NOT NULL,
             created_at INTEGER NOT NULL,
             PRIMARY KEY(owner_digest, operation, idempotency_hash)
+        );
+        CREATE TABLE IF NOT EXISTS provider_attempts (
+            message_id TEXT PRIMARY KEY,
+            owner_digest BLOB NOT NULL,
+            budget_day TEXT NOT NULL,
+            reserved_micro_usd INTEGER NOT NULL,
+            state TEXT NOT NULL,
+            started_at INTEGER NOT NULL,
+            assistant_message_id TEXT
         );
         CREATE TABLE IF NOT EXISTS task_proposals (
             proposal_id TEXT PRIMARY KEY,
@@ -360,6 +370,7 @@ class ConversationStore:
         subject: str,
         *,
         notification_delivery_enabled: bool = False,
+        provider_runtime: ProviderRuntime | None = None,
     ) -> None:
         readonly_preflight = os.environ.get("MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT", "")
         if readonly_preflight not in {"", "true"}:
@@ -374,6 +385,7 @@ class ConversationStore:
             raise ConversationConfigurationError(str(exc)) from exc
         self._lock = threading.Lock()
         self._notification_delivery_enabled = notification_delivery_enabled
+        self._provider_runtime = provider_runtime
         self._live = EncryptedSnapshot(config.state_file, _derived_key(self._key, b"live"), _initialize_live)
         self._ledger = EncryptedSnapshot(config.deletion_ledger_file, _derived_key(self._key, b"ledger"), _initialize_ledger)
         self._last_purge = 0
@@ -383,6 +395,9 @@ class ConversationStore:
             # decrypt and validate both snapshots without rewriting either.
             if not self._readonly_preflight:
                 self._purge_locked(int(time.time()))
+                self._live.connection.execute("UPDATE response_states SET state='failed',completed_at=?,error_code='provider_outcome_unknown' WHERE state='responding'", (int(time.time()),))
+                self._live.connection.execute("UPDATE provider_attempts SET state='unknown' WHERE state='in_flight'")
+                self._live.persist()
 
     @staticmethod
     def _identifier(prefix: str) -> str:
@@ -534,6 +549,8 @@ class ConversationStore:
                 "created_at": _iso(now),
                 "authority_effect": "none",
             }
+            if self._provider_runtime is not None and not self._readonly_preflight:
+                result.update(response_state="queued", error_code=None)
             before = self._live.connection.serialize()
             try:
                 with self._live.connection:
@@ -542,8 +559,9 @@ class ConversationStore:
                         (message_id, conversation_id, body, now),
                     )
                     self._live.connection.execute(
-                        "INSERT INTO response_states VALUES (?,?, 'unavailable',?,?, 'runtime_unavailable')",
-                        (message_id, conversation_id, now, now),
+                        "INSERT INTO response_states VALUES (?,?,?,?,?,?)",
+                        (message_id, conversation_id, result["response_state"], now,
+                         None if result["response_state"] == "queued" else now, result["error_code"]),
                     )
                     self._live.connection.execute(
                         "UPDATE conversations SET last_activity_at=? WHERE conversation_id=?",
@@ -598,8 +616,8 @@ class ConversationStore:
         with self._lock:
             self._purge_if_due_locked(int(time.time()))
             row = self._live.connection.execute(
-                "SELECT r.state,r.created_at,r.completed_at,r.error_code "
-                "FROM response_states r JOIN conversations c USING (conversation_id) "
+                "SELECT r.state,r.created_at,r.completed_at,r.error_code,p.started_at,p.assistant_message_id "
+                "FROM response_states r JOIN conversations c USING (conversation_id) LEFT JOIN provider_attempts p ON p.message_id=r.message_id "
                 "WHERE r.conversation_id=? AND r.message_id=? AND c.owner_digest=?",
                 (conversation_id, message_id, self._owner),
             ).fetchone()
@@ -610,9 +628,9 @@ class ConversationStore:
             "message_id": message_id,
             "state": row["state"],
             "created_at": _iso(row["created_at"]),
-            "started_at": None,
+            "started_at": _iso(row["started_at"]) if row["started_at"] is not None else None,
             "completed_at": _iso(row["completed_at"]) if row["completed_at"] is not None else None,
-            "assistant_message_id": None,
+            "assistant_message_id": row["assistant_message_id"],
             "error_code": row["error_code"],
             "authority_effect": "none",
         }
@@ -957,6 +975,74 @@ class ConversationStore:
                         "WHERE notification_id=? AND owner_digest=? AND delivery_state='in_flight'",
                         (outcome, next_attempt, error, notification["notification_id"], self._owner),
                     )
+                self._live.persist()
+            except Exception:
+                self._live.connection.deserialize(before)
+                raise
+        return True
+
+    def dispatch_one_response(self, *, now: int) -> bool:
+        """Claim+reserve durably before sending. Never replay ambiguous outcomes.
+
+        One process owns the encrypted store. Budget rows intentionally survive
+        conversation deletion, preventing deletion from replenishing spend.
+        """
+        runtime = self._provider_runtime
+        if runtime is None or self._readonly_preflight:
+            return False
+        with self._lock:
+            self._purge_if_due_locked(now)
+            row = self._live.connection.execute(
+                "SELECT r.message_id,r.conversation_id,m.body FROM response_states r "
+                "JOIN messages m ON m.message_id=r.message_id JOIN conversations c ON c.conversation_id=r.conversation_id "
+                "WHERE c.owner_digest=? AND r.state='queued' ORDER BY r.created_at,r.message_id LIMIT 1", (self._owner,)
+            ).fetchone()
+            if row is None:
+                return False
+            before = self._live.connection.serialize()
+            try:
+                try:
+                    payload = runtime.prepare(row["body"], now)
+                    reserved = runtime.policy.reservation()
+                    spent = self._live.connection.execute(
+                        "SELECT COALESCE(SUM(reserved_micro_usd),0) FROM provider_attempts "
+                        "WHERE budget_day=? OR state IN ('in_flight','unknown')", (budget_day(now),)
+                    ).fetchone()[0]
+                    if spent + reserved > DAILY_MICRO_USD:
+                        raise ProviderFailure("provider_daily_limit")
+                except ProviderFailure as exc:
+                    self._live.connection.execute("UPDATE response_states SET state='failed',completed_at=?,error_code=? WHERE message_id=?",
+                                                  (now, str(exc), row["message_id"]))
+                    self._live.persist()
+                    return True
+                self._live.connection.execute("INSERT INTO provider_attempts VALUES (?,?,?,?,'in_flight',?,NULL)",
+                                              (row["message_id"], self._owner, budget_day(now), reserved, now))
+                self._live.connection.execute("UPDATE response_states SET state='responding',error_code=NULL WHERE message_id=?", (row["message_id"],))
+                self._live.persist()
+            except Exception:
+                self._live.connection.deserialize(before)
+                raise
+        try:
+            text = runtime.complete(payload)
+            error = None
+        except Exception:
+            # Do not retain exception strings, response payloads, URLs or credentials.
+            text, error = None, "provider_outcome_unknown"
+        with self._lock:
+            before = self._live.connection.serialize()
+            try:
+                exists = self._live.connection.execute("SELECT 1 FROM response_states WHERE message_id=?", (row["message_id"],)).fetchone()
+                assistant_id = None
+                if exists and error is None:
+                    assistant_id = self._identifier("msg")
+                    self._live.connection.execute("INSERT INTO messages VALUES (?,?,'chief_of_staff',?,?)",
+                                                  (assistant_id, row["conversation_id"], text, max(now + 1, int(time.time()))))
+                # A request spanning JST midnight remains charged on completion
+                # day too; completing it cannot replenish today's allowance.
+                self._live.connection.execute("UPDATE provider_attempts SET state=?,assistant_message_id=?,budget_day=MAX(budget_day,?) WHERE message_id=?",
+                                              ("complete" if error is None else "unknown", assistant_id, budget_day(int(time.time())), row["message_id"]))
+                self._live.connection.execute("UPDATE response_states SET state=?,completed_at=?,error_code=? WHERE message_id=?",
+                                              ("complete" if error is None else "failed", int(time.time()), error, row["message_id"]))
                 self._live.persist()
             except Exception:
                 self._live.connection.deserialize(before)
