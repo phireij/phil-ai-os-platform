@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir --disable-pip-version-check google-auth==2.62.0 r
 COPY ops/mission-control-identity/google_oidc_config.py /srv/google_oidc_config.py
 COPY ops/mission-control-identity/google_identity_probe.py /srv/google_identity_probe.py
 COPY ops/mission-control-identity/conversation_store.py /srv/conversation_store.py
+COPY ops/mission-control-identity/provider_runtime.py /srv/provider_runtime.py
 COPY ops/mission-control-identity/notification_delivery.py /srv/notification_delivery.py
 COPY ops/mission-control-identity/proposal_evidence.py /srv/proposal_evidence.py
 COPY ops/mission-control-identity/conversation_recovery.py /srv/conversation_recovery.py
