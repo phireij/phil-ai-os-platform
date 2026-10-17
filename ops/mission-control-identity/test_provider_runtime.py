@@ -240,6 +240,11 @@ class StoreRuntimeChecks(unittest.TestCase):
             self.assertEqual(config.runtime(int(time.time())).policy.model, "gpt-6-luna")
         with patch.dict(os.environ, {**env, "MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT": "true"}, clear=True):
             self.assertIsNone(ProviderActivationConfig.from_environment())
+        with patch.dict(os.environ, {**env, "MISSION_CONTROL_OPENAI_DISPATCH_ENABLED": "true"}, clear=True):
+            self.assertIsNotNone(ProviderActivationConfig.from_environment())
+        with patch.dict(os.environ, {"MISSION_CONTROL_OPENAI_DISPATCH_ENABLED": "true"}, clear=True):
+            with self.assertRaisesRegex(ProviderConfigurationError, "provider_dispatch_guard_invalid"):
+                ProviderActivationConfig.from_environment()
         policy.write_text(json.dumps({"model": "gpt-6-luna", "input_rate": 100000,
                                       "output_rate": 2000000, "valid_until": int(time.time()) + 3600}), encoding="ascii")
         with patch.dict(os.environ, env, clear=True):
