@@ -5,8 +5,10 @@ on:
     paths:
       - 'apps/operations-hub/src/operations_hub/mission_control_cto_fixture.py'
       - 'apps/operations-hub/src/operations_hub/mission_control_cto_tool.py'
+      - 'apps/operations-hub/src/operations_hub/mission_control_cto_mcp_fixture.py'
       - 'apps/operations-hub/tests/test_mission_control_cto_fixture.py'
       - 'apps/operations-hub/tests/test_mission_control_cto_tool.py'
+      - 'apps/operations-hub/tests/test_mission_control_cto_mcp_fixture.py'
       - 'contracts/mission-control/cto-fixture-status.v1.schema.json'
       - '.github/workflows/mission-control-cto-fixture-ci.yml'
   push:
@@ -14,8 +16,10 @@ on:
     paths:
       - 'apps/operations-hub/src/operations_hub/mission_control_cto_fixture.py'
       - 'apps/operations-hub/src/operations_hub/mission_control_cto_tool.py'
+      - 'apps/operations-hub/src/operations_hub/mission_control_cto_mcp_fixture.py'
       - 'apps/operations-hub/tests/test_mission_control_cto_fixture.py'
       - 'apps/operations-hub/tests/test_mission_control_cto_tool.py'
+      - 'apps/operations-hub/tests/test_mission_control_cto_mcp_fixture.py'
       - 'contracts/mission-control/cto-fixture-status.v1.schema.json'
       - '.github/workflows/mission-control-cto-fixture-ci.yml'
 

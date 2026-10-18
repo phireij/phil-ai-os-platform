@@ -47,6 +47,7 @@ def invoke_fixture_tool(
     *,
     verifier: Callable[[str], VerifiedContext] | None = None,
     fixture_loader: Callable[[], tuple[dict[str, Any], dict[str, Any] | None]] | None = None,
+    expected_audience: str = RESOURCE,
     now: datetime,
 ) -> dict[str, Any]:
     """Authorize first, then project synthetic fixtures. Never reads a live source."""
@@ -65,7 +66,7 @@ def invoke_fixture_tool(
     if (
         context.revoked
         or context.subject != CEO_SUBJECT
-        or context.audience != RESOURCE
+        or context.audience != expected_audience
         or SCOPE not in context.scopes
         or not isinstance(expiry, datetime)
         or expiry.tzinfo is None
