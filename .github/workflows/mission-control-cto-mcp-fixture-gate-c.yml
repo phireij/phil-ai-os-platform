@@ -62,6 +62,7 @@ jobs:
           image_ref="$image:gate-c-$revision"
           credential=/etc/credstore.encrypted/mcp_owner_subject
           unit_path="/etc/systemd/system/$unit"
+          phase=preflight
           created_user=false
           original_stopped=false
           rollback() {
@@ -84,7 +85,7 @@ jobs:
             local rc="$1"
             # Emit only lifecycle fields, never credential contents, environment values,
             # request data, or container configuration.
-            printf 'gate_c_failure rc=%s\n' "$rc"
+            printf 'gate_c_failure rc=%s phase=%s\n' "$rc" "$phase"
             systemctl show "$unit" --no-pager \
               --property=LoadState \
               --property=ActiveState \
@@ -115,25 +116,37 @@ jobs:
             useradd --system --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin mcpfixture
             created_user=true
           fi
+          phase=install_unit
           install -o root -g root -m 0644 /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service "$unit_path"
           systemctl daemon-reload
           test "$(systemctl show "$unit" --property=LoadState --value)" = loaded
           systemctl cat "$unit" >/dev/null
+          phase=park_legacy
           docker stop "$container" >/dev/null
           original_stopped=true
           docker rename "$container" "$backup"
+          phase=start_unit
           systemctl enable --now "$unit"
+          phase=health
           rm -f /tmp/mcp-health.json
           for i in $(seq 1 20); do curl -fsS --max-time 2 http://127.0.0.1:8787/healthz >/tmp/mcp-health.json && break; sleep 1; done
           test "$(cat /tmp/mcp-health.json)" = '{"authority_effect":"none","live_data":false,"mode":"offline_fixture","status":"ok"}'
+          phase=metadata
           test "$(curl -fsS --max-time 2 http://127.0.0.1:8787/.well-known/oauth-protected-resource/mcp | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["resource"]=="https://miscon.phireij.cloud/mcp"; assert d["authorization_servers"]==["https://dev-81f0leykwbfdtibz.jp.auth0.com/"]; print("metadata=ok")')" = metadata=ok
+          phase=challenge
           test "$(curl -fsS --max-time 2 -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_phil_ai_os_status","arguments":{}}}' http://127.0.0.1:8787/mcp | python3 -c 'import json,sys; d=json.load(sys.stdin)["result"]; assert d["isError"] is True and d["content"][0]["text"]=="authentication_required"; assert "mcp/www_authenticate" in d["_meta"]; print("challenge=ok")')" = challenge=ok
+          phase=container_hardening
           test "$(docker inspect "$container" --format '{{.Config.User}}|{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{index .Config.Labels "traefik.enable"}}|{{json .HostConfig.SecurityOpt}}|{{json .HostConfig.CapDrop}}|{{.HostConfig.PidsLimit}}|{{json .HostConfig.PortBindings}}')" = 'app|host|true|false|["no-new-privileges:true"]|["ALL"]|128|{}'
+          phase=credential_read
           docker exec --user 10001:10001 "$container" test -r /run/secrets/mcp_owner_subject
+          phase=credential_mount
           credential_mount="$(docker inspect "$container" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets/mcp_owner_subject"}}{{.Source}}|{{.RW}}{{end}}{{end}}')"
           test "$credential_mount" = "/run/credentials/$unit/mcp_owner_subject|false"
+          phase=credential_mode
           test "$(stat -c '%u:%g:%a' "/run/credentials/$unit/mcp_owner_subject")" = '10001:10001:400'
+          phase=loopback
           ss -ltnH "( sport = :$port )" | grep -Eq '^LISTEN.*127\.0\.0\.1:8787'
+          phase=finalize
           docker rm "$backup" >/dev/null
           echo "gate_c=green listener=127.0.0.1:8787 public_route=false tunnel_client=false auth0_changed=false tokens_issued=false live_data=false owner_credential=encrypted_systemd_file"
           REMOTE
