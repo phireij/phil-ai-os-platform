@@ -38,8 +38,9 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh_opts=(-4 -p "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new)
+          scp_opts=(-4 -P "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new)
           remote="$VPS_USER@$VPS_HOST"
-          scp "${ssh_opts[@]}" /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service "$remote:/tmp/phil-ai-os-mission-control-cto-mcp-fixture.service"
+          scp "${scp_opts[@]}" /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service "$remote:/tmp/phil-ai-os-mission-control-cto-mcp-fixture.service"
           ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$CONTAINER" <<'REMOTE'
           set -euo pipefail
           container="$1"
