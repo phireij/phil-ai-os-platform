@@ -51,8 +51,10 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh_opts=(-4 -p "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new)
-          scp_opts=(-4 -P "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new)
+          # The compressed image transfer is deliberately quiet. Keep the authenticated
+          # connection alive while Hostinger processes it; this changes no host policy.
+          ssh_opts=(-4 -p "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o StrictHostKeyChecking=accept-new)
+          scp_opts=(-4 -P "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o StrictHostKeyChecking=accept-new)
           remote="$VPS_USER@$VPS_HOST"
           scp "${scp_opts[@]}" /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service "$remote:/tmp/phil-ai-os-mission-control-cto-mcp-fixture.service"
           docker save "$IMAGE:gate-c-$GITHUB_SHA" | gzip -1 | ssh "${ssh_opts[@]}" "$remote" 'gzip -d | docker load >/dev/null'
