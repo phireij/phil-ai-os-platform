@@ -27,14 +27,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Build the credential-file fixture image locally
-        id: image
         shell: bash
         run: |
           set -euo pipefail
           docker build --pull --file Dockerfile.mission-control-cto-mcp-fixture --tag "$IMAGE:gate-c-$GITHUB_SHA" .
-          image_id="$(docker image inspect "$IMAGE:gate-c-$GITHUB_SHA" --format '{{.Id}}')"
-          [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
-          echo "image_id=$image_id" >> "$GITHUB_OUTPUT"
+          docker image inspect "$IMAGE:gate-c-$GITHUB_SHA" >/dev/null
       - name: Render unit without credential material
         shell: bash
         run: |
@@ -43,8 +40,6 @@ jobs:
             ops/mission-control-identity/systemd/phil-ai-os-mission-control-cto-mcp-fixture.service.template \
             > /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service
       - name: Transfer image and migrate only after encrypted-credential checks pass
-        env:
-          IMAGE_ID: ${{ steps.image.outputs.image_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -56,11 +51,24 @@ jobs:
           ssh_opts=(-4 -p "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o StrictHostKeyChecking=accept-new)
           scp_opts=(-4 -P "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o StrictHostKeyChecking=accept-new)
           remote="$VPS_USER@$VPS_HOST"
+          archive="$(mktemp "${RUNNER_TEMP:-/tmp}/mission-control-cto-mcp-fixture.XXXXXX.tar.gz")"
+          remote_archive="/tmp/phil-ai-os-mission-control-cto-mcp-fixture-$GITHUB_SHA.tar.gz"
+          trap 'rm -f "$archive"' EXIT
+          docker save "$IMAGE:gate-c-$GITHUB_SHA" | gzip -1 > "$archive"
+          archive_sha256="$(sha256sum "$archive" | awk '{print $1}')"
+          [[ "$archive_sha256" =~ ^[0-9a-f]{64}$ ]]
           scp "${scp_opts[@]}" /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service "$remote:/tmp/phil-ai-os-mission-control-cto-mcp-fixture.service"
-          docker save "$IMAGE:gate-c-$GITHUB_SHA" | gzip -1 | ssh "${ssh_opts[@]}" "$remote" 'gzip -d | docker load >/dev/null'
-          ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$IMAGE" "$GITHUB_SHA" "$IMAGE_ID" "$CONTAINER" "$BACKUP_CONTAINER" "$UNIT" <<'REMOTE'
+          scp "${scp_opts[@]}" "$archive" "$remote:$remote_archive"
+          ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$remote_archive" "$archive_sha256" <<'REMOTE_LOAD'
           set -euo pipefail
-          image="$1"; revision="$2"; image_id="$3"; container="$4"; backup="$5"; unit="$6"; port=8787
+          archive="$1"; expected_sha256="$2"
+          trap 'rm -f "$archive"' EXIT
+          test "$(sha256sum "$archive" | awk '{print $1}')" = "$expected_sha256"
+          gzip -dc -- "$archive" | docker load >/dev/null
+          REMOTE_LOAD
+          ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$IMAGE" "$GITHUB_SHA" "$CONTAINER" "$BACKUP_CONTAINER" "$UNIT" <<'REMOTE'
+          set -euo pipefail
+          image="$1"; revision="$2"; container="$3"; backup="$4"; unit="$5"; port=8787
           image_ref="$image:gate-c-$revision"
           credential=/etc/credstore.encrypted/mcp_owner_subject
           unit_path="/etc/systemd/system/$unit"
@@ -111,7 +119,7 @@ jobs:
           phase=preflight_credential_decrypt
           systemd-creds decrypt --name=mcp_owner_subject "$credential" - >/dev/null
           phase=preflight_image
-          test "$(docker image inspect "$image_ref" --format '{{.Id}}')" = "$image_id"
+          docker image inspect "$image_ref" >/dev/null
           phase=preflight_legacy_container
           docker inspect "$container" >/dev/null
           phase=preflight_backup_absent
