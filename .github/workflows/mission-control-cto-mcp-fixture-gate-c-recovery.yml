@@ -35,6 +35,14 @@ jobs:
           container="$1"; image="$2"; port=8787
           issuer='https://dev-81f0leykwbfdtibz.jp.auth0.com/'
           jwks='https://dev-81f0leykwbfdtibz.jp.auth0.com/.well-known/jwks.json'
+          if docker inspect "$container" >/dev/null 2>&1; then
+            test "$(docker inspect "$container" --format '{{.Config.Image}}')" = "$image"
+            test "$(docker inspect "$container" --format '{{.Config.User}}|{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{index .Config.Labels "traefik.enable"}}|{{json .HostConfig.SecurityOpt}}|{{json .HostConfig.CapDrop}}|{{.HostConfig.PidsLimit}}|{{json .HostConfig.PortBindings}}')" = 'app|host|true|false|["no-new-privileges:true"]|["ALL"]|128|{}'
+            test "$(curl -fsS --max-time 2 http://127.0.0.1:8787/healthz)" = '{"authority_effect":"none","live_data":false,"mode":"offline_fixture","status":"ok"}'
+            ss -ltnH "( sport = :$port )" | grep -Eq '^LISTEN.*127\.0\.0\.1:8787'
+            echo "gate_c_recovery=already_green listener=127.0.0.1:8787 public_route=false"
+            exit 0
+          fi
           ! docker inspect "$container" >/dev/null 2>&1
           ! ss -ltnH "( sport = :$port )" | grep -q .
           docker image inspect "$image" >/dev/null
