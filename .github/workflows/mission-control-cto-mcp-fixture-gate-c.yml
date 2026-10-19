@@ -99,21 +99,34 @@ jobs:
             exit "$rc"
           }
           trap 'report_failure "$?"' ERR
+          phase=preflight_systemd_creds
           version="$(systemd-creds --version | awk 'NR == 1 { print $2 }')"
           [[ "$version" =~ ^[0-9]+$ ]] && (( version >= 250 ))
+          phase=preflight_run_tmpfs
           test "$(findmnt -n -o FSTYPE /run)" = tmpfs
+          phase=preflight_swarm
           test "$(docker info --format '{{.Swarm.LocalNodeState}}')" = inactive
+          phase=preflight_credential_exists
           test -f "$credential"
+          phase=preflight_credential_decrypt
           systemd-creds decrypt --name=mcp_owner_subject "$credential" - >/dev/null
+          phase=preflight_image
           test "$(docker image inspect "$image_ref" --format '{{.Id}}')" = "$image_id"
+          phase=preflight_legacy_container
           docker inspect "$container" >/dev/null
+          phase=preflight_backup_absent
           ! docker inspect "$backup" >/dev/null 2>&1
+          phase=preflight_legacy_hardening
           test "$(docker inspect "$container" --format '{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{index .Config.Labels "traefik.enable"}}|{{json .HostConfig.SecurityOpt}}|{{json .HostConfig.CapDrop}}|{{.HostConfig.PidsLimit}}')" = 'host|true|false|["no-new-privileges:true"]|["ALL"]|128'
+          phase=preflight_legacy_loopback
           ss -ltnH "( sport = :$port )" | grep -Eq '^LISTEN.*127\.0\.0\.1:8787'
+          phase=preflight_uid
           existing_uid="$(getent passwd 10001 | cut -d: -f1 || true)"
           test -z "$existing_uid" || test "$existing_uid" = mcpfixture
           if [ -z "$existing_uid" ]; then
+            phase=preflight_gid
             getent group 10001 >/dev/null 2>&1 && exit 1
+            phase=create_fixture_identity
             groupadd --gid 10001 mcpfixture
             useradd --system --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin mcpfixture
             created_user=true
