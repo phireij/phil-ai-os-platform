@@ -60,7 +60,7 @@ jobs:
           test "$health" = '{"authority_effect":"none","live_data":false,"mode":"offline_fixture","status":"ok"}'
           test "$metadata" = metadata=ok
           test "$challenge" = challenge=ok
-          test "$hardening" = 'app|host|true|false|["no-new-privileges:true"]|["ALL"]|128|null'
+          test "$hardening" = 'app|host|true|false|["no-new-privileges:true"]|["ALL"]|128|{}'
           grep -Eq '^LISTEN.*127\.0\.0\.1:8787' <<<"$listener"
           echo "gate_c_recovery=green listener=127.0.0.1:8787 public_route=false tunnel_client=false auth0_changed=false tokens_issued=false live_data=false"
           REMOTE
