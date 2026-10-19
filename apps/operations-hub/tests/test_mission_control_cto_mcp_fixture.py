@@ -7,12 +7,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from operations_hub.mission_control_cto_mcp_fixture import OfflineMcpFixtureResource  # noqa: E402
+from operations_hub.mission_control_cto_mcp_fixture import (  # noqa: E402
+    CANONICAL_RESOURCE_URI,
+    OfflineApprovedLoopbackMcpPlan,
+    OfflineMcpFixtureResource,
+)
 from operations_hub.mission_control_cto_tool import CEO_SUBJECT, SCOPE, TOOL_NAME, VerifiedContext  # noqa: E402
 
 
 RESOURCE_URI = "https://mcp.example.test/cto-proof"  # Synthetic only; not a deployable endpoint.
 ISSUER = "https://identity.example.test/"
+METADATA_URI = "https://mcp.example.test/.well-known/oauth-protected-resource/cto-proof"
 NOW = datetime(2026, 10, 18, 3, 0, tzinfo=timezone.utc)
 
 
@@ -30,7 +35,7 @@ def allowed(**changes):
 
 class OfflineMcpFixtureTests(unittest.TestCase):
     def setUp(self):
-        self.resource = OfflineMcpFixtureResource(RESOURCE_URI, ISSUER)
+        self.resource = OfflineMcpFixtureResource(RESOURCE_URI, ISSUER, METADATA_URI)
 
     def test_metadata_uses_exact_injected_https_resource_and_issuer(self):
         self.assertEqual(self.resource.protected_resource_metadata(), {
@@ -39,7 +44,7 @@ class OfflineMcpFixtureTests(unittest.TestCase):
             "scopes_supported": [SCOPE],
         })
         self.assertEqual(self.resource.metadata_uri,
-                         "https://mcp.example.test/.well-known/oauth-protected-resource")
+                         METADATA_URI)
 
     def test_no_implicit_or_unsafe_resource_identifier(self):
         for value in ("", "mission-control-cto-read", "http://mcp.example.test",
@@ -47,9 +52,48 @@ class OfflineMcpFixtureTests(unittest.TestCase):
                       "https://mcp.example.test/#part", 'https://mcp.example.test/"x',
                       " https://mcp.example.test", "https://mcp.example.test\\bad"):
             with self.subTest(value=value), self.assertRaises(ValueError):
-                OfflineMcpFixtureResource(value, ISSUER)
+                OfflineMcpFixtureResource(value, ISSUER, METADATA_URI)
         with self.assertRaises(ValueError):
-            OfflineMcpFixtureResource(RESOURCE_URI, "http://identity.example.test/")
+            OfflineMcpFixtureResource(RESOURCE_URI, "http://identity.example.test/", METADATA_URI)
+        for metadata_uri in (
+            "http://mcp.example.test/.well-known/oauth-protected-resource",
+            "https://other.example.test/.well-known/oauth-protected-resource",
+            "https://mcp.example.test/not-well-known",
+            "https://mcp.example.test/.well-known/oauth-protected-resource-unrelated",
+        ):
+            with self.subTest(metadata_uri=metadata_uri), self.assertRaises(ValueError):
+                OfflineMcpFixtureResource(RESOURCE_URI, ISSUER, metadata_uri)
+
+    def test_approved_plan_pins_external_identity_to_private_loopback_transport(self):
+        plan = OfflineApprovedLoopbackMcpPlan(
+            ISSUER,
+            "https://miscon.phireij.cloud/.well-known/oauth-protected-resource/mcp",
+            "http://127.0.0.1:8787/mcp",
+        )
+        self.assertEqual(plan.resource_contract().resource_uri, CANONICAL_RESOURCE_URI)
+        self.assertEqual(plan.resource_contract().metadata_uri,
+                         "https://miscon.phireij.cloud/.well-known/oauth-protected-resource/mcp")
+        self.assertEqual(plan.transport_boundary(), {
+            "canonical_resource_uri": CANONICAL_RESOURCE_URI,
+            "loopback_mcp_uri": "http://127.0.0.1:8787/mcp",
+            "public_mcp_listener": False,
+            "future_tunnel_client_colocated": True,
+        })
+
+    def test_approved_plan_rejects_non_loopback_or_noncanonical_metadata(self):
+        baseline = (ISSUER, "https://miscon.phireij.cloud/.well-known/oauth-protected-resource/mcp",
+                    "http://127.0.0.1:8787/mcp")
+        for changes in (
+            {"loopback_mcp_uri": "http://0.0.0.0:8787/mcp"},
+            {"loopback_mcp_uri": "https://127.0.0.1:8787/mcp"},
+            {"loopback_mcp_uri": "http://127.0.0.1:0/mcp"},
+            {"loopback_mcp_uri": "http://127.0.0.1:8787/other"},
+            {"protected_resource_metadata_uri": "https://other.example/.well-known/oauth-protected-resource/mcp"},
+        ):
+            values = dict(zip(("authorization_issuer", "protected_resource_metadata_uri", "loopback_mcp_uri"), baseline))
+            values.update(changes)
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                OfflineApprovedLoopbackMcpPlan(**values)
 
     def test_exactly_one_closed_read_only_oauth_tool(self):
         tools = self.resource.list_tools()["tools"]

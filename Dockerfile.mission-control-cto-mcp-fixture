@@ -1,0 +1,8 @@
+FROM public.ecr.aws/docker/library/python:3.12-alpine
+WORKDIR /srv
+COPY apps/operations-hub/src/operations_hub /srv/operations_hub
+RUN addgroup -S app && adduser -S -G app app && chown -R app:app /srv
+USER app
+ENV PYTHONPATH=/srv MCP_AUTHORIZATION_ISSUER=https://identity.example.test/
+EXPOSE 8787
+ENTRYPOINT ["python3", "-m", "operations_hub.mission_control_cto_mcp_server"]
