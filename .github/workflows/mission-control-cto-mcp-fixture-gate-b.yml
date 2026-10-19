@@ -1,13 +1,7 @@
 name: MC-021 Gate B Auth0-Verifying Loopback Fixture Deploy
 
 on:
-  push:
-    branches: [codex/mission-control-cto-next-gate]
-    paths:
-      - Dockerfile.mission-control-cto-mcp-fixture
-      - apps/operations-hub/src/operations_hub/mission_control_cto_*.py
-      - apps/operations-hub/mission-control/project-readiness.json
-      - .github/workflows/mission-control-cto-mcp-fixture-gate-b.yml
+  workflow_dispatch:
 
 permissions:
   contents: read

@@ -3,7 +3,9 @@ WORKDIR /srv
 RUN pip install --no-cache-dir "PyJWT[crypto]==2.10.1"
 COPY apps/operations-hub/src/operations_hub /srv/operations_hub
 COPY apps/operations-hub/mission-control/project-readiness.json /srv/mission-control/project-readiness.json
-RUN addgroup -S app && adduser -S -G app app && chown -R app:app /srv
+RUN addgroup -S -g 10001 app && adduser -S -D -H -u 10001 -G app app && \
+    mkdir -p /run/secrets && touch /run/secrets/mcp_owner_subject && \
+    chown -R app:app /srv /run
 USER app
 ENV PYTHONPATH=/srv \
     MCP_AUTHORIZATION_ISSUER=https://dev-81f0leykwbfdtibz.jp.auth0.com/ \

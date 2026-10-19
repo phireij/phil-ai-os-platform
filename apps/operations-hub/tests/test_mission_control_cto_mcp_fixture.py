@@ -1,8 +1,10 @@
 import json
+import os
 import sys
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -13,7 +15,13 @@ from operations_hub.mission_control_cto_mcp_fixture import (  # noqa: E402
     OfflineMcpFixtureResource,
 )
 from operations_hub.mission_control_cto_tool import CEO_SUBJECT, SCOPE, TOOL_NAME, VerifiedContext  # noqa: E402
-from operations_hub.mission_control_cto_auth0_verifier import Auth0JwtVerifier  # noqa: E402
+from operations_hub.mission_control_cto_auth0_verifier import (  # noqa: E402
+    Auth0JwtVerifier,
+    ISSUER_ENV,
+    JWKS_ENV,
+    OWNER_SUBJECT_FILE_ENV,
+    verifier_from_environment,
+)
 
 
 RESOURCE_URI = "https://mcp.example.test/cto-proof"  # Synthetic only; not a deployable endpoint.
@@ -181,6 +189,31 @@ class Auth0VerifierTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             verifier("synthetic.jwt.value")
+
+    def test_verifier_reads_owner_only_from_the_credential_mount(self):
+        environment = {
+            ISSUER_ENV: "https://dev.example.test/",
+            JWKS_ENV: "https://dev.example.test/.well-known/jwks.json",
+            OWNER_SUBJECT_FILE_ENV: "/run/secrets/mcp_owner_subject",
+            "MCP_OWNER_SUBJECT": "must-not-be-read",
+        }
+        with patch.dict(os.environ, environment, clear=True), patch(
+            "operations_hub.mission_control_cto_auth0_verifier.Path.read_text",
+            return_value="auth0|owner\n",
+        ) as read_credential:
+            verifier = verifier_from_environment(CANONICAL_RESOURCE_URI)
+        self.assertEqual(verifier.owner_subject, "auth0|owner")
+        read_credential.assert_called_once_with(encoding="utf-8")
+
+    def test_verifier_fails_closed_without_a_credential_file_path(self):
+        environment = {
+            ISSUER_ENV: "https://dev.example.test/",
+            JWKS_ENV: "https://dev.example.test/.well-known/jwks.json",
+            "MCP_OWNER_SUBJECT": "must-not-be-read",
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            with self.assertRaisesRegex(ValueError, "credential_path_required"):
+                verifier_from_environment(CANONICAL_RESOURCE_URI)
 
 
 if __name__ == "__main__":

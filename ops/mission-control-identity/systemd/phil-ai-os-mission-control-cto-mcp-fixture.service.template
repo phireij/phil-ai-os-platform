@@ -1,0 +1,29 @@
+[Unit]
+Description=Phil AI OS Mission Control CTO MCP offline fixture
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+# This UID is deliberately shared with the image's non-root application user.
+# ExecStart's '+' prefix lets systemd invoke Docker as root while the decrypted
+# credential remains owned by this UID and is readable only by the container app.
+User=10001
+Group=10001
+LoadCredentialEncrypted=mcp_owner_subject:/etc/credstore.encrypted/mcp_owner_subject
+Environment=MCP_OWNER_SUBJECT_FILE=/run/secrets/mcp_owner_subject
+Environment=MCP_AUTHORIZATION_ISSUER=https://dev-81f0leykwbfdtibz.jp.auth0.com/
+Environment=MCP_AUTHORIZATION_JWKS_URI=https://dev-81f0leykwbfdtibz.jp.auth0.com/.well-known/jwks.json
+Environment=MCP_SYNTHETIC_FIXTURE_PATH=/srv/mission-control/project-readiness.json
+ExecStartPre=+/bin/sh -ec '/usr/bin/docker rm -f phil-ai-os-mission-control-cto-mcp-fixture >/dev/null 2>&1 || true'
+ExecStart=+/usr/bin/docker run --name phil-ai-os-mission-control-cto-mcp-fixture --rm --network host --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 128 --label traefik.enable=false --mount type=bind,src=${CREDENTIALS_DIRECTORY}/mcp_owner_subject,dst=/run/secrets/mcp_owner_subject,readonly --env MCP_OWNER_SUBJECT_FILE --env MCP_AUTHORIZATION_ISSUER --env MCP_AUTHORIZATION_JWKS_URI --env MCP_SYNTHETIC_FIXTURE_PATH @IMAGE_REF@
+ExecStop=+/usr/bin/docker stop --time 10 phil-ai-os-mission-control-cto-mcp-fixture
+Restart=always
+RestartSec=5
+TimeoutStartSec=45
+TimeoutStopSec=30
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

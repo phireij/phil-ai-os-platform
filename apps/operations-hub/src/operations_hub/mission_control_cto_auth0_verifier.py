@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
 
@@ -18,7 +19,7 @@ from .mission_control_cto_tool import CEO_SUBJECT, VerifiedContext
 
 ISSUER_ENV = "MCP_AUTHORIZATION_ISSUER"
 JWKS_ENV = "MCP_AUTHORIZATION_JWKS_URI"
-OWNER_SUBJECT_ENV = "MCP_OWNER_SUBJECT"
+OWNER_SUBJECT_FILE_ENV = "MCP_OWNER_SUBJECT_FILE"
 
 
 def _https_url(value: str) -> bool:
@@ -36,6 +37,27 @@ def _https_url(value: str) -> bool:
         and not parsed.query
         and not parsed.fragment
     )
+
+
+def _owner_subject_from_encrypted_credential() -> str:
+    """Read the owner identity only from the runtime credential mount.
+
+    The encrypted credential is decrypted by systemd into an in-memory,
+    read-only path before the container starts.  Keeping the value out of an
+    environment variable prevents it appearing in process inspection output.
+    """
+
+    credential_path = os.environ.get(OWNER_SUBJECT_FILE_ENV, "")
+    path = Path(credential_path)
+    if not credential_path or not credential_path.startswith("/"):
+        raise ValueError("owner_subject_credential_path_required")
+    try:
+        owner_subject = path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise ValueError("owner_subject_credential_unreadable") from exc
+    if not owner_subject or any(character.isspace() for character in owner_subject):
+        raise ValueError("owner_subject_credential_invalid")
+    return owner_subject
 
 
 @dataclass(frozen=True)
@@ -93,5 +115,5 @@ def verifier_from_environment(audience: str) -> Auth0JwtVerifier:
         issuer=os.environ.get(ISSUER_ENV, ""),
         audience=audience,
         jwks_uri=os.environ.get(JWKS_ENV, ""),
-        owner_subject=os.environ.get(OWNER_SUBJECT_ENV, ""),
+        owner_subject=_owner_subject_from_encrypted_credential(),
     )
