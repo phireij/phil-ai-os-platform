@@ -2,6 +2,11 @@ name: MC-021 Gate C Systemd Encrypted Credential Migration
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - codex/mission-control-cto-next-gate
+    paths:
+      - .github/workflows/mission-control-cto-mcp-fixture-gate-c.yml
 
 permissions:
   contents: read
