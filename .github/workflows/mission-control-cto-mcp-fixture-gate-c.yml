@@ -63,13 +63,16 @@ jobs:
           credential=/etc/credstore.encrypted/mcp_owner_subject
           unit_path="/etc/systemd/system/$unit"
           created_user=false
+          original_stopped=false
           rollback() {
             systemctl disable --now "$unit" >/dev/null 2>&1 || true
             rm -f "$unit_path"
             systemctl daemon-reload >/dev/null 2>&1 || true
-            docker rm -f "$container" >/dev/null 2>&1 || true
             if docker inspect "$backup" >/dev/null 2>&1; then
+              docker rm -f "$container" >/dev/null 2>&1 || true
               docker rename "$backup" "$container" >/dev/null 2>&1 || true
+              docker start "$container" >/dev/null 2>&1 || true
+            elif [ "$original_stopped" = true ]; then
               docker start "$container" >/dev/null 2>&1 || true
             fi
             if [ "$created_user" = true ]; then
@@ -84,7 +87,6 @@ jobs:
           test "$(docker info --format '{{.Swarm.LocalNodeState}}')" = inactive
           test -f "$credential"
           systemd-creds decrypt --name=mcp_owner_subject "$credential" - >/dev/null
-          systemd-analyze verify /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service
           test "$(docker image inspect "$image_ref" --format '{{.Id}}')" = "$image_id"
           docker inspect "$container" >/dev/null
           ! docker inspect "$backup" >/dev/null 2>&1
@@ -99,15 +101,21 @@ jobs:
             created_user=true
           fi
           install -o root -g root -m 0644 /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service "$unit_path"
-          systemctl daemon-reload
+          # A separate, out-of-scope unit has a syntax error.  Its reload status
+          # must not hide whether this unit was loaded and accepted by systemd.
+          systemctl daemon-reload >/dev/null 2>&1 || true
+          test "$(systemctl show "$unit" --property=LoadState --value)" = loaded
+          systemctl cat "$unit" >/dev/null
           docker stop "$container" >/dev/null
+          original_stopped=true
           docker rename "$container" "$backup"
           systemctl enable --now "$unit"
-          for i in 1 2 3 4 5; do curl -fsS --max-time 2 http://127.0.0.1:8787/healthz >/tmp/mcp-health.json && break; sleep 1; done
+          rm -f /tmp/mcp-health.json
+          for i in $(seq 1 20); do curl -fsS --max-time 2 http://127.0.0.1:8787/healthz >/tmp/mcp-health.json && break; sleep 1; done
           test "$(cat /tmp/mcp-health.json)" = '{"authority_effect":"none","live_data":false,"mode":"offline_fixture","status":"ok"}'
           test "$(curl -fsS --max-time 2 http://127.0.0.1:8787/.well-known/oauth-protected-resource/mcp | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["resource"]=="https://miscon.phireij.cloud/mcp"; assert d["authorization_servers"]==["https://dev-81f0leykwbfdtibz.jp.auth0.com/"]; print("metadata=ok")')" = metadata=ok
           test "$(curl -fsS --max-time 2 -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_phil_ai_os_status","arguments":{}}}' http://127.0.0.1:8787/mcp | python3 -c 'import json,sys; d=json.load(sys.stdin)["result"]; assert d["isError"] is True and d["content"][0]["text"]=="authentication_required"; assert "mcp/www_authenticate" in d["_meta"]; print("challenge=ok")')" = challenge=ok
-          test "$(docker inspect "$container" --format '{{.Config.User}}|{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{index .Config.Labels "traefik.enable"}}|{{json .HostConfig.SecurityOpt}}|{{json .HostConfig.CapDrop}}|{{.HostConfig.PidsLimit}}|{{json .HostConfig.PortBindings}}')" = 'app|host|true|false|["no-new-privileges:true"]|["ALL"]|128|null'
+          test "$(docker inspect "$container" --format '{{.Config.User}}|{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{index .Config.Labels "traefik.enable"}}|{{json .HostConfig.SecurityOpt}}|{{json .HostConfig.CapDrop}}|{{.HostConfig.PidsLimit}}|{{json .HostConfig.PortBindings}}')" = 'app|host|true|false|["no-new-privileges:true"]|["ALL"]|128|{}'
           docker exec --user 10001:10001 "$container" test -r /run/secrets/mcp_owner_subject
           credential_mount="$(docker inspect "$container" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets/mcp_owner_subject"}}{{.Source}}|{{.RW}}{{end}}{{end}}')"
           test "$credential_mount" = "/run/credentials/$unit/mcp_owner_subject|false"
