@@ -2,6 +2,11 @@ name: MC-021 Gate C Systemd Credential Preflight
 
 on:
   workflow_dispatch:
+  push:
+    branches: [codex/mission-control-cto-next-gate]
+    paths:
+      - .github/workflows/mission-control-cto-mcp-fixture-gate-c-preflight.yml
+      - ops/mission-control-identity/systemd/phil-ai-os-mission-control-cto-mcp-fixture.service.template
 
 permissions:
   contents: read
