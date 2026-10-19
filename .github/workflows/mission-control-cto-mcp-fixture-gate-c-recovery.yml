@@ -38,7 +38,11 @@ jobs:
           ! docker inspect "$container" >/dev/null 2>&1
           ! ss -ltnH "( sport = :$port )" | grep -q .
           docker image inspect "$image" >/dev/null
-          rollback() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          rollback() {
+            docker inspect "$container" --format 'recovery_container_state={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' 2>/dev/null || true
+            docker logs --tail 20 "$container" 2>&1 || true
+            docker rm -f "$container" >/dev/null 2>&1 || true
+          }
           trap rollback ERR
           docker run -d --name "$container" --restart unless-stopped --network host --read-only \
             --tmpfs /tmp:rw,noexec,nosuid,size=16m --cap-drop ALL --security-opt no-new-privileges:true \
