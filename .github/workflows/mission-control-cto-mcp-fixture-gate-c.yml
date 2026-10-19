@@ -80,7 +80,22 @@ jobs:
               groupdel mcpfixture >/dev/null 2>&1 || true
             fi
           }
-          trap rollback ERR
+          report_failure() {
+            local rc="$1"
+            # Emit only lifecycle fields, never credential contents, environment values,
+            # request data, or container configuration.
+            printf 'gate_c_failure rc=%s\n' "$rc"
+            systemctl show "$unit" --no-pager \
+              --property=LoadState \
+              --property=ActiveState \
+              --property=SubState \
+              --property=Result \
+              --property=ExecMainCode \
+              --property=ExecMainStatus || true
+            rollback
+            exit "$rc"
+          }
+          trap 'report_failure "$?"' ERR
           version="$(systemd-creds --version | awk 'NR == 1 { print $2 }')"
           [[ "$version" =~ ^[0-9]+$ ]] && (( version >= 250 ))
           test "$(findmnt -n -o FSTYPE /run)" = tmpfs
@@ -101,9 +116,7 @@ jobs:
             created_user=true
           fi
           install -o root -g root -m 0644 /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service "$unit_path"
-          # A separate, out-of-scope unit has a syntax error.  Its reload status
-          # must not hide whether this unit was loaded and accepted by systemd.
-          systemctl daemon-reload >/dev/null 2>&1 || true
+          systemctl daemon-reload
           test "$(systemctl show "$unit" --property=LoadState --value)" = loaded
           systemctl cat "$unit" >/dev/null
           docker stop "$container" >/dev/null
