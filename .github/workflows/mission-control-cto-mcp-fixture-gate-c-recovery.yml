@@ -49,7 +49,7 @@ jobs:
             --pids-limit 128 --label traefik.enable=false \
             -e MCP_AUTHORIZATION_ISSUER="$issuer" -e MCP_AUTHORIZATION_JWKS_URI="$jwks" \
             "$image" >/dev/null
-          for i in 1 2 3 4 5; do curl -fsS --max-time 2 http://127.0.0.1:8787/healthz >/tmp/mcp-health.json && break; sleep 1; done
+          for i in $(seq 1 20); do curl -fsS --max-time 2 http://127.0.0.1:8787/healthz >/tmp/mcp-health.json && break; sleep 1; done
           test "$(cat /tmp/mcp-health.json)" = '{"authority_effect":"none","live_data":false,"mode":"offline_fixture","status":"ok"}'
           test "$(curl -fsS --max-time 2 http://127.0.0.1:8787/.well-known/oauth-protected-resource/mcp | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["resource"]=="https://miscon.phireij.cloud/mcp"; assert d["authorization_servers"]==["https://dev-81f0leykwbfdtibz.jp.auth0.com/"]; print("metadata=ok")')" = metadata=ok
           test "$(curl -fsS --max-time 2 -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_phil_ai_os_status","arguments":{}}}' http://127.0.0.1:8787/mcp | python3 -c 'import json,sys; d=json.load(sys.stdin)["result"]; assert d["isError"] is True and d["content"][0]["text"]=="authentication_required"; assert "mcp/www_authenticate" in d["_meta"]; print("challenge=ok")')" = challenge=ok
