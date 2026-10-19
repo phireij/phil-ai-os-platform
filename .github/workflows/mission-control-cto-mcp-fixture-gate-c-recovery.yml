@@ -49,11 +49,18 @@ jobs:
             --pids-limit 128 --label traefik.enable=false \
             -e MCP_AUTHORIZATION_ISSUER="$issuer" -e MCP_AUTHORIZATION_JWKS_URI="$jwks" \
             "$image" >/dev/null
+          rm -f /tmp/mcp-health.json
           for i in $(seq 1 20); do curl -fsS --max-time 2 http://127.0.0.1:8787/healthz >/tmp/mcp-health.json && break; sleep 1; done
-          test "$(cat /tmp/mcp-health.json)" = '{"authority_effect":"none","live_data":false,"mode":"offline_fixture","status":"ok"}'
-          test "$(curl -fsS --max-time 2 http://127.0.0.1:8787/.well-known/oauth-protected-resource/mcp | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["resource"]=="https://miscon.phireij.cloud/mcp"; assert d["authorization_servers"]==["https://dev-81f0leykwbfdtibz.jp.auth0.com/"]; print("metadata=ok")')" = metadata=ok
-          test "$(curl -fsS --max-time 2 -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_phil_ai_os_status","arguments":{}}}' http://127.0.0.1:8787/mcp | python3 -c 'import json,sys; d=json.load(sys.stdin)["result"]; assert d["isError"] is True and d["content"][0]["text"]=="authentication_required"; assert "mcp/www_authenticate" in d["_meta"]; print("challenge=ok")')" = challenge=ok
-          test "$(docker inspect "$container" --format '{{.Config.User}}|{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{index .Config.Labels "traefik.enable"}}|{{json .HostConfig.SecurityOpt}}|{{json .HostConfig.CapDrop}}|{{.HostConfig.PidsLimit}}|{{json .HostConfig.PortBindings}}')" = 'app|host|true|false|["no-new-privileges:true"]|["ALL"]|128|null'
-          ss -ltnH "( sport = :$port )" | grep -Eq '^LISTEN.*127\.0\.0\.1:8787'
+          health="$(cat /tmp/mcp-health.json)"
+          metadata="$(curl -fsS --max-time 2 http://127.0.0.1:8787/.well-known/oauth-protected-resource/mcp | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["resource"]=="https://miscon.phireij.cloud/mcp"; assert d["authorization_servers"]==["https://dev-81f0leykwbfdtibz.jp.auth0.com/"]; print("metadata=ok")')"
+          challenge="$(curl -fsS --max-time 2 -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_phil_ai_os_status","arguments":{}}}' http://127.0.0.1:8787/mcp | python3 -c 'import json,sys; d=json.load(sys.stdin)["result"]; assert d["isError"] is True and d["content"][0]["text"]=="authentication_required"; assert "mcp/www_authenticate" in d["_meta"]; print("challenge=ok")')"
+          hardening="$(docker inspect "$container" --format '{{.Config.User}}|{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{index .Config.Labels "traefik.enable"}}|{{json .HostConfig.SecurityOpt}}|{{json .HostConfig.CapDrop}}|{{.HostConfig.PidsLimit}}|{{json .HostConfig.PortBindings}}')"
+          listener="$(ss -ltnH "( sport = :$port )")"
+          printf 'recovery_checks health=%s metadata=%s challenge=%s hardening=%s listener=%s\n' "$health" "$metadata" "$challenge" "$hardening" "$listener"
+          test "$health" = '{"authority_effect":"none","live_data":false,"mode":"offline_fixture","status":"ok"}'
+          test "$metadata" = metadata=ok
+          test "$challenge" = challenge=ok
+          test "$hardening" = 'app|host|true|false|["no-new-privileges:true"]|["ALL"]|128|null'
+          grep -Eq '^LISTEN.*127\.0\.0\.1:8787' <<<"$listener"
           echo "gate_c_recovery=green listener=127.0.0.1:8787 public_route=false tunnel_client=false auth0_changed=false tokens_issued=false live_data=false"
           REMOTE
