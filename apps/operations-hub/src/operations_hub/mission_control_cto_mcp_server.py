@@ -1,7 +1,8 @@
-"""Gate-A-only loopback MCP fixture server.
+"""Loopback-only MCP fixture server with fail-closed Auth0 JWT verification.
 
 This process deliberately exposes no live source, credential issuer, OAuth flow,
-or tunnel connection. It is a local transport proof for the offline contract.
+or tunnel connection.  Its only possible tool output is a committed synthetic
+fixture, and it remains non-callable until a later approved owner-subject map.
 """
 
 from __future__ import annotations
@@ -9,7 +10,9 @@ from __future__ import annotations
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
+from .mission_control_cto_auth0_verifier import verifier_from_environment
 from .mission_control_cto_mcp_fixture import (
     CANONICAL_RESOURCE_URI,
     OfflineMcpFixtureResource,
@@ -20,11 +23,27 @@ HOST = "127.0.0.1"
 PORT = 8787
 METADATA_URI = "https://miscon.phireij.cloud/.well-known/oauth-protected-resource/mcp"
 ISSUER_ENV = "MCP_AUTHORIZATION_ISSUER"
+FIXTURE_PATH_ENV = "MCP_SYNTHETIC_FIXTURE_PATH"
+DEFAULT_FIXTURE_PATH = "/srv/mission-control/project-readiness.json"
 
 
 def _resource() -> OfflineMcpFixtureResource:
     issuer = os.environ.get(ISSUER_ENV, "")
     return OfflineMcpFixtureResource(CANONICAL_RESOURCE_URI, issuer, METADATA_URI)
+
+
+def _fixture_loader() -> tuple[dict[str, object], None]:
+    """Read only the committed image fixture, and only after token verification."""
+
+    path = Path(os.environ.get(FIXTURE_PATH_ENV, DEFAULT_FIXTURE_PATH))
+    return json.loads(path.read_text(encoding="utf-8")), None
+
+
+def _bearer_credential(value: str | None) -> str | None:
+    if not isinstance(value, str) or not value.startswith("Bearer "):
+        return None
+    token = value.removeprefix("Bearer ")
+    return token if token and token == token.strip() and " " not in token else None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -72,7 +91,11 @@ class Handler(BaseHTTPRequestHandler):
         elif method == "tools/call":
             params = request.get("params", {})
             result = resource.call_tool(
-                params.get("name"), params.get("arguments"), None, now=_utc_now()
+                params.get("name"), params.get("arguments"),
+                _bearer_credential(self.headers.get("Authorization")),
+                verifier=verifier_from_environment(CANONICAL_RESOURCE_URI),
+                fixture_loader=_fixture_loader,
+                now=_utc_now(),
             )
         else:
             self._send(200, {"jsonrpc": "2.0", "id": request_id,
@@ -96,7 +119,8 @@ def _utc_now():
 
 
 def main() -> None:
-    _resource()  # Fail closed if the non-secret synthetic issuer is absent/invalid.
+    _resource()  # Fail closed if the configured issuer is absent or invalid.
+    verifier_from_environment(CANONICAL_RESOURCE_URI)  # Validate issuer/JWKS config; no token or network use.
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"offline_mcp_fixture_listening={HOST}:{PORT} authority_effect=none", flush=True)
     server.serve_forever()

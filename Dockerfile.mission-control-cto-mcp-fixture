@@ -1,8 +1,13 @@
 FROM public.ecr.aws/docker/library/python:3.12-alpine
 WORKDIR /srv
+RUN pip install --no-cache-dir "PyJWT[crypto]==2.10.1"
 COPY apps/operations-hub/src/operations_hub /srv/operations_hub
+COPY apps/operations-hub/mission-control/project-readiness.json /srv/mission-control/project-readiness.json
 RUN addgroup -S app && adduser -S -G app app && chown -R app:app /srv
 USER app
-ENV PYTHONPATH=/srv MCP_AUTHORIZATION_ISSUER=https://identity.example.test/
+ENV PYTHONPATH=/srv \
+    MCP_AUTHORIZATION_ISSUER=https://dev-81f0leykwbfdtibz.jp.auth0.com/ \
+    MCP_AUTHORIZATION_JWKS_URI=https://dev-81f0leykwbfdtibz.jp.auth0.com/.well-known/jwks.json \
+    MCP_SYNTHETIC_FIXTURE_PATH=/srv/mission-control/project-readiness.json
 EXPOSE 8787
 ENTRYPOINT ["python3", "-m", "operations_hub.mission_control_cto_mcp_server"]

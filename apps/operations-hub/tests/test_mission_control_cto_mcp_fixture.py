@@ -13,6 +13,7 @@ from operations_hub.mission_control_cto_mcp_fixture import (  # noqa: E402
     OfflineMcpFixtureResource,
 )
 from operations_hub.mission_control_cto_tool import CEO_SUBJECT, SCOPE, TOOL_NAME, VerifiedContext  # noqa: E402
+from operations_hub.mission_control_cto_auth0_verifier import Auth0JwtVerifier  # noqa: E402
 
 
 RESOURCE_URI = "https://mcp.example.test/cto-proof"  # Synthetic only; not a deployable endpoint.
@@ -154,6 +155,32 @@ class OfflineMcpFixtureTests(unittest.TestCase):
         for forbidden in ("http.server", "requests", "urllib.request", "socket", "getenv",
                           "OPENAI_API_KEY", "MISSION_CONTROL_CEO_TOKEN", "FastAPI", "subprocess"):
             self.assertNotIn(forbidden, source)
+
+
+class Auth0VerifierTests(unittest.TestCase):
+    def test_verifier_accepts_only_the_configured_owner_and_auth0_claims(self):
+        now = NOW + timedelta(minutes=5)
+        verifier = Auth0JwtVerifier(
+            "https://dev.example.test/", CANONICAL_RESOURCE_URI,
+            "https://dev.example.test/.well-known/jwks.json", "auth0|owner",
+            _decode=lambda *_args, **_kwargs: {
+                "sub": "auth0|owner", "scope": SCOPE, "exp": now.timestamp(),
+            },
+            _signing_key=lambda _token: object(),
+        )
+        context = verifier("synthetic.jwt.value")
+        self.assertEqual(context.subject, CEO_SUBJECT)
+        self.assertEqual(context.audience, CANONICAL_RESOURCE_URI)
+        self.assertEqual(context.scopes, frozenset({SCOPE}))
+
+    def test_verifier_rejects_blank_or_wrong_owner_before_fixture_load(self):
+        verifier = Auth0JwtVerifier(
+            "https://dev.example.test/", CANONICAL_RESOURCE_URI,
+            "https://dev.example.test/.well-known/jwks.json", "",
+            _decode=lambda *_args, **_kwargs: {}, _signing_key=lambda _token: object(),
+        )
+        with self.assertRaises(ValueError):
+            verifier("synthetic.jwt.value")
 
 
 if __name__ == "__main__":

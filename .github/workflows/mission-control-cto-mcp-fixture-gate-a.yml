@@ -1,12 +1,7 @@
 name: MC-021 Gate A Loopback MCP Fixture Deploy
 
 on:
-  push:
-    branches: [codex/mission-control-cto-next-gate]
-    paths:
-      - Dockerfile.mission-control-cto-mcp-fixture
-      - apps/operations-hub/src/operations_hub/mission_control_cto_*.py
-      - .github/workflows/mission-control-cto-mcp-fixture-gate-a.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
