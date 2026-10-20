@@ -26,12 +26,16 @@ jobs:
       UNIT: phil-ai-os-mission-control-cto-mcp-fixture.service
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Build the credential-file fixture image locally
+      - name: Prepare the checksum-verified fixture build source
         shell: bash
         run: |
           set -euo pipefail
-          docker build --pull --file Dockerfile.mission-control-cto-mcp-fixture --tag "$IMAGE:gate-c-$GITHUB_SHA" .
-          docker image inspect "$IMAGE:gate-c-$GITHUB_SHA" >/dev/null
+          git archive --format=tar "$GITHUB_SHA" \
+            Dockerfile.mission-control-cto-mcp-fixture \
+            apps/operations-hub/src/operations_hub \
+            apps/operations-hub/mission-control/project-readiness.json \
+            | gzip -1 > /tmp/mission-control-cto-mcp-fixture-source.tar.gz
+          test -s /tmp/mission-control-cto-mcp-fixture-source.tar.gz
       - name: Render unit without credential material
         shell: bash
         run: |
@@ -51,30 +55,39 @@ jobs:
           ssh_opts=(-4 -p "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o StrictHostKeyChecking=accept-new)
           scp_opts=(-4 -P "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o StrictHostKeyChecking=accept-new)
           remote="$VPS_USER@$VPS_HOST"
-          archive="$(mktemp "${RUNNER_TEMP:-/tmp}/mission-control-cto-mcp-fixture.XXXXXX.tar.gz")"
           remote_stage=".cache/phil-ai-os-gate-c/$GITHUB_SHA"
           staged_unit="$remote_stage.service"
-          remote_archive="$remote_stage.tar.gz"
-          trap 'rm -f "$archive"' EXIT
-          docker save "$IMAGE:gate-c-$GITHUB_SHA" | gzip -1 > "$archive"
-          archive_sha256="$(sha256sum "$archive" | awk '{print $1}')"
-          [[ "$archive_sha256" =~ ^[0-9a-f]{64}$ ]]
+          source_archive=/tmp/mission-control-cto-mcp-fixture-source.tar.gz
+          remote_source_archive="$remote_stage.source.tar.gz"
+          source_sha256="$(sha256sum "$source_archive" | awk '{print $1}')"
+          [[ "$source_sha256" =~ ^[0-9a-f]{64}$ ]]
           ssh "${ssh_opts[@]}" "$remote" 'mkdir -p -m 700 .cache/phil-ai-os-gate-c'
           echo 'transfer_phase=unit_upload'
           scp "${scp_opts[@]}" /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service "$remote:$staged_unit"
-          echo 'transfer_phase=archive_upload'
-          scp "${scp_opts[@]}" "$archive" "$remote:$remote_archive"
-          echo 'transfer_phase=archive_verify_and_load'
-          ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$remote_archive" "$archive_sha256" <<'REMOTE_LOAD'
+          echo 'transfer_phase=source_archive_upload'
+          scp "${scp_opts[@]}" "$source_archive" "$remote:$remote_source_archive"
+          echo 'transfer_phase=source_verify_and_build'
+          ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$remote_source_archive" "$source_sha256" "$IMAGE:gate-c-$GITHUB_SHA" <<'REMOTE_BUILD'
           set -euo pipefail
-          archive="$1"; expected_sha256="$2"
-          trap 'rm -f "$archive"' EXIT
-          echo 'remote_load_phase=verify'
-          test "$(sha256sum "$archive" | awk '{print $1}')" = "$expected_sha256"
-          echo 'remote_load_phase=load'
-          gzip -dc -- "$archive" | docker load >/dev/null
-          echo 'remote_load_phase=complete'
-          REMOTE_LOAD
+          source_archive="$PWD/$1"; expected_sha256="$2"; image_ref="$3"
+          stage_root="$PWD/.cache/phil-ai-os-gate-c"
+          case "$source_archive" in "$stage_root"/*.source.tar.gz) ;; *) exit 1 ;; esac
+          build_context="$(mktemp -d "$stage_root/build.XXXXXX")"
+          case "$build_context" in "$stage_root"/build.*) ;; *) exit 1 ;; esac
+          cleanup_build_source() {
+            rm -f -- "$source_archive"
+            rm -rf -- "$build_context"
+          }
+          trap cleanup_build_source EXIT
+          echo 'remote_build_phase=verify'
+          test "$(sha256sum "$source_archive" | awk '{print $1}')" = "$expected_sha256"
+          echo 'remote_build_phase=extract'
+          tar -xzf "$source_archive" -C "$build_context"
+          echo 'remote_build_phase=build'
+          docker build --pull --file "$build_context/Dockerfile.mission-control-cto-mcp-fixture" --tag "$image_ref" "$build_context"
+          docker image inspect "$image_ref" >/dev/null
+          echo 'remote_build_phase=complete'
+          REMOTE_BUILD
           ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$IMAGE" "$GITHUB_SHA" "$CONTAINER" "$BACKUP_CONTAINER" "$UNIT" "$staged_unit" <<'REMOTE'
           set -euo pipefail
           image="$1"; revision="$2"; container="$3"; backup="$4"; unit="$5"; staged_unit="$6"; port=8787
