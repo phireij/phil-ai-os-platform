@@ -169,8 +169,15 @@ jobs:
           test "$(docker inspect "$container" --format '{{.Config.User}}|{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{index .Config.Labels "traefik.enable"}}|{{json .HostConfig.SecurityOpt}}|{{json .HostConfig.CapDrop}}|{{.HostConfig.PidsLimit}}|{{json .HostConfig.PortBindings}}')" = 'app|host|true|false|["no-new-privileges:true"]|["ALL"]|128|{}'
           phase=credential_mount
           credential_mount="$(docker inspect "$container" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets/mcp_owner_subject"}}{{.Source}}|{{.RW}}{{end}}{{end}}')"
-          case "$credential_mount" in /run/credentials/*/mcp_owner_subject\|false) ;; *) exit 1 ;; esac
+          credential_mount_shape=unexpected
+          case "$credential_mount" in */mcp_owner_subject\|false) credential_mount_shape=readonly_named ;; esac
+          printf 'credential_mount_shape=%s\n' "$credential_mount_shape"
+          test "$credential_mount_shape" = readonly_named
           credential_source="${credential_mount%|false}"
+          credential_source_class=unexpected
+          case "$credential_source" in /run/credentials/*|/run/systemd/credentials/*) credential_source_class=systemd_memory ;; esac
+          printf 'credential_source_class=%s\n' "$credential_source_class"
+          test "$credential_source_class" = systemd_memory
           phase=credential_mode
           test "$(stat -c '%u:%g:%a' "$credential_source")" = '10001:10001:400'
           phase=credential_read
