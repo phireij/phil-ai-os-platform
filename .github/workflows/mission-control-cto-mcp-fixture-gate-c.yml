@@ -52,13 +52,16 @@ jobs:
           scp_opts=(-4 -P "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o StrictHostKeyChecking=accept-new)
           remote="$VPS_USER@$VPS_HOST"
           archive="$(mktemp "${RUNNER_TEMP:-/tmp}/mission-control-cto-mcp-fixture.XXXXXX.tar.gz")"
-          remote_archive="/tmp/phil-ai-os-mission-control-cto-mcp-fixture-$GITHUB_SHA.tar.gz"
+          remote_stage=".cache/phil-ai-os-gate-c/$GITHUB_SHA"
+          staged_unit="$remote_stage.service"
+          remote_archive="$remote_stage.tar.gz"
           trap 'rm -f "$archive"' EXIT
           docker save "$IMAGE:gate-c-$GITHUB_SHA" | gzip -1 > "$archive"
           archive_sha256="$(sha256sum "$archive" | awk '{print $1}')"
           [[ "$archive_sha256" =~ ^[0-9a-f]{64}$ ]]
+          ssh "${ssh_opts[@]}" "$remote" 'mkdir -p -m 700 .cache/phil-ai-os-gate-c'
           echo 'transfer_phase=unit_upload'
-          scp "${scp_opts[@]}" /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service "$remote:/tmp/phil-ai-os-mission-control-cto-mcp-fixture.service"
+          scp "${scp_opts[@]}" /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service "$remote:$staged_unit"
           echo 'transfer_phase=archive_upload'
           scp "${scp_opts[@]}" "$archive" "$remote:$remote_archive"
           echo 'transfer_phase=archive_verify_and_load'
@@ -72,9 +75,9 @@ jobs:
           gzip -dc -- "$archive" | docker load >/dev/null
           echo 'remote_load_phase=complete'
           REMOTE_LOAD
-          ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$IMAGE" "$GITHUB_SHA" "$CONTAINER" "$BACKUP_CONTAINER" "$UNIT" <<'REMOTE'
+          ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$IMAGE" "$GITHUB_SHA" "$CONTAINER" "$BACKUP_CONTAINER" "$UNIT" "$staged_unit" <<'REMOTE'
           set -euo pipefail
-          image="$1"; revision="$2"; container="$3"; backup="$4"; unit="$5"; port=8787
+          image="$1"; revision="$2"; container="$3"; backup="$4"; unit="$5"; staged_unit="$6"; port=8787
           image_ref="$image:gate-c-$revision"
           credential=/etc/credstore.encrypted/mcp_owner_subject
           unit_path="/etc/systemd/system/$unit"
@@ -96,6 +99,7 @@ jobs:
               userdel mcpfixture >/dev/null 2>&1 || true
               groupdel mcpfixture >/dev/null 2>&1 || true
             fi
+            rm -f "$staged_unit"
           }
           report_failure() {
             local rc="$1"
@@ -146,7 +150,8 @@ jobs:
             created_user=true
           fi
           phase=install_unit
-          install -o root -g root -m 0644 /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service "$unit_path"
+          install -o root -g root -m 0644 "$staged_unit" "$unit_path"
+          rm -f "$staged_unit"
           systemctl daemon-reload
           test "$(systemctl show "$unit" --property=LoadState --value)" = loaded
           systemctl cat "$unit" >/dev/null
