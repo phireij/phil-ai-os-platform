@@ -95,7 +95,6 @@ jobs:
           credential=/etc/credstore.encrypted/mcp_owner_subject
           unit_path="/etc/systemd/system/$unit"
           phase=preflight
-          created_user=false
           original_stopped=false
           rollback() {
             systemctl disable --now "$unit" >/dev/null 2>&1 || true
@@ -107,10 +106,6 @@ jobs:
               docker start "$container" >/dev/null 2>&1 || true
             elif [ "$original_stopped" = true ]; then
               docker start "$container" >/dev/null 2>&1 || true
-            fi
-            if [ "$created_user" = true ]; then
-              userdel mcpfixture >/dev/null 2>&1 || true
-              groupdel mcpfixture >/dev/null 2>&1 || true
             fi
             rm -f "$staged_unit"
           }
@@ -151,17 +146,6 @@ jobs:
           test "$(docker inspect "$container" --format '{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{index .Config.Labels "traefik.enable"}}|{{json .HostConfig.SecurityOpt}}|{{json .HostConfig.CapDrop}}|{{.HostConfig.PidsLimit}}')" = 'host|true|false|["no-new-privileges:true"]|["ALL"]|128'
           phase=preflight_legacy_loopback
           ss -ltnH "( sport = :$port )" | grep -Eq '^LISTEN.*127\.0\.0\.1:8787'
-          phase=preflight_uid
-          existing_uid="$(getent passwd 10001 | cut -d: -f1 || true)"
-          test -z "$existing_uid" || test "$existing_uid" = mcpfixture
-          if [ -z "$existing_uid" ]; then
-            phase=preflight_gid
-            getent group 10001 >/dev/null 2>&1 && exit 1
-            phase=create_fixture_identity
-            groupadd --gid 10001 mcpfixture
-            useradd --system --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin mcpfixture
-            created_user=true
-          fi
           phase=install_unit
           install -o root -g root -m 0644 "$staged_unit" "$unit_path"
           rm -f "$staged_unit"
