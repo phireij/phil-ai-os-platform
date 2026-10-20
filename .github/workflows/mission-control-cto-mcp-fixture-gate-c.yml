@@ -119,6 +119,21 @@ jobs:
               --property=Result \
               --property=ExecMainCode \
               --property=ExecMainStatus || true
+            journal_signal=other_startup_failure
+            if journalctl -u "$unit" --since '-2 minutes' --no-pager -o cat | grep -Fq 'owner_subject_credential_unreadable'; then
+              journal_signal=credential_unreadable
+            elif journalctl -u "$unit" --since '-2 minutes' --no-pager -o cat | grep -Fq 'owner_subject_credential_invalid'; then
+              journal_signal=credential_invalid
+            elif journalctl -u "$unit" --since '-2 minutes' --no-pager -o cat | grep -Fq 'Permission denied'; then
+              journal_signal=permission_denied
+            elif journalctl -u "$unit" --since '-2 minutes' --no-pager -o cat | grep -Fq 'Address already in use'; then
+              journal_signal=address_in_use
+            elif journalctl -u "$unit" --since '-2 minutes' --no-pager -o cat | grep -Fq 'Error response from daemon'; then
+              journal_signal=docker_runtime_error
+            elif journalctl -u "$unit" --since '-2 minutes' --no-pager -o cat | grep -Fq 'Traceback'; then
+              journal_signal=application_startup_error
+            fi
+            printf 'journal_signal=%s\n' "$journal_signal"
             rollback
             exit "$rc"
           }
