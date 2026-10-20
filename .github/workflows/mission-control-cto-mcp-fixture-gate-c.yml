@@ -57,14 +57,20 @@ jobs:
           docker save "$IMAGE:gate-c-$GITHUB_SHA" | gzip -1 > "$archive"
           archive_sha256="$(sha256sum "$archive" | awk '{print $1}')"
           [[ "$archive_sha256" =~ ^[0-9a-f]{64}$ ]]
+          echo 'transfer_phase=unit_upload'
           scp "${scp_opts[@]}" /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service "$remote:/tmp/phil-ai-os-mission-control-cto-mcp-fixture.service"
+          echo 'transfer_phase=archive_upload'
           scp "${scp_opts[@]}" "$archive" "$remote:$remote_archive"
+          echo 'transfer_phase=archive_verify_and_load'
           ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$remote_archive" "$archive_sha256" <<'REMOTE_LOAD'
           set -euo pipefail
           archive="$1"; expected_sha256="$2"
           trap 'rm -f "$archive"' EXIT
+          echo 'remote_load_phase=verify'
           test "$(sha256sum "$archive" | awk '{print $1}')" = "$expected_sha256"
+          echo 'remote_load_phase=load'
           gzip -dc -- "$archive" | docker load >/dev/null
+          echo 'remote_load_phase=complete'
           REMOTE_LOAD
           ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$IMAGE" "$GITHUB_SHA" "$CONTAINER" "$BACKUP_CONTAINER" "$UNIT" <<'REMOTE'
           set -euo pipefail
