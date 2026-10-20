@@ -50,35 +50,31 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          # The compressed image transfer is deliberately quiet. Keep the authenticated
-          # connection alive while Hostinger processes it; this changes no host policy.
+          # Keep authenticated transport alive while Hostinger processes the source build;
+          # this changes no host policy.
           ssh_opts=(-4 -p "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o StrictHostKeyChecking=accept-new)
-          scp_opts=(-4 -P "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o StrictHostKeyChecking=accept-new)
           remote="$VPS_USER@$VPS_HOST"
-          remote_stage=".cache/phil-ai-os-gate-c/$GITHUB_SHA"
-          staged_unit="$remote_stage.service"
           source_archive=/tmp/mission-control-cto-mcp-fixture-source.tar.gz
-          remote_source_archive="$remote_stage.source.tar.gz"
           source_sha256="$(sha256sum "$source_archive" | awk '{print $1}')"
+          unit_b64="$(base64 -w0 /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service)"
           [[ "$source_sha256" =~ ^[0-9a-f]{64}$ ]]
+          test -n "$unit_b64"
           ssh "${ssh_opts[@]}" "$remote" 'mkdir -p -m 700 .cache/phil-ai-os-gate-c'
-          echo 'transfer_phase=unit_upload'
-          scp "${scp_opts[@]}" /tmp/phil-ai-os-mission-control-cto-mcp-fixture.service "$remote:$staged_unit"
-          echo 'transfer_phase=source_archive_upload'
-          scp "${scp_opts[@]}" "$source_archive" "$remote:$remote_source_archive"
-          echo 'transfer_phase=source_verify_and_build'
-          ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$remote_source_archive" "$source_sha256" "$IMAGE:gate-c-$GITHUB_SHA" <<'REMOTE_BUILD'
+          remote_build_script="$(base64 -w0 <<'REMOTE_BUILD'
           set -euo pipefail
-          source_archive="$PWD/$1"; expected_sha256="$2"; image_ref="$3"
+          expected_sha256="$1"; image_ref="$2"
           stage_root="$PWD/.cache/phil-ai-os-gate-c"
-          case "$source_archive" in "$stage_root"/*.source.tar.gz) ;; *) exit 1 ;; esac
+          source_archive="$(mktemp "$stage_root/source.XXXXXX.tar.gz")"
           build_context="$(mktemp -d "$stage_root/build.XXXXXX")"
+          case "$source_archive" in "$stage_root"/source.*.tar.gz) ;; *) exit 1 ;; esac
           case "$build_context" in "$stage_root"/build.*) ;; *) exit 1 ;; esac
           cleanup_build_source() {
             rm -f -- "$source_archive"
             rm -rf -- "$build_context"
           }
           trap cleanup_build_source EXIT
+          echo 'remote_build_phase=receive'
+          cat > "$source_archive"
           echo 'remote_build_phase=verify'
           test "$(sha256sum "$source_archive" | awk '{print $1}')" = "$expected_sha256"
           echo 'remote_build_phase=extract'
@@ -88,9 +84,12 @@ jobs:
           docker image inspect "$image_ref" >/dev/null
           echo 'remote_build_phase=complete'
           REMOTE_BUILD
-          ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$IMAGE" "$GITHUB_SHA" "$CONTAINER" "$BACKUP_CONTAINER" "$UNIT" "$staged_unit" <<'REMOTE'
+          )"
+          echo 'transfer_phase=source_stream_and_build'
+          cat "$source_archive" | ssh "${ssh_opts[@]}" "$remote" "exec 3<&0; printf %s '$remote_build_script' | base64 -d | /bin/bash -s -- '$source_sha256' '$IMAGE:gate-c-$GITHUB_SHA' <&3"
+          ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$IMAGE" "$GITHUB_SHA" "$CONTAINER" "$BACKUP_CONTAINER" "$UNIT" "$unit_b64" <<'REMOTE'
           set -euo pipefail
-          image="$1"; revision="$2"; container="$3"; backup="$4"; unit="$5"; staged_unit="$6"; port=8787
+          image="$1"; revision="$2"; container="$3"; backup="$4"; unit="$5"; unit_b64="$6"; port=8787
           image_ref="$image:gate-c-$revision"
           credential=/etc/credstore.encrypted/mcp_owner_subject
           unit_path="/etc/systemd/system/$unit"
@@ -107,7 +106,6 @@ jobs:
             elif [ "$original_stopped" = true ]; then
               docker start "$container" >/dev/null 2>&1 || true
             fi
-            rm -f "$staged_unit"
           }
           report_failure() {
             local rc="$1"
@@ -147,8 +145,9 @@ jobs:
           phase=preflight_legacy_loopback
           ss -ltnH "( sport = :$port )" | grep -Eq '^LISTEN.*127\.0\.0\.1:8787'
           phase=install_unit
-          install -o root -g root -m 0644 "$staged_unit" "$unit_path"
-          rm -f "$staged_unit"
+          printf %s "$unit_b64" | base64 -d > "$unit_path"
+          chown root:root "$unit_path"
+          chmod 0644 "$unit_path"
           systemctl daemon-reload
           test "$(systemctl show "$unit" --property=LoadState --value)" = loaded
           systemctl cat "$unit" >/dev/null
