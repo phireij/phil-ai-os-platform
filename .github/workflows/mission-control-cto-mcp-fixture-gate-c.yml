@@ -198,9 +198,9 @@ jobs:
           test "$credential_mount_shape" = readonly_named
           credential_source="${credential_mount%|false}"
           credential_source_class=unexpected
-          case "$credential_source" in /run/credentials/*|/run/systemd/credentials/*) credential_source_class=systemd_memory ;; esac
+          case "$credential_source" in /run/phil-ai-os-mission-control-cto-mcp-fixture/mcp_owner_subject) credential_source_class=runtime_tmpfs ;; esac
           printf 'credential_source_class=%s\n' "$credential_source_class"
-          test "$credential_source_class" = systemd_memory
+          test "$credential_source_class" = runtime_tmpfs
           phase=credential_mode
           test "$(stat -c '%u:%g:%a' "$credential_source")" = '10001:10001:400'
           phase=credential_read

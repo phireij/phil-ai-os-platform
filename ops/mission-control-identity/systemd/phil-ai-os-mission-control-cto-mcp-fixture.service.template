@@ -7,17 +7,19 @@ Requires=docker.service
 [Service]
 Type=simple
 # Docker is invoked by this root-owned unit, while the image itself runs its
-# application as numeric UID/GID 10001. The credential file is chowned to that
-# numeric identity immediately before the read-only container bind mount.
+# application as numeric UID/GID 10001. systemd's credential directory itself
+# is immutable, so a tightly permissioned copy is made only in /run (tmpfs) for
+# the read-only container bind mount.
 LoadCredentialEncrypted=mcp_owner_subject:/etc/credstore.encrypted/mcp_owner_subject
+RuntimeDirectory=phil-ai-os-mission-control-cto-mcp-fixture
+RuntimeDirectoryMode=0700
 Environment=MCP_OWNER_SUBJECT_FILE=/run/secrets/mcp_owner_subject
 Environment=MCP_AUTHORIZATION_ISSUER=https://dev-81f0leykwbfdtibz.jp.auth0.com/
 Environment=MCP_AUTHORIZATION_JWKS_URI=https://dev-81f0leykwbfdtibz.jp.auth0.com/.well-known/jwks.json
 Environment=MCP_SYNTHETIC_FIXTURE_PATH=/srv/mission-control/project-readiness.json
-ExecStartPre=+/bin/chown 10001:10001 ${CREDENTIALS_DIRECTORY}/mcp_owner_subject
-ExecStartPre=+/bin/chmod 0400 ${CREDENTIALS_DIRECTORY}/mcp_owner_subject
+ExecStartPre=+/usr/bin/install -o 10001 -g 10001 -m 0400 ${CREDENTIALS_DIRECTORY}/mcp_owner_subject /run/phil-ai-os-mission-control-cto-mcp-fixture/mcp_owner_subject
 ExecStartPre=+/bin/sh -ec '/usr/bin/docker rm -f phil-ai-os-mission-control-cto-mcp-fixture >/dev/null 2>&1 || true'
-ExecStart=+/usr/bin/docker run --name phil-ai-os-mission-control-cto-mcp-fixture --rm --network host --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 128 --label traefik.enable=false --mount type=bind,src=${CREDENTIALS_DIRECTORY}/mcp_owner_subject,dst=/run/secrets/mcp_owner_subject,readonly --env MCP_OWNER_SUBJECT_FILE --env MCP_AUTHORIZATION_ISSUER --env MCP_AUTHORIZATION_JWKS_URI --env MCP_SYNTHETIC_FIXTURE_PATH @IMAGE_REF@
+ExecStart=+/usr/bin/docker run --name phil-ai-os-mission-control-cto-mcp-fixture --rm --network host --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 128 --label traefik.enable=false --mount type=bind,src=/run/phil-ai-os-mission-control-cto-mcp-fixture/mcp_owner_subject,dst=/run/secrets/mcp_owner_subject,readonly --env MCP_OWNER_SUBJECT_FILE --env MCP_AUTHORIZATION_ISSUER --env MCP_AUTHORIZATION_JWKS_URI --env MCP_SYNTHETIC_FIXTURE_PATH @IMAGE_REF@
 ExecStop=+/usr/bin/docker stop --time 10 phil-ai-os-mission-control-cto-mcp-fixture
 Restart=always
 RestartSec=5
