@@ -2,11 +2,10 @@ name: MC-021 Gate C Systemd Encrypted Credential Migration
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - codex/mission-control-cto-next-gate
-    paths:
-      - .github/workflows/mission-control-cto-mcp-fixture-gate-c.yml
+
+concurrency:
+  group: mission-control-cto-mcp-fixture-gate-c
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -95,11 +94,12 @@ jobs:
           unit_path="/etc/systemd/system/$unit"
           phase=preflight
           original_stopped=false
+          legacy_renamed=false
           rollback() {
             systemctl disable --now "$unit" >/dev/null 2>&1 || true
             rm -f "$unit_path"
             systemctl daemon-reload >/dev/null 2>&1 || true
-            if docker inspect "$backup" >/dev/null 2>&1; then
+            if [ "$legacy_renamed" = true ] && docker inspect "$backup" >/dev/null 2>&1; then
               docker rm -f "$container" >/dev/null 2>&1 || true
               docker rename "$backup" "$container" >/dev/null 2>&1 || true
               docker start "$container" >/dev/null 2>&1 || true
@@ -123,6 +123,13 @@ jobs:
             exit "$rc"
           }
           trap 'report_failure "$?"' ERR
+          phase=recover_legacy_backup
+          if ! docker inspect "$container" >/dev/null 2>&1 && docker inspect "$backup" >/dev/null 2>&1; then
+            docker rename "$backup" "$container"
+            if [ "$(docker inspect "$container" --format '{{.State.Running}}')" = false ]; then
+              docker start "$container" >/dev/null
+            fi
+          fi
           phase=preflight_systemd_creds
           version="$(systemd-creds --version | awk 'NR == 1 { print $2 }')"
           [[ "$version" =~ ^[0-9]+$ ]] && (( version >= 250 ))
@@ -155,6 +162,7 @@ jobs:
           docker stop "$container" >/dev/null
           original_stopped=true
           docker rename "$container" "$backup"
+          legacy_renamed=true
           phase=start_unit
           systemctl enable --now "$unit"
           phase=health
