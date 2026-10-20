@@ -74,7 +74,7 @@ jobs:
           }
           trap cleanup_build_source EXIT
           echo 'remote_build_phase=receive'
-          cat > "$source_archive"
+          cat <&3 > "$source_archive"
           echo 'remote_build_phase=verify'
           test "$(sha256sum "$source_archive" | awk '{print $1}')" = "$expected_sha256"
           echo 'remote_build_phase=extract'
@@ -86,7 +86,7 @@ jobs:
           REMOTE_BUILD
           )"
           echo 'transfer_phase=source_stream_and_build'
-          cat "$source_archive" | ssh "${ssh_opts[@]}" "$remote" "exec 3<&0; printf %s '$remote_build_script' | base64 -d | /bin/bash -s -- '$source_sha256' '$IMAGE:gate-c-$GITHUB_SHA' <&3"
+          cat "$source_archive" | ssh "${ssh_opts[@]}" "$remote" "exec 3<&0; printf %s '$remote_build_script' | base64 -d | /bin/bash -s -- '$source_sha256' '$IMAGE:gate-c-$GITHUB_SHA'"
           ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$IMAGE" "$GITHUB_SHA" "$CONTAINER" "$BACKUP_CONTAINER" "$UNIT" "$unit_b64" <<'REMOTE'
           set -euo pipefail
           image="$1"; revision="$2"; container="$3"; backup="$4"; unit="$5"; unit_b64="$6"; port=8787
