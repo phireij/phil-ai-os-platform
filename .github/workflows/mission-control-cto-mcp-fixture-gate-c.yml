@@ -169,9 +169,10 @@ jobs:
           test "$(docker inspect "$container" --format '{{.Config.User}}|{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{index .Config.Labels "traefik.enable"}}|{{json .HostConfig.SecurityOpt}}|{{json .HostConfig.CapDrop}}|{{.HostConfig.PidsLimit}}|{{json .HostConfig.PortBindings}}')" = 'app|host|true|false|["no-new-privileges:true"]|["ALL"]|128|{}'
           phase=credential_mount
           credential_mount="$(docker inspect "$container" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets/mcp_owner_subject"}}{{.Source}}|{{.RW}}{{end}}{{end}}')"
-          test "$credential_mount" = "/run/credentials/$unit/mcp_owner_subject|false"
+          case "$credential_mount" in /run/credentials/*/mcp_owner_subject\|false) ;; *) exit 1 ;; esac
+          credential_source="${credential_mount%|false}"
           phase=credential_mode
-          test "$(stat -c '%u:%g:%a' "/run/credentials/$unit/mcp_owner_subject")" = '10001:10001:400'
+          test "$(stat -c '%u:%g:%a' "$credential_source")" = '10001:10001:400'
           phase=credential_read
           docker exec --user 10001:10001 "$container" test -r /run/secrets/mcp_owner_subject
           phase=loopback
