@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+from io import BytesIO
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -22,6 +23,7 @@ from operations_hub.mission_control_cto_auth0_verifier import (  # noqa: E402
     OWNER_SUBJECT_FILE_ENV,
     verifier_from_environment,
 )
+from operations_hub import mission_control_cto_mcp_server as mcp_server  # noqa: E402
 
 
 RESOURCE_URI = "https://mcp.example.test/cto-proof"  # Synthetic only; not a deployable endpoint.
@@ -214,6 +216,49 @@ class Auth0VerifierTests(unittest.TestCase):
         with patch.dict(os.environ, environment, clear=True):
             with self.assertRaisesRegex(ValueError, "credential_path_required"):
                 verifier_from_environment(CANONICAL_RESOURCE_URI)
+
+
+class IsolatedServerStartupTests(unittest.TestCase):
+    def test_startup_does_not_require_an_owner_credential(self):
+        """The networkless synthetic fixture can start in a fail-closed state."""
+
+        with patch.object(mcp_server, "_resource") as resource, patch.object(
+            mcp_server, "verifier_from_environment",
+            side_effect=AssertionError("verifier must be deferred"),
+        ), patch.object(mcp_server, "ThreadingHTTPServer") as listener, patch("builtins.print"):
+            mcp_server.main()
+
+        resource.assert_called_once_with()
+        listener.assert_called_once_with(
+            (mcp_server.HOST, mcp_server.PORT), mcp_server.Handler
+        )
+
+    def test_owner_verifier_is_constructed_only_for_tool_authorization(self):
+        verified = object()
+        verifier = unittest.mock.Mock(return_value=verified)
+        with patch.object(mcp_server, "verifier_from_environment", return_value=verifier) as factory:
+            self.assertIs(mcp_server._verify_owner_credential("synthetic-token"), verified)
+
+        factory.assert_called_once_with(CANONICAL_RESOURCE_URI)
+        verifier.assert_called_once_with("synthetic-token")
+
+
+class IsolatedServerResponseTests(unittest.TestCase):
+    def test_json_response_has_an_explicit_length_and_closed_connection(self):
+        handler = object.__new__(mcp_server.Handler)
+        handler.wfile = BytesIO()
+        handler.send_response = unittest.mock.Mock()
+        handler.send_header = unittest.mock.Mock()
+        handler.end_headers = unittest.mock.Mock()
+
+        handler._send(200, {"status": "ok"})
+
+        handler.send_response.assert_called_once_with(200)
+        headers = dict(call.args for call in handler.send_header.call_args_list)
+        self.assertEqual(headers["Content-Length"], str(len(b'{"status":"ok"}')))
+        self.assertEqual(headers["Connection"], "close")
+        self.assertNotIn("Transfer-Encoding", headers)
+        self.assertEqual(handler.wfile.getvalue(), b'{"status":"ok"}')
 
 
 if __name__ == "__main__":

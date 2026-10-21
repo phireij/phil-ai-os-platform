@@ -39,6 +39,19 @@ def _fixture_loader() -> tuple[dict[str, object], None]:
     return json.loads(path.read_text(encoding="utf-8")), None
 
 
+def _verify_owner_credential(credential: str):
+    """Construct the verifier only when a valid tool call reaches auth.
+
+    A non-production fixture may deliberately start without an owner-subject
+    credential.  In that state every tool call fails closed, while health and
+    metadata remain available only on the container's loopback interface.
+    Delaying this construction also keeps malformed or unknown tool requests
+    from probing runtime credential configuration.
+    """
+
+    return verifier_from_environment(CANONICAL_RESOURCE_URI)(credential)
+
+
 def _bearer_credential(value: str | None) -> str | None:
     if not isinstance(value, str) or not value.startswith("Bearer "):
         return None
@@ -48,6 +61,7 @@ def _bearer_credential(value: str | None) -> str | None:
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "PhilAiOsOfflineMcpFixture/1"
+    protocol_version = "HTTP/1.1"
 
     def _send(self, code: int, body: object) -> None:
         payload = json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -56,6 +70,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(payload)
 
@@ -93,7 +108,7 @@ class Handler(BaseHTTPRequestHandler):
             result = resource.call_tool(
                 params.get("name"), params.get("arguments"),
                 _bearer_credential(self.headers.get("Authorization")),
-                verifier=verifier_from_environment(CANONICAL_RESOURCE_URI),
+                verifier=_verify_owner_credential,
                 fixture_loader=_fixture_loader,
                 now=_utc_now(),
             )
@@ -120,7 +135,9 @@ def _utc_now():
 
 def main() -> None:
     _resource()  # Fail closed if the configured issuer is absent or invalid.
-    verifier_from_environment(CANONICAL_RESOURCE_URI)  # Validate issuer/JWKS config; no token or network use.
+    # Do not require an owner credential merely to start the isolated fixture.
+    # Tool calls still instantiate the verifier and deny generically unless a
+    # later-approved credential mount has been configured.
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"offline_mcp_fixture_listening={HOST}:{PORT} authority_effect=none", flush=True)
     server.serve_forever()
