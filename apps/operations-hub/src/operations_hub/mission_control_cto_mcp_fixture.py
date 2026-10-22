@@ -140,6 +140,7 @@ class OfflineMcpFixtureResource:
         except ToolDenied:
             challenge = (
                 f'Bearer resource_metadata="{self.metadata_uri}", '
+                f'scope="{SCOPE}", '
                 'error="invalid_token", error_description="Authentication required"'
             )
             return {

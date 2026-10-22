@@ -63,7 +63,9 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "PhilAiOsOfflineMcpFixture/1"
     protocol_version = "HTTP/1.1"
 
-    def _send(self, code: int, body: object) -> None:
+    def _send(
+        self, code: int, body: object, headers: dict[str, str] | None = None
+    ) -> None:
         payload = json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -71,6 +73,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Connection", "close")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(payload)
 
@@ -112,6 +116,23 @@ class Handler(BaseHTTPRequestHandler):
                 fixture_loader=_fixture_loader,
                 now=_utc_now(),
             )
+            challenge = result.get("_meta", {}).get("mcp/www_authenticate", ())
+            if result.get("isError") and challenge:
+                challenge_value = challenge[0]
+                if _bearer_credential(self.headers.get("Authorization")):
+                    challenge_value = challenge_value.replace(
+                        "error=\"invalid_token\"", "error=\"insufficient_scope\""
+                    )
+                self._send(
+                    401,
+                    {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "error": {"code": -32001, "message": "authentication_required"},
+                    },
+                    headers={"WWW-Authenticate": challenge_value},
+                )
+                return
         else:
             self._send(200, {"jsonrpc": "2.0", "id": request_id,
                              "error": {"code": -32601, "message": "method_not_found"}})
