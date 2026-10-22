@@ -1,0 +1,50 @@
+# MC-021 approved non-production activation only.  This is separate from the
+# dormant networkless fixture definition and never publishes a port or route.
+# Launchers must source the root-owned VPS secret file immediately before
+# `docker compose up`; the key itself is neither mounted nor committed.
+name: phil-ai-os-mc021-tunnel-nonprod
+
+services:
+  mcp-tunnel:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.mission-control-cto-mcp-tunnel
+    image: phil-ai-os/mc021-tunnel:nonprod
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 384m
+    cpus: 0.50
+    restart: "no"
+    environment:
+      CONTROL_PLANE_API_KEY: ${CONTROL_PLANE_API_KEY:?root-owned VPS runtime key is required}
+      CONTROL_PLANE_TUNNEL_ID: tunnel_6ad562a9e7e08191ae10c64acae2db8d
+      MCP_AUTHORIZATION_ISSUER: https://dev-81f0leykwbfdtibz.jp.auth0.com/
+      MCP_AUTHORIZATION_JWKS_URI: https://dev-81f0leykwbfdtibz.jp.auth0.com/.well-known/jwks.json
+      MCP_OAUTH_TRUSTED_ORIGINS: https://dev-81f0leykwbfdtibz.jp.auth0.com
+      MCP_SYNTHETIC_FIXTURE_PATH: /srv/mission-control/project-readiness.json
+      MCP_OWNER_SUBJECT_FILE: /run/secrets/mc021_owner_subject
+    volumes:
+      - type: bind
+        source: /etc/phil-ai-os/secrets/mc021-owner-subject
+        target: /run/secrets/mc021_owner_subject
+        read_only: true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/healthz', timeout=2).read(); urllib.request.urlopen('http://127.0.0.1:18080/health', timeout=2).read()"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    labels:
+      traefik.enable: "false"
+      com.phil-ai-os.scope: "mc021-synthetic-nonprod"
+      com.phil-ai-os.authority: "none"
