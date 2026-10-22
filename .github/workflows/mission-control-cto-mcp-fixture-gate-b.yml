@@ -1,0 +1,82 @@
+name: MC-021 Gate B Auth0-Verifying Loopback Fixture Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  upgrade-loopback-fixture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}/mission-control-cto-mcp-fixture
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CONTAINER: phil-ai-os-mission-control-cto-mcp-fixture
+      BACKUP_CONTAINER: phil-ai-os-mission-control-cto-mcp-fixture-gate-a-backup
+      REMOTE_DOCKER_CONFIG: /tmp/phil-ai-os-mcp-fixture-ghcr-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - name: Build and publish Auth0-verifying fixture image
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx build --platform linux/amd64 --provenance=false --sbom=false \
+            --file Dockerfile.mission-control-cto-mcp-fixture --tag "$IMAGE:sha-$GITHUB_SHA" \
+            --push --metadata-file /tmp/image.json .
+          digest="$(python3 -c 'import json; print(json.load(open("/tmp/image.json"))["containerimage.digest"])')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Upgrade only the existing loopback fixture
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          remote="$VPS_USER@$VPS_HOST"
+          ssh_opts=(-4 -p "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new)
+          ssh "${ssh_opts[@]}" "$remote" true
+          printf '%s' "$GH_TOKEN" | ssh "${ssh_opts[@]}" "$remote" \
+            "mkdir -m 700 -p '$REMOTE_DOCKER_CONFIG' && DOCKER_CONFIG='$REMOTE_DOCKER_CONFIG' docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin"
+          ssh "${ssh_opts[@]}" "$remote" 'bash -s' -- "$IMAGE" "$DIGEST" "$CONTAINER" "$BACKUP_CONTAINER" "$REMOTE_DOCKER_CONFIG" <<'REMOTE'
+          set -euo pipefail
+          image="$1"; digest="$2"; container="$3"; backup="$4"; config="$5"; port=8787
+          issuer='https://dev-81f0leykwbfdtibz.jp.auth0.com/'
+          jwks='https://dev-81f0leykwbfdtibz.jp.auth0.com/.well-known/jwks.json'
+          cleanup() { DOCKER_CONFIG="$config" docker logout ghcr.io >/dev/null 2>&1 || true; rm -f "$config/config.json"; rmdir "$config" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker inspect "$container" >/dev/null
+          ! docker inspect "$backup" >/dev/null 2>&1
+          test "$(docker inspect "$container" --format '{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{index .Config.Labels "traefik.enable"}}')" = 'host|true|false'
+          ss -ltnH "( sport = :$port )" | grep -Eq '^LISTEN.*127\.0\.0\.1:8787'
+          DOCKER_CONFIG="$config" docker pull --platform linux/amd64 "$image@$digest" >/dev/null
+          docker stop "$container" >/dev/null
+          docker rename "$container" "$backup"
+          rollback() { docker rm -f "$container" >/dev/null 2>&1 || true; docker rename "$backup" "$container" >/dev/null 2>&1 || true; docker start "$container" >/dev/null 2>&1 || true; }
+          trap 'rollback; cleanup' ERR
+          docker run -d --name "$container" --restart unless-stopped --network host --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m --cap-drop ALL --security-opt no-new-privileges:true \
+            --pids-limit 128 --label traefik.enable=false \
+            -e MCP_AUTHORIZATION_ISSUER="$issuer" -e MCP_AUTHORIZATION_JWKS_URI="$jwks" \
+            "$image@$digest" >/dev/null
+          for i in 1 2 3 4 5; do curl -fsS --max-time 2 http://127.0.0.1:8787/healthz >/tmp/mcp-health.json && break; sleep 1; done
+          test "$(cat /tmp/mcp-health.json)" = '{"authority_effect":"none","live_data":false,"mode":"offline_fixture","status":"ok"}'
+          test "$(curl -fsS --max-time 2 http://127.0.0.1:8787/.well-known/oauth-protected-resource/mcp | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["resource"]=="https://miscon.phireij.cloud/mcp"; assert d["authorization_servers"]==["https://dev-81f0leykwbfdtibz.jp.auth0.com/"]; print("metadata=ok")')" = metadata=ok
+          test "$(curl -fsS --max-time 2 -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_phil_ai_os_status","arguments":{}}}' http://127.0.0.1:8787/mcp | python3 -c 'import json,sys; d=json.load(sys.stdin)["result"]; assert d["isError"] is True and d["content"][0]["text"]=="authentication_required"; assert "mcp/www_authenticate" in d["_meta"]; print("challenge=ok")')" = challenge=ok
+          test "$(docker inspect "$container" --format '{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{index .Config.Labels "traefik.enable"}}')" = 'host|true|false'
+          ss -ltnH "( sport = :$port )" | grep -Eq '^LISTEN.*127\.0\.0\.1:8787'
+          docker rm "$backup" >/dev/null
+          echo "gate_b=green listener=127.0.0.1:8787 public_route=false tunnel_client=false auth0_api=true tokens_issued=false live_data=false"
+          REMOTE

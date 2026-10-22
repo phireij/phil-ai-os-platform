@@ -1,0 +1,37 @@
+# MC-021 non-production, fixture-only workload.
+#
+# This definition intentionally runs without a published port, host networking,
+# Docker socket, bind mounts, owner credential, runtime API key, or
+# tunnel-client.  `network_mode: none` means the server's 127.0.0.1 listener
+# cannot be reached outside this container and cannot make egress requests.
+# A separately approved activation must use a distinct, reviewed runtime
+# design; do not extend this file with a tunnel-client or credentials.
+name: phil-ai-os-mc021-fixture-nonprod
+
+services:
+  mcp-fixture:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.mission-control-cto-mcp-fixture
+    image: phil-ai-os/mc021-fixture:nonprod
+    init: true
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.50
+    restart: "no"
+    labels:
+      traefik.enable: "false"
+      com.phil-ai-os.scope: "mc021-synthetic-nonprod"
+      com.phil-ai-os.authority: "none"
+    environment:
+      MCP_AUTHORIZATION_ISSUER: https://dev-81f0leykwbfdtibz.jp.auth0.com/
+      MCP_AUTHORIZATION_JWKS_URI: https://dev-81f0leykwbfdtibz.jp.auth0.com/.well-known/jwks.json
+      MCP_SYNTHETIC_FIXTURE_PATH: /srv/mission-control/project-readiness.json

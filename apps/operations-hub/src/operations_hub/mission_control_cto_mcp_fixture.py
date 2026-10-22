@@ -1,8 +1,9 @@
 """Transportless, offline MC-021 MCP-facing fixture contract.
 
 This is not a network server or a JWT verifier. A future approved transport must
-provide the canonical HTTPS resource URI and a trusted per-call verifier. There
-is deliberately no default URI, fixture loader, credential, or network access.
+provide the canonical HTTPS resource URI, the protected-resource metadata URI,
+and a trusted per-call verifier. There is deliberately no fixture default URI,
+fixture loader, credential, or network access.
 """
 
 from __future__ import annotations
@@ -17,6 +18,9 @@ from .mission_control_cto_tool import (
     SCOPE, TOOL_DESCRIPTOR, TOOL_NAME, ToolDenied, VerifiedContext,
     invoke_fixture_tool,
 )
+
+
+CANONICAL_RESOURCE_URI = "https://miscon.phireij.cloud/mcp"
 
 
 def _https_url(value: str) -> bool:
@@ -42,21 +46,62 @@ def _https_url(value: str) -> bool:
         return False
 
 
+def _metadata_uri_for_resource(metadata_uri: str, resource_uri: str) -> bool:
+    if not _https_url(metadata_uri):
+        return False
+    metadata = urlsplit(metadata_uri)
+    resource = urlsplit(resource_uri)
+    metadata_path = "/.well-known/oauth-protected-resource"
+    return (
+        metadata.scheme == resource.scheme
+        and metadata.netloc == resource.netloc
+        and (metadata.path == metadata_path or metadata.path.startswith(f"{metadata_path}/"))
+    )
+
+
+def _loopback_mcp_url(value: str) -> bool:
+    if not isinstance(value, str) or value != value.strip():
+        return False
+    try:
+        parsed = urlsplit(value)
+        return (
+            parsed.scheme == "http"
+            and parsed.hostname == "127.0.0.1"
+            and parsed.port is not None
+            and 0 < parsed.port < 65536
+            and parsed.path == "/mcp"
+            and not parsed.username
+            and not parsed.password
+            and not parsed.query
+            and not parsed.fragment
+        )
+    except ValueError:
+        return False
+
+
 @dataclass(frozen=True)
 class OfflineMcpFixtureResource:
     """Pure response builder; no listener, HTTP route, OAuth flow, or live source."""
 
     resource_uri: str
     authorization_issuer: str
+    protected_resource_metadata_uri: str
 
     def __post_init__(self) -> None:
-        if not _https_url(self.resource_uri) or not _https_url(self.authorization_issuer):
+        if (
+            not _https_url(self.resource_uri)
+            or not _https_url(self.authorization_issuer)
+            or not _metadata_uri_for_resource(
+                self.protected_resource_metadata_uri, self.resource_uri
+            )
+        ):
             raise ValueError("https_resource_and_issuer_required")
 
     @property
     def metadata_uri(self) -> str:
-        parsed = urlsplit(self.resource_uri)
-        return f"https://{parsed.netloc}/.well-known/oauth-protected-resource"
+        """Explicit metadata location; never infer a path from the resource URI."""
+
+        return self.protected_resource_metadata_uri
 
     def protected_resource_metadata(self) -> dict[str, Any]:
         return {
@@ -95,6 +140,7 @@ class OfflineMcpFixtureResource:
         except ToolDenied:
             challenge = (
                 f'Bearer resource_metadata="{self.metadata_uri}", '
+                f'scope="{SCOPE}", '
                 'error="invalid_token", error_description="Authentication required"'
             )
             return {
@@ -106,4 +152,43 @@ class OfflineMcpFixtureResource:
             "isError": False,
             "structuredContent": result,
             "content": [{"type": "text", "text": json.dumps(result, sort_keys=True)}],
+        }
+
+
+@dataclass(frozen=True)
+class OfflineApprovedLoopbackMcpPlan:
+    """Offline design contract for the owner-approved future Hostinger layout.
+
+    This object does not start a server, read a secret, or configure a tunnel.
+    It only pins the approved external resource identity to a private loopback
+    target that a future separately approved tunnel-client may reach locally.
+    """
+
+    authorization_issuer: str
+    protected_resource_metadata_uri: str
+    loopback_mcp_uri: str
+
+    def __post_init__(self) -> None:
+        if not _https_url(self.authorization_issuer):
+            raise ValueError("https_authorization_issuer_required")
+        if not _metadata_uri_for_resource(
+            self.protected_resource_metadata_uri, CANONICAL_RESOURCE_URI
+        ):
+            raise ValueError("canonical_protected_resource_metadata_uri_required")
+        if not _loopback_mcp_url(self.loopback_mcp_uri):
+            raise ValueError("loopback_mcp_uri_required")
+
+    def resource_contract(self) -> OfflineMcpFixtureResource:
+        return OfflineMcpFixtureResource(
+            CANONICAL_RESOURCE_URI,
+            self.authorization_issuer,
+            self.protected_resource_metadata_uri,
+        )
+
+    def transport_boundary(self) -> dict[str, Any]:
+        return {
+            "canonical_resource_uri": CANONICAL_RESOURCE_URI,
+            "loopback_mcp_uri": self.loopback_mcp_uri,
+            "public_mcp_listener": False,
+            "future_tunnel_client_colocated": True,
         }
