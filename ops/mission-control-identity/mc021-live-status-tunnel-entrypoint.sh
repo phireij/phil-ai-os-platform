@@ -37,4 +37,11 @@ tunnel-client init \
 # live-status MCP tool or either allowed Mission Control source.
 tunnel-client doctor --profile "$profile" --profile-dir "$profile_dir"
 
-exec tunnel-client run --profile "$profile" --profile-dir "$profile_dir"
+# Permit only the trusted HTTP loopback MCP origin to be registered by OAuth
+# discovery as Harpoon's protected-resource metadata target.  This makes the
+# required internal discovery channel routable without adding a public route,
+# arbitrary target, live-source target, or credentials to Harpoon.
+exec tunnel-client run \
+  --profile "$profile" \
+  --profile-dir "$profile_dir" \
+  --harpoon.allow-plaintext-http

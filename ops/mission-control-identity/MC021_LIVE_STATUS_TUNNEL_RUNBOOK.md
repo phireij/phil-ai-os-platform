@@ -34,3 +34,12 @@ unset CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID
 The only startup checks are the local MCP health endpoint and the tunnel-client
 health endpoint.  A live Mission Control status request occurs only after a
 valid owner credential invokes the sole read-only MCP tool.
+
+## Discovery target boundary
+
+The runtime permits plaintext HTTP only for its trusted `127.0.0.1` MCP origin
+so tunnel-client can auto-register the protected-resource metadata endpoint as
+its Harpoon discovery target. This enables ChatGPT's internal discovery channel
+without exposing a route, permitting arbitrary URLs, supplying credentials to
+Harpoon, or authorizing a live-status request. The MCP listener and the
+tunnel-client health listener remain loopback-only.
