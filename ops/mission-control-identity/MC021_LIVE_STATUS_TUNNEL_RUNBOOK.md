@@ -43,3 +43,8 @@ its Harpoon discovery target. This enables ChatGPT's internal discovery channel
 without exposing a route, permitting arbitrary URLs, supplying credentials to
 Harpoon, or authorizing a live-status request. The MCP listener and the
 tunnel-client health listener remain loopback-only.
+
+OAuth discovery trusts only the existing Auth0 issuer origin for its public
+metadata documents. This does not grant that issuer MCP, source, or tunnel
+authority; it lets tunnel-client complete the metadata resolution required by
+the already-configured OAuth connection.

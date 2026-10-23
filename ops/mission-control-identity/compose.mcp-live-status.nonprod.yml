@@ -24,6 +24,9 @@ services:
     environment:
       MCP_AUTHORIZATION_ISSUER: https://dev-81f0leykwbfdtibz.jp.auth0.com/
       MCP_AUTHORIZATION_JWKS_URI: https://dev-81f0leykwbfdtibz.jp.auth0.com/.well-known/jwks.json
+      # Tunnel-client may fetch only the existing Auth0 issuer metadata while
+      # resolving the private MCP server's OAuth discovery document.
+      MCP_OAUTH_TRUSTED_ORIGINS: https://dev-81f0leykwbfdtibz.jp.auth0.com
       MCP_LIVE_STATUS_MANIFEST_PATH: /srv/mission-control/live-status-manifest.json
       MCP_OWNER_SUBJECT_FILE: /run/secrets/mc021_owner_subject
     volumes:
