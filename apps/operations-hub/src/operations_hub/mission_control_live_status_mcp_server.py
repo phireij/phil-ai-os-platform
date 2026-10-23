@@ -26,6 +26,10 @@ PROTECTED_RESOURCE_METADATA_PATHS = frozenset({
 ISSUER_ENV = "MCP_AUTHORIZATION_ISSUER"
 MANIFEST_PATH_ENV = "MCP_LIVE_STATUS_MANIFEST_PATH"
 DEFAULT_MANIFEST_PATH = "/srv/mission-control/live-status-manifest.json"
+SERVER_INFO = {
+    "name": "phil-ai-os-mission-control-live-status",
+    "version": "1.0.0",
+}
 
 
 def _resource() -> LiveStatusMcpResource:
@@ -53,6 +57,16 @@ def protected_resource_metadata_for_path(path: str) -> dict[str, object] | None:
     if path not in PROTECTED_RESOURCE_METADATA_PATHS:
         return None
     return _resource().protected_resource_metadata()
+
+
+def initialize_result() -> dict[str, object]:
+    """Return the protocol-complete MCP initialization response."""
+
+    return {
+        "protocolVersion": "2025-03-26",
+        "capabilities": {"tools": {}},
+        "serverInfo": SERVER_INFO,
+    }
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -92,7 +106,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         resource = _resource()
         if method == "initialize":
-            result = {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}}
+            result = initialize_result()
         elif method == "tools/list":
             result = resource.list_tools()
         elif method == "tools/call":
