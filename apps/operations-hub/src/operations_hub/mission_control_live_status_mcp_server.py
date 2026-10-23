@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -30,6 +31,8 @@ SERVER_INFO = {
     "name": "phil-ai-os-mission-control-live-status",
     "version": "1.0.0",
 }
+LOGGER = logging.getLogger(__name__)
+MCP_METHODS = frozenset({"initialize", "tools/list", "tools/call"})
 
 
 def _resource() -> LiveStatusMcpResource:
@@ -69,6 +72,34 @@ def initialize_result() -> dict[str, object]:
     }
 
 
+def mcp_method_category(method: object) -> str:
+    """Return a fixed, non-user-controlled method label for diagnostics."""
+
+    return method if isinstance(method, str) and method in MCP_METHODS else "unsupported"
+
+
+def mcp_tool_outcome(result: dict[str, object]) -> str:
+    """Return a fixed result code without logging response or credential data."""
+
+    if not result.get("isError"):
+        return "tool_completed"
+    content = result.get("content")
+    if isinstance(content, list) and content and isinstance(content[0], dict):
+        text = content[0].get("text")
+        if text in {"authentication_required", "tool_denied", "live_status_unavailable"}:
+            return text
+    return "tool_error"
+
+
+def log_mcp_outcome(method: object, outcome: str, http_status: int) -> None:
+    """Emit only fixed diagnostic labels; never log request or response contents."""
+
+    LOGGER.warning(
+        "mcp_request method=%s outcome=%s http_status=%d",
+        mcp_method_category(method), outcome, http_status,
+    )
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "PhilAiOsLiveStatusMcp/1"
     protocol_version = "HTTP/1.1"
@@ -103,12 +134,15 @@ class Handler(BaseHTTPRequestHandler):
             method, request_id = request["method"], request.get("id")
         except (UnicodeDecodeError, ValueError, KeyError, TypeError):
             self._send(400, {"error": "invalid_request"})
+            log_mcp_outcome(None, "invalid_request", 400)
             return
         resource = _resource()
         if method == "initialize":
             result = initialize_result()
+            outcome = "initialized"
         elif method == "tools/list":
             result = resource.list_tools()
+            outcome = "tools_listed"
         elif method == "tools/call":
             params = request.get("params", {})
             result = resource.call_tool(
@@ -119,11 +153,15 @@ class Handler(BaseHTTPRequestHandler):
             challenge = result.get("_meta", {}).get("mcp/www_authenticate", ())
             if result.get("isError") and challenge:
                 self._send(401, {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32001, "message": "authentication_required"}}, headers={"WWW-Authenticate": challenge[0]})
+                log_mcp_outcome(method, mcp_tool_outcome(result), 401)
                 return
+            outcome = mcp_tool_outcome(result)
         else:
             self._send(200, {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "method_not_found"}})
+            log_mcp_outcome(method, "method_not_found", 200)
             return
         self._send(200, {"jsonrpc": "2.0", "id": request_id, "result": result})
+        log_mcp_outcome(method, outcome, 200)
 
     def do_PUT(self) -> None:  # noqa: N802
         self._send(405, {"status": "read_only"})
