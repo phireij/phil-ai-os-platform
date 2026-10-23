@@ -25,6 +25,8 @@ from operations_hub.mission_control_live_status_mcp_server import (  # noqa: E40
     PROTECTED_RESOURCE_METADATA_PATHS,
     SERVER_INFO,
     initialize_result,
+    mcp_method_category,
+    mcp_tool_outcome,
     protected_resource_metadata_for_path,
 )
 
@@ -128,6 +130,19 @@ class LiveStatusTests(unittest.TestCase):
         self.assertEqual(result["serverInfo"], SERVER_INFO)
         self.assertEqual(SERVER_INFO["name"], "phil-ai-os-mission-control-live-status")
         self.assertEqual(SERVER_INFO["version"], "1.0.0")
+
+    def test_diagnostics_redact_untrusted_methods_and_tool_contents(self):
+        self.assertEqual(mcp_method_category("tools/call"), "tools/call")
+        self.assertEqual(mcp_method_category("arbitrary caller text"), "unsupported")
+        self.assertEqual(mcp_tool_outcome({"isError": False, "structuredContent": {"sensitive": "discarded"}}), "tool_completed")
+        self.assertEqual(
+            mcp_tool_outcome({"isError": True, "content": [{"type": "text", "text": "authentication_required"}]}),
+            "authentication_required",
+        )
+        self.assertEqual(
+            mcp_tool_outcome({"isError": True, "content": [{"type": "text", "text": "untrusted error text"}]}),
+            "tool_error",
+        )
 
 
 if __name__ == "__main__":
