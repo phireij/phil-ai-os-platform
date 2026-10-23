@@ -23,6 +23,8 @@ from operations_hub.mission_control_live_status_mcp import (  # noqa: E402
 )
 from operations_hub.mission_control_live_status_mcp_server import (  # noqa: E402
     PROTECTED_RESOURCE_METADATA_PATHS,
+    SERVER_INFO,
+    initialize_result,
     protected_resource_metadata_for_path,
 )
 
@@ -118,6 +120,14 @@ class LiveStatusTests(unittest.TestCase):
         self.assertEqual(metadata["resource"], "https://miscon.phireij.cloud/mcp/live-status")
         self.assertEqual(metadata["scopes_supported"], [SCOPE])
         self.assertIsNone(protected_resource_metadata_for_path("/.well-known/oauth-protected-resource"))
+
+    def test_initialize_response_contains_required_server_info(self):
+        result = initialize_result()
+        self.assertEqual(result["protocolVersion"], "2025-03-26")
+        self.assertEqual(result["capabilities"], {"tools": {}})
+        self.assertEqual(result["serverInfo"], SERVER_INFO)
+        self.assertEqual(SERVER_INFO["name"], "phil-ai-os-mission-control-live-status")
+        self.assertEqual(SERVER_INFO["version"], "1.0.0")
 
 
 if __name__ == "__main__":
