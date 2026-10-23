@@ -1,0 +1,26 @@
+# Overlay the base live-status container with the outbound-only tunnel client.
+# Launchers source /etc/phil-ai-os/secrets/mc021-live-status-tunnel.env before
+# starting Compose.  That root-owned file contains the runtime key and tunnel
+# ID; neither is mounted into the container or committed to this repository.
+services:
+  mcp-live-status:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.mission-control-cto-mcp-live-status-tunnel
+    image: phil-ai-os/mc021-live-status-tunnel:nonprod
+    environment:
+      CONTROL_PLANE_API_KEY: ${CONTROL_PLANE_API_KEY:?root-owned VPS runtime key is required}
+      CONTROL_PLANE_TUNNEL_ID: ${CONTROL_PLANE_TUNNEL_ID:?root-owned VPS tunnel identity is required}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8788/healthz', timeout=2).read(); urllib.request.urlopen('http://127.0.0.1:18081/health', timeout=2).read()"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    labels:
+      traefik.enable: "false"
+      com.phil-ai-os.scope: "mc021-live-status-nonprod"
+      com.phil-ai-os.authority: "none"

@@ -1,0 +1,30 @@
+# Composite runtime for the restricted MC-021 live-status connector.  It keeps
+# the MCP listener and tunnel client in the same network namespace so neither
+# needs a host port or public ingress route.
+FROM docker.io/library/python@sha256:1b668429b3511ab407d8e00648891631b0b1a4d7e15e3ca70f38ab5b91ad4ab4
+
+ARG TUNNEL_CLIENT_VERSION=v0.0.17
+ARG TUNNEL_CLIENT_SHA256=bd6a57c6c0511644267cafadd13ffdb53ece0d753e0b88857f957e78a8fbc793
+
+WORKDIR /srv
+RUN apk add --no-cache curl unzip && \
+    curl --fail --location --proto '=https' --tlsv1.2 \
+      "https://github.com/openai/tunnel-client/releases/download/${TUNNEL_CLIENT_VERSION}/tunnel-client-${TUNNEL_CLIENT_VERSION}-linux-amd64.zip" \
+      --output /tmp/tunnel-client.zip && \
+    echo "${TUNNEL_CLIENT_SHA256}  /tmp/tunnel-client.zip" | sha256sum -c - && \
+    unzip -q /tmp/tunnel-client.zip -d /usr/local/bin && \
+    chmod 0755 /usr/local/bin/tunnel-client && \
+    rm -f /tmp/tunnel-client.zip && \
+    pip install --no-cache-dir "PyJWT[crypto]==2.10.1"
+COPY apps/operations-hub/src/operations_hub /srv/operations_hub
+COPY ops/mission-control-identity/mc021-live-status-manifest.v1.json /srv/mission-control/live-status-manifest.json
+COPY ops/mission-control-identity/mc021-live-status-tunnel-entrypoint.sh /usr/local/bin/mc021-live-status-tunnel-entrypoint
+RUN addgroup -S -g 10001 app && adduser -S -D -H -u 10001 -G app app && \
+    chown -R app:app /srv && chmod 0755 /usr/local/bin/mc021-live-status-tunnel-entrypoint
+USER app
+ENV PYTHONPATH=/srv \
+    MCP_AUTHORIZATION_ISSUER=https://dev-81f0leykwbfdtibz.jp.auth0.com/ \
+    MCP_AUTHORIZATION_JWKS_URI=https://dev-81f0leykwbfdtibz.jp.auth0.com/.well-known/jwks.json \
+    MCP_LIVE_STATUS_MANIFEST_PATH=/srv/mission-control/live-status-manifest.json \
+    TUNNEL_CLIENT_PROFILE_DIR=/tmp/tunnel-client
+ENTRYPOINT ["/usr/local/bin/mc021-live-status-tunnel-entrypoint"]
