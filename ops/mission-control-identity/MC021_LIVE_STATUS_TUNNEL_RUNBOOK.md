@@ -1,0 +1,36 @@
+# MC-021 live-status tunnel activation
+
+This overlay is a separate, non-production, outbound-only connector for the
+read-only live-status MCP server.  It adds no public listener, Traefik route,
+or mutation capability.
+
+## VPS custody
+
+`/etc/phil-ai-os/secrets/mc021-live-status-tunnel.env` is root-owned with mode
+`0600`.  It is the only location for these runtime values:
+
+- `CONTROL_PLANE_API_KEY` — a 30-day restricted key with Tunnels Read + Use.
+- `CONTROL_PLANE_TUNNEL_ID` — the distinct live-status tunnel identity.
+
+Neither value belongs in Git, an image, a container mount, a Compose file, or
+terminal output.
+
+## Deploy
+
+From `/opt/phil-ai-os-platform/mc021-main-runtime`, source the root-only file
+for the single Compose invocation:
+
+```sh
+set -a
+. /etc/phil-ai-os/secrets/mc021-live-status-tunnel.env
+set +a
+docker compose \
+  -f ops/mission-control-identity/compose.mcp-live-status.nonprod.yml \
+  -f ops/mission-control-identity/compose.mcp-live-status.tunnel.nonprod.yml \
+  up -d --build
+unset CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID
+```
+
+The only startup checks are the local MCP health endpoint and the tunnel-client
+health endpoint.  A live Mission Control status request occurs only after a
+valid owner credential invokes the sole read-only MCP tool.
