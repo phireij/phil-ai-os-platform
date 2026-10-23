@@ -16,12 +16,13 @@ from .mission_control_live_status_mcp import CANONICAL_RESOURCE_URI, LiveStatusM
 
 HOST = "127.0.0.1"
 PORT = 8788
-METADATA_URI = "https://miscon.phireij.cloud/.well-known/oauth-protected-resource/mcp/live-status"
+METADATA_URI = "https://miscon.phireij.cloud/.well-known/oauth-protected-resource/mcp"
 PROTECTED_RESOURCE_METADATA_PATHS = frozenset({
     "/.well-known/oauth-protected-resource/mcp/live-status",
     # tunnel-client derives this standard path from the loopback /mcp endpoint.
-    # Both locations deliberately describe the same, narrower live-status
-    # resource; the alias does not create a second resource or grant scope.
+    # The legacy live-status discovery path is retained only for a stale client
+    # cache.  Both locations advertise the same existing Auth0 resource and
+    # scope; neither creates a route, a grant, or a second capability.
     "/.well-known/oauth-protected-resource/mcp",
 })
 ISSUER_ENV = "MCP_AUTHORIZATION_ISSUER"
