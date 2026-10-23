@@ -109,7 +109,7 @@ class LiveStatusTests(unittest.TestCase):
         load_manifest_mock.assert_called_once_with()
         collector.assert_called_once_with(self.manifest)
 
-    def test_standard_mcp_metadata_path_describes_only_live_status_resource(self):
+    def test_standard_mcp_metadata_path_uses_the_existing_auth0_resource(self):
         self.assertIn("/.well-known/oauth-protected-resource/mcp", PROTECTED_RESOURCE_METADATA_PATHS)
         with patch.dict(
             os.environ,
@@ -119,7 +119,7 @@ class LiveStatusTests(unittest.TestCase):
                 "/.well-known/oauth-protected-resource/mcp"
             )
         self.assertIsNotNone(metadata)
-        self.assertEqual(metadata["resource"], "https://miscon.phireij.cloud/mcp/live-status")
+        self.assertEqual(metadata["resource"], "https://miscon.phireij.cloud/mcp")
         self.assertEqual(metadata["scopes_supported"], [SCOPE])
         self.assertIsNone(protected_resource_metadata_for_path("/.well-known/oauth-protected-resource"))
 

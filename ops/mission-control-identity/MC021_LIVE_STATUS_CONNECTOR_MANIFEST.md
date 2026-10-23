@@ -18,8 +18,10 @@ each discarded response at 16 KiB and each call at five seconds.
 ## Custody and activation boundary
 
 The base Compose file deliberately has no public port, tunnel client, OpenAI
-runtime key, or live credential.  Before this workload can be connected, the
-owner must separately provide a new tunnel identity that is bound to the
-resource `https://miscon.phireij.cloud/mcp/live-status` and authorize its Auth0
-audience.  The runtime key and owner-subject file remain VPS-managed secrets;
-they must never be committed or printed.
+runtime key, or live credential.  The live-status connector uses the existing
+MC-021 Auth0 resource `https://miscon.phireij.cloud/mcp` and its already
+approved read scope.  Its isolation comes from the separate tunnel workload,
+one-tool contract, root-managed owner-subject file, and fixed source allowlist;
+it does not create an additional audience, scope, or public route.  The runtime
+key and owner-subject file remain VPS-managed secrets; they must never be
+committed or printed.
