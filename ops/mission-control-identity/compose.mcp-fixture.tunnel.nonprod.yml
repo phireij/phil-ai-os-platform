@@ -21,7 +21,7 @@ services:
     pids_limit: 128
     mem_limit: 384m
     cpus: 0.50
-    restart: "no"
+    restart: unless-stopped
     environment:
       CONTROL_PLANE_API_KEY: ${CONTROL_PLANE_API_KEY:?root-owned VPS runtime key is required}
       CONTROL_PLANE_TUNNEL_ID: tunnel_6ad562a9e7e08191ae10c64acae2db8d

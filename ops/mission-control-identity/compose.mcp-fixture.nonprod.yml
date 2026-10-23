@@ -26,7 +26,7 @@ services:
     pids_limit: 128
     mem_limit: 256m
     cpus: 0.50
-    restart: "no"
+    restart: unless-stopped
     labels:
       traefik.enable: "false"
       com.phil-ai-os.scope: "mc021-synthetic-nonprod"
