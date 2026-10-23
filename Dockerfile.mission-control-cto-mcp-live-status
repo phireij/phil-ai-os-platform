@@ -1,0 +1,12 @@
+FROM docker.io/library/python@sha256:1b668429b3511ab407d8e00648891631b0b1a4d7e15e3ca70f38ab5b91ad4ab4
+WORKDIR /srv
+RUN pip install --no-cache-dir "PyJWT[crypto]==2.10.1"
+COPY apps/operations-hub/src/operations_hub /srv/operations_hub
+COPY ops/mission-control-identity/mc021-live-status-manifest.v1.json /srv/mission-control/live-status-manifest.json
+RUN addgroup -S -g 10001 app && adduser -S -D -H -u 10001 -G app app && chown -R app:app /srv
+USER app
+ENV PYTHONPATH=/srv \
+    MCP_AUTHORIZATION_ISSUER=https://dev-81f0leykwbfdtibz.jp.auth0.com/ \
+    MCP_AUTHORIZATION_JWKS_URI=https://dev-81f0leykwbfdtibz.jp.auth0.com/.well-known/jwks.json \
+    MCP_LIVE_STATUS_MANIFEST_PATH=/srv/mission-control/live-status-manifest.json
+ENTRYPOINT ["python3", "-m", "operations_hub.mission_control_live_status_mcp_server"]
