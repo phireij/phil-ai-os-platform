@@ -16,6 +16,13 @@ from .mission_control_live_status_mcp import CANONICAL_RESOURCE_URI, LiveStatusM
 HOST = "127.0.0.1"
 PORT = 8788
 METADATA_URI = "https://miscon.phireij.cloud/.well-known/oauth-protected-resource/mcp/live-status"
+PROTECTED_RESOURCE_METADATA_PATHS = frozenset({
+    "/.well-known/oauth-protected-resource/mcp/live-status",
+    # tunnel-client derives this standard path from the loopback /mcp endpoint.
+    # Both locations deliberately describe the same, narrower live-status
+    # resource; the alias does not create a second resource or grant scope.
+    "/.well-known/oauth-protected-resource/mcp",
+})
 ISSUER_ENV = "MCP_AUTHORIZATION_ISSUER"
 MANIFEST_PATH_ENV = "MCP_LIVE_STATUS_MANIFEST_PATH"
 DEFAULT_MANIFEST_PATH = "/srv/mission-control/live-status-manifest.json"
@@ -40,6 +47,14 @@ def _bearer_credential(value: str | None) -> str | None:
     return token if token and token == token.strip() and " " not in token else None
 
 
+def protected_resource_metadata_for_path(path: str) -> dict[str, object] | None:
+    """Serve the canonical metadata at both approved discovery paths."""
+
+    if path not in PROTECTED_RESOURCE_METADATA_PATHS:
+        return None
+    return _resource().protected_resource_metadata()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "PhilAiOsLiveStatusMcp/1"
     protocol_version = "HTTP/1.1"
@@ -58,11 +73,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def do_GET(self) -> None:  # noqa: N802
-        resource = _resource()
         if self.path == "/healthz":
             self._send(200, {"status": "ok", "mode": "live_status_read_only", "authority_effect": "none", "live_data": "on_demand"})
-        elif self.path == "/.well-known/oauth-protected-resource/mcp/live-status":
-            self._send(200, resource.protected_resource_metadata())
+        elif metadata := protected_resource_metadata_for_path(self.path):
+            self._send(200, metadata)
         else:
             self._send(404, {"status": "not_found"})
 

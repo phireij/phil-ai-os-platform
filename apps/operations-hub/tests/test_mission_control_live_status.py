@@ -1,10 +1,11 @@
 import json
+import os
 import sys
 import unittest
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -19,6 +20,10 @@ from operations_hub.mission_control_cto_tool import CEO_SUBJECT, SCOPE, Verified
 from operations_hub.mission_control_live_status_mcp import (  # noqa: E402
     TOOL_NAME,
     LiveStatusMcpResource,
+)
+from operations_hub.mission_control_live_status_mcp_server import (  # noqa: E402
+    PROTECTED_RESOURCE_METADATA_PATHS,
+    protected_resource_metadata_for_path,
 )
 
 
@@ -99,6 +104,20 @@ class LiveStatusTests(unittest.TestCase):
         self.assertEqual(authorized["structuredContent"], {"authority_effect": "none"})
         load_manifest_mock.assert_called_once_with()
         collector.assert_called_once_with(self.manifest)
+
+    def test_standard_mcp_metadata_path_describes_only_live_status_resource(self):
+        self.assertIn("/.well-known/oauth-protected-resource/mcp", PROTECTED_RESOURCE_METADATA_PATHS)
+        with patch.dict(
+            os.environ,
+            {"MCP_AUTHORIZATION_ISSUER": "https://issuer.example.test/"},
+        ):
+            metadata = protected_resource_metadata_for_path(
+                "/.well-known/oauth-protected-resource/mcp"
+            )
+        self.assertIsNotNone(metadata)
+        self.assertEqual(metadata["resource"], "https://miscon.phireij.cloud/mcp/live-status")
+        self.assertEqual(metadata["scopes_supported"], [SCOPE])
+        self.assertIsNone(protected_resource_metadata_for_path("/.well-known/oauth-protected-resource"))
 
 
 if __name__ == "__main__":
