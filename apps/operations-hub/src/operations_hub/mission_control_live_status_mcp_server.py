@@ -79,7 +79,7 @@ def mcp_method_category(method: object) -> str:
     return method if isinstance(method, str) and method in MCP_METHODS else "unsupported"
 
 
-def mcp_tool_outcome(result: dict[str, object]) -> str:
+def mcp_tool_outcome(result: dict[str, object], *, credential_present: bool = False) -> str:
     """Return a fixed result code without logging response or credential data."""
 
     if not result.get("isError"):
@@ -87,7 +87,12 @@ def mcp_tool_outcome(result: dict[str, object]) -> str:
     content = result.get("content")
     if isinstance(content, list) and content and isinstance(content[0], dict):
         text = content[0].get("text")
-        if text in {"authentication_required", "tool_denied", "live_status_unavailable"}:
+        if text == "authentication_required":
+            # This only distinguishes a syntactically usable Bearer credential
+            # from no usable credential.  It never records header, token, claim,
+            # issuer, audience, scope, or verifier-error information.
+            return "token_rejected" if credential_present else "token_missing"
+        if text in {"tool_denied", "live_status_unavailable"}:
             return text
     return "tool_error"
 
@@ -146,15 +151,16 @@ class Handler(BaseHTTPRequestHandler):
             outcome = "tools_listed"
         elif method == "tools/call":
             params = request.get("params", {})
+            credential = _bearer_credential(self.headers.get("Authorization"))
             result = resource.call_tool(
-                params.get("name"), params.get("arguments"), _bearer_credential(self.headers.get("Authorization")),
+                params.get("name"), params.get("arguments"), credential,
                 verifier=_verify_owner_credential, manifest_loader=_manifest_loader,
                 collector=collect_live_status, now=datetime.now(timezone.utc),
             )
             challenge = result.get("_meta", {}).get("mcp/www_authenticate", ())
             if result.get("isError") and challenge:
                 self._send(401, {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32001, "message": "authentication_required"}}, headers={"WWW-Authenticate": challenge[0]})
-                log_mcp_outcome(method, mcp_tool_outcome(result), 401)
+                log_mcp_outcome(method, mcp_tool_outcome(result, credential_present=credential is not None), 401)
                 return
             outcome = mcp_tool_outcome(result)
         else:

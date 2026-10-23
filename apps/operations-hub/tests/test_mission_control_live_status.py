@@ -135,10 +135,9 @@ class LiveStatusTests(unittest.TestCase):
         self.assertEqual(mcp_method_category("tools/call"), "tools/call")
         self.assertEqual(mcp_method_category("arbitrary caller text"), "unsupported")
         self.assertEqual(mcp_tool_outcome({"isError": False, "structuredContent": {"sensitive": "discarded"}}), "tool_completed")
-        self.assertEqual(
-            mcp_tool_outcome({"isError": True, "content": [{"type": "text", "text": "authentication_required"}]}),
-            "authentication_required",
-        )
+        authentication_required = {"isError": True, "content": [{"type": "text", "text": "authentication_required"}]}
+        self.assertEqual(mcp_tool_outcome(authentication_required), "token_missing")
+        self.assertEqual(mcp_tool_outcome(authentication_required, credential_present=True), "token_rejected")
         self.assertEqual(
             mcp_tool_outcome({"isError": True, "content": [{"type": "text", "text": "untrusted error text"}]}),
             "tool_error",
