@@ -112,6 +112,31 @@ class LiveStatusTests(unittest.TestCase):
         load_manifest_mock.assert_called_once_with()
         collector.assert_called_once_with(self.manifest)
 
+    def test_mcp_tool_uses_scope_upgrade_challenge_for_verified_token_without_scope(self):
+        resource = LiveStatusMcpResource(
+            "https://mcp.example.test/live-status",
+            "https://issuer.example.test/",
+            "https://mcp.example.test/.well-known/oauth-protected-resource/live-status",
+        )
+        denied = resource.call_tool(
+            TOOL_NAME,
+            {},
+            "token",
+            verifier=lambda _: VerifiedContext(
+                subject=CEO_SUBJECT,
+                audience="https://mcp.example.test/live-status",
+                scopes=frozenset(),
+                expires_at=NOW.replace(year=2027),
+            ),
+            manifest_loader=Mock(),
+            collector=Mock(),
+            now=NOW,
+        )
+        challenge = denied["_meta"]["mcp/www_authenticate"][0]
+        self.assertIn('scope="mission_control:cto_read"', challenge)
+        self.assertIn('error="insufficient_scope"', challenge)
+        self.assertNotIn('error="invalid_token"', challenge)
+
     def test_metadata_paths_use_the_dedicated_live_status_auth0_resource(self):
         self.assertIn("/.well-known/oauth-protected-resource/mcp", PROTECTED_RESOURCE_METADATA_PATHS)
         with patch.dict(
