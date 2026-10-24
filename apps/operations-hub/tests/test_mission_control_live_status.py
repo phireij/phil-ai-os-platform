@@ -19,6 +19,7 @@ from operations_hub.mission_control_live_status import (  # noqa: E402
 from operations_hub.mission_control_cto_tool import CEO_SUBJECT, SCOPE, VerifiedContext  # noqa: E402
 from operations_hub.mission_control_cto_auth0_verifier import CredentialRejected  # noqa: E402
 from operations_hub.mission_control_live_status_mcp import (  # noqa: E402
+    CANONICAL_RESOURCE_URI,
     TOOL_NAME,
     LiveStatusMcpResource,
 )
@@ -111,18 +112,19 @@ class LiveStatusTests(unittest.TestCase):
         load_manifest_mock.assert_called_once_with()
         collector.assert_called_once_with(self.manifest)
 
-    def test_standard_mcp_metadata_path_uses_the_existing_auth0_resource(self):
+    def test_metadata_paths_use_the_dedicated_live_status_auth0_resource(self):
         self.assertIn("/.well-known/oauth-protected-resource/mcp", PROTECTED_RESOURCE_METADATA_PATHS)
         with patch.dict(
             os.environ,
             {"MCP_AUTHORIZATION_ISSUER": "https://issuer.example.test/"},
         ):
-            metadata = protected_resource_metadata_for_path(
-                "/.well-known/oauth-protected-resource/mcp"
-            )
-        self.assertIsNotNone(metadata)
-        self.assertEqual(metadata["resource"], "https://miscon.phireij.cloud/mcp")
-        self.assertEqual(metadata["scopes_supported"], [SCOPE])
+            metadata = [
+                protected_resource_metadata_for_path(path)
+                for path in PROTECTED_RESOURCE_METADATA_PATHS
+            ]
+        self.assertTrue(all(item is not None for item in metadata))
+        self.assertTrue(all(item["resource"] == CANONICAL_RESOURCE_URI for item in metadata))
+        self.assertTrue(all(item["scopes_supported"] == [SCOPE] for item in metadata))
         self.assertIsNone(protected_resource_metadata_for_path("/.well-known/oauth-protected-resource"))
 
     def test_initialize_response_contains_required_server_info(self):

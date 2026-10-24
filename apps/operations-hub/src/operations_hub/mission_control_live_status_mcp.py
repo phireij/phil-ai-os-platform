@@ -12,12 +12,11 @@ from .mission_control_cto_tool import CEO_SUBJECT, SCOPE, ToolDenied, VerifiedCo
 from .mission_control_live_status import LiveStatusError
 
 
-# Auth0 issues the existing MC-021 read token for the shared MCP resource.  The
-# live-status deployment remains separately isolated by its one-tool contract,
-# owner-subject check, and source manifest; it must nevertheless advertise the
-# exact OAuth resource identifier that Auth0 can place in the access-token aud
-# claim.  ChatGPT sends this value unchanged as the OAuth `resource` parameter.
-CANONICAL_RESOURCE_URI = "https://miscon.phireij.cloud/mcp"
+# The live-status connector has its own Auth0 API.  Keep this identifier exact:
+# Auth0 places it in the access-token aud claim, and ChatGPT sends it unchanged
+# as the OAuth `resource` parameter.  Accepting the broader shared MCP audience
+# would weaken the connector boundary and rejects valid dedicated API tokens.
+CANONICAL_RESOURCE_URI = "https://miscon.phireij.cloud/mcp/live-status"
 TOOL_NAME = "get_mission_control_live_status"
 TOOL_DESCRIPTOR = {
     "name": TOOL_NAME,

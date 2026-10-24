@@ -17,13 +17,12 @@ from .mission_control_cto_tool import SCOPE, VerifiedContext
 
 HOST = "127.0.0.1"
 PORT = 8788
-METADATA_URI = "https://miscon.phireij.cloud/.well-known/oauth-protected-resource/mcp"
+METADATA_URI = "https://miscon.phireij.cloud/.well-known/oauth-protected-resource/mcp/live-status"
 PROTECTED_RESOURCE_METADATA_PATHS = frozenset({
     "/.well-known/oauth-protected-resource/mcp/live-status",
     # tunnel-client derives this standard path from the loopback /mcp endpoint.
-    # The legacy live-status discovery path is retained only for a stale client
-    # cache.  Both locations advertise the same existing Auth0 resource and
-    # scope; neither creates a route, a grant, or a second capability.
+    # It remains an alias for discovery only; both paths advertise the dedicated
+    # live-status Auth0 resource and the same bounded read scope.
     "/.well-known/oauth-protected-resource/mcp",
 })
 ISSUER_ENV = "MCP_AUTHORIZATION_ISSUER"
