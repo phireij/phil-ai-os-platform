@@ -26,6 +26,10 @@ TOOL_DESCRIPTOR = {
 }
 
 
+class ScopeDenied(ToolDenied):
+    """A verified credential lacks the one required read-only scope."""
+
+
 def _https_url(value: str) -> bool:
     try:
         parsed = urlsplit(value)
@@ -98,6 +102,12 @@ class LiveStatusMcpResource:
             return {"isError": True, "content": [{"type": "text", "text": "tool_denied"}]}
         try:
             _authorize(credential, verifier, self.resource_uri, now)
+        except ScopeDenied:
+            return _authentication_required(
+                self.protected_resource_metadata_uri,
+                error="insufficient_scope",
+                description="Required read-only scope is missing",
+            )
         except ToolDenied:
             return _authentication_required(self.protected_resource_metadata_uri)
         try:
@@ -127,19 +137,27 @@ def _authorize(
         or context.revoked
         or context.subject != CEO_SUBJECT
         or context.audience != audience
-        or SCOPE not in context.scopes
         or not isinstance(expiry, datetime)
         or expiry.tzinfo is None
         or expiry.utcoffset() is None
         or expiry <= now
     ):
         raise ToolDenied("tool_denied")
+    if SCOPE not in context.scopes:
+        raise ScopeDenied("scope_missing")
 
 
-def _authentication_required(metadata_uri: str) -> dict[str, Any]:
+def _authentication_required(
+    metadata_uri: str,
+    *,
+    error: str = "invalid_token",
+    description: str = "Authentication required",
+) -> dict[str, Any]:
+    if error not in {"invalid_token", "insufficient_scope"}:
+        raise ValueError("invalid_oauth_challenge_error")
     challenge = (
         f'Bearer resource_metadata="{metadata_uri}", scope="{SCOPE}", '
-        'error="invalid_token", error_description="Authentication required"'
+        f'error="{error}", error_description="{description}"'
     )
     return {
         "isError": True,
