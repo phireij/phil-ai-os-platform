@@ -21,6 +21,8 @@ services:
       retries: 3
       start_period: 30s
     labels:
-      traefik.enable: "false"
+      # Preserve the base file's explicitly approved public MCP routers when
+      # this outbound tunnel overlay is applied.
+      traefik.enable: "true"
       com.phil-ai-os.scope: "mc021-live-status-nonprod"
       com.phil-ai-os.authority: "none"
