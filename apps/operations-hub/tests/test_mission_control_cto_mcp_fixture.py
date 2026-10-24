@@ -18,6 +18,7 @@ from operations_hub.mission_control_cto_mcp_fixture import (  # noqa: E402
 from operations_hub.mission_control_cto_tool import CEO_SUBJECT, SCOPE, TOOL_NAME, VerifiedContext  # noqa: E402
 from operations_hub.mission_control_cto_auth0_verifier import (  # noqa: E402
     Auth0JwtVerifier,
+    CredentialRejected,
     ISSUER_ENV,
     JWKS_ENV,
     OWNER_SUBJECT_FILE_ENV,
@@ -189,8 +190,29 @@ class Auth0VerifierTests(unittest.TestCase):
             "https://dev.example.test/.well-known/jwks.json", "",
             _decode=lambda *_args, **_kwargs: {}, _signing_key=lambda _token: object(),
         )
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(CredentialRejected, "owner_mapping_invalid"):
             verifier("synthetic.jwt.value")
+
+    def test_verifier_classifies_fixed_jwt_and_owner_rejections(self):
+        class InvalidAudienceError(Exception):
+            pass
+
+        verifier = Auth0JwtVerifier(
+            "https://dev.example.test/", CANONICAL_RESOURCE_URI,
+            "https://dev.example.test/.well-known/jwks.json", "auth0|owner",
+            _decode=lambda *_args, **_kwargs: (_ for _ in ()).throw(InvalidAudienceError()),
+            _signing_key=lambda _token: object(),
+        )
+        with self.assertRaisesRegex(CredentialRejected, "audience_mismatch"):
+            verifier("synthetic.jwt.value")
+        owner_verifier = Auth0JwtVerifier(
+            "https://dev.example.test/", CANONICAL_RESOURCE_URI,
+            "https://dev.example.test/.well-known/jwks.json", "auth0|owner",
+            _decode=lambda *_args, **_kwargs: {"sub": "auth0|other", "scope": SCOPE, "exp": NOW.timestamp()},
+            _signing_key=lambda _token: object(),
+        )
+        with self.assertRaisesRegex(CredentialRejected, "owner_mismatch"):
+            owner_verifier("synthetic.jwt.value")
 
     def test_verifier_reads_owner_only_from_the_credential_mount(self):
         environment = {

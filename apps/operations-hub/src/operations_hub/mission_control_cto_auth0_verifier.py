@@ -22,6 +22,14 @@ JWKS_ENV = "MCP_AUTHORIZATION_JWKS_URI"
 OWNER_SUBJECT_FILE_ENV = "MCP_OWNER_SUBJECT_FILE"
 
 
+class CredentialRejected(ValueError):
+    """A fixed, redacted credential rejection category for diagnostics."""
+
+    def __init__(self, category: str) -> None:
+        super().__init__(category)
+        self.category = category
+
+
 def _https_url(value: str) -> bool:
     try:
         parsed = urlsplit(value)
@@ -79,21 +87,26 @@ class Auth0JwtVerifier:
         # Leaving owner_subject blank keeps the deployed fixture non-callable
         # until a later, separately approved owner-identity mapping exists.
         if not self.owner_subject or not isinstance(credential, str) or not credential:
-            raise ValueError("owner_subject_and_credential_required")
+            raise CredentialRejected("owner_mapping_invalid")
         decode, signing_key = self._jwt_primitives()
-        claims = decode(
-            credential,
-            signing_key(credential),
-            algorithms=["RS256"],
-            audience=self.audience,
-            issuer=self.issuer,
-            options={"require": ["exp", "iat", "sub", "scope"]},
-        )
+        try:
+            claims = decode(
+                credential,
+                signing_key(credential),
+                algorithms=["RS256"],
+                audience=self.audience,
+                issuer=self.issuer,
+                options={"require": ["exp", "iat", "sub", "scope"]},
+            )
+        except Exception as exc:
+            raise CredentialRejected(_jwt_rejection_category(exc)) from exc
         subject = claims.get("sub")
         scope = claims.get("scope")
         expiry = claims.get("exp")
-        if subject != self.owner_subject or not isinstance(scope, str) or not isinstance(expiry, (int, float)):
-            raise ValueError("owner_scope_or_expiry_invalid")
+        if subject != self.owner_subject:
+            raise CredentialRejected("owner_mismatch")
+        if not isinstance(scope, str) or not isinstance(expiry, (int, float)):
+            raise CredentialRejected("required_claim_missing")
         return VerifiedContext(
             subject=CEO_SUBJECT,
             audience=self.audience,
@@ -108,6 +121,20 @@ class Auth0JwtVerifier:
 
         client = PyJWKClient(self.jwks_uri, cache_jwk_set=True, lifespan=300)
         return decode, lambda token: client.get_signing_key_from_jwt(token).key
+
+
+def _jwt_rejection_category(exc: Exception) -> str:
+    """Map verifier failures to fixed labels without retaining exception detail."""
+
+    return {
+        "ExpiredSignatureError": "token_expired",
+        "InvalidAudienceError": "audience_mismatch",
+        "InvalidIssuerError": "issuer_mismatch",
+        "InvalidSignatureError": "signature_invalid",
+        "InvalidAlgorithmError": "signature_invalid",
+        "MissingRequiredClaimError": "required_claim_missing",
+        "PyJWKClientError": "signature_unavailable",
+    }.get(type(exc).__name__, "token_verification_failed")
 
 
 def verifier_from_environment(audience: str) -> Auth0JwtVerifier:
