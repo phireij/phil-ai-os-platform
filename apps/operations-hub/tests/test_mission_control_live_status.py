@@ -17,6 +17,7 @@ from operations_hub.mission_control_live_status import (  # noqa: E402
     load_manifest,
 )
 from operations_hub.mission_control_cto_tool import CEO_SUBJECT, SCOPE, VerifiedContext  # noqa: E402
+from operations_hub.mission_control_cto_auth0_verifier import CredentialRejected  # noqa: E402
 from operations_hub.mission_control_live_status_mcp import (  # noqa: E402
     TOOL_NAME,
     LiveStatusMcpResource,
@@ -24,6 +25,7 @@ from operations_hub.mission_control_live_status_mcp import (  # noqa: E402
 from operations_hub.mission_control_live_status_mcp_server import (  # noqa: E402
     PROTECTED_RESOURCE_METADATA_PATHS,
     SERVER_INFO,
+    _verification_result,
     initialize_result,
     mcp_method_category,
     mcp_tool_outcome,
@@ -139,9 +141,28 @@ class LiveStatusTests(unittest.TestCase):
         self.assertEqual(mcp_tool_outcome(authentication_required), "token_missing")
         self.assertEqual(mcp_tool_outcome(authentication_required, credential_present=True), "token_rejected")
         self.assertEqual(
+            mcp_tool_outcome(authentication_required, verification_outcome="audience_mismatch"),
+            "audience_mismatch",
+        )
+        self.assertEqual(
             mcp_tool_outcome({"isError": True, "content": [{"type": "text", "text": "untrusted error text"}]}),
             "tool_error",
         )
+
+    @patch("operations_hub.mission_control_live_status_mcp_server._verify_owner_credential")
+    def test_diagnostics_classify_owner_scope_and_generic_verification_without_credentials(self, verifier):
+        verifier.side_effect = CredentialRejected("owner_mismatch")
+        self.assertEqual(_verification_result("synthetic.jwt.value"), (None, "owner_mismatch"))
+        verifier.side_effect = ValueError("opaque verifier detail")
+        self.assertEqual(_verification_result("synthetic.jwt.value"), (None, "token_verification_failed"))
+        verifier.side_effect = None
+        verifier.return_value = VerifiedContext(
+            subject=CEO_SUBJECT, audience="https://mcp.example.test", scopes=frozenset(),
+            expires_at=NOW.replace(year=2027),
+        )
+        _context, outcome = _verification_result("synthetic.jwt.value")
+        self.assertEqual(outcome, "scope_missing")
+        self.assertEqual(_verification_result(None), (None, "token_missing"))
 
 
 if __name__ == "__main__":

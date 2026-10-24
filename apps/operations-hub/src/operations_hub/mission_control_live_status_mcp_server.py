@@ -9,9 +9,10 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from .mission_control_cto_auth0_verifier import verifier_from_environment
+from .mission_control_cto_auth0_verifier import CredentialRejected, verifier_from_environment
 from .mission_control_live_status import collect_live_status, load_manifest
 from .mission_control_live_status_mcp import CANONICAL_RESOURCE_URI, LiveStatusMcpResource
+from .mission_control_cto_tool import SCOPE, VerifiedContext
 
 
 HOST = "127.0.0.1"
@@ -34,6 +35,20 @@ SERVER_INFO = {
 }
 LOGGER = logging.getLogger(__name__)
 MCP_METHODS = frozenset({"initialize", "tools/list", "tools/call"})
+VERIFICATION_OUTCOMES = frozenset({
+    "token_missing",
+    "owner_mapping_invalid",
+    "owner_mismatch",
+    "scope_missing",
+    "token_expired",
+    "audience_mismatch",
+    "issuer_mismatch",
+    "signature_invalid",
+    "signature_unavailable",
+    "required_claim_missing",
+    "token_verification_failed",
+    "token_accepted",
+})
 
 
 def _resource() -> LiveStatusMcpResource:
@@ -46,6 +61,22 @@ def _manifest_loader() -> dict[str, object]:
 
 def _verify_owner_credential(credential: str):
     return verifier_from_environment(CANONICAL_RESOURCE_URI)(credential)
+
+
+def _verification_result(credential: str | None) -> tuple[VerifiedContext | None, str]:
+    """Verify once and retain only a fixed outcome label for diagnostics."""
+
+    if credential is None:
+        return None, "token_missing"
+    try:
+        context = _verify_owner_credential(credential)
+    except CredentialRejected as exc:
+        return None, exc.category if exc.category in VERIFICATION_OUTCOMES else "token_verification_failed"
+    except Exception:
+        return None, "token_verification_failed"
+    if SCOPE not in context.scopes:
+        return context, "scope_missing"
+    return context, "token_accepted"
 
 
 def _bearer_credential(value: str | None) -> str | None:
@@ -79,7 +110,10 @@ def mcp_method_category(method: object) -> str:
     return method if isinstance(method, str) and method in MCP_METHODS else "unsupported"
 
 
-def mcp_tool_outcome(result: dict[str, object], *, credential_present: bool = False) -> str:
+def mcp_tool_outcome(
+    result: dict[str, object], *, credential_present: bool = False,
+    verification_outcome: str | None = None,
+) -> str:
     """Return a fixed result code without logging response or credential data."""
 
     if not result.get("isError"):
@@ -88,9 +122,10 @@ def mcp_tool_outcome(result: dict[str, object], *, credential_present: bool = Fa
     if isinstance(content, list) and content and isinstance(content[0], dict):
         text = content[0].get("text")
         if text == "authentication_required":
-            # This only distinguishes a syntactically usable Bearer credential
-            # from no usable credential.  It never records header, token, claim,
-            # issuer, audience, scope, or verifier-error information.
+            # The verifier emits only fixed category labels.  It never records
+            # a header, token, claim value, subject, or verifier error detail.
+            if verification_outcome in VERIFICATION_OUTCOMES:
+                return verification_outcome
             return "token_rejected" if credential_present else "token_missing"
         if text in {"tool_denied", "live_status_unavailable"}:
             return text
@@ -152,15 +187,24 @@ class Handler(BaseHTTPRequestHandler):
         elif method == "tools/call":
             params = request.get("params", {})
             credential = _bearer_credential(self.headers.get("Authorization"))
+            context, verification_outcome = _verification_result(credential)
             result = resource.call_tool(
                 params.get("name"), params.get("arguments"), credential,
-                verifier=_verify_owner_credential, manifest_loader=_manifest_loader,
+                verifier=(lambda _credential: context) if context is not None else None,
+                manifest_loader=_manifest_loader,
                 collector=collect_live_status, now=datetime.now(timezone.utc),
             )
             challenge = result.get("_meta", {}).get("mcp/www_authenticate", ())
             if result.get("isError") and challenge:
                 self._send(401, {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32001, "message": "authentication_required"}}, headers={"WWW-Authenticate": challenge[0]})
-                log_mcp_outcome(method, mcp_tool_outcome(result, credential_present=credential is not None), 401)
+                log_mcp_outcome(
+                    method,
+                    mcp_tool_outcome(
+                        result, credential_present=credential is not None,
+                        verification_outcome=verification_outcome,
+                    ),
+                    401,
+                )
                 return
             outcome = mcp_tool_outcome(result)
         else:
