@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "phil-ai-os-mission-control-live-status",
+  "version": "1.0.0",
+  "description": "Owner-scoped, read-only live Mission Control health status.",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Phil AI OS Mission Control — Live Status",
+        "shortDescription": "Owner-scoped, read-only live Mission Control health status.",
+        "longDescription": "Retrieves bounded, owner-scoped Mission Control health status through one OAuth-protected read-only tool.",
+        "developerName": "Phil AI OS",
+        "category": "Productivity",
+        "capabilities": [
+          "Read"
+        ]
+      }
+    }
+  }
+}

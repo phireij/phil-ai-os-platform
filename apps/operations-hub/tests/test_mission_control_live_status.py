@@ -24,10 +24,13 @@ from operations_hub.mission_control_live_status_mcp import (  # noqa: E402
     LiveStatusMcpResource,
 )
 from operations_hub.mission_control_live_status_mcp_server import (  # noqa: E402
+    LOOPBACK_HOST,
+    PUBLIC_CONTAINER_HOST,
     PROTECTED_RESOURCE_METADATA_PATHS,
     SERVER_INFO,
     _verification_result,
     initialize_result,
+    listen_host,
     mcp_method_category,
     mcp_tool_outcome,
     protected_resource_metadata_for_path,
@@ -159,6 +162,15 @@ class LiveStatusTests(unittest.TestCase):
         self.assertEqual(result["serverInfo"], SERVER_INFO)
         self.assertEqual(SERVER_INFO["name"], "phil-ai-os-mission-control-live-status")
         self.assertEqual(SERVER_INFO["version"], "1.0.0")
+
+    def test_listener_host_is_closed_to_private_or_traefik_container_shapes(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(listen_host(), LOOPBACK_HOST)
+        with patch.dict(os.environ, {"MCP_LISTEN_HOST": PUBLIC_CONTAINER_HOST}, clear=True):
+            self.assertEqual(listen_host(), PUBLIC_CONTAINER_HOST)
+        with patch.dict(os.environ, {"MCP_LISTEN_HOST": "192.0.2.99"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "mcp_listener_host_denied"):
+                listen_host()
 
     def test_diagnostics_redact_untrusted_methods_and_tool_contents(self):
         self.assertEqual(mcp_method_category("tools/call"), "tools/call")

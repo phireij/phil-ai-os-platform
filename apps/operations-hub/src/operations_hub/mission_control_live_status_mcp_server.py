@@ -15,7 +15,8 @@ from .mission_control_live_status_mcp import CANONICAL_RESOURCE_URI, LiveStatusM
 from .mission_control_cto_tool import SCOPE, VerifiedContext
 
 
-HOST = "127.0.0.1"
+LOOPBACK_HOST = "127.0.0.1"
+PUBLIC_CONTAINER_HOST = "0.0.0.0"
 PORT = 8788
 METADATA_URI = "https://miscon.phireij.cloud/.well-known/oauth-protected-resource/mcp/live-status"
 PROTECTED_RESOURCE_METADATA_PATHS = frozenset({
@@ -101,6 +102,21 @@ def initialize_result() -> dict[str, object]:
         "capabilities": {"tools": {}},
         "serverInfo": SERVER_INFO,
     }
+
+
+def listen_host() -> str:
+    """Return the explicitly approved listener shape for this deployment.
+
+    The default preserves the private tunnel deployment.  The only public
+    option is the all-interface container listener used behind Traefik; the
+    Compose file never publishes a host port, so Traefik remains the sole
+    HTTPS entry point.
+    """
+
+    configured = os.environ.get("MCP_LISTEN_HOST", LOOPBACK_HOST)
+    if configured not in {LOOPBACK_HOST, PUBLIC_CONTAINER_HOST}:
+        raise RuntimeError("mcp_listener_host_denied")
+    return configured
 
 
 def mcp_method_category(method: object) -> str:
@@ -225,8 +241,9 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     _resource()
-    server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"live_status_mcp_listening={HOST}:{PORT} authority_effect=none", flush=True)
+    host = listen_host()
+    server = ThreadingHTTPServer((host, PORT), Handler)
+    print(f"live_status_mcp_listening={host}:{PORT} authority_effect=none", flush=True)
     server.serve_forever()
 
 

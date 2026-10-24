@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "mission-control-live-status": {
+      "type": "streamable-http",
+      "url": "https://miscon.phireij.cloud/mcp/live-status",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "resource": "https://miscon.phireij.cloud/mcp/live-status",
+            "baseScopes": [
+              "mission_control:cto_read"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

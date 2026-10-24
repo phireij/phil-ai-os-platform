@@ -1,6 +1,8 @@
-# MC-021 live-status connector base.  No port is published and no tunnel or
-# runtime key is present here.  The process can make only the manifest's two
-# fixed HTTPS GET probes after an authenticated tool call.
+# MC-021 live-status connector.  No host port is published and no tunnel or
+# runtime key is present here. Traefik is the only approved public HTTPS entry
+# point and forwards only the OAuth-protected MCP route and its metadata.
+# The process can make only the manifest's two fixed HTTPS GET probes after an
+# authenticated tool call.
 name: phil-ai-os-mc021-live-status-nonprod
 
 services:
@@ -22,6 +24,9 @@ services:
     cpus: 0.50
     restart: unless-stopped
     environment:
+      # Bind within Docker's bridge network for Traefik only. No host port is
+      # published, and the listener rejects every other bind shape in code.
+      MCP_LISTEN_HOST: 0.0.0.0
       MCP_AUTHORIZATION_ISSUER: https://dev-81f0leykwbfdtibz.jp.auth0.com/
       MCP_AUTHORIZATION_JWKS_URI: https://dev-81f0leykwbfdtibz.jp.auth0.com/.well-known/jwks.json
       # Tunnel-client may fetch only the existing Auth0 issuer metadata while
@@ -41,6 +46,23 @@ services:
       retries: 3
       start_period: 30s
     labels:
-      traefik.enable: "false"
+      traefik.enable: "true"
+      traefik.docker.network: "bridge"
+      traefik.http.routers.mcp-live-status.entrypoints: "web,websecure"
+      traefik.http.routers.mcp-live-status.rule: "Host(`miscon.phireij.cloud`) && Path(`/mcp/live-status`)"
+      traefik.http.routers.mcp-live-status.priority: "200"
+      traefik.http.routers.mcp-live-status.tls: "true"
+      traefik.http.routers.mcp-live-status.tls.certresolver: "letsencrypt"
+      traefik.http.routers.mcp-live-status.middlewares: "mcp-live-status-strip"
+      traefik.http.routers.mcp-live-status.service: "mcp-live-status"
+      traefik.http.middlewares.mcp-live-status-strip.stripprefix.prefixes: "/mcp/live-status"
+      traefik.http.routers.mcp-live-status-metadata.entrypoints: "web,websecure"
+      traefik.http.routers.mcp-live-status-metadata.rule: "Host(`miscon.phireij.cloud`) && Path(`/.well-known/oauth-protected-resource/mcp/live-status`)"
+      traefik.http.routers.mcp-live-status-metadata.priority: "200"
+      traefik.http.routers.mcp-live-status-metadata.tls: "true"
+      traefik.http.routers.mcp-live-status-metadata.tls.certresolver: "letsencrypt"
+      traefik.http.routers.mcp-live-status-metadata.service: "mcp-live-status"
+      traefik.http.services.mcp-live-status.loadbalancer.server.port: "8788"
       com.phil-ai-os.scope: "mc021-live-status-nonprod"
       com.phil-ai-os.authority: "none"
+    network_mode: bridge
