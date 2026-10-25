@@ -343,3 +343,9 @@ remains local-only.
   recovery and prevent a replacement activation until a separately reviewed
   cleanup decision. The new workflow's audit and emergency-stop modes require
   distinct exact acknowledgements and now skip image publication/preflight.
+- A proposed `cleanup` mode is restricted to exactly three audited stopped
+  rollback containers. It checks that each remains stopped and has the expected
+  immutable Mission Control image before removal; it preserves all volumes,
+  images, and the currently contained CEO-session container. It is manual-only
+  and requires the separate exact acknowledgement
+  `approve-cleanup-stopped-mission-control-rollbacks`.
