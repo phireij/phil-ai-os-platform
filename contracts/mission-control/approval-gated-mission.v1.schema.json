@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/approval-gated-mission.v1.schema.json",
+  "title": "Mission Control approval-gated mission v1 (inactive)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "mission_id", "project_id", "source", "created_by", "created_at", "risk_assessment_id", "plan_id", "state", "activation_state", "execution_authorized", "mutation_authorized", "authority_effect"],
+  "properties": {
+    "schema": {"const": "phil-ai-os-mission-control-approval-gated-mission"},
+    "version": {"const": 1},
+    "mission_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "project_id": {"enum": ["phil-ai-os", "rubys-cake-delights-hq", "kcfc-portal"]},
+    "source": {"enum": ["ceo_conversation", "project_signal", "connected_channel"]},
+    "created_by": {"enum": ["ceo", "chief_of_staff"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "risk_assessment_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "plan_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "state": {"enum": ["draft", "classified", "planning", "awaiting_approval", "stopped_for_review", "expired", "revoked"]},
+    "activation_state": {"const": "design_only_inactive"},
+    "execution_authorized": {"const": false},
+    "mutation_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}

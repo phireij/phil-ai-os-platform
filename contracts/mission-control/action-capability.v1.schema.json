@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/action-capability.v1.schema.json",
+  "title": "Mission Control action capability v1 (disabled)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["capability_id", "action_class", "target_environment", "target_allowlist", "identity_reference", "state", "activation_state", "dispatch_authorized", "authority_effect"],
+  "properties": {
+    "capability_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "action_class": {"const": "github_sandbox_issue_or_draft"},
+    "target_environment": {"const": "sandbox"},
+    "target_allowlist": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+    "identity_reference": {"type": "string", "minLength": 1, "maxLength": 500, "description": "Reference only; credential values are forbidden."},
+    "state": {"const": "disabled"},
+    "activation_state": {"const": "design_only_inactive"},
+    "dispatch_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}

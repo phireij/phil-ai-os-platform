@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/approval-packet.v1.schema.json",
+  "title": "Mission Control approval packet v1 (inactive)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["approval_id", "mission_id", "plan_id", "plan_digest", "risk_level", "policy_version", "target_summary", "scope_summary", "expires_at", "decision_state", "activation_state", "execution_authorized", "mutation_authorized", "authority_effect"],
+  "properties": {
+    "approval_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "mission_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "plan_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "plan_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "risk_level": {"enum": ["R1", "R2", "R3", "R4"]},
+    "policy_version": {"type": "string", "minLength": 1, "maxLength": 100},
+    "target_summary": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "scope_summary": {"type": "string", "minLength": 1, "maxLength": 5000},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "decision_state": {"const": "awaiting_decision"},
+    "activation_state": {"const": "design_only_inactive"},
+    "execution_authorized": {"const": false},
+    "mutation_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}

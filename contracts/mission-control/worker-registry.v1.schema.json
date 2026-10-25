@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/worker-registry.v1.schema.json",
+  "title": "Mission Control worker registry v1 (plan-only)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["worker_id", "provider", "model", "task_classes", "maximum_risk_level", "data_classification", "capability_ids", "state", "activation_state", "automatic_execution", "authority_effect"],
+  "properties": {
+    "worker_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "provider": {"type": "string", "minLength": 1, "maxLength": 100},
+    "model": {"type": "string", "minLength": 1, "maxLength": 200},
+    "task_classes": {"type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true, "items": {"enum": ["planning", "review", "classification"]}},
+    "maximum_risk_level": {"enum": ["R0", "R1"]},
+    "data_classification": {"enum": ["public", "internal"]},
+    "capability_ids": {"type": "array", "maxItems": 0},
+    "state": {"const": "plan_only"},
+    "activation_state": {"const": "design_only_inactive"},
+    "automatic_execution": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}
