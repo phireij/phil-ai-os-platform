@@ -11,6 +11,7 @@ on:
         options:
           - preflight
           - activate
+          - audit
       activation_acknowledgement:
         description: Required only for activate; enter approve-google-identity-probe-route exactly
         required: false
@@ -45,12 +46,17 @@ jobs:
               test "$ACKNOWLEDGEMENT" = 'approve-google-identity-probe-route'
               echo 'mode=activate; route is still identity-probe-only and grants no session or action authority' >> "$GITHUB_STEP_SUMMARY"
               ;;
+            audit)
+              test "$ACKNOWLEDGEMENT" = 'approve-read-only-google-route-audit'
+              echo 'mode=audit; reports metadata only and makes no VPS change' >> "$GITHUB_STEP_SUMMARY"
+              ;;
             *)
               exit 1
               ;;
           esac
 
   publish-immutable-image:
+    if: ${{ inputs.mode != 'audit' }}
     needs: validate-dispatch
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -105,6 +111,7 @@ jobs:
           docker logout ghcr.io
 
   remote-preflight:
+    if: ${{ inputs.mode != 'audit' }}
     needs: publish-immutable-image
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -184,6 +191,70 @@ jobs:
         if: ${{ inputs.mode == 'preflight' }}
         shell: bash
         run: echo 'VPS preflight passed; no route, volume, secret, or container was created.' >> "$GITHUB_STEP_SUMMARY"
+
+  read-only-google-route-audit:
+    if: ${{ inputs.mode == 'audit' }}
+    needs: validate-dispatch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      HOSTNAME: miscon.phireij.cloud
+      ROUTE_PATH: /auth/google
+    steps:
+      - name: Prepare restricted SSH transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=12 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true
+      - name: Audit only containers claiming the Google route
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$HOSTNAME" "$ROUTE_PATH" <<'REMOTE'
+          set -euo pipefail
+          HOSTNAME="$1"; ROUTE_PATH="$2"; found=false
+          test "$HOSTNAME" = miscon.phireij.cloud
+          test "$ROUTE_PATH" = /auth/google
+          for candidate in $(docker ps -a --format '{{.Names}}'); do
+            claimed=false
+            while IFS='=' read -r key value; do
+              if [[ "$key" == traefik.http.routers.*.rule && "$value" == *"$HOSTNAME"* && "$value" == *"$ROUTE_PATH"* ]]; then
+                claimed=true
+              fi
+            done < <(docker inspect "$candidate" --format '{{range $k,$v := .Config.Labels}}{{printf "%s=%s\n" $k $v}}{{end}}')
+            if [[ "$claimed" != true ]]; then
+              continue
+            fi
+            found=true
+            echo "audit.container.name=$candidate"
+            echo "audit.container.image=$(docker inspect "$candidate" --format '{{.Config.Image}}')"
+            echo "audit.container.running=$(docker inspect "$candidate" --format '{{.State.Running}}')"
+            echo "audit.container.restart_policy=$(docker inspect "$candidate" --format '{{.HostConfig.RestartPolicy.Name}}')"
+            echo "audit.container.created=$(docker inspect "$candidate" --format '{{.Created}}')"
+            echo 'audit.container.mounts=type|name|destination|rw'
+            docker inspect "$candidate" --format '{{range .Mounts}}{{printf "%s|%s|%s|%t\n" .Type .Name .Destination .RW}}{{end}}'
+            echo 'audit.container.environment_names='
+            docker inspect "$candidate" --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | sort
+            echo 'audit.container.traefik_labels='
+            docker inspect "$candidate" --format '{{range $k,$v := .Config.Labels}}{{printf "%s=%s\n" $k $v}}{{end}}' | awk -F= '$1 ~ /^traefik\./' | sort
+          done
+          [[ "$found" == true ]]
+          REMOTE
+      - name: Read the public health endpoint only
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error --max-time 15 "https://$HOSTNAME$ROUTE_PATH/healthz")"
+          printf 'audit.public_health_response=%s\n' "$response"
+          echo 'Read-only audit completed; no VPS change was requested.' >> "$GITHUB_STEP_SUMMARY"
 
   activate-identity-probe:
     if: ${{ inputs.mode == 'activate' }}
