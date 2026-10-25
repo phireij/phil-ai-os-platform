@@ -75,10 +75,13 @@ PY
 
 BEFORE="$(docker ps --format '{{.Names}}|{{.Image}}' | awk -F'|' -v c="$CONTAINER" '$1 != c' | sort)"
 docker pull "$IMAGE@$IMAGE_DIGEST" >/dev/null
-docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --mount "type=volume,src=$SECRET_VOLUME,dst=/run/secrets,readonly" \
   --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
-  -c 'test "$(stat -c "%u:%a" /run/secrets/client_secret)" = "10002:400" && test -s /run/secrets/client_secret'
+  -c 'test "$(stat -c "%u:%a" /run/secrets/client_secret)" = "10002:400" && test -s /run/secrets/client_secret'; then
+  echo 'google_probe_secret_mount_preflight_failed' >&2
+  exit 1
+fi
 
 PREFLIGHT_STARTED=true
 docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
@@ -90,14 +93,20 @@ docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL --se
   --label 'traefik.enable=false' \
   "$IMAGE@$IMAGE_DIGEST" >/dev/null
 sleep 2
-test "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" = true
-docker exec "$PREFLIGHT" python3 -c '
+if ! test "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" = true; then
+  echo 'google_probe_container_preflight_failed' >&2
+  exit 1
+fi
+if ! docker exec "$PREFLIGHT" python3 -c '
 from urllib.request import Request, urlopen
 request = Request("http://127.0.0.1:8092/auth/google/healthz", headers={"Host": "miscon.phireij.cloud"})
 with urlopen(request, timeout=5) as response:
     assert response.status == 200
     assert response.read(100) == b"probe_ready;authority_effect=none"
-'
+'; then
+  echo 'google_probe_health_preflight_failed' >&2
+  exit 1
+fi
 docker rm -f "$PREFLIGHT" >/dev/null
 PREFLIGHT_STARTED=false
 
