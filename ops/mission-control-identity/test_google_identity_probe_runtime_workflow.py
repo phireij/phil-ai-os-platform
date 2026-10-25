@@ -39,6 +39,14 @@ class ProbeRuntimeWorkflowChecks(unittest.TestCase):
         self.assertIn("Restore the prior runtime after failed public verification", self.workflow)
         self.assertIn("docker rename \"$ROLLBACK\" \"$CONTAINER\"", self.workflow)
 
+    def test_read_only_audit_and_emergency_stop_require_distinct_exact_acknowledgements(self) -> None:
+        self.assertIn("approve-read-only-google-route-audit", self.workflow)
+        self.assertIn("approve-emergency-stop-google-ceo-session", self.workflow)
+        self.assertIn("Audit only containers claiming the Google route", self.workflow)
+        self.assertIn("docker update --restart=no \"$CONTAINER\"", self.workflow)
+        self.assertIn("docker stop --time 20 \"$CONTAINER\"", self.workflow)
+        self.assertIn("volumes_preserved=true rollback_containers_preserved=true", self.workflow)
+
     def test_secret_stager_accepts_secret_only_on_stdin_and_sets_strict_permissions(self) -> None:
         self.assertIn("cat > /run/secrets/client_secret", self.stager)
         self.assertNotIn("MISSION_CONTROL_GOOGLE_CLIENT_SECRET", self.stager)

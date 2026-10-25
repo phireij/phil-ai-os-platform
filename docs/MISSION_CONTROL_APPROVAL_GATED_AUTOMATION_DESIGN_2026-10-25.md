@@ -319,3 +319,27 @@ remains local-only.
 - This workflow is source-controlled preparation only. It has not been
   dispatched, no container or route has been created, and no Google client
   secret has been copied to the VPS.
+
+### Live-route audit and emergency containment — 2026-10-25
+
+- A manual `preflight` run (GitHub Actions run `40194231852`) published and
+  verified immutable image
+  `sha256:6325fc1ba1cc0c317ebf7f2b1ffe302de6dfc35403fe2d544be930c63d8ddb96`,
+  then stopped before VPS mutation because an existing `/auth/google` Traefik
+  route was detected. It did not create a route, container, or secret volume.
+- An owner-authorized read-only audit (run `40194835348`) found that
+  `phil-ai-os-mission-control-google-ceo-session` was running with
+  `conversation_authority=enabled` and exposed `/auth/google` together with
+  conversation, notification, and task-proposal API prefixes. The audit read
+  only metadata: image/restart state, route labels, mount names/destinations,
+  and environment variable names; it did not read secret values.
+- On owner authorization, emergency containment (run `40194953576`) set that
+  container's restart policy to `no` and stopped it. Public verification
+  confirmed that its `session_ready;conversation_authority=enabled` response
+  was no longer available. No volume, secret, image, or rollback container was
+  deleted.
+- The audit identified stopped rollback containers, including an older Google
+  identity-probe rollback. They do not serve traffic but remain preserved for
+  recovery and prevent a replacement activation until a separately reviewed
+  cleanup decision. The new workflow's audit and emergency-stop modes require
+  distinct exact acknowledgements and now skip image publication/preflight.
