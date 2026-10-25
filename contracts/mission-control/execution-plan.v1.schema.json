@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/execution-plan.v1.schema.json",
+  "title": "Mission Control execution plan v1 (non-executable)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["plan_id", "mission_id", "revision", "plan_digest", "risk_level", "policy_version", "steps", "estimated_cost_usd", "approval_state", "activation_state", "execution_authorized", "mutation_authorized", "authority_effect"],
+  "properties": {
+    "plan_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "mission_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "revision": {"type": "integer", "minimum": 1},
+    "plan_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "risk_level": {"enum": ["R0", "R1", "R2", "R3", "R4"]},
+    "policy_version": {"type": "string", "minLength": 1, "maxLength": 100},
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sequence", "description", "mode", "target_reference", "action_capability_id"],
+        "properties": {
+          "sequence": {"type": "integer", "minimum": 1},
+          "description": {"type": "string", "minLength": 1, "maxLength": 2000},
+          "mode": {"enum": ["read_only", "simulation"]},
+          "target_reference": {"type": "string", "minLength": 1, "maxLength": 500},
+          "action_capability_id": {"type": ["string", "null"], "maxLength": 200}
+        }
+      }
+    },
+    "estimated_cost_usd": {"type": "number", "minimum": 0, "maximum": 0},
+    "approval_state": {"const": "awaiting_approval"},
+    "activation_state": {"const": "design_only_inactive"},
+    "execution_authorized": {"const": false},
+    "mutation_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}

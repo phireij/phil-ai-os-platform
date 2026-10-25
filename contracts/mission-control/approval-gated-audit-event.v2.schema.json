@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/approval-gated-audit-event.v2.schema.json",
+  "title": "Mission Control approval-gated audit event v2 (inactive)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "sequence", "mission_id", "plan_id", "plan_digest", "stage", "actor_type", "occurred_at", "policy_version", "previous_event_hash", "event_hash", "content_included", "activation_state", "execution_authorized", "mutation_authorized", "authority_effect"],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "sequence": {"type": "integer", "minimum": 1},
+    "mission_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "plan_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "plan_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "stage": {"enum": ["intake_created", "risk_assessed", "plan_created", "approval_requested", "approval_expired", "approval_revoked", "preflight_stopped", "exception_recorded"]},
+    "actor_type": {"enum": ["ceo", "chief_of_staff", "policy_engine", "system"]},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "policy_version": {"type": "string", "minLength": 1, "maxLength": 100},
+    "previous_event_hash": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+    "event_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "content_included": {"const": false},
+    "activation_state": {"const": "design_only_inactive"},
+    "execution_authorized": {"const": false},
+    "mutation_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}

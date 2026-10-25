@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/approval-persistence.v1.schema.json",
+  "title": "Mission Control approval persistence policy v1 (inactive)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "status", "engine", "network_boundary", "identity_boundary", "retention", "backup", "audit_ledger", "connection_reference", "activation_authorized", "authority_effect"],
+  "properties": {
+    "version": {"const": 1},
+    "status": {"const": "design_only_inactive"},
+    "engine": {"const": "PostgreSQL"},
+    "network_boundary": {"const": "isolated Mission Control network; no public database ingress"},
+    "identity_boundary": {"const": "one least-privilege Mission Control application role; no shared provider or adapter credentials"},
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_content_days", "approval_execution_metadata_days", "secrets_stored"],
+      "properties": {
+        "raw_content_days": {"const": 30},
+        "approval_execution_metadata_days": {"const": 365},
+        "secrets_stored": {"const": false}
+      }
+    },
+    "backup": {"const": "encrypted backups with restore rehearsal required before activation"},
+    "audit_ledger": {"const": "append-only chained hashes with periodic sealed checkpoints"},
+    "connection_reference": {"type": "null", "description": "A secret-manager reference only; a DSN or credential is forbidden in this record."},
+    "activation_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/execution-lease-preview.v1.schema.json",
+  "title": "Mission Control execution lease preview v1 (not issuable)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["lease_id", "approval_id", "plan_digest", "action_capability_id", "lease_state", "reason", "activation_state", "dispatch_authorized", "authority_effect"],
+  "properties": {
+    "lease_id": {"type": "null"},
+    "approval_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "plan_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "action_capability_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "lease_state": {"const": "not_issued"},
+    "reason": {"const": "runtime_inactive"},
+    "activation_state": {"const": "design_only_inactive"},
+    "dispatch_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}

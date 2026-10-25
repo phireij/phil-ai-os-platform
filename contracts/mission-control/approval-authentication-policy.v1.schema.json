@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/approval-authentication-policy.v1.schema.json",
+  "title": "Mission Control approval authentication policy v1 (inactive)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "status", "identity_provider", "flow", "pkce_method", "principal_binding", "browser_session", "approval_reauthentication", "break_glass", "activation_authorized", "authority_effect"],
+  "properties": {
+    "version": {"const": 1},
+    "status": {"const": "design_only_inactive"},
+    "identity_provider": {"const": "Google OIDC"},
+    "flow": {"const": "authorization_code"},
+    "pkce_method": {"const": "S256"},
+    "principal_binding": {"const": "exact issuer and subject; email is display-only"},
+    "browser_session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["storage", "secure", "http_only", "same_site", "idle_seconds", "absolute_seconds", "browser_token_persistence"],
+      "properties": {
+        "storage": {"const": "server_side_session_with_opaque_cookie"},
+        "secure": {"const": true},
+        "http_only": {"const": true},
+        "same_site": {"const": "Lax"},
+        "idle_seconds": {"const": 1800},
+        "absolute_seconds": {"const": 28800},
+        "browser_token_persistence": {"const": false}
+      }
+    },
+    "approval_reauthentication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["R2_max_auth_age_seconds", "R3_max_auth_age_seconds", "R3_typed_confirmation"],
+      "properties": {
+        "R2_max_auth_age_seconds": {"const": 900},
+        "R3_max_auth_age_seconds": {"const": 300},
+        "R3_typed_confirmation": {"const": true}
+      }
+    },
+    "break_glass": {"const": "host-mounted read-only diagnostic token; cannot approve, delegate, or execute"},
+    "activation_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}
