@@ -297,3 +297,25 @@ remains local-only.
   required before an isolated database, secret volume, or route can be created.
   Pull-request review and merge are source-control decisions only; they do not
   activate an action adapter, route, identity session, or execution authority.
+
+### Gated identity-probe runtime preparation — 2026-10-25
+
+- Pull request #615 was merged into `codex/mission-control-ui-safety` as
+  `e03ea546544ee21d13c69dd41dad8088b1ba5dde`. Its review branch remains
+  preserved for auditability.
+- The next proposed increment is a manual-only GitHub Actions workflow with
+  `preflight` and `activate` modes. `preflight` authenticates only long enough
+  to inspect the VPS and pull an immutable image; it creates no route, secret
+  volume, or container. `activate` requires the exact acknowledgement
+  `approve-google-identity-probe-route` and is serialized against concurrent
+  runs.
+- The proposed activation path stages the Google client secret only through
+  standard input into a new per-run Docker volume, validates `10002:10002` and
+  mode `0400`, uses a read-only/capability-dropped container, verifies the
+  public health endpoint, and restores the prior runtime if that verification
+  fails. The route remains limited to `/auth/google` and the service reports
+  `authority_effect=none`; it cannot create a Mission Control session or take
+  an action.
+- This workflow is source-controlled preparation only. It has not been
+  dispatched, no container or route has been created, and no Google client
+  secret has been copied to the VPS.

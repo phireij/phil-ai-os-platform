@@ -1,0 +1,294 @@
+name: Mission Control Google Identity Probe Gated Runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Read-only preflight or separately acknowledged identity-probe activation
+        required: true
+        default: preflight
+        type: choice
+        options:
+          - preflight
+          - activate
+      activation_acknowledgement:
+        description: Required only for activate; enter approve-google-identity-probe-route exactly
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: mission-control-google-identity-probe-runtime
+  cancel-in-progress: false
+
+jobs:
+  validate-dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require an explicit activation acknowledgement
+        shell: bash
+        env:
+          MODE: ${{ inputs.mode }}
+          ACKNOWLEDGEMENT: ${{ inputs.activation_acknowledgement }}
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            preflight)
+              test -z "$ACKNOWLEDGEMENT"
+              echo 'mode=preflight; authority_effect=none' >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            activate)
+              test "$ACKNOWLEDGEMENT" = 'approve-google-identity-probe-route'
+              echo 'mode=activate; route is still identity-probe-only and grants no session or action authority' >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+
+  publish-immutable-image:
+    needs: validate-dispatch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify inactive probe boundaries before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n ops/mission-control-identity/activate-google-identity-probe.sh
+          bash -n ops/mission-control-identity/stage-google-identity-probe-secret.sh
+          python3 -m venv /tmp/mission-control-google-probe-venv
+          source /tmp/mission-control-google-probe-venv/bin/activate
+          python3 -m pip install --disable-pip-version-check cryptography==47.0.0 google-auth==2.50.0 requests==2.32.4
+          python3 ops/mission-control-identity/test_google_identity_probe.py
+          python3 ops/mission-control-identity/test_google_identity_probe_activation_script.py
+          python3 ops/mission-control-identity/test_google_identity_probe_build_manifest.py
+          python3 ops/mission-control-identity/test_google_identity_probe_runtime_workflow.py
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish and verify the immutable Linux AMD64 image
+        id: image
+        shell: bash
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}/mission-control-google-identity-probe
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --platform linux/amd64 \
+            --provenance=false \
+            --sbom=false \
+            --file Dockerfile.mission-control-google-identity-probe \
+            --tag "$IMAGE:sha-$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --push \
+            --metadata-file /tmp/mission-control-google-probe-image.json \
+            .
+          digest="$(python3 -c 'import json; print(json.load(open("/tmp/mission-control-google-probe-image.json"))["containerimage.digest"])')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker pull --platform linux/amd64 "$IMAGE@$digest"
+          test "$(docker image inspect "$IMAGE@$digest" --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
+          docker image rm "$IMAGE@$digest" >/dev/null
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "published_image=$IMAGE@$digest authority_effect=none" >> "$GITHUB_STEP_SUMMARY"
+          docker logout ghcr.io
+
+  remote-preflight:
+    needs: publish-immutable-image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}/mission-control-google-identity-probe
+      DIGEST: ${{ needs.publish-immutable-image.outputs.digest }}
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      HOSTNAME: miscon.phireij.cloud
+      CONTAINER: phil-ai-os-mission-control-google-identity-probe
+      REMOTE_DOCKER_CONFIG: /tmp/phil-ai-os-mc-google-probe-ghcr-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Prepare restricted SSH transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=12 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true
+      - name: Authenticate the per-run remote image pull
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" \
+            "mkdir -m 700 -p '$REMOTE_DOCKER_CONFIG' && DOCKER_CONFIG='$REMOTE_DOCKER_CONFIG' docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin"
+      - name: Inspect the VPS without creating a route, secret, or container
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$IMAGE" "$DIGEST" "$HOSTNAME" "$CONTAINER" "$REMOTE_DOCKER_CONFIG" <<'REMOTE'
+          set -euo pipefail
+          IMAGE="$1"; DIGEST="$2"; HOSTNAME="$3"; CONTAINER="$4"; REMOTE_DOCKER_CONFIG="$5"
+          [[ "$IMAGE" == ghcr.io/phireij/phil-ai-os-platform/mission-control-google-identity-probe ]]
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$HOSTNAME" == miscon.phireij.cloud ]]
+          [[ "$CONTAINER" == phil-ai-os-mission-control-google-identity-probe ]]
+          [[ "$REMOTE_DOCKER_CONFIG" =~ ^/tmp/phil-ai-os-mc-google-probe-ghcr-[0-9]+-[0-9]+$ ]]
+          cleanup() {
+            DOCKER_CONFIG="$REMOTE_DOCKER_CONFIG" docker logout ghcr.io >/dev/null 2>&1 || true
+            rm -f -- "$REMOTE_DOCKER_CONFIG/config.json"
+            rmdir -- "$REMOTE_DOCKER_CONFIG" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT HUP INT TERM
+          TRAEFIK_CONTAINER="$(for candidate in $(docker ps --format '{{.Names}}'); do
+            image="$(docker inspect "$candidate" --format '{{.Config.Image}}')"
+            service="$(docker inspect "$candidate" --format '{{index .Config.Labels "com.docker.compose.service"}}')"
+            case "$image:$service" in traefik*:*|*:traefik) printf '%s\n' "$candidate"; break ;; esac
+          done)"
+          test -n "$TRAEFIK_CONTAINER"
+          ! docker inspect "${CONTAINER}-rollback" >/dev/null 2>&1
+          ! docker inspect "${CONTAINER}-preflight" >/dev/null 2>&1
+          python3 - "$CONTAINER" "$HOSTNAME" <<'PY'
+          import json
+          import subprocess
+          import sys
+
+          own, hostname = sys.argv[1:]
+          for name in subprocess.check_output(["docker", "ps", "--format", "{{.Names}}"], text=True).splitlines():
+              if name == own:
+                  continue
+              labels = json.loads(subprocess.check_output(["docker", "inspect", name], text=True))[0].get("Config", {}).get("Labels", {}) or {}
+              for key, rule in labels.items():
+                  if key.startswith("traefik.http.routers.") and key.endswith(".rule") and hostname in rule and "/auth/google" in rule:
+                      raise SystemExit("google_probe_route_collision")
+          print("google_probe_route_collision=none")
+          PY
+          DOCKER_CONFIG="$REMOTE_DOCKER_CONFIG" docker pull --platform linux/amd64 "$IMAGE@$DIGEST" >/dev/null
+          test "$(docker image inspect "$IMAGE@$DIGEST" --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
+          echo "preflight=passed authority_effect=none traefik_container=$TRAEFIK_CONTAINER"
+          REMOTE
+      - name: Report preflight-only completion
+        if: ${{ inputs.mode == 'preflight' }}
+        shell: bash
+        run: echo 'VPS preflight passed; no route, volume, secret, or container was created.' >> "$GITHUB_STEP_SUMMARY"
+
+  activate-identity-probe:
+    if: ${{ inputs.mode == 'activate' }}
+    needs:
+      - validate-dispatch
+      - publish-immutable-image
+      - remote-preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}/mission-control-google-identity-probe
+      DIGEST: ${{ needs.publish-immutable-image.outputs.digest }}
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.MISSION_CONTROL_GOOGLE_CLIENT_SECRET }}
+      HOSTNAME: miscon.phireij.cloud
+      CONTAINER: phil-ai-os-mission-control-google-identity-probe
+      SECRET_VOLUME: phil-ai-os-mc-google-probe-secret-${{ github.run_id }}
+      REMOTE_DOCKER_CONFIG: /tmp/phil-ai-os-mc-google-probe-ghcr-${{ github.run_id }}-${{ github.run_attempt }}
+      REMOTE_STAGING_SCRIPT: /tmp/phil-ai-os-mc-google-probe-stage-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Prepare restricted SSH transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GOOGLE_CLIENT_SECRET" && test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=12 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true
+      - name: Authenticate the per-run remote image pull
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" \
+            "mkdir -m 700 -p '$REMOTE_DOCKER_CONFIG' && DOCKER_CONFIG='$REMOTE_DOCKER_CONFIG' docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin"
+      - name: Install the temporary remote secret-staging helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$REMOTE_STAGING_SCRIPT" =~ ^/tmp/phil-ai-os-mc-google-probe-stage-[0-9]+$ ]]
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" \
+            "umask 077; cat > '$REMOTE_STAGING_SCRIPT'; chmod 700 '$REMOTE_STAGING_SCRIPT'" \
+            < ops/mission-control-identity/stage-google-identity-probe-secret.sh
+      - name: Stage the client secret into a new protected Docker volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SECRET_VOLUME" =~ ^phil-ai-os-mc-google-probe-secret-[0-9]+$ ]]
+          printf '%s' "$GOOGLE_CLIENT_SECRET" | ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" \
+            "IMAGE='$IMAGE' IMAGE_DIGEST='$DIGEST' SECRET_VOLUME='$SECRET_VOLUME' '$REMOTE_STAGING_SCRIPT'"
+      - name: Run the separately acknowledged remote activation script
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" \
+            "DOCKER_CONFIG='$REMOTE_DOCKER_CONFIG' IMAGE_DIGEST='$DIGEST' SECRET_VOLUME='$SECRET_VOLUME' HOSTNAME='$HOSTNAME' MISSION_CONTROL_GOOGLE_PROBE_ACTIVATION_ACKNOWLEDGEMENT='approve-google-identity-probe-route' bash -s" \
+            < ops/mission-control-identity/activate-google-identity-probe.sh
+      - name: Verify the public route grants no session or action authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(curl --fail --silent --show-error --max-time 15 https://$HOSTNAME/auth/google/healthz)" = 'probe_ready;authority_effect=none'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 -X POST https://$HOSTNAME/auth/google/healthz)" = 405
+          echo 'Public identity-probe health route verified; it grants no Mission Control session or action authority.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Finalize successful activation rollback staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$CONTAINER" <<'REMOTE'
+          set -euo pipefail
+          CONTAINER="$1"; ROLLBACK="${CONTAINER}-rollback"
+          previous_volume="$(docker inspect "$ROLLBACK" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets"}}{{.Name}}{{end}}{{end}}' 2>/dev/null || true)"
+          docker rm -f "$ROLLBACK" >/dev/null 2>&1 || true
+          if [[ "$previous_volume" =~ ^phil-ai-os-mc-google-probe-secret-[0-9]+$ ]]; then
+            docker volume rm "$previous_volume" >/dev/null
+          fi
+          echo activation_finalized=true prior_secret_volume_removed=$([[ -n "$previous_volume" ]] && echo true || echo false)
+          REMOTE
+      - name: Restore the prior runtime after failed public verification
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$CONTAINER" "$SECRET_VOLUME" <<'REMOTE'
+          set -euo pipefail
+          CONTAINER="$1"; SECRET_VOLUME="$2"; ROLLBACK="${CONTAINER}-rollback"
+          if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
+            docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+            docker rename "$ROLLBACK" "$CONTAINER"
+            docker start "$CONTAINER" >/dev/null
+          else
+            docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+          fi
+          docker volume rm "$SECRET_VOLUME" >/dev/null 2>&1 || true
+          echo activation_rollback_completed=true
+          REMOTE
+      - name: Remove the per-run remote registry credentials
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" \
+            "rm -f -- '$REMOTE_STAGING_SCRIPT'; DOCKER_CONFIG='$REMOTE_DOCKER_CONFIG' docker logout ghcr.io >/dev/null 2>&1 || true; rm -f -- '$REMOTE_DOCKER_CONFIG/config.json'; rmdir -- '$REMOTE_DOCKER_CONFIG' >/dev/null 2>&1 || true"
