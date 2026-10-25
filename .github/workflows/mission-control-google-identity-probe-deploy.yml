@@ -61,7 +61,7 @@ jobs:
           esac
 
   publish-immutable-image:
-    if: ${{ inputs.mode != 'audit' }}
+    if: ${{ inputs.mode == 'preflight' || inputs.mode == 'activate' }}
     needs: validate-dispatch
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -116,7 +116,7 @@ jobs:
           docker logout ghcr.io
 
   remote-preflight:
-    if: ${{ inputs.mode != 'audit' }}
+    if: ${{ inputs.mode == 'preflight' || inputs.mode == 'activate' }}
     needs: publish-immutable-image
     runs-on: ubuntu-24.04
     timeout-minutes: 15
