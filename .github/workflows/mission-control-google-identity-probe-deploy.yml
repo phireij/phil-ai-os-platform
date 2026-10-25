@@ -13,6 +13,7 @@ on:
           - activate
           - audit
           - emergency-stop
+          - cleanup
       activation_acknowledgement:
         description: Required only for activate; enter approve-google-identity-probe-route exactly
         required: false
@@ -54,6 +55,10 @@ jobs:
             emergency-stop)
               test "$ACKNOWLEDGEMENT" = 'approve-emergency-stop-google-ceo-session'
               echo 'mode=emergency-stop; only the active CEO-session container may be stopped; no volume, secret, image, or rollback container may be deleted' >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            cleanup)
+              test "$ACKNOWLEDGEMENT" = 'approve-cleanup-stopped-mission-control-rollbacks'
+              echo 'mode=cleanup; only three named stopped rollback containers may be removed; volumes, images, and the contained CEO-session container are preserved' >> "$GITHUB_STEP_SUMMARY"
               ;;
             *)
               exit 1
@@ -310,6 +315,50 @@ jobs:
           test "$status" != 200
           test "$body" != 'session_ready;conversation_authority=enabled'
           echo "public_session_response_removed=true http_status=$status" >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup-stopped-rollbacks:
+    if: ${{ inputs.mode == 'cleanup' }}
+    needs: validate-dispatch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Prepare restricted SSH transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=12 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true
+      - name: Remove only the audited stopped rollback containers
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          containers=(
+            phil-ai-os-mission-control-google-ceo-session-storage-rollback
+            phil-ai-os-mission-control-google-ceo-session-rollback-legacy
+            phil-ai-os-mission-control-google-identity-probe-rollback
+          )
+          for container in "${containers[@]}"; do
+            test "$(docker inspect "$container" --format '{{.State.Running}}')" = false
+            image="$(docker inspect "$container" --format '{{.Config.Image}}')"
+            case "$image" in
+              ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session@sha256:*|ghcr.io/phireij/phil-ai-os-platform/mission-control-google-identity-probe@sha256:*) ;;
+              *) exit 1 ;;
+            esac
+          done
+          docker rm "${containers[@]}" >/dev/null
+          for container in "${containers[@]}"; do ! docker inspect "$container" >/dev/null 2>&1; done
+          echo 'rollback_cleanup_completed=true volumes_preserved=true images_preserved=true contained_ceo_session_preserved=true'
+          REMOTE
 
   activate-identity-probe:
     if: ${{ inputs.mode == 'activate' }}

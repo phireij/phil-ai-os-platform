@@ -47,6 +47,15 @@ class ProbeRuntimeWorkflowChecks(unittest.TestCase):
         self.assertIn("docker stop --time 20 \"$CONTAINER\"", self.workflow)
         self.assertIn("volumes_preserved=true rollback_containers_preserved=true", self.workflow)
 
+    def test_cleanup_is_limited_to_named_stopped_rollbacks_and_preserves_volumes(self) -> None:
+        self.assertIn("approve-cleanup-stopped-mission-control-rollbacks", self.workflow)
+        self.assertIn("cleanup-stopped-rollbacks", self.workflow)
+        self.assertIn("phil-ai-os-mission-control-google-ceo-session-storage-rollback", self.workflow)
+        self.assertIn("phil-ai-os-mission-control-google-ceo-session-rollback-legacy", self.workflow)
+        self.assertIn("phil-ai-os-mission-control-google-identity-probe-rollback", self.workflow)
+        self.assertIn("test \"$(docker inspect \"$container\" --format '{{.State.Running}}')\" = false", self.workflow)
+        self.assertIn("volumes_preserved=true images_preserved=true contained_ceo_session_preserved=true", self.workflow)
+
     def test_secret_stager_accepts_secret_only_on_stdin_and_sets_strict_permissions(self) -> None:
         self.assertIn("cat > /run/secrets/client_secret", self.stager)
         self.assertNotIn("MISSION_CONTROL_GOOGLE_CLIENT_SECRET", self.stager)
