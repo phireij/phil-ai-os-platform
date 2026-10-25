@@ -283,8 +283,17 @@ remains local-only.
   run 40192916588: the secret presence checks, private-key format, host
   reachability, and passwordless SSH authentication all passed. The diagnostic
   made no VPS change.
+- A clean, focused source-control review branch was created from the published
+  Mission Control safety branch: `codex/approval-gated-automation-review`.
+  Pull request [#615](https://github.com/phireij/phil-ai-os-platform/pull/615)
+  records the inactive contracts, policy/store/session guards, identity probe,
+  database migration, image definitions, CI, and this design record. It does
+  not include the separately modified synthetic UI files.
+- Pull request #615 passed all five required GitHub checks on 2026-10-25:
+  `integrated-contract-regression`, `isolated-runtime-smoke`,
+  `operations-foundation`, `verify-probe`, and
+  `workflow-supply-chain-policy`.
 - A reviewed immutable image publication and deployment entrypoint are still
   required before an isolated database, secret volume, or route can be created.
-  The current workspace is intentionally dirty, so publishing its new code
-  requires a deliberate source-control review/commit decision rather than an
-  automatic push.
+  Pull-request review and merge are source-control decisions only; they do not
+  activate an action adapter, route, identity session, or execution authority.
