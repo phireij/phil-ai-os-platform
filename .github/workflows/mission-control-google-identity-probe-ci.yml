@@ -6,12 +6,14 @@ on:
       - 'Dockerfile.mission-control-google-identity-probe'
       - 'ops/mission-control-identity/**'
       - '.github/workflows/mission-control-google-identity-probe-ci.yml'
+      - '.github/workflows/mission-control-google-identity-probe-deploy.yml'
   push:
     branches: [main]
     paths:
       - 'Dockerfile.mission-control-google-identity-probe'
       - 'ops/mission-control-identity/**'
       - '.github/workflows/mission-control-google-identity-probe-ci.yml'
+      - '.github/workflows/mission-control-google-identity-probe-deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -23,9 +25,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Check inactive activation script syntax
+      - name: Check inactive activation and secret-staging script syntax
         shell: bash
-        run: bash -n ops/mission-control-identity/activate-google-identity-probe.sh
+        run: |
+          bash -n ops/mission-control-identity/activate-google-identity-probe.sh
+          bash -n ops/mission-control-identity/stage-google-identity-probe-secret.sh
       - name: Verify offline OAuth boundaries
         shell: bash
         run: |
@@ -34,6 +38,7 @@ jobs:
           source /tmp/mission-control-google-probe-venv/bin/activate
           python3 -m pip install --disable-pip-version-check cryptography==47.0.0 google-auth==2.50.0 requests==2.32.4
           python3 ops/mission-control-identity/test_google_identity_probe.py
+          python3 ops/mission-control-identity/test_google_identity_probe_runtime_workflow.py
       - name: Build inactive probe image
         shell: bash
         run: |
