@@ -78,7 +78,7 @@ live-pilot readiness are **BLOCKED**.
 | App permission minimization | PASS | Metadata read is mandatory; Issues read/write is the sole selected permission. |
 | Installation target scope | PASS | GitHub shows one selected repository: `phireij/mission-control-github-sandbox`. |
 | Webhook and user-token surface | PASS | Webhooks, OAuth-on-install, and Device Flow are off; no event subscriptions are selected. |
-| Credential isolation | PASS for current posture | The key was not accessed by this work and no repository or Mission Control secret path exists. A future runtime secret boundary requires its own review. |
+| Credential isolation | PASS for current posture | The key was not accessed by this work and no repository or Mission Control secret path exists. PR #654 adds an inert public-metadata validator for the proposed root-owned secret-file boundary; a credential-reading runtime still requires separate review. |
 | Source-level target pinning | PASS for the inert request boundary | PR #651 adds a pure validator that rejects every repository, operation, or label except the exact allowlisted sandbox target and labelled issue creation. It always returns a blocked preview and has no token, network, or dispatch path. |
 | Token non-disclosure | BLOCKED | No token path exists yet. The implementation must prevent private keys, JWTs, installation tokens, authorization headers, and raw API errors from entering logs, audit records, exceptions, or browser responses. |
 | One-action lease and approval binding | BLOCKED | The inert Mission Control contracts exist, but no GitHub adapter validates a single-use, unexpired, plan-bound R3 lease. |
