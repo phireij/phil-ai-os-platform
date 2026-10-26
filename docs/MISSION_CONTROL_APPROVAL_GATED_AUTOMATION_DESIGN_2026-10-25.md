@@ -408,3 +408,16 @@ remains local-only.
 - The legacy CEO-session container remains stopped with restart policy `no`.
   Its separate legacy rollback container remains stopped and untouched; it was
   only reported as audit metadata. The audit made no VPS change.
+
+### Privacy-redaction deployment preflight — 2026-10-26
+
+- Pull request [#639](https://github.com/phireij/phil-ai-os-platform/pull/639)
+  removed Google identity details from the probe callback response and added a
+  regression test. It passed the full isolated probe CI and was merged without
+  changing the live runtime.
+- Preflight run `40337653664` published and verified immutable probe image
+  `sha256:360c7c375cfb46cf14b40eae733c2acfc386b4d6ff86f1554e0668cecf0a8805`.
+  It reported no route collision and completed with `authority_effect=none`;
+  it created no route, secret, or container.
+- Activating that image remains separately gated by the workflow's exact
+  `approve-google-identity-probe-route` acknowledgement.
