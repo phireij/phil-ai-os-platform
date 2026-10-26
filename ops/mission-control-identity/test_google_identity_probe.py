@@ -129,7 +129,15 @@ class TokenClaimChecks(unittest.TestCase):
         return header + ".payload.signature"
 
     def test_valid_claims_require_exact_issuer_nonce_presenter_and_subject(self) -> None:
-        claims = {"iss": probe.ISSUER, "azp": probe.CLIENT_ID, "nonce": "nonce", "sub": "12345"}
+        claims = {
+            "iss": probe.ISSUER,
+            "azp": probe.CLIENT_ID,
+            "nonce": "nonce",
+            "sub": "12345",
+            "email": "synthetic-email@example.test",
+            "email_verified": True,
+            "name": "Synthetic Person",
+        }
         session = FakeSession()
         with mock.patch.object(probe.google_id_token, "verify_oauth2_token", return_value=claims):
             self.assertEqual(probe._verified_subject(self.token(), "nonce", session), "12345")
@@ -271,12 +279,12 @@ class ProbeHttpChecks(unittest.TestCase):
         self.server.flows.put("state", probe.PendingFlow(hashlib.sha256(browser.encode()).digest(), "nonce", "verifier", time.monotonic()))
         session = FakeSession(200, b'{"id_token":"synthetic-id-token"}')
         with mock.patch.object(probe.requests, "Session", return_value=session):
-            with mock.patch.object(probe, "_verified_subject", return_value="12345"):
+            with mock.patch.object(probe, "_verified_subject", return_value="synthetic-subject@example.test"):
                 status, headers, body = self.request("/auth/google/callback?state=state&code=synthetic-code", cookie=f"{probe.COOKIE_NAME}={browser}")
         self.assertEqual(status, 200)
         self.assertIn("No Mission Control session was created", body)
         self.assertIn("Identity details are not displayed or retained", body)
-        self.assertNotIn("12345", body)
+        self.assertNotIn("synthetic-subject@example.test", body)
         self.assertNotIn("synthetic-id-token", body)
         self.assertIn("Max-Age=0", headers["Set-Cookie"])
         self.assertNotIn("mission_control:conversation", body)
