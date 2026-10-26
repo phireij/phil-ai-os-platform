@@ -1,16 +1,17 @@
 # Mission Control GitHub sandbox adapter readiness
 
 **Recorded:** 2026-10-27 JST  
-**Status:** Design-only readiness assessment; no adapter, credential, workflow,
-route, or execution authority is enabled.
+**Status:** Sandbox App provisioning and a configuration-only security review are
+recorded; no adapter, token use, workflow, route, or issue-creation authority is
+enabled.
 
 ## Current finding
 
 The approval-gated foundation and the identity-only Google probe remain
-non-authorizing. Repository review found no GitHub sandbox-adapter implementation,
-no GitHub credential or token-provisioning path, no target-repository binding, and
-no adapter activation workflow. This is the correct posture until the required
-dedicated review and owner decision occur.
+non-authorizing. Repository review still finds no GitHub sandbox-adapter
+implementation, credential-reading path, target-repository enforcement in source,
+or adapter activation workflow. This is the correct posture until the remaining
+implementation review and a separately scoped owner decision occur.
 
 ### External sandbox provisioning — 2026-10-27
 
@@ -25,11 +26,30 @@ dedicated review and owner decision occur.
   pinned to a single App if a pilot is later approved.
 - No GitHub organization is currently available to the owner account. A
   personal-account GitHub App cannot give the named secondary operator the
-  required independent installation-stop authority. Before App registration,
-  create a dedicated GitHub organization with the CEO and Ruby Bombeo as
-  owners, transfer this empty sandbox repository to that organization, and
-  register the App as organization-owned. No App, credential, installation, or
-  issue has been created.
+  required independent installation-stop authority. The approved temporary
+  single-person exception therefore remains in force; a future organization
+  migration with the CEO and Ruby Bombeo as owners is still required to restore
+  independent dual control.
+
+### GitHub App provisioning — 2026-10-27
+
+- The owner authorized the personal-account GitHub App **Mission Control Sandbox
+  Pilot**. GitHub's 34-character app-name limit required this approved shortened
+  form of the requested name.
+- The App is installed on exactly one repository:
+  `phireij/mission-control-github-sandbox`. GitHub's installation review shows
+  `Only select repositories` and one selected repository; it is not installed
+  on current or future repositories generally.
+- Repository permissions are limited to Metadata read (GitHub-mandatory) and
+  Issues read/write. All other repository, organization, account, and enterprise
+  permissions are no access. Webhooks, OAuth-on-install, Device Flow, setup URL,
+  and event subscriptions are disabled or absent.
+- A private key was generated and downloaded directly by GitHub to the
+  owner-controlled browser environment. It was not opened, copied, logged, or
+  stored in this repository, Mission Control records, or browser persistence by
+  this work. No client secret was created.
+- The installation has not been used: no installation token was requested, no
+  workflow or adapter was deployed, and no sandbox issue was created.
 
 ### Temporary single-person emergency-stop exception — 2026-10-27
 
@@ -39,8 +59,34 @@ dedicated review and owner decision occur.
   future sandbox installation but does not satisfy the original separate-
   operator safeguard.
 - The exception expires on 2026-11-26 JST or when a distinct technical operator
-  is added, whichever occurs first. It does not authorize a GitHub App,
-  credential, installation, or issue creation by itself.
+  is added, whichever occurs first. It did not itself authorize App provisioning
+  or installation, and it does not authorize issue creation.
+
+## Dedicated adapter security review — configuration result
+
+**Review scope:** the provisioned App's visible configuration and the current
+repository source tree. The review intentionally did not open the private key,
+request an installation token, or call the GitHub API as the App.
+
+**Result:** configuration minimization is **PASS**; adapter implementation and
+live-pilot readiness are **BLOCKED**.
+
+| Control | Result | Evidence / remaining requirement |
+| --- | --- | --- |
+| App permission minimization | PASS | Metadata read is mandatory; Issues read/write is the sole selected permission. |
+| Installation target scope | PASS | GitHub shows one selected repository: `phireij/mission-control-github-sandbox`. |
+| Webhook and user-token surface | PASS | Webhooks, OAuth-on-install, and Device Flow are off; no event subscriptions are selected. |
+| Credential isolation | PASS for current posture | The key was not accessed by this work and no repository or Mission Control secret path exists. A future runtime secret boundary requires its own review. |
+| Source-level target pinning | BLOCKED | No adapter exists yet. A future adapter must reject every owner/repository/action value except the exact allowlisted sandbox target and labelled issue creation. |
+| Token non-disclosure | BLOCKED | No token path exists yet. The implementation must prevent private keys, JWTs, installation tokens, authorization headers, and raw API errors from entering logs, audit records, exceptions, or browser responses. |
+| One-action lease and approval binding | BLOCKED | The inert Mission Control contracts exist, but no GitHub adapter validates a single-use, unexpired, plan-bound R3 lease. |
+| Idempotency and ambiguous-result handling | BLOCKED | The implementation must persist a scoped idempotency key before dispatch, query only the pinned repository for recovery evidence, and stop for review on any uncertain outcome. |
+| Expiry, revocation, and emergency stop | BLOCKED | The owner can manually suspend or uninstall the one App installation, but adapter-side preflight checks and a documented suspend/revoke rehearsal do not yet exist. |
+
+No row marked **BLOCKED** may be treated as an activation approval. The next
+safe increment is a source-only adapter contract and negative-test suite that is
+inert without an injected test double; it must not read the private key, obtain
+a token, or contact GitHub.
 
 ## Recommended first bounded adapter
 
