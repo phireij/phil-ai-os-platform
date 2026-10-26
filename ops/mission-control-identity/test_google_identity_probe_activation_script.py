@@ -35,6 +35,7 @@ class ProbeActivationScriptChecks(unittest.TestCase):
 
     def test_only_a_verified_stopped_inert_preflight_can_be_removed(self) -> None:
         self.assertIn("google_probe_stale_preflight_contract_failed", self.content)
+        self.assertIn("google_probe_stale_preflight_contract_mismatch=", self.content)
         self.assertIn("host.get('NetworkMode') == 'none'", self.content)
         self.assertIn("labels.get('traefik.enable') == 'false'", self.content)
         self.assertIn("('bind', '/run/secrets/client_secret', False, secret_file)", self.content)
@@ -48,6 +49,8 @@ class ProbeActivationScriptChecks(unittest.TestCase):
 
     def test_preserves_rollback_and_never_claims_a_mission_control_session(self) -> None:
         self.assertIn('restore_and_exit()', self.content)
+        self.assertIn("trap 'restore_and_exit \"$?\"' EXIT", self.content)
+        self.assertIn('trap - EXIT ERR HUP INT TERM', self.content)
         self.assertIn('docker rename "$CONTAINER" "$ROLLBACK"', self.content)
         self.assertNotIn('mission_control:conversation', self.content)
 
