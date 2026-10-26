@@ -40,9 +40,45 @@ trap 'restore_and_exit 129' HUP
 trap 'restore_and_exit 130' INT
 trap 'restore_and_exit 143' TERM
 
-if docker inspect "$ROLLBACK" >/dev/null 2>&1 || docker inspect "$PREFLIGHT" >/dev/null 2>&1; then
-  echo 'Refusing activation: rollback or preflight container already exists' >&2
+if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
+  echo 'Refusing activation: rollback container already exists' >&2
   exit 1
+fi
+
+# A prior failed inert preflight can leave behind only its stopped, isolated
+# temporary container. Verify every relevant invariant before removing it; a
+# rollback container is never treated as disposable recovery state.
+if docker inspect "$PREFLIGHT" >/dev/null 2>&1; then
+  if ! python3 - "$PREFLIGHT" "$IMAGE" "$SECRET_FILE" <<'PY'
+import json
+import subprocess
+import sys
+
+name, image, secret_file = sys.argv[1:]
+item = json.loads(subprocess.check_output(['docker', 'inspect', name], text=True))[0]
+config = item.get('Config') or {}
+host = item.get('HostConfig') or {}
+labels = config.get('Labels') or {}
+mounts = item.get('Mounts') or []
+
+assert (item.get('State') or {}).get('Running') is False
+assert (host.get('RestartPolicy') or {}).get('Name') == 'no'
+assert host.get('NetworkMode') == 'none'
+assert host.get('ReadonlyRootfs') is True
+assert config.get('Image', '').startswith(f'{image}@sha256:')
+assert labels.get('traefik.enable') == 'false'
+assert all(not key.startswith('traefik.') or key == 'traefik.enable' for key in labels)
+assert [(mount.get('Type'), mount.get('Destination'), mount.get('RW'), mount.get('Source')) for mount in mounts] == [
+    ('bind', '/run/secrets/client_secret', False, secret_file),
+]
+PY
+  then
+    echo 'google_probe_stale_preflight_contract_failed' >&2
+    exit 1
+  fi
+  docker rm "$PREFLIGHT" >/dev/null
+  ! docker inspect "$PREFLIGHT" >/dev/null 2>&1
+  echo 'google_probe_stale_preflight_removed=true'
 fi
 
 TRAEFIK_CONTAINER=''

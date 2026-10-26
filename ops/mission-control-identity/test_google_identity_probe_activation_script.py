@@ -29,6 +29,14 @@ class ProbeActivationScriptChecks(unittest.TestCase):
         self.assertIn('docker run -d --name "$PREFLIGHT" --network none', self.content)
         self.assertIn('b"probe_ready;authority_effect=none"', self.content)
 
+    def test_only_a_verified_stopped_inert_preflight_can_be_removed(self) -> None:
+        self.assertIn("google_probe_stale_preflight_contract_failed", self.content)
+        self.assertIn("host.get('NetworkMode') == 'none'", self.content)
+        self.assertIn("labels.get('traefik.enable') == 'false'", self.content)
+        self.assertIn("('bind', '/run/secrets/client_secret', False, secret_file)", self.content)
+        self.assertIn('docker rm "$PREFLIGHT"', self.content)
+        self.assertIn("Refusing activation: rollback container already exists", self.content)
+
     def test_live_route_is_constrained_to_google_auth_on_the_canonical_host(self) -> None:
         self.assertIn('test "$HOSTNAME" = miscon.phireij.cloud', self.content)
         self.assertIn('PathPrefix(\\`/auth/google\\`)', self.content)
