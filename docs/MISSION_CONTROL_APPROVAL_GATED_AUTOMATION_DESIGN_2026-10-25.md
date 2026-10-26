@@ -382,3 +382,8 @@ remains local-only.
   labels; it was not started, changed, or removed because it was outside the
   specifically approved containment and cleanup targets. Public probe health
   was `404` before the successful identity-probe activation.
+- A post-deployment read-only audit (run `40329287851`) confirmed the identity
+  probe is the only running container claiming `/auth/google`; both temporary
+  probe container names are absent and public health is `200`. The contained
+  CEO-session container remains stopped with restart policy `no`; the separate
+  legacy CEO rollback remains stopped and untouched.
