@@ -14,6 +14,7 @@ on:
           - audit
           - emergency-stop
           - cleanup
+          - storage-audit
       activation_acknowledgement:
         description: Required only for activate; enter approve-google-identity-probe-route exactly
         required: false
@@ -60,6 +61,10 @@ jobs:
               test "$ACKNOWLEDGEMENT" = 'approve-cleanup-stopped-mission-control-rollbacks'
               echo 'mode=cleanup; only three named stopped rollback containers may be removed; volumes, images, and the contained CEO-session container are preserved' >> "$GITHUB_STEP_SUMMARY"
               ;;
+            storage-audit)
+              test "$ACKNOWLEDGEMENT" = 'approve-read-only-secret-storage-audit'
+              echo 'mode=storage-audit; metadata only, no file or container change' >> "$GITHUB_STEP_SUMMARY"
+              ;;
             *)
               exit 1
               ;;
@@ -79,7 +84,7 @@ jobs:
         run: |
           set -euo pipefail
           bash -n ops/mission-control-identity/activate-google-identity-probe.sh
-          bash -n ops/mission-control-identity/stage-google-identity-probe-secret.sh
+          bash -n ops/mission-control-identity/stage-google-identity-probe-host-secret.sh
           python3 -m venv /tmp/mission-control-google-probe-venv
           source /tmp/mission-control-google-probe-venv/bin/activate
           python3 -m pip install --disable-pip-version-check cryptography==47.0.0 google-auth==2.50.0 requests==2.32.4
@@ -360,6 +365,40 @@ jobs:
           echo 'rollback_cleanup_completed=true volumes_preserved=true images_preserved=true contained_ceo_session_preserved=true'
           REMOTE
 
+  secret-storage-capability-audit:
+    if: ${{ inputs.mode == 'storage-audit' }}
+    needs: validate-dispatch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Prepare restricted SSH transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true
+      - name: Read secret-storage capability metadata only
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          printf 'audit.remote_uid=%s\n' "$(id -u)"
+          printf 'audit.remote_groups=%s\n' "$(id -Gn)"
+          docker info --format 'audit.docker_root_dir={{.DockerRootDir}}'
+          docker info --format 'audit.docker_security_options={{json .SecurityOptions}}'
+          docker info --format 'audit.docker_driver={{.Driver}}'
+          printf 'audit.sudo_noninteractive=%s\n' "$(sudo -n true >/dev/null 2>&1 && echo available || echo unavailable)"
+          REMOTE
+
   activate-identity-probe:
     if: ${{ inputs.mode == 'activate' }}
     needs:
@@ -379,7 +418,7 @@ jobs:
       GOOGLE_CLIENT_SECRET: ${{ secrets.MISSION_CONTROL_GOOGLE_CLIENT_SECRET }}
       HOSTNAME: miscon.phireij.cloud
       CONTAINER: phil-ai-os-mission-control-google-identity-probe
-      SECRET_VOLUME: phil-ai-os-mc-google-probe-secret-${{ github.run_id }}
+      SECRET_FILE: /opt/phil-ai-os-platform/mission-control/secrets/google-identity-probe-client-secret
       REMOTE_DOCKER_CONFIG: /tmp/phil-ai-os-mc-google-probe-ghcr-${{ github.run_id }}-${{ github.run_attempt }}
       REMOTE_STAGING_SCRIPT: /tmp/phil-ai-os-mc-google-probe-stage-${{ github.run_id }}
     steps:
@@ -406,20 +445,20 @@ jobs:
           [[ "$REMOTE_STAGING_SCRIPT" =~ ^/tmp/phil-ai-os-mc-google-probe-stage-[0-9]+$ ]]
           ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" \
             "umask 077; cat > '$REMOTE_STAGING_SCRIPT'; chmod 700 '$REMOTE_STAGING_SCRIPT'" \
-            < ops/mission-control-identity/stage-google-identity-probe-secret.sh
+            < ops/mission-control-identity/stage-google-identity-probe-host-secret.sh
       - name: Stage the client secret into a new protected Docker volume
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$SECRET_VOLUME" =~ ^phil-ai-os-mc-google-probe-secret-[0-9]+$ ]]
+          test "$SECRET_FILE" = /opt/phil-ai-os-platform/mission-control/secrets/google-identity-probe-client-secret
           printf '%s' "$GOOGLE_CLIENT_SECRET" | ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" \
-            "IMAGE='$IMAGE' IMAGE_DIGEST='$DIGEST' SECRET_VOLUME='$SECRET_VOLUME' '$REMOTE_STAGING_SCRIPT'"
+            "SECRET_FILE='$SECRET_FILE' '$REMOTE_STAGING_SCRIPT'"
       - name: Run the separately acknowledged remote activation script
         shell: bash
         run: |
           set -euo pipefail
           ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" \
-            "DOCKER_CONFIG='$REMOTE_DOCKER_CONFIG' IMAGE_DIGEST='$DIGEST' SECRET_VOLUME='$SECRET_VOLUME' HOSTNAME='$HOSTNAME' MISSION_CONTROL_GOOGLE_PROBE_ACTIVATION_ACKNOWLEDGEMENT='approve-google-identity-probe-route' bash -s" \
+            "DOCKER_CONFIG='$REMOTE_DOCKER_CONFIG' IMAGE_DIGEST='$DIGEST' SECRET_FILE='$SECRET_FILE' HOSTNAME='$HOSTNAME' MISSION_CONTROL_GOOGLE_PROBE_ACTIVATION_ACKNOWLEDGEMENT='approve-google-identity-probe-route' bash -s" \
             < ops/mission-control-identity/activate-google-identity-probe.sh
       - name: Verify the public route grants no session or action authority
         shell: bash
@@ -447,9 +486,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$CONTAINER" "$SECRET_VOLUME" <<'REMOTE'
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$CONTAINER" <<'REMOTE'
           set -euo pipefail
-          CONTAINER="$1"; SECRET_VOLUME="$2"; ROLLBACK="${CONTAINER}-rollback"
+          CONTAINER="$1"; ROLLBACK="${CONTAINER}-rollback"
           if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
             docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
             docker rename "$ROLLBACK" "$CONTAINER"
@@ -457,7 +496,6 @@ jobs:
           else
             docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
           fi
-          docker volume rm "$SECRET_VOLUME" >/dev/null 2>&1 || true
           echo activation_rollback_completed=true
           REMOTE
       - name: Remove the per-run remote registry credentials
