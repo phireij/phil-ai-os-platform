@@ -398,3 +398,13 @@ remains local-only.
 - This exercise confirms the identity-only boundary in the live path. It does
   not enable conversation, session, action-adapter, notification, task, or any
   other Mission Control runtime authority.
+
+### Post-exercise read-only runtime audit — 2026-10-26
+
+- The owner-authorized audit run `40334704300` completed successfully after
+  the supervised exercise. It confirmed that the identity probe is the only
+  running container claiming `/auth/google`, its public health status is
+  `200`, and both named temporary probe containers are absent.
+- The legacy CEO-session container remains stopped with restart policy `no`.
+  Its separate legacy rollback container remains stopped and untouched; it was
+  only reported as audit metadata. The audit made no VPS change.
