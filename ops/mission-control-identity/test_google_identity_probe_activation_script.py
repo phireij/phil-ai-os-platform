@@ -37,8 +37,12 @@ class ProbeActivationScriptChecks(unittest.TestCase):
         self.assertIn("google_probe_stale_preflight_contract_failed", self.content)
         self.assertIn("google_probe_stale_preflight_contract_mismatch=", self.content)
         self.assertIn("host.get('NetworkMode') == 'none'", self.content)
+        self.assertIn("set(host.get('CapDrop') or []) == {'ALL'}", self.content)
+        self.assertIn("host.get('Tmpfs') == {'/tmp': 'rw,noexec,nosuid,size=16m'}", self.content)
         self.assertIn("labels.get('traefik.enable') == 'false'", self.content)
         self.assertIn("('bind', '/run/secrets/client_secret', False, secret_file)", self.content)
+        self.assertIn('docker stop --time 10 "$PREFLIGHT"', self.content)
+        self.assertIn('google_probe_stale_preflight_stopped=true', self.content)
         self.assertIn('docker rm "$PREFLIGHT"', self.content)
         self.assertIn("Refusing activation: rollback container already exists", self.content)
 
