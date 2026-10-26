@@ -65,7 +65,11 @@ def _protected_file(variable: str) -> Path:
         details = path.lstat()
         if not stat.S_ISREG(details.st_mode):
             raise GoogleOidcConfigurationError("google_oidc_protected_file_invalid")
-        if details.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
+        mode = stat.S_IMODE(details.st_mode)
+        if variable == "MISSION_CONTROL_GOOGLE_CLIENT_SECRET_FILE":
+            if (details.st_uid, details.st_gid, mode) != (0, 10002, 0o640):
+                raise GoogleOidcConfigurationError("google_oidc_protected_file_permissions")
+        elif details.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
             raise GoogleOidcConfigurationError("google_oidc_protected_file_permissions")
         if details.st_size == 0 or details.st_size > 4096:
             raise GoogleOidcConfigurationError("google_oidc_protected_file_size_invalid")
