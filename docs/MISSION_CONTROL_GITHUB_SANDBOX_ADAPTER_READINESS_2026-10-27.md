@@ -31,6 +31,17 @@ dedicated review and owner decision occur.
   register the App as organization-owned. No App, credential, installation, or
   issue has been created.
 
+### Temporary single-person emergency-stop exception — 2026-10-27
+
+- The owner temporarily designates themself as both the CEO primary and the
+  secondary emergency-stop operator. This is an explicit single-person
+  exception, not independent dual control: it permits the owner to stop a
+  future sandbox installation but does not satisfy the original separate-
+  operator safeguard.
+- The exception expires on 2026-11-26 JST or when a distinct technical operator
+  is added, whichever occurs first. It does not authorize a GitHub App,
+  credential, installation, or issue creation by itself.
+
 ## Recommended first bounded adapter
 
 Use one GitHub App installation, restricted to one dedicated sandbox repository,
