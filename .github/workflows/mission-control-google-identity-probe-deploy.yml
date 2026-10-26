@@ -219,6 +219,7 @@ jobs:
       VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
       HOSTNAME: miscon.phireij.cloud
       ROUTE_PATH: /auth/google
+      CONTAINER: phil-ai-os-mission-control-google-identity-probe
     steps:
       - name: Prepare restricted SSH transport
         shell: bash
@@ -229,15 +230,34 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o ConnectTimeout=12 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" true
-      - name: Audit only containers claiming the Google route
+      - name: Audit route-claiming and exact temporary probe containers
         shell: bash
         run: |
           set -euo pipefail
-          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$HOSTNAME" "$ROUTE_PATH" <<'REMOTE'
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$HOSTNAME" "$ROUTE_PATH" "$CONTAINER" <<'REMOTE'
           set -euo pipefail
-          HOSTNAME="$1"; ROUTE_PATH="$2"; found=false
+          HOSTNAME="$1"; ROUTE_PATH="$2"; CONTAINER="$3"
+          route_found=false
+          temporary_found=false
           test "$HOSTNAME" = miscon.phireij.cloud
           test "$ROUTE_PATH" = /auth/google
+          test "$CONTAINER" = phil-ai-os-mission-control-google-identity-probe
+
+          report_container() {
+            local category="$1" candidate="$2"
+            echo "audit.${category}.name=$candidate"
+            echo "audit.${category}.image=$(docker inspect "$candidate" --format '{{.Config.Image}}')"
+            echo "audit.${category}.running=$(docker inspect "$candidate" --format '{{.State.Running}}')"
+            echo "audit.${category}.restart_policy=$(docker inspect "$candidate" --format '{{.HostConfig.RestartPolicy.Name}}')"
+            echo "audit.${category}.created=$(docker inspect "$candidate" --format '{{.Created}}')"
+            echo "audit.${category}.mounts=type|destination|rw"
+            docker inspect "$candidate" --format '{{range .Mounts}}{{printf "%s|%s|%t\n" .Type .Destination .RW}}{{end}}'
+            echo "audit.${category}.environment_names="
+            docker inspect "$candidate" --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | sort
+            echo "audit.${category}.traefik_labels="
+            docker inspect "$candidate" --format '{{range $k,$v := .Config.Labels}}{{printf "%s=%s\n" $k $v}}{{end}}' | awk -F= '$1 ~ /^traefik\./' | sort
+          }
+
           for candidate in $(docker ps -a --format '{{.Names}}'); do
             claimed=false
             while IFS='=' read -r key value; do
@@ -248,27 +268,28 @@ jobs:
             if [[ "$claimed" != true ]]; then
               continue
             fi
-            found=true
-            echo "audit.container.name=$candidate"
-            echo "audit.container.image=$(docker inspect "$candidate" --format '{{.Config.Image}}')"
-            echo "audit.container.running=$(docker inspect "$candidate" --format '{{.State.Running}}')"
-            echo "audit.container.restart_policy=$(docker inspect "$candidate" --format '{{.HostConfig.RestartPolicy.Name}}')"
-            echo "audit.container.created=$(docker inspect "$candidate" --format '{{.Created}}')"
-            echo 'audit.container.mounts=type|name|destination|rw'
-            docker inspect "$candidate" --format '{{range .Mounts}}{{printf "%s|%s|%s|%t\n" .Type .Name .Destination .RW}}{{end}}'
-            echo 'audit.container.environment_names='
-            docker inspect "$candidate" --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | sort
-            echo 'audit.container.traefik_labels='
-            docker inspect "$candidate" --format '{{range $k,$v := .Config.Labels}}{{printf "%s=%s\n" $k $v}}{{end}}' | awk -F= '$1 ~ /^traefik\./' | sort
+            route_found=true
+            report_container route_container "$candidate"
           done
-          [[ "$found" == true ]]
+          for candidate in "${CONTAINER}-preflight" "${CONTAINER}-rollback"; do
+            if ! docker inspect "$candidate" >/dev/null 2>&1; then
+              echo "audit.temporary_container.name=$candidate"
+              echo 'audit.temporary_container.present=false'
+              continue
+            fi
+            temporary_found=true
+            echo 'audit.temporary_container.present=true'
+            report_container temporary_container "$candidate"
+          done
+          echo "audit.route_claims_present=$route_found"
+          echo "audit.probe_temporary_containers_present=$temporary_found"
           REMOTE
-      - name: Read the public health endpoint only
+      - name: Read the public health status only
         shell: bash
         run: |
           set -euo pipefail
-          response="$(curl --fail --silent --show-error --max-time 15 "https://$HOSTNAME$ROUTE_PATH/healthz")"
-          printf 'audit.public_health_response=%s\n' "$response"
+          status="$(curl --silent --output /tmp/google-route-health --write-out '%{http_code}' --max-time 15 "https://$HOSTNAME$ROUTE_PATH/healthz")"
+          printf 'audit.public_health_status=%s\n' "$status"
           echo 'Read-only audit completed; no VPS change was requested.' >> "$GITHUB_STEP_SUMMARY"
 
   emergency-stop-google-ceo-session:

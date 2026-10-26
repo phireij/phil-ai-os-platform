@@ -42,7 +42,10 @@ class ProbeRuntimeWorkflowChecks(unittest.TestCase):
     def test_read_only_audit_and_emergency_stop_require_distinct_exact_acknowledgements(self) -> None:
         self.assertIn("approve-read-only-google-route-audit", self.workflow)
         self.assertIn("approve-emergency-stop-google-ceo-session", self.workflow)
-        self.assertIn("Audit only containers claiming the Google route", self.workflow)
+        self.assertIn("Audit route-claiming and exact temporary probe containers", self.workflow)
+        self.assertIn('"${CONTAINER}-preflight" "${CONTAINER}-rollback"', self.workflow)
+        self.assertIn("audit.probe_temporary_containers_present", self.workflow)
+        self.assertIn("audit.public_health_status", self.workflow)
         self.assertIn("docker update --restart=no \"$CONTAINER\"", self.workflow)
         self.assertIn("docker stop --time 20 \"$CONTAINER\"", self.workflow)
         self.assertIn("volumes_preserved=true rollback_containers_preserved=true", self.workflow)
