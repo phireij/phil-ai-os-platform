@@ -25,9 +25,11 @@ cannot read a credential or contact GitHub.
    exceptions, or audit evidence.
 2. Before any runtime is built, the owner must place the file in a dedicated
    root-owned secret directory on the approved isolated host. The proposed path
-   is `/opt/phil-ai-os-platform/mission-control/secrets/github-sandbox-pilot.pem`.
-   The directory must be mode `0700`; the file must be root-owned and mode
-   `0400`. The file path—not its contents—may be configured.
+   is `/opt/phil-ai-os-platform/mission-control/secrets/github-sandbox-pilot/private-key.pem`.
+   `github-sandbox-pilot` is a dedicated subdirectory and must be root-owned
+   and mode `0700`; the file must be root-owned and mode `0400`. The shared
+   `secrets` directory must not be re-permissioned. The file path—not its
+   contents—may be configured.
 3. A dedicated, non-browser worker may receive the path through a narrowly
    named configuration reference. No HTTP route, UI, workflow variable, or
    general-purpose task runner may receive the key or key path.
