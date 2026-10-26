@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/mission-control-google-identity-probe-deploy.yml"
-STAGER = ROOT / "ops/mission-control-identity/stage-google-identity-probe-secret.sh"
+STAGER = ROOT / "ops/mission-control-identity/stage-google-identity-probe-host-secret.sh"
 
 
 class ProbeRuntimeWorkflowChecks(unittest.TestCase):
@@ -60,13 +60,20 @@ class ProbeRuntimeWorkflowChecks(unittest.TestCase):
         self.assertIn("volumes_preserved=true images_preserved=true contained_ceo_session_preserved=true", self.workflow)
 
     def test_secret_stager_accepts_secret_only_on_stdin_and_sets_strict_permissions(self) -> None:
-        self.assertIn("cat > /run/secrets/client_secret", self.stager)
+        self.assertIn('cat > "$temporary"', self.stager)
         self.assertNotIn("MISSION_CONTROL_GOOGLE_CLIENT_SECRET", self.stager)
-        self.assertIn("chown 10002:10002 /run/secrets/client_secret", self.stager)
-        self.assertIn("chmod 400 /run/secrets/client_secret", self.stager)
-        self.assertIn("--read-only", self.stager)
-        self.assertIn("--cap-drop ALL", self.stager)
-        self.assertIn("trap cleanup EXIT HUP INT TERM", self.stager)
+        self.assertIn("chown root:10002 \"$temporary\"", self.stager)
+        self.assertIn("chmod 640 \"$temporary\"", self.stager)
+        self.assertIn("BACKUP_FILE=\"${SECRET_FILE}.rollback\"", self.stager)
+        self.assertIn("mv -- \"$SECRET_FILE\" \"$BACKUP_FILE\"", self.stager)
+        self.assertIn("mv -f -- \"$temporary\" \"$SECRET_FILE\"", self.stager)
+        self.assertIn("trap restore EXIT HUP INT TERM", self.stager)
+
+    def test_workflow_uses_host_secret_lifecycle_without_deleting_volumes(self) -> None:
+        self.assertIn("Stage the client secret in the protected host file", self.workflow)
+        self.assertIn("protected_secret_backup_removed=true", self.workflow)
+        self.assertNotIn("prior_secret_volume_removed", self.workflow)
+        self.assertNotIn("docker volume rm \"$previous_volume\"", self.workflow)
 
 
 if __name__ == "__main__":
