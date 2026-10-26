@@ -239,6 +239,8 @@ class ProbeHttpChecks(unittest.TestCase):
         self.assertEqual(status, 302)
         self.assertEqual(body, "Continue to Google")
         self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertEqual(headers["Referrer-Policy"], "no-referrer")
+        self.assertEqual(headers["Content-Security-Policy"], "default-src 'none'; base-uri 'none'; frame-ancestors 'none'")
         self.assertIn("Secure; HttpOnly; SameSite=Lax", headers["Set-Cookie"])
         self.assertNotIn("Domain=", headers["Set-Cookie"])
         parsed = urlsplit(headers["Location"])
