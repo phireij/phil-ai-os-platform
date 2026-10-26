@@ -18,9 +18,11 @@ class ProbeActivationScriptChecks(unittest.TestCase):
         self.assertIn("MISSION_CONTROL_GOOGLE_PROBE_ACTIVATION_ACKNOWLEDGEMENT", self.content)
         self.assertIn("approve-google-identity-probe-route", self.content)
 
-    def test_requires_an_immutable_image_and_narrow_secret_volume(self) -> None:
+    def test_requires_an_immutable_image_and_protected_host_secret_file(self) -> None:
         self.assertIn('[[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]', self.content)
-        self.assertIn('[[ "$SECRET_VOLUME" =~ ^phil-ai-os-mc-google-probe-secret-[0-9]+$ ]]', self.content)
+        self.assertIn('test "$SECRET_FILE" = /opt/phil-ai-os-platform/mission-control/secrets/google-identity-probe-client-secret', self.content)
+        self.assertIn("'0:10002:640'", self.content)
+        self.assertIn('type=bind,src=$SECRET_FILE,dst=/run/secrets/client_secret,readonly', self.content)
         self.assertIn('test "$(stat -c "%u:%a" /run/secrets/client_secret)" = "10002:400"', self.content)
 
     def test_preflight_has_no_network_and_requires_the_inert_health_response(self) -> None:
