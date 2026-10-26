@@ -78,7 +78,7 @@ docker pull "$IMAGE@$IMAGE_DIGEST" >/dev/null
 if ! docker run --rm --network none --user 0:0 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --mount "type=bind,src=$SECRET_FILE,dst=/run/secrets/client_secret,readonly" \
   --entrypoint /bin/sh "$IMAGE@$IMAGE_DIGEST" \
-  -c 'test "$(stat -c "%u:%a" /run/secrets/client_secret)" = "10002:400" && test -s /run/secrets/client_secret'; then
+  -c 'test "$(stat -c "%u:%g:%a" /run/secrets/client_secret)" = "0:10002:640" && test -s /run/secrets/client_secret'; then
   echo 'google_probe_secret_mount_preflight_failed' >&2
   exit 1
 fi
