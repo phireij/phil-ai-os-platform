@@ -265,7 +265,7 @@ class ProbeHttpChecks(unittest.TestCase):
         self.assertFalse(session.trust_env)
         self.assertEqual(session.max_redirects, 0)
 
-    def test_success_shows_subject_without_session_or_token(self) -> None:
+    def test_success_hides_identity_details_without_session_or_token(self) -> None:
         browser = "synthetic-browser"
         self.server.flows.put("state", probe.PendingFlow(hashlib.sha256(browser.encode()).digest(), "nonce", "verifier", time.monotonic()))
         session = FakeSession(200, b'{"id_token":"synthetic-id-token"}')
@@ -273,8 +273,9 @@ class ProbeHttpChecks(unittest.TestCase):
             with mock.patch.object(probe, "_verified_subject", return_value="12345"):
                 status, headers, body = self.request("/auth/google/callback?state=state&code=synthetic-code", cookie=f"{probe.COOKIE_NAME}={browser}")
         self.assertEqual(status, 200)
-        self.assertIn("Subject: 12345", body)
         self.assertIn("No Mission Control session was created", body)
+        self.assertIn("Identity details are not displayed or retained", body)
+        self.assertNotIn("12345", body)
         self.assertNotIn("synthetic-id-token", body)
         self.assertIn("Max-Age=0", headers["Set-Cookie"])
         self.assertNotIn("mission_control:conversation", body)
