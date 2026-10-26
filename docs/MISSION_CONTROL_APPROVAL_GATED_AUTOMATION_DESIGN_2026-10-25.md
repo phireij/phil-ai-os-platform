@@ -421,3 +421,17 @@ remains local-only.
   it created no route, secret, or container.
 - Activating that image remains separately gated by the workflow's exact
   `approve-google-identity-probe-route` acknowledgement.
+
+### Privacy-redaction activation and audit — 2026-10-26
+
+- With the owner's fresh exact acknowledgement, activation run `40338617938`
+  completed successfully. It passed the isolated readiness checks, public
+  no-session/no-action verification, rollback finalization, and temporary
+  registry-credential cleanup. The live callback now omits Google identity
+  details while retaining the identity-only, no-session result.
+- Post-deployment read-only audit run `40338994273` confirmed the probe is
+  running image
+  `sha256:3f98861b83e6fa93a4d30d8f9fe840d71e1560eba283c26fdb9ae321969beb08`,
+  its public health is `200`, and its named preflight and rollback containers
+  are absent. The legacy CEO-session container remains stopped with restart
+  policy `no`; its stopped rollback container remains untouched.
