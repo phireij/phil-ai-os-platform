@@ -63,10 +63,13 @@ labels = config.get('Labels') or {}
 mounts = item.get('Mounts') or []
 
 checks = {
-    'stopped': (item.get('State') or {}).get('Running') is False,
+    'running_or_stopped': (item.get('State') or {}).get('Running') in (True, False),
     'restart_no': (host.get('RestartPolicy') or {}).get('Name') == 'no',
     'network_none': host.get('NetworkMode') == 'none',
     'read_only': host.get('ReadonlyRootfs') is True,
+    'cap_drop_all': set(host.get('CapDrop') or []) == {'ALL'},
+    'no_new_privileges': 'no-new-privileges:true' in (host.get('SecurityOpt') or []),
+    'only_tmpfs_scratch': host.get('Tmpfs') == {'/tmp': 'rw,noexec,nosuid,size=16m'},
     'probe_image': config.get('Image', '').startswith(f'{image}@sha256:'),
     'traefik_disabled': labels.get('traefik.enable') == 'false',
     'no_other_traefik_labels': all(not key.startswith('traefik.') or key == 'traefik.enable' for key in labels),
@@ -81,6 +84,11 @@ PY
   then
     echo 'google_probe_stale_preflight_contract_failed' >&2
     exit 1
+  fi
+  if test "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" = true; then
+    docker stop --time 10 "$PREFLIGHT" >/dev/null
+    test "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" = false
+    echo 'google_probe_stale_preflight_stopped=true'
   fi
   docker rm "$PREFLIGHT" >/dev/null
   ! docker inspect "$PREFLIGHT" >/dev/null 2>&1
