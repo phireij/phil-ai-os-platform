@@ -77,16 +77,18 @@ live-pilot readiness are **BLOCKED**.
 | Installation target scope | PASS | GitHub shows one selected repository: `phireij/mission-control-github-sandbox`. |
 | Webhook and user-token surface | PASS | Webhooks, OAuth-on-install, and Device Flow are off; no event subscriptions are selected. |
 | Credential isolation | PASS for current posture | The key was not accessed by this work and no repository or Mission Control secret path exists. A future runtime secret boundary requires its own review. |
-| Source-level target pinning | BLOCKED | No adapter exists yet. A future adapter must reject every owner/repository/action value except the exact allowlisted sandbox target and labelled issue creation. |
+| Source-level target pinning | PASS for the inert request boundary | PR #651 adds a pure validator that rejects every repository, operation, or label except the exact allowlisted sandbox target and labelled issue creation. It always returns a blocked preview and has no token, network, or dispatch path. |
 | Token non-disclosure | BLOCKED | No token path exists yet. The implementation must prevent private keys, JWTs, installation tokens, authorization headers, and raw API errors from entering logs, audit records, exceptions, or browser responses. |
 | One-action lease and approval binding | BLOCKED | The inert Mission Control contracts exist, but no GitHub adapter validates a single-use, unexpired, plan-bound R3 lease. |
 | Idempotency and ambiguous-result handling | BLOCKED | The implementation must persist a scoped idempotency key before dispatch, query only the pinned repository for recovery evidence, and stop for review on any uncertain outcome. |
 | Expiry, revocation, and emergency stop | BLOCKED | The owner can manually suspend or uninstall the one App installation, but adapter-side preflight checks and a documented suspend/revoke rehearsal do not yet exist. |
 
 No row marked **BLOCKED** may be treated as an activation approval. The next
-safe increment is a source-only adapter contract and negative-test suite that is
-inert without an injected test double; it must not read the private key, obtain
-a token, or contact GitHub.
+safe increment—the source-only adapter contract, target-pinning validator, and
+negative-test suite—was merged in PRs #650 and #651. They remain inert: neither
+may read the private key, obtain a token, or contact GitHub. The remaining
+blocked controls require a separately approved credential-handling and live-pilot
+design.
 
 ## Recommended first bounded adapter
 
