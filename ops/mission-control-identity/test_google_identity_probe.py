@@ -237,6 +237,7 @@ class ProbeHttpChecks(unittest.TestCase):
         self.assertEqual(parsed.netloc, "accounts.google.com")
         values = parse_qs(parsed.query)
         self.assertEqual(values["redirect_uri"], [probe.REDIRECT_URI])
+        self.assertEqual(values["scope"], ["openid email"])
         self.assertEqual(values["code_challenge_method"], ["S256"])
         self.assertEqual(values["response_type"], ["code"])
         self.assertTrue(values["state"][0] and values["nonce"][0])

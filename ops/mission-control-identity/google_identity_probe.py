@@ -199,6 +199,9 @@ class ProbeHandler(BaseHTTPRequestHandler):
             "client_id": CLIENT_ID,
             "redirect_uri": REDIRECT_URI,
             "response_type": "code",
+            # Google OIDC requires openid plus email or profile. The probe uses
+            # the narrower email alternative only for protocol compliance and
+            # discards every identity claim after subject validation.
             "scope": "openid email",
             "state": state,
             "nonce": nonce,
