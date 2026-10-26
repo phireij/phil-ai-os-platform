@@ -349,3 +349,36 @@ remains local-only.
   images, and the currently contained CEO-session container. It is manual-only
   and requires the separate exact acknowledgement
   `approve-cleanup-stopped-mission-control-rollbacks`.
+
+### Isolated identity-probe activation evidence — 2026-10-26
+
+- The owner-authorized cleanup completed for the three explicitly audited
+  stopped rollback containers. Volumes, images, and the contained legacy
+  CEO-session container were preserved.
+- The identity probe now uses a root-owned host file at
+  `/opt/phil-ai-os-platform/mission-control/secrets/google-identity-probe-client-secret`,
+  verified as `root:10002` mode `0640`, and bind-mounts it read-only at
+  `/run/secrets/client_secret`. The secret value is supplied to the temporary
+  stager only on standard input and is never emitted in workflow logs.
+- Safety changes in pull requests [#626](https://github.com/phireij/phil-ai-os-platform/pull/626),
+  [#627](https://github.com/phireij/phil-ai-os-platform/pull/627),
+  [#628](https://github.com/phireij/phil-ai-os-platform/pull/628),
+  [#629](https://github.com/phireij/phil-ai-os-platform/pull/629),
+  [#630](https://github.com/phireij/phil-ai-os-platform/pull/630), and
+  [#631](https://github.com/phireij/phil-ai-os-platform/pull/631) added bounded
+  diagnostics, read-only temporary-container audit evidence, verified recovery
+  for an isolated failed preflight, bounded local readiness polling, and
+  cleanup on every failed exit. Each was merged only after its required CI
+  passed.
+- The separately acknowledged activation run `40328747122` completed
+  successfully. It removed only a verified temporary preflight container,
+  passed the fresh no-network local health preflight, and then verified the
+  public endpoint `GET /auth/google/healthz` returns exactly
+  `probe_ready;authority_effect=none`; `POST` to that endpoint returns `405`.
+  The route is limited to `/auth/google` and does not create a Mission Control
+  session, permit an action, or reactivate the CEO-session service.
+- The legacy CEO-session containers remain stopped. A read-only audit also
+  observed a stopped legacy CEO-session rollback container with retained route
+  labels; it was not started, changed, or removed because it was outside the
+  specifically approved containment and cleanup targets. Public probe health
+  was `404` before the successful identity-probe activation.
