@@ -23,7 +23,7 @@ class ProbeActivationScriptChecks(unittest.TestCase):
         self.assertIn('test "$SECRET_FILE" = /opt/phil-ai-os-platform/mission-control/secrets/google-identity-probe-client-secret', self.content)
         self.assertIn("'0:10002:640'", self.content)
         self.assertIn('type=bind,src=$SECRET_FILE,dst=/run/secrets/client_secret,readonly', self.content)
-        self.assertIn('test "$(stat -c "%u:%a" /run/secrets/client_secret)" = "10002:400"', self.content)
+        self.assertIn('test "$(stat -c "%u:%g:%a" /run/secrets/client_secret)" = "0:10002:640"', self.content)
 
     def test_preflight_has_no_network_and_requires_the_inert_health_response(self) -> None:
         self.assertIn('docker run -d --name "$PREFLIGHT" --network none', self.content)
