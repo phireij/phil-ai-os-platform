@@ -16,7 +16,7 @@ class GitHubSandboxCredentialBoundaryError(ValueError):
 
 
 EXPECTED_PRIVATE_KEY_PATH = PurePosixPath(
-    "/opt/phil-ai-os-platform/mission-control/secrets/github-sandbox-pilot.pem"
+    "/opt/phil-ai-os-platform/mission-control/secrets/github-sandbox-pilot/private-key.pem"
 )
 EXPECTED_PRIVATE_KEY_MODE = 0o400
 EXPECTED_SECRET_DIRECTORY_MODE = 0o700
