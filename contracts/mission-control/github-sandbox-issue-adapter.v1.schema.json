@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phil-ai-os.local/contracts/mission-control/github-sandbox-issue-adapter.v1.schema.json",
+  "title": "Mission Control GitHub sandbox issue adapter v1 (inert)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "adapter_id",
+    "github_app_slug",
+    "target_repository",
+    "permitted_operation",
+    "required_label",
+    "credential_boundary",
+    "installation_scope",
+    "activation_state",
+    "network_authorized",
+    "token_request_authorized",
+    "dispatch_authorized",
+    "authority_effect"
+  ],
+  "properties": {
+    "adapter_id": {"const": "github-sandbox-issue-pilot-v1"},
+    "github_app_slug": {"const": "mission-control-sandbox-pilot"},
+    "target_repository": {"const": "phireij/mission-control-github-sandbox"},
+    "permitted_operation": {"const": "create_labelled_issue"},
+    "required_label": {"const": "mission-control-sandbox-pilot"},
+    "credential_boundary": {"const": "external_owner_managed_not_read_by_adapter"},
+    "installation_scope": {"const": "one_selected_repository"},
+    "activation_state": {"const": "design_only_inactive"},
+    "network_authorized": {"const": false},
+    "token_request_authorized": {"const": false},
+    "dispatch_authorized": {"const": false},
+    "authority_effect": {"const": "none"}
+  }
+}
