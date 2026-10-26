@@ -8,10 +8,12 @@ enabled.
 ## Current finding
 
 The approval-gated foundation and the identity-only Google probe remain
-non-authorizing. Repository review still finds no GitHub sandbox-adapter
-implementation, credential-reading path, target-repository enforcement in source,
-or adapter activation workflow. This is the correct posture until the remaining
-implementation review and a separately scoped owner decision occur.
+non-authorizing. Repository review finds no GitHub credential-reading path,
+GitHub client, or adapter activation workflow. The source-only validator now
+enforces the exact future target-repository/operation/label request shape while
+always returning a blocked preview. This is the correct posture until the
+remaining implementation gates in the [credential and pilot gate](MISSION_CONTROL_GITHUB_SANDBOX_CREDENTIAL_AND_PILOT_GATE_2026-10-27.md)
+are complete.
 
 ### External sandbox provisioning — 2026-10-27
 
