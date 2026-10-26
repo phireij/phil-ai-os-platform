@@ -28,6 +28,10 @@ class ProbeActivationScriptChecks(unittest.TestCase):
     def test_preflight_has_no_network_and_requires_the_inert_health_response(self) -> None:
         self.assertIn('docker run -d --name "$PREFLIGHT" --network none', self.content)
         self.assertIn('b"probe_ready;authority_effect=none"', self.content)
+        self.assertIn('PREFLIGHT_HEALTHY=false', self.content)
+        self.assertIn('for attempt in $(seq 1 10); do', self.content)
+        self.assertIn('google_probe_health_preflight_ready=true attempts=$attempt', self.content)
+        self.assertIn('docker logs --tail 20 "$PREFLIGHT" >&2 || true', self.content)
 
     def test_only_a_verified_stopped_inert_preflight_can_be_removed(self) -> None:
         self.assertIn("google_probe_stale_preflight_contract_failed", self.content)
