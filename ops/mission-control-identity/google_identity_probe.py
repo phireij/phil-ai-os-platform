@@ -9,7 +9,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import html
 import json
 import os
 import secrets
@@ -253,7 +252,7 @@ class ProbeHandler(BaseHTTPRequestHandler):
                 token = token_response.get("id_token") if isinstance(token_response, dict) else None
                 if not isinstance(token, str):
                     raise ValueError("id_token_missing")
-                subject = _verified_subject(token, flow.nonce, session)
+                _verified_subject(token, flow.nonce, session)
         except Exception:
             # Neither the exception nor the authorization code may reach a log.
             self._send(HTTPStatus.BAD_GATEWAY, "Google sign-in could not be completed", cookie=clear_cookie)
@@ -262,7 +261,7 @@ class ProbeHandler(BaseHTTPRequestHandler):
         body = (
             "<!doctype html><html><head><title>CEO identity probe</title></head><body>"
             "<h1>Google identity verified</h1><p>No Mission Control session was created.</p>"
-            f"<p>Issuer: {html.escape(ISSUER)}</p><p>Subject: {html.escape(subject)}</p>"
+            "<p>Identity details are not displayed or retained by this probe.</p>"
             "</body></html>"
         )
         self._send(HTTPStatus.OK, body, cookie=clear_cookie)
