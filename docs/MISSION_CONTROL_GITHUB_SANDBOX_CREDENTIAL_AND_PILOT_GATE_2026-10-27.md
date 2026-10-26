@@ -43,6 +43,14 @@ cannot read a credential or contact GitHub.
    access and expire after one hour; the worker must retain one only for its
    single attempt and discard it immediately afterward. See [GitHub's installation-token guidance](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app).
 
+### Source-only boundary implementation — 2026-10-27
+
+PR #654 adds an inert, pure boundary validator. It accepts only public file
+metadata and rejects any path, file type, owner, or mode outside this gate. It
+also validates the JWT lifetime ceiling and the one-installation/one-repository
+issue-write scope as non-secret previews. It cannot open the key, generate a
+JWT, request a token, use a network client, or dispatch an issue.
+
 ## Required preflight
 
 Every potential dispatch must fail closed unless all of the following are true
@@ -103,10 +111,10 @@ not a substitute for the planned independent secondary operator.
 
 1. The owner places the already downloaded key at the dedicated host path with
    the stated ownership and modes, without disclosing its contents.
-2. A source-only credential-boundary implementation and tests prove file-mode
-   rejection, redaction, JWT lifetime enforcement, installation/repository/
-   permission pinning, single-use lease consumption, idempotency persistence,
-   and all failure paths.
+2. Extend the merged source-only credential-boundary checks with a separately
+   reviewed runtime implementation that proves redaction, single-use lease
+   consumption, idempotency persistence, and all failure paths without logging
+   key or token material.
 3. A read-only preflight and manual suspend/revoke rehearsal complete without
    issuing an installation token or creating an issue.
 4. The CEO approves one exact R3 issue packet, including the static title/body,
