@@ -21,7 +21,7 @@ PREFLIGHT_STARTED=false
 
 restore_and_exit() {
   local status="$1"
-  trap - ERR HUP INT TERM
+  trap - EXIT ERR HUP INT TERM
   if [[ "$PREFLIGHT_STARTED" == true ]]; then docker rm -f "$PREFLIGHT" >/dev/null 2>&1 || true; fi
   if [[ "$OLD_STAGED" == true ]]; then
     docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
@@ -35,6 +35,7 @@ restore_and_exit() {
   echo "google_probe_activation_failed status=$status rollback_attempted=$OLD_STAGED" >&2
   exit "$status"
 }
+trap 'restore_and_exit "$?"' EXIT
 trap 'restore_and_exit "$?"' ERR
 trap 'restore_and_exit 129' HUP
 trap 'restore_and_exit 130' INT
@@ -61,16 +62,21 @@ host = item.get('HostConfig') or {}
 labels = config.get('Labels') or {}
 mounts = item.get('Mounts') or []
 
-assert (item.get('State') or {}).get('Running') is False
-assert (host.get('RestartPolicy') or {}).get('Name') == 'no'
-assert host.get('NetworkMode') == 'none'
-assert host.get('ReadonlyRootfs') is True
-assert config.get('Image', '').startswith(f'{image}@sha256:')
-assert labels.get('traefik.enable') == 'false'
-assert all(not key.startswith('traefik.') or key == 'traefik.enable' for key in labels)
-assert [(mount.get('Type'), mount.get('Destination'), mount.get('RW'), mount.get('Source')) for mount in mounts] == [
-    ('bind', '/run/secrets/client_secret', False, secret_file),
-]
+checks = {
+    'stopped': (item.get('State') or {}).get('Running') is False,
+    'restart_no': (host.get('RestartPolicy') or {}).get('Name') == 'no',
+    'network_none': host.get('NetworkMode') == 'none',
+    'read_only': host.get('ReadonlyRootfs') is True,
+    'probe_image': config.get('Image', '').startswith(f'{image}@sha256:'),
+    'traefik_disabled': labels.get('traefik.enable') == 'false',
+    'no_other_traefik_labels': all(not key.startswith('traefik.') or key == 'traefik.enable' for key in labels),
+    'expected_secret_bind': [(mount.get('Type'), mount.get('Destination'), mount.get('RW'), mount.get('Source')) for mount in mounts] == [
+        ('bind', '/run/secrets/client_secret', False, secret_file),
+    ],
+}
+failed = [name for name, passed in checks.items() if not passed]
+if failed:
+    raise SystemExit('google_probe_stale_preflight_contract_mismatch=' + ','.join(failed))
 PY
   then
     echo 'google_probe_stale_preflight_contract_failed' >&2
@@ -192,5 +198,5 @@ test "$(docker inspect "$CONTAINER" --format '{{.HostConfig.NetworkMode}}')" = b
 test "$(docker inspect "$CONTAINER" --format '{{.HostConfig.ReadonlyRootfs}}')" = true
 AFTER="$(docker ps --format '{{.Names}}|{{.Image}}' | awk -F'|' -v c="$CONTAINER" '$1 != c' | sort)"
 test "$BEFORE" = "$AFTER"
-trap - ERR HUP INT TERM
+trap - EXIT ERR HUP INT TERM
 echo "google_probe_activated=true image=$IMAGE@$IMAGE_DIGEST route=https://$HOSTNAME/auth/google existing_workloads_unchanged=true rollback_staged=$OLD_STAGED"
