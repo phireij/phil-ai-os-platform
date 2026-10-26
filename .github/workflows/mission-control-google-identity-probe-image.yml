@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           bash -n ops/mission-control-identity/activate-google-identity-probe.sh
-          bash -n ops/mission-control-identity/stage-google-identity-probe-secret.sh
+          bash -n ops/mission-control-identity/stage-google-identity-probe-host-secret.sh
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.1.0
         with:

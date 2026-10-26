@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/mission-control-google-identity-probe-deploy.yml"
 STAGER = ROOT / "ops/mission-control-identity/stage-google-identity-probe-host-secret.sh"
+RETIRED_VOLUME_STAGER = ROOT / "ops/mission-control-identity/stage-google-identity-probe-secret.sh"
 
 
 class ProbeRuntimeWorkflowChecks(unittest.TestCase):
@@ -74,6 +75,9 @@ class ProbeRuntimeWorkflowChecks(unittest.TestCase):
         self.assertIn("protected_secret_backup_removed=true", self.workflow)
         self.assertNotIn("prior_secret_volume_removed", self.workflow)
         self.assertNotIn("docker volume rm \"$previous_volume\"", self.workflow)
+
+    def test_retired_volume_stager_is_not_present(self) -> None:
+        self.assertFalse(RETIRED_VOLUME_STAGER.exists())
 
 
 if __name__ == "__main__":

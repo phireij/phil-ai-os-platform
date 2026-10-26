@@ -29,7 +29,7 @@ jobs:
         shell: bash
         run: |
           bash -n ops/mission-control-identity/activate-google-identity-probe.sh
-          bash -n ops/mission-control-identity/stage-google-identity-probe-secret.sh
+          bash -n ops/mission-control-identity/stage-google-identity-probe-host-secret.sh
       - name: Verify offline OAuth boundaries
         shell: bash
         run: |
