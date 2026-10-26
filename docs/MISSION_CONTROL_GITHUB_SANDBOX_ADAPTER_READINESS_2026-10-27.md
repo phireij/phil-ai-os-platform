@@ -12,6 +12,25 @@ no GitHub credential or token-provisioning path, no target-repository binding, a
 no adapter activation workflow. This is the correct posture until the required
 dedicated review and owner decision occur.
 
+### External sandbox provisioning — 2026-10-27
+
+- The owner-authorized private repository
+  [`phireij/mission-control-github-sandbox`](https://github.com/phireij/mission-control-github-sandbox)
+  now exists. Issues are enabled; Actions, projects, wiki, discussions, and
+  downloads are disabled; no webhooks are configured; and the pre-created
+  `mission-control-sandbox-pilot` label is the only label an eventual adapter
+  may use.
+- GitHub does not allow private-repository forking to be disabled on a
+  user-owned account. The repository remains private and must be installation-
+  pinned to a single App if a pilot is later approved.
+- No GitHub organization is currently available to the owner account. A
+  personal-account GitHub App cannot give the named secondary operator the
+  required independent installation-stop authority. Before App registration,
+  create a dedicated GitHub organization with the CEO and Ruby Bombeo as
+  owners, transfer this empty sandbox repository to that organization, and
+  register the App as organization-owned. No App, credential, installation, or
+  issue has been created.
+
 ## Recommended first bounded adapter
 
 Use one GitHub App installation, restricted to one dedicated sandbox repository,
@@ -33,6 +52,8 @@ records, logs, browser storage, and source control.
    a draft artifact or any other GitHub operation.
 3. The CEO names the secondary emergency-stop operator required by the approved
    operating defaults.
+   The operator's GitHub username is required to grant the corresponding
+   organization-owner access.
 4. A dedicated adapter security review proves target pinning, GitHub App
    permission minimization, no token logging, one-action leases, idempotency,
    expiry/revocation checks, and fail-closed behavior.
