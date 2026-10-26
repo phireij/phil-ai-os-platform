@@ -471,11 +471,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$CONTAINER" <<'REMOTE'
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$CONTAINER" "$SECRET_FILE" <<'REMOTE'
           set -euo pipefail
-          CONTAINER="$1"; ROLLBACK="${CONTAINER}-rollback"
+          CONTAINER="$1"; SECRET_FILE="$2"; ROLLBACK="${CONTAINER}-rollback"
           previous_volume="$(docker inspect "$ROLLBACK" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets"}}{{.Name}}{{end}}{{end}}' 2>/dev/null || true)"
           docker rm -f "$ROLLBACK" >/dev/null 2>&1 || true
+          rm -f -- "${SECRET_FILE}.rollback"
           if [[ "$previous_volume" =~ ^phil-ai-os-mc-google-probe-secret-[0-9]+$ ]]; then
             docker volume rm "$previous_volume" >/dev/null
           fi
@@ -486,15 +487,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$CONTAINER" <<'REMOTE'
+          ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$CONTAINER" "$SECRET_FILE" <<'REMOTE'
           set -euo pipefail
-          CONTAINER="$1"; ROLLBACK="${CONTAINER}-rollback"
+          CONTAINER="$1"; SECRET_FILE="$2"; ROLLBACK="${CONTAINER}-rollback"
           if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
             docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
             docker rename "$ROLLBACK" "$CONTAINER"
             docker start "$CONTAINER" >/dev/null
           else
             docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+          fi
+          if [[ -e "${SECRET_FILE}.rollback" ]]; then
+            mv -f -- "${SECRET_FILE}.rollback" "$SECRET_FILE"
+          else
+            rm -f -- "$SECRET_FILE"
           fi
           echo activation_rollback_completed=true
           REMOTE
