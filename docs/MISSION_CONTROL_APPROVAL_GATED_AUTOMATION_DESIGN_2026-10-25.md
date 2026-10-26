@@ -179,6 +179,10 @@ work or create/approve a revised plan.
 5. Add R2/R3 capabilities one action adapter at a time under separate activation
    records. Add other models first as plan-only workers.
 
+The design-only [GitHub sandbox adapter readiness checklist](MISSION_CONTROL_GITHUB_SANDBOX_ADAPTER_READINESS_2026-10-27.md)
+records the present non-authorizing posture and the evidence required before the
+first real adapter can be proposed.
+
 ## Progress monitoring criteria
 
 The recurring design review should inspect repository changes and report only:
