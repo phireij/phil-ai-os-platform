@@ -435,3 +435,12 @@ remains local-only.
   its public health is `200`, and its named preflight and rollback containers
   are absent. The legacy CEO-session container remains stopped with restart
   policy `no`; its stopped rollback container remains untouched.
+
+### OIDC scope-minimization guard — 2026-10-27
+
+- Pull request [#642](https://github.com/phireij/phil-ai-os-platform/pull/642)
+  passed the isolated probe CI and locks the probe's authorization request to
+  the provider-required minimum `openid email`. The probe discards identity
+  claims after subject validation and does not display or retain them.
+- The guard prevents unreviewed scope expansion. It is comments and regression
+  coverage only, so it required no image publication or live redeployment.
