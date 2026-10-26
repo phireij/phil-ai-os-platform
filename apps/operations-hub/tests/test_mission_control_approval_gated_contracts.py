@@ -13,6 +13,7 @@ CONTRACTS = {
     "worker": "worker-registry.v1.schema.json",
     "lease": "execution-lease-preview.v1.schema.json",
     "audit": "approval-gated-audit-event.v2.schema.json",
+    "github_sandbox_adapter": "github-sandbox-issue-adapter.v1.schema.json",
 }
 
 
@@ -39,6 +40,9 @@ class ApprovalGatedContractTests(unittest.TestCase):
         self.assertFalse(self.contracts["approval"]["properties"]["execution_authorized"]["const"])
         self.assertFalse(self.contracts["capability"]["properties"]["dispatch_authorized"]["const"])
         self.assertFalse(self.contracts["lease"]["properties"]["dispatch_authorized"]["const"])
+        self.assertFalse(self.contracts["github_sandbox_adapter"]["properties"]["network_authorized"]["const"])
+        self.assertFalse(self.contracts["github_sandbox_adapter"]["properties"]["token_request_authorized"]["const"])
+        self.assertFalse(self.contracts["github_sandbox_adapter"]["properties"]["dispatch_authorized"]["const"])
 
     def test_plan_approval_and_lease_are_bound_and_inert(self):
         self.assertEqual("^sha256:[a-f0-9]{64}$", self.contracts["plan"]["properties"]["plan_digest"]["pattern"])
@@ -53,6 +57,18 @@ class ApprovalGatedContractTests(unittest.TestCase):
         self.assertEqual("blocked", rules[0]["then"]["properties"]["required_gate"]["const"])
         self.assertEqual("R3", rules[1]["if"]["properties"]["risk_level"]["const"])
         self.assertEqual("ceo_typed_confirmation", rules[1]["then"]["properties"]["required_gate"]["const"])
+
+    def test_github_sandbox_adapter_contract_pins_scope_without_credentials(self):
+        adapter = self.contracts["github_sandbox_adapter"]
+        properties = adapter["properties"]
+        self.assertEqual("mission-control-sandbox-pilot", properties["github_app_slug"]["const"])
+        self.assertEqual("phireij/mission-control-github-sandbox", properties["target_repository"]["const"])
+        self.assertEqual("create_labelled_issue", properties["permitted_operation"]["const"])
+        self.assertEqual("mission-control-sandbox-pilot", properties["required_label"]["const"])
+        self.assertEqual("external_owner_managed_not_read_by_adapter", properties["credential_boundary"]["const"])
+        self.assertEqual("one_selected_repository", properties["installation_scope"]["const"])
+        forbidden_fields = {"private_key", "installation_token", "authorization_header", "webhook_secret"}
+        self.assertFalse(forbidden_fields & set(properties))
 
 
 if __name__ == "__main__":
