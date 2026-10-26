@@ -94,6 +94,7 @@ docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL --se
   "$IMAGE@$IMAGE_DIGEST" >/dev/null
 sleep 2
 if ! test "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" = true; then
+  docker logs --tail 20 "$PREFLIGHT" >&2 || true
   echo 'google_probe_container_preflight_failed' >&2
   exit 1
 fi
