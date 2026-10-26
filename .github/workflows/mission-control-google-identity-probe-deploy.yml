@@ -467,7 +467,7 @@ jobs:
           ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" \
             "umask 077; cat > '$REMOTE_STAGING_SCRIPT'; chmod 700 '$REMOTE_STAGING_SCRIPT'" \
             < ops/mission-control-identity/stage-google-identity-probe-host-secret.sh
-      - name: Stage the client secret into a new protected Docker volume
+      - name: Stage the client secret in the protected host file
         shell: bash
         run: |
           set -euo pipefail
@@ -495,13 +495,10 @@ jobs:
           ssh -4 -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$VPS_USER@$VPS_HOST" 'bash -s' -- "$CONTAINER" "$SECRET_FILE" <<'REMOTE'
           set -euo pipefail
           CONTAINER="$1"; SECRET_FILE="$2"; ROLLBACK="${CONTAINER}-rollback"
-          previous_volume="$(docker inspect "$ROLLBACK" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets"}}{{.Name}}{{end}}{{end}}' 2>/dev/null || true)"
+          test "$SECRET_FILE" = /opt/phil-ai-os-platform/mission-control/secrets/google-identity-probe-client-secret
           docker rm -f "$ROLLBACK" >/dev/null 2>&1 || true
           rm -f -- "${SECRET_FILE}.rollback"
-          if [[ "$previous_volume" =~ ^phil-ai-os-mc-google-probe-secret-[0-9]+$ ]]; then
-            docker volume rm "$previous_volume" >/dev/null
-          fi
-          echo activation_finalized=true prior_secret_volume_removed=$([[ -n "$previous_volume" ]] && echo true || echo false)
+          echo activation_finalized=true protected_secret_backup_removed=true
           REMOTE
       - name: Restore the prior runtime after failed public verification
         if: ${{ failure() }}
