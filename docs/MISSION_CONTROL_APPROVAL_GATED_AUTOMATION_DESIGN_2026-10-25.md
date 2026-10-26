@@ -387,3 +387,14 @@ remains local-only.
   probe container names are absent and public health is `200`. The contained
   CEO-session container remains stopped with restart policy `no`; the separate
   legacy CEO rollback remains stopped and untouched.
+
+### Supervised Google identity-only exercise — 2026-10-26
+
+- The owner completed a live Google sign-in through the isolated probe. The
+  callback reported that Google identity verification succeeded and explicitly
+  stated that no Mission Control session was created.
+- No user identifier, OAuth authorization code, or token value is retained in
+  this record. The temporary browser tab was closed after verification.
+- This exercise confirms the identity-only boundary in the live path. It does
+  not enable conversation, session, action-adapter, notification, task, or any
+  other Mission Control runtime authority.
