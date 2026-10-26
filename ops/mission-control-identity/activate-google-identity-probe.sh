@@ -128,19 +128,32 @@ docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL --se
   --mount "type=bind,src=$SECRET_FILE,dst=/run/secrets/client_secret,readonly" \
   --label 'traefik.enable=false' \
   "$IMAGE@$IMAGE_DIGEST" >/dev/null
-sleep 2
 if ! test "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" = true; then
   docker logs --tail 20 "$PREFLIGHT" >&2 || true
   echo 'google_probe_container_preflight_failed' >&2
   exit 1
 fi
-if ! docker exec "$PREFLIGHT" python3 -c '
+
+PREFLIGHT_HEALTHY=false
+for attempt in $(seq 1 10); do
+  if ! test "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" = true; then
+    break
+  fi
+  if docker exec "$PREFLIGHT" python3 -c '
 from urllib.request import Request, urlopen
 request = Request("http://127.0.0.1:8092/auth/google/healthz", headers={"Host": "miscon.phireij.cloud"})
 with urlopen(request, timeout=5) as response:
     assert response.status == 200
     assert response.read(100) == b"probe_ready;authority_effect=none"
-'; then
+' >/dev/null 2>&1; then
+    PREFLIGHT_HEALTHY=true
+    echo "google_probe_health_preflight_ready=true attempts=$attempt"
+    break
+  fi
+  sleep 1
+done
+if [[ "$PREFLIGHT_HEALTHY" != true ]]; then
+  docker logs --tail 20 "$PREFLIGHT" >&2 || true
   echo 'google_probe_health_preflight_failed' >&2
   exit 1
 fi
