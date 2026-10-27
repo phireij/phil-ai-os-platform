@@ -53,6 +53,20 @@ also validates the JWT lifetime ceiling and the one-installation/one-repository
 issue-write scope as non-secret previews. It cannot open the key, generate a
 JWT, request a token, use a network client, or dispatch an issue.
 
+### External key-placement verification — 2026-10-27
+
+- After the original in-app-browser download could not be located, the owner
+  generated a replacement GitHub App key in a regular browser and placed it at
+  the dedicated path defined above.
+- Remote metadata verification reported exactly
+  `root:root_400_/opt/phil-ai-os-platform/mission-control/secrets/github-sandbox-pilot/private-key.pem`.
+  The temporary staging copy was then removed and its staging directory deleted.
+- This work did not read, fingerprint, copy, log, or otherwise disclose key
+  contents. No JWT, installation token, GitHub API request, or issue was made.
+- The earlier missing private key remains registered with GitHub. It must be
+  explicitly revoked after the replacement key is independently verified for a
+  future approved runtime; do not delete the replacement key.
+
 ## Required preflight
 
 Every potential dispatch must fail closed unless all of the following are true
