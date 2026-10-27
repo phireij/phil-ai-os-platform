@@ -153,6 +153,19 @@ def _valid_start_query(query: str) -> bool:
     return len(attempt) == 1 and bool(ATTEMPT_PATTERN.fullmatch(attempt[0]))
 
 
+def _token_exchange_failure_stage(status_code: int) -> str:
+    """Return a fixed, non-sensitive token-exchange failure category."""
+    if status_code in (401, 403):
+        return "token_exchange_client_rejected"
+    if status_code == 429:
+        return "token_exchange_rate_limited"
+    if 400 <= status_code < 500:
+        return "token_exchange_request_rejected"
+    if 500 <= status_code < 600:
+        return "token_exchange_google_unavailable"
+    return "token_exchange_unexpected_status"
+
+
 def _verified_subject(token: str, nonce: str, session: requests.Session) -> str:
     if len(token) > 16384:
         raise ValueError("id_token_too_large")
@@ -311,6 +324,8 @@ class ProbeHandler(BaseHTTPRequestHandler):
                     stream=True,
                 )
                 if response.status_code != 200:
+                    stage = _token_exchange_failure_stage(response.status_code)
+                    response.close()
                     raise ValueError("token_exchange_failed")
                 stage = "token_response"
                 raw = response.raw.read(MAX_TOKEN_RESPONSE_BYTES + 1, decode_content=True)
