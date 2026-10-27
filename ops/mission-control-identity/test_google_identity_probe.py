@@ -350,6 +350,36 @@ class ProbeHttpChecks(unittest.TestCase):
         self.assertIn("No Mission Control session was created", body)
         self.assertNotIn("synthetic-subject", body)
 
+    def test_r3_handoff_failure_has_a_fixed_non_sensitive_stage(self) -> None:
+        browser = "synthetic-browser"
+        self.server.flows.put("state", probe.PendingFlow(hashlib.sha256(browser.encode()).digest(), "nonce", "verifier", time.monotonic()))
+        self.server.r3_metadata_runtime = mock.Mock()
+        self.server.r3_metadata_runtime.attest_and_write.side_effect = probe.R3AttestationHandoffError("synthetic-handoff-error")
+        session = FakeSession(200, b'{"id_token":"synthetic-id-token"}')
+        with mock.patch.object(probe.requests, "Session", return_value=session):
+            with mock.patch.object(probe, "_verified_subject", return_value="synthetic-subject"):
+                with contextlib.redirect_stderr(io.StringIO()) as output:
+                    status, _headers, body = self.request("/auth/google/callback?state=state&code=synthetic-code", cookie=f"{probe.COOKIE_NAME}={browser}")
+        self.assertEqual(status, 502)
+        self.assertIn("mission_control_google_probe_stage=failed_attestation_handoff", output.getvalue())
+        self.assertNotIn("synthetic-handoff-error", body + output.getvalue())
+        self.assertNotIn("synthetic-subject", body + output.getvalue())
+
+    def test_r3_writer_failure_has_a_fixed_non_sensitive_stage(self) -> None:
+        browser = "synthetic-browser"
+        self.server.flows.put("state", probe.PendingFlow(hashlib.sha256(browser.encode()).digest(), "nonce", "verifier", time.monotonic()))
+        self.server.r3_metadata_runtime = mock.Mock()
+        self.server.r3_metadata_runtime.attest_and_write.side_effect = probe.R3AttestationMetadataWriterError("synthetic-writer-error")
+        session = FakeSession(200, b'{"id_token":"synthetic-id-token"}')
+        with mock.patch.object(probe.requests, "Session", return_value=session):
+            with mock.patch.object(probe, "_verified_subject", return_value="synthetic-subject"):
+                with contextlib.redirect_stderr(io.StringIO()) as output:
+                    status, _headers, body = self.request("/auth/google/callback?state=state&code=synthetic-code", cookie=f"{probe.COOKIE_NAME}={browser}")
+        self.assertEqual(status, 502)
+        self.assertIn("mission_control_google_probe_stage=failed_metadata_write", output.getvalue())
+        self.assertNotIn("synthetic-writer-error", body + output.getvalue())
+        self.assertNotIn("synthetic-subject", body + output.getvalue())
+
     def test_health_and_mutations_have_no_authority(self) -> None:
         self.assertIn("authority_effect=none", self.request("/auth/google/healthz")[2])
         for method in ("POST", "PUT", "PATCH", "DELETE", "OPTIONS"):
