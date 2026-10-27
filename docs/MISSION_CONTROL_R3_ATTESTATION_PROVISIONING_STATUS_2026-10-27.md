@@ -6,8 +6,8 @@ The R3 reauthentication-attestation design remains **default-off** and has no
 runtime authority. The Google identity probe remains separate from the
 attestation handoff and does not create a Mission Control session.
 
-The intended dedicated PostgreSQL database and its protected host files are
-not provisioned. No shared application database has been used.
+The dedicated PostgreSQL database and its protected host files are provisioned
+and independently verified. No shared application database has been used.
 
 ## Designed boundary
 
@@ -48,22 +48,36 @@ container. The earlier zero-table result is therefore not evidence of a
 database consistency fault and must not be used as a basis for granting
 authority.
 
+## Production-equivalent provision result
+
+After fresh explicit approval, the dedicated database was provisioned using
+the verified temporary-file migration delivery method. A separate read-only
+audit confirmed:
+
+1. Exactly one `mission_control` database and one
+   `mission_control_migrator` role exist.
+2. Exactly five `mission_control` tables exist.
+3. The migration role has no superuser, database-creation, role-creation, or
+   inherited privileges.
+4. The migration-password file is `root:root` mode `0400`.
+5. The attestation signing-key file is `root:10002` mode `0640`.
+
+The provisioned schema stores only design-approved metadata and constrains all
+authority flags false. Provisioning did not enable the R3 handoff, create a
+Mission Control session, or permit any external action adapter.
+
 ## Next gate
 
-A fresh explicit approval is required before a production-equivalent,
-dedicated-database provision attempt. It must use the verified temporary-file
-migration delivery method, verify exactly five tables and protected-file modes,
-and roll back all newly created state on any failure. It must not activate the
-handoff or any external action adapter.
+The R3 handoff remains disabled. Any runtime integration needs separate,
+explicit approval for the exact integration boundary and a fresh R3
+confirmation flow; the database alone is not authority to activate it.
 
 ## Monitoring criteria
 
 This record may advance only when all of the following are independently
 verified:
 
-1. A new explicit approval authorizes a production-equivalent dedicated
-   database provision attempt.
-2. Post-provision verification observes exactly the intended five tables and
-   the expected protected-file ownership and modes.
-3. The R3 handoff remains disabled until a separately approved runtime
+1. A periodic read-only audit continues to observe the five-table schema,
+   isolated role flags, and protected-file ownership and modes.
+2. The R3 handoff remains disabled until a separately approved runtime
    integration and fresh R3 confirmation flow exist.
