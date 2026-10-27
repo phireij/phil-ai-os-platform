@@ -226,7 +226,10 @@ class ProbeHandler(BaseHTTPRequestHandler):
             "code_challenge": _challenge(verifier),
             "code_challenge_method": "S256",
         })
-        cookie = f"{COOKIE_NAME}={browser}; Path=/; Secure; HttpOnly; SameSite=Lax"
+        # Google returns through a cross-site OAuth redirect.  The cookie stays
+        # host-only, Secure, HTTP-only, and bound to a single five-minute flow;
+        # ``None`` ensures compatible browsers send it on that verified return.
+        cookie = f"{COOKIE_NAME}={browser}; Path=/; Secure; HttpOnly; SameSite=None"
         self._send(HTTPStatus.FOUND, "Continue to Google", location=f"{AUTHORIZATION_URL}?{query}", cookie=cookie)
 
     def _callback(self, query: str) -> None:
@@ -234,7 +237,7 @@ class ProbeHandler(BaseHTTPRequestHandler):
         code = _single_query_value(query, "code", 4096)
         flow = self.server.flows.take(state) if state and code else None  # type: ignore[attr-defined]
         browser = _cookie_value(self.headers.get("Cookie", ""))
-        clear_cookie = f"{COOKIE_NAME}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0"
+        clear_cookie = f"{COOKIE_NAME}=; Path=/; Secure; HttpOnly; SameSite=None; Max-Age=0"
         if not flow or not browser or not hmac.compare_digest(
             hashlib.sha256(browser.encode("utf-8")).digest(), flow.browser_hash
         ):
