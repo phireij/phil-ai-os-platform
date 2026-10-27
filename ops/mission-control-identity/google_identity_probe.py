@@ -25,6 +25,7 @@ import requests
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token as google_id_token
 
+from google_subject_enrollment import GoogleSubjectEnrollment, GoogleSubjectEnrollmentError
 from google_oidc_config import CLIENT_ID, ISSUER, REDIRECT_URI, _protected_file
 
 
@@ -255,17 +256,21 @@ class ProbeHandler(BaseHTTPRequestHandler):
                 token = token_response.get("id_token") if isinstance(token_response, dict) else None
                 if not isinstance(token, str):
                     raise ValueError("id_token_missing")
-                _verified_subject(token, flow.nonce, session)
+                verified_subject = _verified_subject(token, flow.nonce, session)
+                enrollment = getattr(self.server, "subject_enrollment", None)
+                if enrollment is not None:
+                    enrollment.enroll(verified_subject)
         except Exception:
             # Neither the exception nor the authorization code may reach a log.
             self._send(HTTPStatus.BAD_GATEWAY, "Google sign-in could not be completed", cookie=clear_cookie)
             return
 
+        enrolled = getattr(self.server, "subject_enrollment", None) is not None
         body = (
             "<!doctype html><html><head><title>CEO identity probe</title></head><body>"
             "<h1>Google identity verified</h1><p>No Mission Control session was created.</p>"
-            "<p>Identity details are not displayed or retained by this probe.</p>"
-            "</body></html>"
+            + ("<p>A protected subject digest was enrolled for later exact matching.</p>" if enrolled else "<p>Identity details are not displayed or retained by this probe.</p>")
+            + "</body></html>"
         )
         self._send(HTTPStatus.OK, body, cookie=clear_cookie)
 
@@ -279,6 +284,11 @@ def main() -> None:
     server = ThreadingHTTPServer(("0.0.0.0", 8092), ProbeHandler)
     server.flows = FlowStore()  # type: ignore[attr-defined]
     server.secret_file = secret_file  # type: ignore[attr-defined]
+    if os.environ.get("MISSION_CONTROL_GOOGLE_SUBJECT_ENROLLMENT_ENABLED") == "true":
+        try:
+            server.subject_enrollment = GoogleSubjectEnrollment.from_environment()  # type: ignore[attr-defined]
+        except GoogleSubjectEnrollmentError as error:
+            raise SystemExit(str(error)) from error
     server.serve_forever()
 
 

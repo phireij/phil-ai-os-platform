@@ -5,6 +5,7 @@ RUN pip install --no-cache-dir --disable-pip-version-check cryptography==47.0.0 
     && addgroup -S -g 10002 app \
     && adduser -S -D -u 10002 -G app app
 COPY ops/mission-control-identity/google_oidc_config.py /srv/google_oidc_config.py
+COPY ops/mission-control-identity/google_subject_enrollment.py /srv/google_subject_enrollment.py
 COPY ops/mission-control-identity/google_identity_probe.py /srv/google_identity_probe.py
 USER app
 EXPOSE 8092

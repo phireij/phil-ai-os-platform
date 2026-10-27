@@ -291,6 +291,20 @@ class ProbeHttpChecks(unittest.TestCase):
         self.assertIn("Max-Age=0", headers["Set-Cookie"])
         self.assertNotIn("mission_control:conversation", body)
 
+    def test_opt_in_enrollment_receives_only_the_verified_subject_and_grants_no_session(self) -> None:
+        browser = "synthetic-browser"
+        self.server.flows.put("state", probe.PendingFlow(hashlib.sha256(browser.encode()).digest(), "nonce", "verifier", time.monotonic()))
+        self.server.subject_enrollment = mock.Mock()
+        session = FakeSession(200, b'{"id_token":"synthetic-id-token"}')
+        with mock.patch.object(probe.requests, "Session", return_value=session):
+            with mock.patch.object(probe, "_verified_subject", return_value="synthetic-subject"):
+                status, _headers, body = self.request("/auth/google/callback?state=state&code=synthetic-code", cookie=f"{probe.COOKIE_NAME}={browser}")
+        self.assertEqual(status, 200)
+        self.server.subject_enrollment.enroll.assert_called_once_with("synthetic-subject")
+        self.assertIn("protected subject digest was enrolled", body)
+        self.assertIn("No Mission Control session was created", body)
+        self.assertNotIn("synthetic-subject", body)
+
     def test_health_and_mutations_have_no_authority(self) -> None:
         self.assertIn("authority_effect=none", self.request("/auth/google/healthz")[2])
         for method in ("POST", "PUT", "PATCH", "DELETE", "OPTIONS"):

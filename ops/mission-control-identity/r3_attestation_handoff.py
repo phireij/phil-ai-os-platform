@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import secrets
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +27,7 @@ from r3_attestation_handoff_config import R3AttestationHandoffConfig
 
 
 METADATA_RETENTION_SECONDS = 365 * 24 * 60 * 60
+_SUBJECT_SHA256 = re.compile(r"^sha256:[a-f0-9]{64}$")
 
 
 class R3AttestationHandoffError(ValueError):
@@ -78,8 +80,9 @@ class R3AttestationHandoff:
         """Issue a five-minute proof, retaining only safe metadata in the result."""
 
         _validate_verified_subject(verified_subject)
-        expected_subject = _read_exact_subject(self._config.ceo_subject_file)
-        if not hmac.compare_digest(verified_subject, expected_subject):
+        expected_subject_digest = _read_subject_digest(self._config.ceo_subject_file)
+        supplied_subject_digest = _subject_digest(verified_subject)
+        if not hmac.compare_digest(supplied_subject_digest, expected_subject_digest):
             raise R3AttestationHandoffError("r3_attestation_handoff_subject_mismatch")
         signing_key = _read_signing_key(self._config.signing_key_file)
         try:
@@ -119,18 +122,21 @@ def _validate_verified_subject(subject: str) -> None:
         raise R3AttestationHandoffError("r3_attestation_handoff_verified_subject_invalid")
 
 
-def _read_exact_subject(path: Path) -> str:
+def _read_subject_digest(path: Path) -> str:
     try:
         value = path.read_text(encoding="utf-8")
     except OSError as error:
         raise R3AttestationHandoffError("r3_attestation_handoff_subject_unavailable") from error
     if not value.endswith("\n") or value.count("\n") != 1:
         raise R3AttestationHandoffError("r3_attestation_handoff_subject_format_invalid")
-    subject = value[:-1]
-    _validate_verified_subject(subject)
-    if any(character.isspace() for character in subject):
+    digest = value[:-1]
+    if not _SUBJECT_SHA256.fullmatch(digest):
         raise R3AttestationHandoffError("r3_attestation_handoff_subject_format_invalid")
-    return subject
+    return digest
+
+
+def _subject_digest(subject: str) -> str:
+    return "sha256:" + hashlib.sha256(subject.encode("utf-8")).hexdigest()
 
 
 def _read_signing_key(path: Path) -> bytes:
