@@ -67,6 +67,15 @@ JWT, request a token, use a network client, or dispatch an issue.
   explicitly revoked after the replacement key is independently verified for a
   future approved runtime; do not delete the replacement key.
 
+### Lost-key revocation — 2026-10-27
+
+- Following the owner's explicit approval, the earlier missing key was revoked
+  in GitHub's App key-pair settings. GitHub now reports one remaining key and
+  disables its deletion because it is the sole active key.
+- The remaining key is the replacement previously verified at the dedicated
+  root-only host path. No key fingerprint, contents, JWT, or installation token
+  is retained in this record.
+
 ## Required preflight
 
 Every potential dispatch must fail closed unless all of the following are true
