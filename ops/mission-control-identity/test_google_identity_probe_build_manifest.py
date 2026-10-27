@@ -14,6 +14,7 @@ IMAGE_WORKFLOW = ROOT / ".github/workflows/mission-control-google-identity-probe
 PINNED_DEPENDENCIES = (
     "cryptography==47.0.0",
     "google-auth==2.50.0",
+    "psycopg[binary]==3.2.9",
     "requests==2.32.4",
 )
 

@@ -305,11 +305,32 @@ class ProbeHttpChecks(unittest.TestCase):
         self.assertIn("No Mission Control session was created", body)
         self.assertNotIn("synthetic-subject", body)
 
+    def test_opt_in_r3_runtime_receives_the_verified_subject_only_and_grants_no_session(self) -> None:
+        browser = "synthetic-browser"
+        self.server.flows.put("state", probe.PendingFlow(hashlib.sha256(browser.encode()).digest(), "nonce", "verifier", time.monotonic()))
+        self.server.r3_metadata_runtime = mock.Mock()
+        session = FakeSession(200, b'{"id_token":"synthetic-id-token"}')
+        with mock.patch.object(probe.requests, "Session", return_value=session):
+            with mock.patch.object(probe, "_verified_subject", return_value="synthetic-subject"):
+                status, _headers, body = self.request("/auth/google/callback?state=state&code=synthetic-code", cookie=f"{probe.COOKIE_NAME}={browser}")
+        self.assertEqual(status, 200)
+        self.server.r3_metadata_runtime.attest_and_write.assert_called_once_with("synthetic-subject")
+        self.assertIn("R3 reauthentication metadata was recorded with no action authority", body)
+        self.assertIn("No Mission Control session was created", body)
+        self.assertNotIn("synthetic-subject", body)
+
     def test_health_and_mutations_have_no_authority(self) -> None:
         self.assertIn("authority_effect=none", self.request("/auth/google/healthz")[2])
         for method in ("POST", "PUT", "PATCH", "DELETE", "OPTIONS"):
             with self.subTest(method=method):
                 self.assertEqual(self.request("/auth/google/start", method=method)[0], 405)
+
+    def test_runtime_requires_both_default_off_gates(self) -> None:
+        with mock.patch.dict("os.environ", {"MISSION_CONTROL_GOOGLE_PROBE_ENABLED": "true", "MISSION_CONTROL_GOOGLE_CLIENT_ID": probe.CLIENT_ID, "MISSION_CONTROL_GOOGLE_CLIENT_SECRET_FILE": "/tmp/secret", "MISSION_CONTROL_R3_ATTESTATION_RUNTIME_ENABLED": "true"}, clear=True):
+            with mock.patch.object(probe, "_protected_file", return_value=mock.Mock()):
+                with mock.patch.object(probe.R3AttestationHandoff, "from_environment", side_effect=ValueError("handoff_inactive")):
+                    with self.assertRaisesRegex(SystemExit, "handoff_inactive"):
+                        probe.main()
 
 
 if __name__ == "__main__":

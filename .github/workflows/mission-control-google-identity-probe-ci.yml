@@ -29,6 +29,7 @@ jobs:
         shell: bash
         run: |
           bash -n ops/mission-control-identity/activate-google-identity-probe.sh
+          bash -n ops/mission-control-identity/activate-google-identity-probe-r3-metadata-writer.sh
           bash -n ops/mission-control-identity/stage-google-identity-probe-host-secret.sh
       - name: Verify offline OAuth boundaries
         shell: bash
@@ -36,8 +37,11 @@ jobs:
           set -euo pipefail
           python3 -m venv /tmp/mission-control-google-probe-venv
           source /tmp/mission-control-google-probe-venv/bin/activate
-          python3 -m pip install --disable-pip-version-check cryptography==47.0.0 google-auth==2.50.0 requests==2.32.4
+          python3 -m pip install --disable-pip-version-check cryptography==47.0.0 google-auth==2.50.0 psycopg[binary]==3.2.9 requests==2.32.4
           python3 ops/mission-control-identity/test_google_identity_probe.py
+          python3 ops/mission-control-identity/test_r3_attestation_metadata_writer.py
+          python3 ops/mission-control-identity/test_r3_attestation_metadata_writer_config.py
+          python3 ops/mission-control-identity/test_r3_attestation_metadata_writer_activation_script.py
           python3 ops/mission-control-identity/test_google_identity_probe_runtime_workflow.py
       - name: Build inactive probe image
         shell: bash
