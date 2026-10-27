@@ -14,7 +14,9 @@ from pathlib import Path
 
 
 ISSUER = "https://accounts.google.com"
-SIGNING_KEY_PATH = Path("/opt/phil-ai-os-platform/mission-control/secrets/google-r3-attestation-hmac-key")
+# The root:app 0640 host key is exposed read-only only at this in-container
+# location. The host path is never accepted as runtime configuration.
+SIGNING_KEY_PATH = Path("/run/secrets/r3_signing_key")
 
 
 class R3AttestationHandoffConfigurationError(ValueError):

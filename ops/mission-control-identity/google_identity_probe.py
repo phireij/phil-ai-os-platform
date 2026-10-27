@@ -27,6 +27,8 @@ from google.oauth2 import id_token as google_id_token
 
 from google_subject_enrollment import GoogleSubjectEnrollment, GoogleSubjectEnrollmentError
 from google_oidc_config import CLIENT_ID, ISSUER, REDIRECT_URI, _protected_file
+from r3_attestation_handoff import R3AttestationHandoff, R3AttestationHandoffError
+from r3_attestation_metadata_writer import R3AttestationMetadataWriter, R3AttestationMetadataWriterError
 
 
 AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -48,6 +50,21 @@ class PendingFlow:
     nonce: str
     verifier: str
     created_at: float
+
+
+@dataclass(frozen=True)
+class R3MetadataRuntime:
+    """Private R3 proof-to-metadata bridge; it has no action capability."""
+
+    handoff: R3AttestationHandoff
+    writer: R3AttestationMetadataWriter
+
+    def attest_and_write(self, verified_subject: str) -> None:
+        issued = self.handoff.issue_for_verified_subject(
+            verified_subject=verified_subject,
+            authenticated_at_epoch=int(time.time()),
+        )
+        self.writer.write(issued.metadata)
 
 
 class FlowStore:
@@ -260,16 +277,21 @@ class ProbeHandler(BaseHTTPRequestHandler):
                 enrollment = getattr(self.server, "subject_enrollment", None)
                 if enrollment is not None:
                     enrollment.enroll(verified_subject)
+                r3_runtime = getattr(self.server, "r3_metadata_runtime", None)
+                if r3_runtime is not None:
+                    r3_runtime.attest_and_write(verified_subject)
         except Exception:
             # Neither the exception nor the authorization code may reach a log.
             self._send(HTTPStatus.BAD_GATEWAY, "Google sign-in could not be completed", cookie=clear_cookie)
             return
 
         enrolled = getattr(self.server, "subject_enrollment", None) is not None
+        r3_written = getattr(self.server, "r3_metadata_runtime", None) is not None
         body = (
             "<!doctype html><html><head><title>CEO identity probe</title></head><body>"
             "<h1>Google identity verified</h1><p>No Mission Control session was created.</p>"
             + ("<p>A protected subject digest was enrolled for later exact matching.</p>" if enrolled else "<p>Identity details are not displayed or retained by this probe.</p>")
+            + ("<p>R3 reauthentication metadata was recorded with no action authority.</p>" if r3_written else "")
             + "</body></html>"
         )
         self._send(HTTPStatus.OK, body, cookie=clear_cookie)
@@ -288,6 +310,14 @@ def main() -> None:
         try:
             server.subject_enrollment = GoogleSubjectEnrollment.from_environment()  # type: ignore[attr-defined]
         except GoogleSubjectEnrollmentError as error:
+            raise SystemExit(str(error)) from error
+    if os.environ.get("MISSION_CONTROL_R3_ATTESTATION_RUNTIME_ENABLED") == "true":
+        try:
+            server.r3_metadata_runtime = R3MetadataRuntime(  # type: ignore[attr-defined]
+                handoff=R3AttestationHandoff.from_environment(),
+                writer=R3AttestationMetadataWriter.from_environment(),
+            )
+        except (R3AttestationHandoffError, R3AttestationMetadataWriterError, ValueError) as error:
             raise SystemExit(str(error)) from error
     server.serve_forever()
 

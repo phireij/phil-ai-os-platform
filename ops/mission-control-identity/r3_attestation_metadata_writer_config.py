@@ -16,10 +16,12 @@ from pathlib import Path
 
 DATABASE_NAME = "mission_control"
 WRITER_ROLE = "mission_control_attestation_writer"
-WRITER_PASSWORD_PATH = Path(
-    "/opt/phil-ai-os-platform/mission-control/secrets/"
-    "mission-control-postgres-attestation-writer-password"
-)
+DATABASE_HOST = "buzz-prod-postgres-1"
+DATABASE_PORT = 5432
+# The host file is root:app 0640 and is exposed read-only at this exact
+# in-container path.  The host path is intentionally not accepted as a
+# container configuration value.
+WRITER_PASSWORD_PATH = Path("/run/secrets/attestation_writer_password")
 
 
 class R3AttestationMetadataWriterConfigurationError(ValueError):
@@ -32,6 +34,8 @@ class R3AttestationMetadataWriterConfig:
 
     database_name: str
     writer_role: str
+    database_host: str
+    database_port: int
     password_file: Path
     activation_state: str = "metadata_writer_configured"
     authority_effect: str = "none"
@@ -44,9 +48,15 @@ class R3AttestationMetadataWriterConfig:
             raise R3AttestationMetadataWriterConfigurationError("r3_attestation_metadata_writer_database_invalid")
         if os.environ.get("MISSION_CONTROL_R3_ATTESTATION_WRITER_ROLE") != WRITER_ROLE:
             raise R3AttestationMetadataWriterConfigurationError("r3_attestation_metadata_writer_role_invalid")
+        if os.environ.get("MISSION_CONTROL_R3_ATTESTATION_DATABASE_HOST") != DATABASE_HOST:
+            raise R3AttestationMetadataWriterConfigurationError("r3_attestation_metadata_writer_host_invalid")
+        if os.environ.get("MISSION_CONTROL_R3_ATTESTATION_DATABASE_PORT") != str(DATABASE_PORT):
+            raise R3AttestationMetadataWriterConfigurationError("r3_attestation_metadata_writer_port_invalid")
         return cls(
             database_name=DATABASE_NAME,
             writer_role=WRITER_ROLE,
+            database_host=DATABASE_HOST,
+            database_port=DATABASE_PORT,
             password_file=_protected_password_file("MISSION_CONTROL_R3_ATTESTATION_WRITER_PASSWORD_FILE"),
         )
 
