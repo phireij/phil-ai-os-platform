@@ -34,23 +34,36 @@ not provisioned. No shared application database has been used.
    returned zero visible `mission_control` schemas and tables. The guarded run
    therefore rolled back instead of retaining credentials or state.
 
+## Catalog diagnostic result
+
+The narrowly scoped disposable-database diagnostic completed successfully.
+Both the applying `psql` session and a new connection observed one
+`mission_control` schema, four foundation tables, and then five tables after
+the R3 metadata migration. The disposable database and role were removed at
+the end of the diagnostic.
+
+This establishes that PostgreSQL catalog visibility is consistent when the
+migrations are delivered through a temporary file inside the database
+container. The earlier zero-table result is therefore not evidence of a
+database consistency fault and must not be used as a basis for granting
+authority.
+
 ## Next gate
 
-Dedicated-database provisioning is paused pending a narrowly scoped
-PostgreSQL catalog-visibility diagnosis. That diagnosis must use a disposable
-database, verify in-session and second-session catalog state, remove the
-disposable database afterwards, and must not activate the handoff or any
-external action adapter.
+A fresh explicit approval is required before a production-equivalent,
+dedicated-database provision attempt. It must use the verified temporary-file
+migration delivery method, verify exactly five tables and protected-file modes,
+and roll back all newly created state on any failure. It must not activate the
+handoff or any external action adapter.
 
 ## Monitoring criteria
 
 This record may advance only when all of the following are independently
 verified:
 
-1. The disposable diagnostic resolves the catalog-visibility discrepancy.
-2. A new explicit approval authorizes a production-equivalent dedicated
+1. A new explicit approval authorizes a production-equivalent dedicated
    database provision attempt.
-3. Post-provision verification observes exactly the intended five tables and
+2. Post-provision verification observes exactly the intended five tables and
    the expected protected-file ownership and modes.
-4. The R3 handoff remains disabled until a separately approved runtime
+3. The R3 handoff remains disabled until a separately approved runtime
    integration and fresh R3 confirmation flow exist.
