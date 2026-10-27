@@ -34,14 +34,14 @@ class GoogleSubjectEnrollmentTests(unittest.TestCase):
         with mock.patch.dict("os.environ", {}, clear=True):
             with self.assertRaisesRegex(enrollment.GoogleSubjectEnrollmentError, "inactive"):
                 enrollment.GoogleSubjectEnrollment.from_environment()
-        fake_details = mock.Mock(st_mode=0o100620, st_uid=0, st_gid=10002)
+        fake_details = mock.Mock(st_mode=0o100660, st_uid=0, st_gid=10002)
         target = mock.Mock()
         target.lstat.return_value = fake_details
         target.read_text.return_value = enrollment.PENDING_MARKER
         with mock.patch.dict("os.environ", {
             "MISSION_CONTROL_GOOGLE_SUBJECT_ENROLLMENT_ENABLED": "true",
             "MISSION_CONTROL_GOOGLE_SUBJECT_ENROLLMENT_FILE": "/run/secrets/subject_enrollment",
-        }, clear=True), mock.patch.object(enrollment, "Path", return_value=target), mock.patch.object(enrollment.stat, "S_ISREG", return_value=True), mock.patch.object(enrollment.stat, "S_IMODE", return_value=0o620):
+        }, clear=True), mock.patch.object(enrollment, "Path", return_value=target), mock.patch.object(enrollment.stat, "S_ISREG", return_value=True), mock.patch.object(enrollment.stat, "S_IMODE", return_value=0o660):
             self.assertIsInstance(enrollment.GoogleSubjectEnrollment.from_environment(), enrollment.GoogleSubjectEnrollment)
 
     def test_source_has_no_network_or_raw_subject_output(self) -> None:
