@@ -88,6 +88,12 @@ class FlowStore:
                 return None
             return flow
 
+    def empty(self) -> bool:
+        """Report store emptiness for non-sensitive operational diagnostics."""
+        with self._lock:
+            self._expire(time.monotonic())
+            return not self._flows
+
     def _expire(self, now: float) -> None:
         for key, flow in list(self._flows.items()):
             if now - flow.created_at > FLOW_SECONDS:
@@ -219,6 +225,7 @@ class ProbeHandler(BaseHTTPRequestHandler):
         if not self.server.flows.put(state, flow):  # type: ignore[attr-defined]
             self._send(HTTPStatus.SERVICE_UNAVAILABLE, "Sign-in temporarily unavailable")
             return
+        self._stage("flow_created")
         query = urlencode({
             "client_id": CLIENT_ID,
             "redirect_uri": REDIRECT_URI,
@@ -245,7 +252,8 @@ class ProbeHandler(BaseHTTPRequestHandler):
         browser = _cookie_value(self.headers.get("Cookie", ""))
         clear_cookie = f"{COOKIE_NAME}=; Path=/; Secure; HttpOnly; SameSite=None; Max-Age=0"
         if not flow:
-            self._stage("rejected_flow")
+            flows = self.server.flows  # type: ignore[attr-defined]
+            self._stage("rejected_flow_empty" if flows.empty() else "rejected_flow_with_pending")
             self._send(HTTPStatus.UNAUTHORIZED, "Sign-in could not be verified", cookie=clear_cookie)
             return
         # Some managed browsers suppress even a Secure, host-only OAuth return
