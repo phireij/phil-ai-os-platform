@@ -12,6 +12,7 @@ import hmac
 import json
 import os
 import secrets
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -166,6 +167,11 @@ class ProbeHandler(BaseHTTPRequestHandler):
         # The callback query contains an authorization code; never log it.
         return
 
+    @staticmethod
+    def _stage(stage: str) -> None:
+        """Emit an allowlisted diagnostic stage without identity or OAuth data."""
+        print(f"mission_control_google_probe_stage={stage}", file=sys.stderr, flush=True)
+
     def _send(self, status: HTTPStatus, body: str, *, location: str | None = None, cookie: str | None = None) -> None:
         payload = body.encode("utf-8")
         self.send_response(status)
@@ -239,6 +245,7 @@ class ProbeHandler(BaseHTTPRequestHandler):
         browser = _cookie_value(self.headers.get("Cookie", ""))
         clear_cookie = f"{COOKIE_NAME}=; Path=/; Secure; HttpOnly; SameSite=None; Max-Age=0"
         if not flow:
+            self._stage("rejected_flow")
             self._send(HTTPStatus.UNAUTHORIZED, "Sign-in could not be verified", cookie=clear_cookie)
             return
         # Some managed browsers suppress even a Secure, host-only OAuth return
@@ -250,9 +257,11 @@ class ProbeHandler(BaseHTTPRequestHandler):
         if browser and not hmac.compare_digest(
             hashlib.sha256(browser.encode("utf-8")).digest(), flow.browser_hash
         ):
+            self._stage("rejected_browser_binding")
             self._send(HTTPStatus.UNAUTHORIZED, "Sign-in could not be verified", cookie=clear_cookie)
             return
 
+        stage = "token_exchange"
         try:
             with requests.Session() as session:
                 session.trust_env = False
@@ -277,6 +286,7 @@ class ProbeHandler(BaseHTTPRequestHandler):
                 )
                 if response.status_code != 200:
                     raise ValueError("token_exchange_failed")
+                stage = "token_response"
                 raw = response.raw.read(MAX_TOKEN_RESPONSE_BYTES + 1, decode_content=True)
                 response.close()
                 if len(raw) > MAX_TOKEN_RESPONSE_BYTES:
@@ -285,15 +295,19 @@ class ProbeHandler(BaseHTTPRequestHandler):
                 token = token_response.get("id_token") if isinstance(token_response, dict) else None
                 if not isinstance(token, str):
                     raise ValueError("id_token_missing")
+                stage = "identity_verification"
                 verified_subject = _verified_subject(token, flow.nonce, session)
                 enrollment = getattr(self.server, "subject_enrollment", None)
                 if enrollment is not None:
+                    stage = "subject_enrollment"
                     enrollment.enroll(verified_subject)
                 r3_runtime = getattr(self.server, "r3_metadata_runtime", None)
                 if r3_runtime is not None:
+                    stage = "metadata_write"
                     r3_runtime.attest_and_write(verified_subject)
         except Exception:
             # Neither the exception nor the authorization code may reach a log.
+            self._stage(f"failed_{stage}")
             self._send(HTTPStatus.BAD_GATEWAY, "Google sign-in could not be completed", cookie=clear_cookie)
             return
 
@@ -306,6 +320,7 @@ class ProbeHandler(BaseHTTPRequestHandler):
             + ("<p>R3 reauthentication metadata was recorded with no action authority.</p>" if r3_written else "")
             + "</body></html>"
         )
+        self._stage("verified")
         self._send(HTTPStatus.OK, body, cookie=clear_cookie)
 
 

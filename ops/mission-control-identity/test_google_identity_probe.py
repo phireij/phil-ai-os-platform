@@ -279,6 +279,7 @@ class ProbeHttpChecks(unittest.TestCase):
                 status, _headers, body = self.request("/auth/google/callback?state=state&code=synthetic-code", cookie=f"{probe.COOKIE_NAME}={browser}")
         self.assertEqual(status, 502)
         self.assertNotIn("synthetic-code", body + output.getvalue())
+        self.assertIn("mission_control_google_probe_stage=failed_token_exchange", output.getvalue())
         self.assertFalse(session.post_args[1]["allow_redirects"])
         self.assertFalse(session.trust_env)
         self.assertEqual(session.max_redirects, 0)
