@@ -103,3 +103,10 @@ verified:
    isolated role flags, and protected-file ownership and modes.
 2. The R3 handoff remains disabled until a separately approved runtime
    integration and fresh R3 confirmation flow exist.
+
+The `Mission Control safety monitor` is a weekly, read-only Codex heartbeat
+attached to this work. It checks the posture above, the probe's default-off
+health state, and Mission Control pull-request/CI health. It stays quiet when
+there is no actionable change, and it is explicitly forbidden from enabling a
+handoff, connecting a runtime writer, changing secrets, creating GitHub
+issues, or taking an external action.
