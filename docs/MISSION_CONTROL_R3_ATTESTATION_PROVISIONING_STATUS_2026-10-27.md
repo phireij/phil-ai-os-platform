@@ -68,9 +68,20 @@ Mission Control session, or permit any external action adapter.
 
 ## Next gate
 
-The R3 handoff remains disabled. Any runtime integration needs separate,
-explicit approval for the exact integration boundary and a fresh R3
-confirmation flow; the database alone is not authority to activate it.
+The R3 handoff remains disabled. The approved implementation boundary now has
+an offline, default-off handoff component: it can compare a verified Google
+subject with a protected host mapping, issue a five-minute internal proof, and
+derive metadata that is safe for the dedicated database. It has no listener,
+database connection, route, action adapter, or dispatch authority.
+
+The live probe has been checked without reading any identity value. Its
+`MISSION_CONTROL_GOOGLE_CEO_SUBJECT_FILE` mapping is not configured. The
+dedicated database also has no least-privilege runtime writer role. These are
+intentional activation blockers; the current migration role must not be reused
+by a runtime service. A future deployment therefore needs the protected
+subject mapping, a separately provisioned least-privilege writer credential,
+and a distinct deployment approval. A fresh R3 confirmation remains required
+before any external action attempt.
 
 ## Monitoring criteria
 
