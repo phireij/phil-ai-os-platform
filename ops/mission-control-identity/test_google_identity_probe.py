@@ -244,7 +244,9 @@ class ProbeHttpChecks(unittest.TestCase):
         status, headers, body = self.request("/auth/google/start")
         self.assertEqual(status, 302)
         self.assertEqual(body, "Continue to Google")
-        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertEqual(headers["Cache-Control"], "no-store, no-cache, max-age=0, must-revalidate")
+        self.assertEqual(headers["Pragma"], "no-cache")
+        self.assertEqual(headers["Expires"], "0")
         self.assertEqual(headers["Referrer-Policy"], "no-referrer")
         self.assertEqual(headers["Content-Security-Policy"], "default-src 'none'; base-uri 'none'; frame-ancestors 'none'")
         self.assertIn("Secure; HttpOnly; SameSite=None", headers["Set-Cookie"])
@@ -257,6 +259,12 @@ class ProbeHttpChecks(unittest.TestCase):
         self.assertEqual(values["code_challenge_method"], ["S256"])
         self.assertEqual(values["response_type"], ["code"])
         self.assertTrue(values["state"][0] and values["nonce"][0])
+
+    def test_start_accepts_only_a_bounded_opaque_cache_buster(self) -> None:
+        self.assertEqual(self.request("/auth/google/start?attempt=mc_r3_retry_20261027")[0], 302)
+        for query in ("?attempt=short", "?attempt=mc-r3-retry-20261027&extra=value", "?other=mc-r3-retry-20261027"):
+            with self.subTest(query=query):
+                self.assertEqual(self.request("/auth/google/start" + query)[0], 404)
 
     def test_callback_refuses_unbound_state_and_replay_without_network(self) -> None:
         with mock.patch.object(probe.requests, "Session") as session:

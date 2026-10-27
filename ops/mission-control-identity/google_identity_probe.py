@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import sys
 import threading
@@ -39,6 +40,7 @@ COOKIE_NAME = "__Host-mc-oauth-probe"
 # weakening the distinct five-minute lifetime of the issued R3 proof.
 FLOW_SECONDS = 900
 MAX_FLOWS = 100
+ATTEMPT_PATTERN = re.compile(r"[A-Za-z0-9_-]{16,64}\Z")
 MAX_TOKEN_RESPONSE_BYTES = 65536
 MAX_CERTIFICATE_RESPONSE_BYTES = 131072
 CERTIFICATE_URLS = frozenset({
@@ -139,6 +141,18 @@ def _single_query_value(query: str, key: str, maximum: int) -> str:
     return values[0]
 
 
+def _valid_start_query(query: str) -> bool:
+    """Permit only a bounded opaque cache-buster on the existing start route."""
+    if not query:
+        return True
+    try:
+        values = parse_qs(query, strict_parsing=True, max_num_fields=1)
+    except ValueError:
+        return False
+    attempt = values.get("attempt", [])
+    return len(attempt) == 1 and bool(ATTEMPT_PATTERN.fullmatch(attempt[0]))
+
+
 def _verified_subject(token: str, nonce: str, session: requests.Session) -> str:
     if len(token) > 16384:
         raise ValueError("id_token_too_large")
@@ -184,7 +198,9 @@ class ProbeHandler(BaseHTTPRequestHandler):
         payload = body.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
         self.send_header("Content-Security-Policy", "default-src 'none'; base-uri 'none'; frame-ancestors 'none'")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
@@ -201,7 +217,7 @@ class ProbeHandler(BaseHTTPRequestHandler):
         if self.headers.get("Host") != "miscon.phireij.cloud":
             self._send(HTTPStatus.BAD_REQUEST, "Invalid host")
             return
-        if path.path == "/auth/google/start" and not path.query:
+        if path.path == "/auth/google/start" and _valid_start_query(path.query):
             self._start()
         elif path.path == "/auth/google/callback":
             self._callback(path.query)
