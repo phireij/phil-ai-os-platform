@@ -68,6 +68,9 @@ class FakeSession:
 
 
 class ConfigAndFlowChecks(unittest.TestCase):
+    def test_oauth_flow_ttl_is_fifteen_minutes(self) -> None:
+        self.assertEqual(probe.FLOW_SECONDS, 15 * 60)
+
     def test_config_is_inactive_by_default(self) -> None:
         with mock.patch.dict("os.environ", {}, clear=True):
             with self.assertRaisesRegex(config.GoogleOidcConfigurationError, "google_oidc_inactive"):
