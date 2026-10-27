@@ -293,10 +293,19 @@ class ProbeHttpChecks(unittest.TestCase):
                 status, _headers, body = self.request("/auth/google/callback?state=state&code=synthetic-code", cookie=f"{probe.COOKIE_NAME}={browser}")
         self.assertEqual(status, 502)
         self.assertNotIn("synthetic-code", body + output.getvalue())
-        self.assertIn("mission_control_google_probe_stage=failed_token_exchange", output.getvalue())
+        self.assertIn("mission_control_google_probe_stage=failed_token_exchange_unexpected_status", output.getvalue())
         self.assertFalse(session.post_args[1]["allow_redirects"])
         self.assertFalse(session.trust_env)
         self.assertEqual(session.max_redirects, 0)
+        self.assertTrue(session.response.closed)
+
+    def test_token_exchange_failure_stages_are_allowlisted_and_non_sensitive(self) -> None:
+        self.assertEqual(probe._token_exchange_failure_stage(400), "token_exchange_request_rejected")
+        self.assertEqual(probe._token_exchange_failure_stage(401), "token_exchange_client_rejected")
+        self.assertEqual(probe._token_exchange_failure_stage(403), "token_exchange_client_rejected")
+        self.assertEqual(probe._token_exchange_failure_stage(429), "token_exchange_rate_limited")
+        self.assertEqual(probe._token_exchange_failure_stage(500), "token_exchange_google_unavailable")
+        self.assertEqual(probe._token_exchange_failure_stage(302), "token_exchange_unexpected_status")
 
     def test_success_hides_identity_details_without_session_or_token(self) -> None:
         browser = "synthetic-browser"
