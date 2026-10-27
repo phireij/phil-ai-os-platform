@@ -114,6 +114,20 @@ JWT, request a token, use a network client, or dispatch an issue.
   It did not retain a JWT, installation token, authorization header, private
   key material, raw API response, or exact suspension timestamp.
 
+### Durable runtime safety ledger — 2026-10-27
+
+- The separately reviewed runtime boundary now persists one sandbox attempt per
+  approval and idempotency key in a transactional local ledger. Each reservation
+  is bound to the approval ID, plan digest, idempotency key, and expiry; a
+  duplicate, binding drift, expiry, or second terminal transition fails closed.
+- The ledger records only opaque identifiers, the approved plan digest, timing,
+  and a small fixed set of redacted failure classifications. It accepts no
+  provider error text, issue body, private key, JWT, installation token, or
+  authorization header.
+- This source layer remains unwired: it cannot read a credential, mint a JWT,
+  request a token, call GitHub, or dispatch an issue. Every persisted record
+  states that credential, token, and dispatch authority are false.
+
 ## Required preflight
 
 Every potential dispatch must fail closed unless all of the following are true
@@ -172,12 +186,8 @@ not a substitute for the planned independent secondary operator.
 
 ## Remaining implementation and activation gates
 
-1. Extend the merged source-only credential-boundary checks with a separately
-   reviewed runtime implementation that proves redaction, single-use lease
-   consumption, idempotency persistence, and all failure paths without logging
-   key or token material.
-2. The CEO approves one exact R3 issue packet, including the static title/body,
+1. The CEO approves one exact R3 issue packet, including the static title/body,
    plan digest, target, timing, and emergency-stop owner.
 
-Only step 2 authorizes one issue attempt. Until then, this is a source and
+Only step 1 authorizes one issue attempt. Until then, this is a source and
 operating-design record, not live execution authority.
