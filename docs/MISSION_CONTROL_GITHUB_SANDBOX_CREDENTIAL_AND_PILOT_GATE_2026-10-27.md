@@ -76,6 +76,15 @@ JWT, request a token, use a network client, or dispatch an issue.
   root-only host path. No key fingerprint, contents, JWT, or installation token
   is retained in this record.
 
+### Replacement verification and local-copy removal — 2026-10-27
+
+- The owner-authorized OpenSSL public-key fingerprint check on the protected
+  host file matched GitHub's sole remaining App key. The check emitted only the
+  public fingerprint; it did not disclose private-key content.
+- Following the owner's explicit deletion approval, the verified redundant
+  Downloads copy was removed from the workstation. The protected root-only host
+  file is now the sole retained private-key copy.
+
 ## Required preflight
 
 Every potential dispatch must fail closed unless all of the following are true
