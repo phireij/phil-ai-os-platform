@@ -82,9 +82,12 @@ class ConfigAndFlowChecks(unittest.TestCase):
 
     def test_flow_is_bounded_single_use_and_expires(self) -> None:
         store = probe.FlowStore()
+        self.assertTrue(store.empty())
         flow = probe.PendingFlow(b"hash", "nonce", "verifier", time.monotonic())
         self.assertTrue(store.put("state", flow))
+        self.assertFalse(store.empty())
         self.assertEqual(store.take("state"), flow)
+        self.assertTrue(store.empty())
         self.assertIsNone(store.take("state"))
         old = probe.PendingFlow(b"hash", "nonce", "verifier", time.monotonic() - probe.FLOW_SECONDS - 1)
         self.assertTrue(store.put("old", old))
