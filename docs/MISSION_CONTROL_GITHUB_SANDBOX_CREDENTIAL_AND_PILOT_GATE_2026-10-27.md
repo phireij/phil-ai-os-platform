@@ -99,6 +99,21 @@ JWT, request a token, use a network client, or dispatch an issue.
   successfully. It did not retain the JWT, private-key material, authorization
   header, installation credential, or raw API response.
 
+### Emergency-stop rehearsal — 2026-10-27
+
+- The owner-facing installation settings showed the **Suspend** control for the
+  one selected sandbox installation. Following the owner's explicit rehearsal
+  authorization, the App-owner emergency-stop endpoint returned `204` for the
+  suspension, and a subsequent read showed a non-null suspension timestamp.
+- The paired documented unsuspend endpoint then returned `204`; a final
+  read showed `suspended_at` as null. The installation is active again with its
+  original single-repository scope and no new token, issue, workflow, webhook,
+  repository setting, or other resource action.
+- The rehearsal signed short-lived App JWTs locally from the protected host key
+  and printed only HTTP result classes plus suspension-state classifications.
+  It did not retain a JWT, installation token, authorization header, private
+  key material, raw API response, or exact suspension timestamp.
+
 ## Required preflight
 
 Every potential dispatch must fail closed unless all of the following are true
@@ -161,11 +176,8 @@ not a substitute for the planned independent secondary operator.
    reviewed runtime implementation that proves redaction, single-use lease
    consumption, idempotency persistence, and all failure paths without logging
    key or token material.
-2. A manual suspend/revoke rehearsal completes without issuing an installation
-   token or creating an issue. The read-only App-installation preflight is
-   complete and recorded above.
-3. The CEO approves one exact R3 issue packet, including the static title/body,
+2. The CEO approves one exact R3 issue packet, including the static title/body,
    plan digest, target, timing, and emergency-stop owner.
 
-Only step 3 authorizes one issue attempt. Until then, this is a source and
+Only step 2 authorizes one issue attempt. Until then, this is a source and
 operating-design record, not live execution authority.
