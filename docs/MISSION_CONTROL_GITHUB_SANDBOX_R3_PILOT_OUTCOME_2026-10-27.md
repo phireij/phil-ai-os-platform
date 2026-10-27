@@ -61,3 +61,12 @@ then supplied the typed confirmation, but that bridge did not produce a
 machine-verifiable reauthentication timestamp. A production-capable adapter
 must bind an independently verifiable, five-minute-or-newer reauthentication
 record to its single-use approval before it can dispatch.
+
+## Post-pilot emergency stop
+
+After the single issue was verified and the pilot outcome was recorded, the
+CEO explicitly authorized the emergency stop. The protected App-level suspend
+request returned `204`, and the installation read-back confirmed that a
+suspension timestamp is present. The GitHub App installation is therefore
+suspended again. No installation token was minted and no second issue was
+attempted during closure.
