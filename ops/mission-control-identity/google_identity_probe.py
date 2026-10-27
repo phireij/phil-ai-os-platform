@@ -346,6 +346,18 @@ class ProbeHandler(BaseHTTPRequestHandler):
                 if r3_runtime is not None:
                     stage = "metadata_write"
                     r3_runtime.attest_and_write(verified_subject)
+        except R3AttestationHandoffError:
+            # Preserve the R3 handoff/write boundary in the diagnostic stream
+            # without releasing an identity, proof, or persistence error.
+            self._stage("failed_attestation_handoff")
+            self._send(HTTPStatus.BAD_GATEWAY, "Google sign-in could not be completed", cookie=clear_cookie)
+            return
+        except R3AttestationMetadataWriterError:
+            # The writer deliberately exposes no database details to callers or
+            # logs.  This fixed category is sufficient for safe remediation.
+            self._stage("failed_metadata_write")
+            self._send(HTTPStatus.BAD_GATEWAY, "Google sign-in could not be completed", cookie=clear_cookie)
+            return
         except Exception:
             # Neither the exception nor the authorization code may reach a log.
             self._stage(f"failed_{stage}")
