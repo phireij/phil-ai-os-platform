@@ -74,14 +74,25 @@ subject with a protected host mapping, issue a five-minute internal proof, and
 derive metadata that is safe for the dedicated database. It has no listener,
 database connection, route, action adapter, or dispatch authority.
 
-The live probe has been checked without reading any identity value. Its
-`MISSION_CONTROL_GOOGLE_CEO_SUBJECT_FILE` mapping is not configured. The
-dedicated database also has no least-privilege runtime writer role. These are
-intentional activation blockers; the current migration role must not be reused
-by a runtime service. A future deployment therefore needs the protected
-subject mapping, a separately provisioned least-privilege writer credential,
-and a distinct deployment approval. A fresh R3 confirmation remains required
-before any external action attempt.
+The one-time Google enrollment completed without retaining a raw identity
+value: the resulting subject mapping is a SHA-256 digest held in a protected
+host file (`root:root`, mode `0400`). The normal Google probe was restored
+afterward and still creates neither a Mission Control session nor an action.
+
+A separate `mission_control_attestation_writer` role is now provisioned for
+the R3 metadata table. A read-only audit verified a connection limit of one,
+database `CONNECT`, schema `USAGE`, and table `INSERT` only. It has no
+superuser, database-creation, role-creation, inherited, replication, bypass-
+RLS, `SELECT`, `UPDATE`, or `DELETE` privilege. Its credential file is
+`root:10002`, mode `0640`. A failed temporary password-staging file from an
+earlier provisioning attempt was removed after its exact path, owner, and mode
+were verified.
+
+These prerequisites do not activate the handoff. The current migration role
+must not be reused by a runtime service, and the writer role is not yet wired
+to any process, database network, route, or action adapter. A distinct runtime
+integration approval and fresh R3 confirmation remain required before any
+external action attempt.
 
 ## Monitoring criteria
 
