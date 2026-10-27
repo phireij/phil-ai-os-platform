@@ -85,6 +85,20 @@ JWT, request a token, use a network client, or dispatch an issue.
   Downloads copy was removed from the workstation. The protected root-only host
   file is now the sole retained private-key copy.
 
+### Read-only App-installation preflight — 2026-10-27
+
+- With the owner's explicit authorization, the protected host key signed one
+  short-lived RS256 App JWT solely to read the GitHub App installation metadata.
+  No installation access token was requested, and no issue, workflow, webhook,
+  repository setting, or other GitHub state was changed.
+- The API read succeeded and confirmed installation `175604299` belongs to App
+  `5486262`, targets a `User`, and has `repository_selection` set to
+  `selected`. Its effective permissions are only `metadata: read` and
+  `issues: write`; its event list is empty.
+- The preflight emitted only this non-secret configuration summary and exited
+  successfully. It did not retain the JWT, private-key material, authorization
+  header, installation credential, or raw API response.
+
 ## Required preflight
 
 Every potential dispatch must fail closed unless all of the following are true
@@ -143,16 +157,15 @@ not a substitute for the planned independent secondary operator.
 
 ## Remaining implementation and activation gates
 
-1. The owner places the already downloaded key at the dedicated host path with
-   the stated ownership and modes, without disclosing its contents.
-2. Extend the merged source-only credential-boundary checks with a separately
+1. Extend the merged source-only credential-boundary checks with a separately
    reviewed runtime implementation that proves redaction, single-use lease
    consumption, idempotency persistence, and all failure paths without logging
    key or token material.
-3. A read-only preflight and manual suspend/revoke rehearsal complete without
-   issuing an installation token or creating an issue.
-4. The CEO approves one exact R3 issue packet, including the static title/body,
+2. A manual suspend/revoke rehearsal completes without issuing an installation
+   token or creating an issue. The read-only App-installation preflight is
+   complete and recorded above.
+3. The CEO approves one exact R3 issue packet, including the static title/body,
    plan digest, target, timing, and emergency-stop owner.
 
-Only step 4 authorizes one issue attempt. Until then, this is a source and
+Only step 3 authorizes one issue attempt. Until then, this is a source and
 operating-design record, not live execution authority.
