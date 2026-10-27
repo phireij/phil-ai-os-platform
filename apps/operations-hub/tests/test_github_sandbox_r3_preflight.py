@@ -13,6 +13,7 @@ from operations_hub.github_sandbox_r3_preflight import (  # noqa: E402
     PilotIdempotencyEvidence,
     PilotLimitEvidence,
     R3PilotApprovalEvidence,
+    VerifiedR3ReauthenticationEvidence,
     review_r3_preflight,
 )
 
@@ -36,8 +37,8 @@ def approval(**overrides):
         "approval_id": "approval-r3-001",
         "plan_digest": PLAN_DIGEST,
         "risk_level": "R3",
+        "operator_subject": "ceo:phil-b",
         "typed_confirmation": "CREATE ONE LABELLED SANDBOX ISSUE in phireij/mission-control-github-sandbox",
-        "ceo_reauthenticated_at_epoch": NOW - 60,
         "approved_at_epoch": NOW - 60,
         "expires_at_epoch": NOW + 840,
         "revoked": False,
@@ -45,6 +46,19 @@ def approval(**overrides):
     }
     values.update(overrides)
     return R3PilotApprovalEvidence(**values)
+
+
+def reauthentication(**overrides):
+    values = {
+        "issuer": "mission-control-identity",
+        "subject": "ceo:phil-b",
+        "reauthenticated_at_epoch": NOW - 60,
+        "verification_id": "reauth-proof-001",
+        "attestation_digest": "sha256:" + "b" * 64,
+        "verification_state": "verified",
+    }
+    values.update(overrides)
+    return VerifiedR3ReauthenticationEvidence(**values)
 
 
 def limits(**overrides):
@@ -60,7 +74,7 @@ def limits(**overrides):
 
 class GitHubSandboxR3PreflightTests(unittest.TestCase):
     def test_complete_evidence_still_returns_only_a_blocked_preview(self):
-        preview = review_r3_preflight(request(), approval(), limits(), PilotIdempotencyEvidence("absent"), NOW)
+        preview = review_r3_preflight(request(), approval(), reauthentication(), limits(), PilotIdempotencyEvidence("absent"), NOW)
         self.assertEqual("blocked", preview.state)
         self.assertEqual("adapter_runtime_inactive", preview.reason)
         self.assertFalse(preview.execution_lease_issued)
@@ -79,9 +93,17 @@ class GitHubSandboxR3PreflightTests(unittest.TestCase):
         ):
             with self.subTest(overrides=overrides):
                 with self.assertRaisesRegex(GitHubSandboxR3PreflightError, error):
-                    review_r3_preflight(request(), approval(**overrides), limits(), PilotIdempotencyEvidence("absent"), NOW)
-        with self.assertRaisesRegex(GitHubSandboxR3PreflightError, "github_sandbox_ceo_reauthentication_stale"):
-            review_r3_preflight(request(), approval(ceo_reauthenticated_at_epoch=NOW - 301), limits(), PilotIdempotencyEvidence("absent"), NOW)
+                    review_r3_preflight(request(), approval(**overrides), reauthentication(), limits(), PilotIdempotencyEvidence("absent"), NOW)
+        for reauth_overrides, error in (
+            ({"verification_state": "claimed"}, "github_sandbox_reauthentication_unverified"),
+            ({"subject": "ceo:someone-else"}, "github_sandbox_reauthentication_subject_mismatch"),
+            ({"attestation_digest": "sha256:not-a-digest"}, "github_sandbox_reauthentication_attestation_invalid"),
+            ({"reauthenticated_at_epoch": NOW - 361}, "github_sandbox_ceo_reauthentication_stale"),
+            ({"reauthenticated_at_epoch": NOW + 1}, "github_sandbox_ceo_reauthentication_stale"),
+        ):
+            with self.subTest(reauth_overrides=reauth_overrides):
+                with self.assertRaisesRegex(GitHubSandboxR3PreflightError, error):
+                    review_r3_preflight(request(), approval(), reauthentication(**reauth_overrides), limits(), PilotIdempotencyEvidence("absent"), NOW)
 
     def test_stop_limit_budget_or_idempotency_evidence_fails_closed(self):
         for pilot_limits, idempotency, error in (
@@ -92,7 +114,7 @@ class GitHubSandboxR3PreflightTests(unittest.TestCase):
         ):
             with self.subTest(error=error):
                 with self.assertRaisesRegex(GitHubSandboxR3PreflightError, error):
-                    review_r3_preflight(request(), approval(), pilot_limits, idempotency, NOW)
+                    review_r3_preflight(request(), approval(), reauthentication(), pilot_limits, idempotency, NOW)
 
     def test_source_has_no_credential_or_execution_dependency(self):
         source = (ROOT / "src" / "operations_hub" / "github_sandbox_r3_preflight.py").read_text(encoding="utf-8")

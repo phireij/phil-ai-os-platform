@@ -8,6 +8,7 @@ returns a blocked preview; it cannot issue an execution lease.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import re
 
 from .github_sandbox_issue_pilot import GitHubSandboxIssuePilotRequest, preview_issue_dispatch
 
@@ -19,6 +20,7 @@ class GitHubSandboxR3PreflightError(ValueError):
 _R3_TTL_SECONDS = 15 * 60
 _CEO_REAUTH_MAX_AGE_SECONDS = 5 * 60
 _REQUIRED_CONFIRMATION = "CREATE ONE LABELLED SANDBOX ISSUE in phireij/mission-control-github-sandbox"
+_SHA256_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 @dataclass(frozen=True)
@@ -26,12 +28,29 @@ class R3PilotApprovalEvidence:
     approval_id: str
     plan_digest: str
     risk_level: str
+    operator_subject: str
     typed_confirmation: str
-    ceo_reauthenticated_at_epoch: int
     approved_at_epoch: int
     expires_at_epoch: int
     revoked: bool
     consumed: bool
+
+
+@dataclass(frozen=True)
+class VerifiedR3ReauthenticationEvidence:
+    """An identity service's verified reauthentication attestation.
+
+    This is deliberately separate from an approval timestamp. A future identity
+    adapter must verify the attestation before constructing this value; a caller
+    cannot satisfy the R3 gate merely by supplying a fresh-looking integer.
+    """
+
+    issuer: str
+    subject: str
+    reauthenticated_at_epoch: int
+    verification_id: str
+    attestation_digest: str
+    verification_state: str
 
 
 @dataclass(frozen=True)
@@ -66,6 +85,7 @@ class InertR3PreflightPreview:
 def review_r3_preflight(
     request: GitHubSandboxIssuePilotRequest,
     approval: R3PilotApprovalEvidence,
+    reauthentication: VerifiedR3ReauthenticationEvidence,
     limits: PilotLimitEvidence,
     idempotency: PilotIdempotencyEvidence,
     now_epoch_seconds: int,
@@ -73,19 +93,26 @@ def review_r3_preflight(
     """Validate all supplied R3 gate evidence and still fail closed at runtime."""
 
     preview_issue_dispatch(request)
-    _validate_approval(request, approval, now_epoch_seconds)
+    _validate_approval(request, approval, reauthentication, now_epoch_seconds)
     _validate_limits(limits)
     _validate_idempotency(idempotency)
     return InertR3PreflightPreview(approval_id=approval.approval_id, plan_digest=request.plan_digest)
 
 
-def _validate_approval(request: GitHubSandboxIssuePilotRequest, approval: R3PilotApprovalEvidence, now: int) -> None:
+def _validate_approval(
+    request: GitHubSandboxIssuePilotRequest,
+    approval: R3PilotApprovalEvidence,
+    reauthentication: VerifiedR3ReauthenticationEvidence,
+    now: int,
+) -> None:
     if not isinstance(approval, R3PilotApprovalEvidence):
         raise GitHubSandboxR3PreflightError("github_sandbox_approval_evidence_invalid")
     if not isinstance(now, int) or isinstance(now, bool) or now <= 0:
         raise GitHubSandboxR3PreflightError("github_sandbox_preflight_clock_invalid")
     if not isinstance(approval.approval_id, str) or not approval.approval_id:
         raise GitHubSandboxR3PreflightError("github_sandbox_approval_id_invalid")
+    if not isinstance(approval.operator_subject, str) or not approval.operator_subject:
+        raise GitHubSandboxR3PreflightError("github_sandbox_approval_subject_invalid")
     if approval.risk_level != "R3":
         raise GitHubSandboxR3PreflightError("github_sandbox_risk_not_r3")
     if approval.plan_digest != request.plan_digest:
@@ -100,7 +127,24 @@ def _validate_approval(request: GitHubSandboxIssuePilotRequest, approval: R3Pilo
         raise GitHubSandboxR3PreflightError("github_sandbox_approval_ttl_invalid")
     if now > approval.expires_at_epoch:
         raise GitHubSandboxR3PreflightError("github_sandbox_approval_expired")
-    if now - approval.ceo_reauthenticated_at_epoch > _CEO_REAUTH_MAX_AGE_SECONDS:
+    if not isinstance(reauthentication, VerifiedR3ReauthenticationEvidence):
+        raise GitHubSandboxR3PreflightError("github_sandbox_reauthentication_evidence_invalid")
+    if reauthentication.verification_state != "verified":
+        raise GitHubSandboxR3PreflightError("github_sandbox_reauthentication_unverified")
+    if not isinstance(reauthentication.issuer, str) or not reauthentication.issuer:
+        raise GitHubSandboxR3PreflightError("github_sandbox_reauthentication_issuer_invalid")
+    if reauthentication.subject != approval.operator_subject:
+        raise GitHubSandboxR3PreflightError("github_sandbox_reauthentication_subject_mismatch")
+    if not isinstance(reauthentication.verification_id, str) or not reauthentication.verification_id:
+        raise GitHubSandboxR3PreflightError("github_sandbox_reauthentication_verification_id_invalid")
+    if not isinstance(reauthentication.attestation_digest, str) or not _SHA256_DIGEST.fullmatch(reauthentication.attestation_digest):
+        raise GitHubSandboxR3PreflightError("github_sandbox_reauthentication_attestation_invalid")
+    if (
+        not isinstance(reauthentication.reauthenticated_at_epoch, int)
+        or isinstance(reauthentication.reauthenticated_at_epoch, bool)
+        or reauthentication.reauthenticated_at_epoch > approval.approved_at_epoch
+        or approval.approved_at_epoch - reauthentication.reauthenticated_at_epoch > _CEO_REAUTH_MAX_AGE_SECONDS
+    ):
         raise GitHubSandboxR3PreflightError("github_sandbox_ceo_reauthentication_stale")
 
 
