@@ -50,6 +50,17 @@ class R3AttestationHandoffChecks(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr + result.stdout)
         self.assertIn("R3_ATTESTATION_HANDOFF_MIGRATION_GREEN", result.stdout)
 
+    def test_foundation_migration_remains_design_only_and_authority_free(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "validate_approval_gated_foundation_migration.py")],
+            cwd=ROOT.parents[1],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr + result.stdout)
+        self.assertIn("APPROVAL_GATED_FOUNDATION_MIGRATION_GREEN", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
