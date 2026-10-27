@@ -263,6 +263,13 @@ class ProbeHttpChecks(unittest.TestCase):
             self.assertEqual(self.request(path, cookie=f"{probe.COOKIE_NAME}={browser}")[0], 401)
             session.assert_not_called()
 
+    def test_callback_without_a_browser_cookie_uses_the_single_use_server_flow(self) -> None:
+        self.server.flows.put("state", probe.PendingFlow(b"hash", "nonce", "verifier", time.monotonic()))
+        session = FakeSession(302)
+        with mock.patch.object(probe.requests, "Session", return_value=session):
+            self.assertEqual(self.request("/auth/google/callback?state=state&code=synthetic")[0], 502)
+        self.assertIsNotNone(session.post_args)
+
     def test_callback_rejects_token_redirect_and_hides_code(self) -> None:
         browser = "synthetic-browser"
         self.server.flows.put("state", probe.PendingFlow(hashlib.sha256(browser.encode()).digest(), "nonce", "verifier", time.monotonic()))

@@ -238,7 +238,16 @@ class ProbeHandler(BaseHTTPRequestHandler):
         flow = self.server.flows.take(state) if state and code else None  # type: ignore[attr-defined]
         browser = _cookie_value(self.headers.get("Cookie", ""))
         clear_cookie = f"{COOKIE_NAME}=; Path=/; Secure; HttpOnly; SameSite=None; Max-Age=0"
-        if not flow or not browser or not hmac.compare_digest(
+        if not flow:
+            self._send(HTTPStatus.UNAUTHORIZED, "Sign-in could not be verified", cookie=clear_cookie)
+            return
+        # Some managed browsers suppress even a Secure, host-only OAuth return
+        # cookie.  The state remains high-entropy, server-held, five-minute,
+        # and single-use; PKCE, nonce, issuer/audience/signature validation,
+        # and exact protected-subject matching remain mandatory.  Preserve the
+        # cookie binding whenever the browser does supply it, and reject a
+        # supplied mismatch rather than silently falling back.
+        if browser and not hmac.compare_digest(
             hashlib.sha256(browser.encode("utf-8")).digest(), flow.browser_hash
         ):
             self._send(HTTPStatus.UNAUTHORIZED, "Sign-in could not be verified", cookie=clear_cookie)
