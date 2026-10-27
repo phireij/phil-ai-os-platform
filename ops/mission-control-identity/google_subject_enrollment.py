@@ -39,7 +39,10 @@ class GoogleSubjectEnrollment:
             details = path.lstat()
         except OSError as error:
             raise GoogleSubjectEnrollmentError("google_subject_enrollment_file_unavailable") from error
-        if not stat.S_ISREG(details.st_mode) or (details.st_uid, details.st_gid, stat.S_IMODE(details.st_mode)) != (0, 10002, 0o620):
+        # The service group needs read access to validate the one-time pending
+        # marker and write access to replace it. The host seals the completed
+        # digest to root-only mode before any R3 handoff can use it.
+        if not stat.S_ISREG(details.st_mode) or (details.st_uid, details.st_gid, stat.S_IMODE(details.st_mode)) != (0, 10002, 0o660):
             raise GoogleSubjectEnrollmentError("google_subject_enrollment_file_permissions")
         if path.read_text(encoding="ascii") != PENDING_MARKER:
             raise GoogleSubjectEnrollmentError("google_subject_enrollment_not_pending")
