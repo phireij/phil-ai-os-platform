@@ -31,7 +31,7 @@ class R3AttestationHandoffTests(unittest.TestCase):
                 handoff.R3AttestationHandoff.from_environment()
 
     def test_issue_returns_only_safe_metadata_and_a_short_lived_internal_proof(self) -> None:
-        self.config.ceo_subject_file.read_text.return_value = self.subject + "\n"
+        self.config.ceo_subject_file.read_text.return_value = "sha256:" + hashlib.sha256(self.subject.encode()).hexdigest() + "\n"
         self.config.signing_key_file.read_bytes.return_value = self.signing_key
         result = handoff.R3AttestationHandoff(self.config).issue_for_verified_subject(
             verified_subject=self.subject, authenticated_at_epoch=1_700_000_000
@@ -49,12 +49,12 @@ class R3AttestationHandoffTests(unittest.TestCase):
         self.assertNotIn(result.token, repr(result.metadata))
 
     def test_mismatch_or_malformed_subject_never_issues_a_proof(self) -> None:
-        self.config.ceo_subject_file.read_text.return_value = self.subject + "\n"
+        self.config.ceo_subject_file.read_text.return_value = "sha256:" + hashlib.sha256(self.subject.encode()).hexdigest() + "\n"
         self.config.signing_key_file.read_bytes.return_value = self.signing_key
         service = handoff.R3AttestationHandoff(self.config)
         with self.assertRaisesRegex(handoff.R3AttestationHandoffError, "subject_mismatch"):
             service.issue_for_verified_subject(verified_subject="different-subject", authenticated_at_epoch=1_700_000_000)
-        self.config.ceo_subject_file.read_text.return_value = self.subject
+        self.config.ceo_subject_file.read_text.return_value = "sha256:" + hashlib.sha256(self.subject.encode()).hexdigest()
         with self.assertRaisesRegex(handoff.R3AttestationHandoffError, "subject_format_invalid"):
             service.issue_for_verified_subject(verified_subject=self.subject, authenticated_at_epoch=1_700_000_000)
 
