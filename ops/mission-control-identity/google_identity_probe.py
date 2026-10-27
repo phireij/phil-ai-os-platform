@@ -35,7 +35,9 @@ from r3_attestation_metadata_writer import R3AttestationMetadataWriter, R3Attest
 AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 COOKIE_NAME = "__Host-mc-oauth-probe"
-FLOW_SECONDS = 300
+# The OAuth round trip needs to accommodate a human account selection without
+# weakening the distinct five-minute lifetime of the issued R3 proof.
+FLOW_SECONDS = 900
 MAX_FLOWS = 100
 MAX_TOKEN_RESPONSE_BYTES = 65536
 MAX_CERTIFICATE_RESPONSE_BYTES = 131072
@@ -240,7 +242,7 @@ class ProbeHandler(BaseHTTPRequestHandler):
             "code_challenge_method": "S256",
         })
         # Google returns through a cross-site OAuth redirect.  The cookie stays
-        # host-only, Secure, HTTP-only, and bound to a single five-minute flow;
+        # host-only, Secure, HTTP-only, and bound to a single 15-minute flow;
         # ``None`` ensures compatible browsers send it on that verified return.
         cookie = f"{COOKIE_NAME}={browser}; Path=/; Secure; HttpOnly; SameSite=None"
         self._send(HTTPStatus.FOUND, "Continue to Google", location=f"{AUTHORIZATION_URL}?{query}", cookie=cookie)
@@ -257,7 +259,7 @@ class ProbeHandler(BaseHTTPRequestHandler):
             self._send(HTTPStatus.UNAUTHORIZED, "Sign-in could not be verified", cookie=clear_cookie)
             return
         # Some managed browsers suppress even a Secure, host-only OAuth return
-        # cookie.  The state remains high-entropy, server-held, five-minute,
+        # cookie.  The state remains high-entropy, server-held, 15-minute,
         # and single-use; PKCE, nonce, issuer/audience/signature validation,
         # and exact protected-subject matching remain mandatory.  Preserve the
         # cookie binding whenever the browser does supply it, and reject a
