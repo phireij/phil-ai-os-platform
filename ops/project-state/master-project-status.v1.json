@@ -115,9 +115,11 @@
         "mutation_authorized": false
       },
       "blockers": [
-        "Fresh KCFC repository evidence is missing"
+        "Fresh staging runtime evidence is not yet represented"
       ],
-      "completed": [],
+      "completed": [
+        "Fresh read-only repository snapshot observed"
+      ],
       "deployment_state": {
         "environment": null,
         "evidence_ref": null,
@@ -126,9 +128,9 @@
       },
       "evidence": [
         {
-          "freshness": "stale",
+          "freshness": "fresh",
           "kind": "repository_snapshot",
-          "observed_at": "2026-10-05",
+          "observed_at": "2026-10-28T20:53:46Z",
           "ref": "ops/project-state/observations/kcfc-repository.v1.json"
         }
       ],
@@ -143,13 +145,13 @@
       "project_id": "kcfc-portal",
       "queue": [],
       "repository_state": {
-        "ref": "main",
+        "ref": "redesign/mobile-first-v2",
         "repository": "phireij/KCFC-Portal",
-        "verified_at": "2026-10-05",
-        "verified_head": "653cc7229600fd7baff17a21a21f12d267b66d2b"
+        "verified_at": "2026-10-28T20:53:46Z",
+        "verified_head": "a57224f336d55ad419bece3c0eeeb6d768429181"
       },
       "schema_version": 1,
-      "status": "unknown"
+      "status": "yellow"
     }
   ],
   "schema": "phil-ai-os-master-project-status",

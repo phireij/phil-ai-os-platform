@@ -11,6 +11,6 @@ assert ids==["phil-ai-os","rubys-cake-delights-hq","kcfc-portal"]
 phil=d["projects"][0]; ruby=d["projects"][1]; kcfc=d["projects"][2]
 assert phil["status"]=="unknown" and any("AO-MVP CI" in x for x in phil["blockers"])
 assert ruby["status"]=="yellow" and any("stale" in x.lower() for x in ruby["blockers"])
-assert kcfc["status"]=="unknown" and any("repository evidence" in x.lower() for x in kcfc["blockers"])
+assert kcfc["status"]=="yellow" and any("staging" in x.lower() for x in kcfc["blockers"])
 assert all(x["authority"]["mutation_authorized"] is False for x in d["projects"])
 print("AO master-status generation contract: GREEN")
