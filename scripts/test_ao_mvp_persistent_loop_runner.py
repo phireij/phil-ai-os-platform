@@ -7,6 +7,9 @@ s=importlib.util.spec_from_file_location("r",p); assert s and s.loader
 m=importlib.util.module_from_spec(s); s.loader.exec_module(m)
 with tempfile.TemporaryDirectory() as td:
  d=Path(td)
+ assert m.iterate(d)["state"]=="idle"
+ assert not (d/"dispatch.jsonl").exists()
+ m.selector.select=lambda: {"selected_work_id":"ao-work:hostinger-deployment-fixtures","capability":"development_branch_code_preparation"}
  a=m.iterate(d)
  assert a["state"]=="verified_success"
  assert a["execution_performed"] is False

@@ -641,15 +641,18 @@
       "work_id": "ao-work:hostinger-deployment-fixtures",
       "project_id": "phil-ai-os",
       "title": "Prepare inert Hostinger Docker deployment fixtures",
-      "state": "ready_for_inert_selection",
+      "state": "completed",
       "priority": 21,
       "dependencies": [
         "ao-work:runtime-target-decision-package"
       ],
-      "evidence_refs": [],
+      "evidence_refs": [
+        "ops/runtime/hostinger/compose.inert.yml",
+        "scripts/test_ao_mvp_hostinger_compose_fixture.py"
+      ],
       "selection": {
-        "eligible": true,
-        "reason": "Target recommendation documented; inert deployment fixtures may be prepared without server mutation",
+        "eligible": false,
+        "reason": "Completed: inert Hostinger compose fixture is contract-tested; server deployment remains separately gated",
         "execution_authorized": false
       },
       "authority": {
