@@ -166,6 +166,27 @@ def _token_exchange_failure_stage(status_code: int) -> str:
     return "token_exchange_unexpected_status"
 
 
+_R3_HANDOFF_FAILURES = frozenset(
+    {
+        "r3_attestation_handoff_subject_mismatch",
+        "r3_attestation_handoff_issuance_invalid",
+        "r3_attestation_handoff_verified_subject_invalid",
+        "r3_attestation_handoff_subject_unavailable",
+        "r3_attestation_handoff_subject_format_invalid",
+        "r3_attestation_handoff_signing_key_unavailable",
+        "r3_attestation_handoff_signing_key_invalid",
+    }
+)
+
+
+def _r3_handoff_failure_stage(error: R3AttestationHandoffError) -> str:
+    """Return a fixed safe diagnostic without ever passing through error text."""
+    category = str(error)
+    if category not in _R3_HANDOFF_FAILURES:
+        category = "unspecified"
+    return f"failed_attestation_handoff_{category}"
+
+
 def _verified_subject(token: str, nonce: str, session: requests.Session) -> str:
     if len(token) > 16384:
         raise ValueError("id_token_too_large")
@@ -346,10 +367,12 @@ class ProbeHandler(BaseHTTPRequestHandler):
                 if r3_runtime is not None:
                     stage = "metadata_write"
                     r3_runtime.attest_and_write(verified_subject)
-        except R3AttestationHandoffError:
+        except R3AttestationHandoffError as error:
             # Preserve the R3 handoff/write boundary in the diagnostic stream
-            # without releasing an identity, proof, or persistence error.
-            self._stage("failed_attestation_handoff")
+            # without releasing an identity, proof, persistence error, or an
+            # arbitrary exception message. The helper accepts only fixed,
+            # source-owned handoff categories.
+            self._stage(_r3_handoff_failure_stage(error))
             self._send(HTTPStatus.BAD_GATEWAY, "Google sign-in could not be completed", cookie=clear_cookie)
             return
         except R3AttestationMetadataWriterError:
