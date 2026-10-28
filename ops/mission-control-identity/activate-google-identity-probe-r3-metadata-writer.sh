@@ -82,6 +82,7 @@ docker run -d --name "$PREFLIGHT" --network none --read-only --cap-drop ALL --se
   "${RUNTIME_ENV[@]}" "${MOUNTS[@]}" --label 'traefik.enable=false' "$IMAGE@$IMAGE_DIGEST" >/dev/null
 sleep 2
 test "$(docker inspect "$PREFLIGHT" --format '{{.State.Running}}')" = true
+docker exec "$PREFLIGHT" sh -c 'test -r /run/secrets/ceo_subject_digest && test "$(stat -c "%u:%g:%a" /run/secrets/ceo_subject_digest)" = "0:10002:640"'
 docker rm -f "$PREFLIGHT" >/dev/null
 
 docker rename "$CONTAINER" "$ROLLBACK"
