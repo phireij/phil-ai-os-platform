@@ -1,4 +1,4 @@
-name: Mission Control Conversation Storage Monitor
+name: Mission Control Identity Probe Boundary Monitor
 
 on:
   schedule:
@@ -21,12 +21,12 @@ jobs:
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_PORT: ${{ secrets.VPS_PORT }}
       HOSTNAME: miscon.phireij.cloud
-      SESSION: phil-ai-os-mission-control-google-ceo-session
+      CONTAINER: phil-ai-os-mission-control-google-identity-probe
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
-      - name: Check active encrypted conversation boundary without content access
+      - name: Check active identity-probe boundary without secret access
         shell: bash
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -42,17 +42,17 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
           remote_command="set -euo pipefail
-          test \"\$(docker inspect '$SESSION' --format '{{.State.Running}}')\" = true
-          test \"\$(docker inspect '$SESSION' --format '{{.HostConfig.ReadonlyRootfs}}')\" = true
-          test \"\$(docker inspect '$SESSION' --format '{{.HostConfig.Privileged}}')\" = false
-          test \"\$(docker inspect '$SESSION' --format '{{json .HostConfig.CapDrop}}')\" = '[\"ALL\"]'
-          SESSION_IMAGE=\$(docker inspect '$SESSION' --format '{{.Config.Image}}')
-          SECRET_VOLUME=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}')
-          STATE_VOLUME=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/var/lib/mission-control\"}}{{.Name}}{{end}}{{end}}')
-          SESSION_IMAGE=\"\$SESSION_IMAGE\" SECRET_VOLUME=\"\$SECRET_VOLUME\" STATE_VOLUME=\"\$STATE_VOLUME\" BACKUP_VOLUME='phil-ai-os-mission-control-conversation-backup-v1' bash -s"
-          ssh "${ssh_opts[@]}" "$remote" "$remote_command" < ops/mission-control-identity/monitor-conversation-storage.sh
+          test \"\$(docker inspect '$CONTAINER' --format '{{.State.Running}}')\" = true
+          test \"\$(docker inspect '$CONTAINER' --format '{{.HostConfig.ReadonlyRootfs}}')\" = true
+          test \"\$(docker inspect '$CONTAINER' --format '{{.HostConfig.Privileged}}')\" = false
+          test \"\$(docker inspect '$CONTAINER' --format '{{json .HostConfig.CapDrop}}')\" = '[\"ALL\"]'
+          case \"\$(docker inspect '$CONTAINER' --format '{{.Config.Image}}')\" in ghcr.io/phireij/phil-ai-os-platform/mission-control-google-identity-probe@sha256:*) ;; *) exit 1 ;; esac
+          test \"\$(docker inspect '$CONTAINER' --format '{{range .Mounts}}{{if .RW}}{{.Destination}}{{end}}{{end}}')\" = ''"
+          ssh "${ssh_opts[@]}" "$remote" "$remote_command"
           health="$(curl --fail-with-body --silent --show-error --max-time 15 "https://$HOSTNAME/auth/google/healthz")"
-          test "$health" = 'session_ready;conversation_authority=enabled'
-          unauth_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 "https://$HOSTNAME/auth/google/session")"
-          test "$unauth_status" = 401
-          echo 'conversation_storage_monitor_completed=true public_health=green unauthenticated_session=401 existing_workloads_unchanged=true authority_effect=none'
+          test "$health" = 'probe_ready;authority_effect=none'
+          post_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 -X POST "https://$HOSTNAME/auth/google/healthz")"
+          test "$post_status" = 405
+          session_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 "https://$HOSTNAME/auth/google/session")"
+          test "$session_status" = 404
+          echo 'identity_probe_boundary_monitor_completed=true public_health=green session_route=absent authority_effect=none'
