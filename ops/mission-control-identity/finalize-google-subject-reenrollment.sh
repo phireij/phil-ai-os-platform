@@ -20,7 +20,7 @@ R3_ACTIVATOR_SHA256=154120fa74cb0594d32de1401c68317cc2a0352588d2ddb4b21c20130d62
 test "$FINALIZATION_ACKNOWLEDGEMENT" = approve-google-subject-reenrollment-finalization
 test -f "$R3_ACTIVATOR_FILE"
 test "$(sha256sum "$R3_ACTIVATOR_FILE" | awk '{print $1}')" = "$R3_ACTIVATOR_SHA256"
-test "$(stat -c '%u:%g:%a' "$CURRENT")" = '0:0:400'
+test "$(stat -c '%u:%g:%a' "$CURRENT")" = '0:10002:640'
 test "$(stat -c '%u:%g:%a' "$PENDING")" = '0:10002:660'
 grep -Eq '^sha256:[a-f0-9]{64}$' "$CURRENT"
 grep -Eq '^sha256:[a-f0-9]{64}$' "$PENDING"
@@ -39,7 +39,7 @@ cleanup() {
     exit "$status"
   fi
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-  install -o root -g root -m 400 "$BACKUP" "$CURRENT" || true
+  install -o root -g 10002 -m 640 "$BACKUP" "$CURRENT" || true
   if docker inspect "$REENROLLMENT_ROLLBACK" >/dev/null 2>&1; then
     docker rename "$REENROLLMENT_ROLLBACK" "$CONTAINER" || true
     docker start "$CONTAINER" >/dev/null || true
@@ -50,8 +50,8 @@ cleanup() {
 }
 trap 'cleanup "$?"' EXIT ERR HUP INT TERM
 
-install -o root -g root -m 400 "$CURRENT" "$BACKUP"
-install -o root -g root -m 400 "$PENDING" "$CURRENT"
+install -o root -g 10002 -m 640 "$CURRENT" "$BACKUP"
+install -o root -g 10002 -m 640 "$PENDING" "$CURRENT"
 cmp -s "$CURRENT" "$PENDING"
 COMMITTED=true
 
