@@ -26,6 +26,8 @@ class R3AttestationMetadataWriterActivationScriptTests(unittest.TestCase):
             self.assertIn(path, self.content)
         self.assertNotIn("'0:0:400'", self.content)
         self.assertGreaterEqual(self.content.count("'0:10002:640'"), 4)
+        self.assertIn('docker exec "$PREFLIGHT" sh -c', self.content)
+        self.assertIn('test -r /run/secrets/ceo_subject_digest', self.content)
 
     def test_uses_only_the_private_database_network_and_exact_writer_role(self) -> None:
         self.assertIn('test "$DB_NETWORK" = buzz-prod_buzz-net', self.content)
