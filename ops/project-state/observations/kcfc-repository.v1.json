@@ -4,7 +4,7 @@
   "project_id": "kcfc-portal",
   "source_kind": "repository_snapshot",
   "observed_at": "2026-10-05",
-  "freshness": "fresh",
+  "freshness": "stale",
   "facts": {
     "repository": "phireij/KCFC-Portal",
     "main_head": "653cc7229600fd7baff17a21a21f12d267b66d2b",

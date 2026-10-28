@@ -1,0 +1,26 @@
+{
+  "schema": "phil-ai-os-project-observation",
+  "version": 1,
+  "project_id": "phil-ai-os",
+  "source_kind": "github_ci",
+  "observed_at": "2026-10-28T16:07:54Z",
+  "freshness": "fresh",
+  "facts": {
+    "branch": "main",
+    "head": "3d8942017803bb760c0ff889c30c714349b42007",
+    "identity_probe_ci_run_id": 40703073667,
+    "identity_probe_ci": "success",
+    "supply_chain_run_id": 40703073521,
+    "supply_chain": "success",
+    "identity_probe_image_run_id": 40703073614,
+    "identity_probe_image": "success",
+    "identity_probe_boundary_monitor_run_id": 40722880521,
+    "identity_probe_boundary_monitor": "success",
+    "ao_mvp_contract_ci": "not_observed",
+    "production_mutation_authorized": false
+  },
+  "authority": {
+    "authority_effect": "none",
+    "mutation_authorized": false
+  }
+}

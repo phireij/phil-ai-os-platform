@@ -4,7 +4,7 @@
   "project_id": "phil-ai-os",
   "source_kind": "github_ci",
   "observed_at": "2026-10-05T13:08:00Z",
-  "freshness": "fresh",
+  "freshness": "stale",
   "facts": {
     "branch": "ao-mvp/phase0-architecture",
     "head": "b3ccf6f9294eef8dcd5cbdcfe343cd7921156c60",
