@@ -13,4 +13,8 @@ stale={**fresh,"freshness":"stale"}
 assert m.reconcile(phil,[fresh])["status"]=="green"
 assert m.reconcile(phil,[stale])["status"]=="unknown"
 assert m.reconcile(phil,[])["status"]=="unknown"
+limited={**fresh,"observed_at":"2026-10-28T16:07:54Z","facts":{"branch":"main","head":"current","supply_chain":"success","ao_mvp_contract_ci":"not_observed"}}
+state=m.reconcile(phil,[fresh,limited])
+assert state["status"]=="unknown"
+assert state["repository_state"]["verified_head"]=="current"
 print("AO-1 evidence freshness fail-closed tests: GREEN")

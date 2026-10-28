@@ -18,7 +18,7 @@ def observations()->dict[str,list[dict[str,Any]]]:
         o=load(path)
         if o.get("authority")!={"authority_effect":"none","mutation_authorized":False}:
             continue
-        out.setdefault(o["project_id"],[]).append({**o,"_ref":str(path.relative_to(ROOT))})
+        out.setdefault(o["project_id"],[]).append({**o,"_ref":path.relative_to(ROOT).as_posix()})
     return out
 
 def ev(o:dict[str,Any])->dict[str,str]:
@@ -39,7 +39,15 @@ def reconcile(p:dict[str,Any], obs:list[dict[str,Any]])->dict[str,Any]:
     s=base(p,obs); pid=p["project_id"]
     fresh=[o for o in obs if o.get("freshness")=="fresh"]
     if pid=="phil-ai-os":
-        ci=next((o for o in fresh if o["source_kind"]=="github_ci"),None)
+        fresh_ci=[o for o in fresh if o["source_kind"]=="github_ci"]
+        ci=max(fresh_ci,key=lambda o:o["observed_at"],default=None)
+        if ci:
+            facts=ci["facts"]
+            if isinstance(facts.get("branch"),str):
+                s["repository_state"]["ref"]=facts["branch"]
+            if isinstance(facts.get("head"),str):
+                s["repository_state"]["verified_head"]=facts["head"]
+            s["repository_state"]["verified_at"]=ci["observed_at"]
         if ci and ci["facts"].get("contract_ci")=="success" and ci["facts"].get("supply_chain")=="success":
             s["status"]="green"; s["completed"]=["Bounded A1 contract and exact-head CI evidenced GREEN"]
         else:

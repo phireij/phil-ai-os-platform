@@ -16,6 +16,12 @@ AO-1 turns the Phase 0 registry into an evidence-backed project-state layer. It 
 7. Mission Control consumes this layer read-only.
 8. Queue/selector/orchestrator execution remains out of scope until later AO phases.
 
+An observation marked `fresh` is a limited claim about its recorded source and
+observation time, not a permanent project-health claim. When a newer observation
+exists, or when no current source can re-establish the claim, the older evidence
+must be marked `stale`. A limited current CI observation must not establish
+`GREEN` unless it includes the complete CI evidence required by the reconciler.
+
 ## Canonical state
 
 The v1 schema is stored at `ops/project-state/project-state.v1.schema.json`.

@@ -25,5 +25,11 @@ for project in projects:
 ruby = next(p for p in projects if p["project_id"] == "rubys-cake-delights-hq")
 assert "Quick Pickup production activation readiness is false" in ruby["blockers"]
 kcfc = next(p for p in projects if p["project_id"] == "kcfc-portal")
-assert kcfc["repository_state"]["ref"] == "redesign/mobile-first-v2"
+assert kcfc["status"] == "unknown"
+assert "Fresh KCFC repository evidence is missing" in kcfc["blockers"]
+phil = next(p for p in projects if p["project_id"] == "phil-ai-os")
+assert phil["status"] == "unknown"
+assert phil["repository_state"]["ref"] == "main"
+assert phil["repository_state"]["verified_head"] == "3d8942017803bb760c0ff889c30c714349b42007"
+assert "Fresh successful AO-MVP CI evidence is missing" in phil["blockers"]
 print("AO-1 static reconciler contract: GREEN")
