@@ -350,7 +350,7 @@ class ProbeHttpChecks(unittest.TestCase):
         self.assertIn("No Mission Control session was created", body)
         self.assertNotIn("synthetic-subject", body)
 
-    def test_r3_handoff_failure_has_a_fixed_non_sensitive_stage(self) -> None:
+    def test_r3_handoff_failure_has_an_allowlisted_non_sensitive_stage(self) -> None:
         browser = "synthetic-browser"
         self.server.flows.put("state", probe.PendingFlow(hashlib.sha256(browser.encode()).digest(), "nonce", "verifier", time.monotonic()))
         self.server.r3_metadata_runtime = mock.Mock()
@@ -361,7 +361,7 @@ class ProbeHttpChecks(unittest.TestCase):
                 with contextlib.redirect_stderr(io.StringIO()) as output:
                     status, _headers, body = self.request("/auth/google/callback?state=state&code=synthetic-code", cookie=f"{probe.COOKIE_NAME}={browser}")
         self.assertEqual(status, 502)
-        self.assertIn("mission_control_google_probe_stage=failed_attestation_handoff", output.getvalue())
+        self.assertIn("mission_control_google_probe_stage=failed_attestation_handoff_unspecified", output.getvalue())
         self.assertNotIn("synthetic-handoff-error", body + output.getvalue())
         self.assertNotIn("synthetic-subject", body + output.getvalue())
 
