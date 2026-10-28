@@ -7,6 +7,7 @@ import sys
 import unittest
 from pathlib import Path
 from unittest import mock
+import stat
 
 
 ROOT = Path(__file__).resolve().parent
@@ -38,6 +39,26 @@ class R3AttestationHandoffChecks(unittest.TestCase):
         with mock.patch.dict("os.environ", {"MISSION_CONTROL_GOOGLE_CEO_SUBJECT_FILE": "relative"}, clear=True):
             with self.assertRaisesRegex(config.R3AttestationHandoffConfigurationError, "subject_file_invalid"):
                 config._protected_subject_file("MISSION_CONTROL_GOOGLE_CEO_SUBJECT_FILE")
+
+    def test_subject_digest_requires_the_dedicated_read_only_app_group(self) -> None:
+        details = mock.Mock(
+            st_mode=stat.S_IFREG | 0o640,
+            st_uid=0,
+            st_gid=10002,
+            st_size=72,
+        )
+        subject_path = Path.cwd() / "ceo_subject_digest"
+        environment = {"MISSION_CONTROL_GOOGLE_CEO_SUBJECT_FILE": str(subject_path)}
+        with mock.patch.dict("os.environ", environment, clear=True):
+            with mock.patch.object(Path, "lstat", return_value=details):
+                self.assertEqual(
+                    config._protected_subject_file("MISSION_CONTROL_GOOGLE_CEO_SUBJECT_FILE"),
+                    subject_path,
+                )
+            details.st_gid = 0
+            with mock.patch.object(Path, "lstat", return_value=details):
+                with self.assertRaisesRegex(config.R3AttestationHandoffConfigurationError, "subject_file_permissions"):
+                    config._protected_subject_file("MISSION_CONTROL_GOOGLE_CEO_SUBJECT_FILE")
 
     def test_design_only_migration_excludes_sensitive_data_and_authority(self) -> None:
         result = subprocess.run(
