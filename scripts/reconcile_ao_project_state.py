@@ -75,6 +75,7 @@ def reconcile(p:dict[str,Any], obs:list[dict[str,Any]])->dict[str,Any]:
             facts=repo["facts"]; s["status"]="yellow"
             s["repository_state"]["ref"]=facts.get("development_branch",p.get("development_branch",p["default_branch"]))
             s["repository_state"]["verified_head"]=facts.get("development_head",p.get("verified_development_head",p["verified_head"]))
+            s["repository_state"]["verified_at"]=repo["observed_at"]
             s["completed"]=["Fresh read-only repository snapshot observed"]
             s["blockers"]=["Fresh staging runtime evidence is not yet represented"]
         else:
