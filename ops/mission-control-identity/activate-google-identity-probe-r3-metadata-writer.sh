@@ -22,7 +22,7 @@ test "$HOSTNAME" = miscon.phireij.cloud
 test "$MISSION_CONTROL_R3_METADATA_WRITER_ACTIVATION_ACKNOWLEDGEMENT" = 'approve-r3-metadata-writer-runtime'
 test "$(stat -c '%u:%g:%a' "$CLIENT_SECRET_FILE")" = '0:10002:640'
 test "$(stat -c '%u:%g:%a' "$SIGNING_KEY_FILE")" = '0:10002:640'
-test "$(stat -c '%u:%g:%a' "$SUBJECT_FILE")" = '0:0:400'
+test "$(stat -c '%u:%g:%a' "$SUBJECT_FILE")" = '0:10002:640'
 test "$(stat -c '%u:%g:%a' "$WRITER_PASSWORD_FILE")" = '0:10002:640'
 
 IMAGE='ghcr.io/phireij/phil-ai-os-platform/mission-control-google-identity-probe'

@@ -24,8 +24,8 @@ class R3AttestationMetadataWriterActivationScriptTests(unittest.TestCase):
             "mission-control-postgres-attestation-writer-password",
         ):
             self.assertIn(path, self.content)
-        self.assertIn("'0:0:400'", self.content)
-        self.assertGreaterEqual(self.content.count("'0:10002:640'"), 3)
+        self.assertNotIn("'0:0:400'", self.content)
+        self.assertGreaterEqual(self.content.count("'0:10002:640'"), 4)
 
     def test_uses_only_the_private_database_network_and_exact_writer_role(self) -> None:
         self.assertIn('test "$DB_NETWORK" = buzz-prod_buzz-net', self.content)

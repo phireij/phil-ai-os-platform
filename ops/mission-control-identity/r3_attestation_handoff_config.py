@@ -46,17 +46,42 @@ def _protected_signing_key(variable: str) -> Path:
     raw = os.environ.get(variable, "")
     if raw != str(SIGNING_KEY_PATH):
         raise R3AttestationHandoffConfigurationError("r3_attestation_handoff_signing_key_path_invalid")
-    return _protected_file(Path(raw), variable, required_mode=0o640, required_group=10002, minimum_size=32)
+    return _protected_file(
+        Path(raw),
+        variable,
+        required_mode=0o640,
+        required_group=10002,
+        permission_error="r3_attestation_handoff_signing_key_permissions",
+        minimum_size=32,
+    )
 
 
 def _protected_subject_file(variable: str) -> Path:
     raw = os.environ.get(variable, "")
     if not raw or not Path(raw).is_absolute():
         raise R3AttestationHandoffConfigurationError("r3_attestation_handoff_subject_file_invalid")
-    return _protected_file(Path(raw), variable, required_mode=None, required_group=None, minimum_size=1)
+    # The probe runs as the dedicated unprivileged app user. It may read only
+    # the irreversible expected-subject digest, so the bind-mounted file must
+    # be root-owned, app-group-readable, and not writable by that group.
+    return _protected_file(
+        Path(raw),
+        variable,
+        required_mode=0o640,
+        required_group=10002,
+        permission_error="r3_attestation_handoff_subject_file_permissions",
+        minimum_size=1,
+    )
 
 
-def _protected_file(path: Path, variable: str, *, required_mode: int | None, required_group: int | None, minimum_size: int) -> Path:
+def _protected_file(
+    path: Path,
+    variable: str,
+    *,
+    required_mode: int,
+    required_group: int,
+    permission_error: str,
+    minimum_size: int,
+) -> Path:
     try:
         details = path.lstat()
     except OSError as error:
@@ -64,8 +89,6 @@ def _protected_file(path: Path, variable: str, *, required_mode: int | None, req
     if not stat.S_ISREG(details.st_mode) or details.st_uid != 0 or details.st_size < minimum_size or details.st_size > 4096:
         raise R3AttestationHandoffConfigurationError("r3_attestation_handoff_protected_file_invalid")
     mode = stat.S_IMODE(details.st_mode)
-    if required_mode is not None and (details.st_gid, mode) != (required_group, required_mode):
-        raise R3AttestationHandoffConfigurationError("r3_attestation_handoff_signing_key_permissions")
-    if required_mode is None and details.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
-        raise R3AttestationHandoffConfigurationError("r3_attestation_handoff_subject_file_permissions")
+    if (details.st_gid, mode) != (required_group, required_mode):
+        raise R3AttestationHandoffConfigurationError(permission_error)
     return path
