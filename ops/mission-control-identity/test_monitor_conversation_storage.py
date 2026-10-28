@@ -3,7 +3,7 @@ import unittest
 
 
 class ConversationStorageMonitorChecks(unittest.TestCase):
-    def test_probe_is_networkless_read_only_and_content_free(self) -> None:
+    def test_legacy_storage_probe_remains_networkless_read_only_and_content_free(self) -> None:
         script = (Path(__file__).parent / "monitor-conversation-storage.sh").read_text(encoding="utf-8")
         for marker in (
             "--network none",
@@ -38,7 +38,7 @@ class ConversationStorageMonitorChecks(unittest.TestCase):
         self.assertIn(r'Z\.enc", path.name)', script)
         self.assertNotIn(r'Z\\.enc", path.name)', script)
 
-    def test_workflow_is_scheduled_and_checks_isolation_and_public_boundary(self) -> None:
+    def test_workflow_is_scheduled_and_checks_the_replacement_probe_boundary(self) -> None:
         workflow = (
             Path(__file__).parents[2]
             / ".github"
@@ -48,15 +48,18 @@ class ConversationStorageMonitorChecks(unittest.TestCase):
         for marker in (
             "schedule:",
             "17,47 * * * *",
-            "monitor-conversation-storage.sh",
+            "phil-ai-os-mission-control-google-identity-probe",
             "ReadonlyRootfs",
             "CapDrop",
-            "healthz",
-            "unauthenticated_session=401",
+            "probe_ready;authority_effect=none",
+            "session_status",
+            "test \"$session_status\" = 404",
             "authority_effect=none",
         ):
             self.assertIn(marker, workflow)
         for prohibited in (
+            "google-ceo-session",
+            "conversation_authority=enabled",
             "docker start",
             "docker stop",
             "docker rm",
