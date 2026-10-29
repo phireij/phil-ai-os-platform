@@ -227,6 +227,38 @@ class ConversationStoreChecks(unittest.TestCase):
         self.assertEqual("dead_letter", failed["delivery_state"])
         self.assertEqual(2, failed["attempt_count"])
         self.assertEqual("telegram_request_rejected", failed["last_error"])
+        delivered_conversation_id = store._live.connection.execute(
+            "SELECT p.conversation_id FROM ceo_decisions d "
+            "JOIN task_proposals p ON p.proposal_id=d.proposal_id WHERE d.decision_id=?",
+            (decision["decision_id"],),
+        ).fetchone()["conversation_id"]
+        failed_conversation_id = store._live.connection.execute(
+            "SELECT p.conversation_id FROM ceo_decisions d "
+            "JOIN task_proposals p ON p.proposal_id=d.proposal_id WHERE d.decision_id=?",
+            (failed["decision_id"],),
+        ).fetchone()["conversation_id"]
+        delivery_events = [
+            event for timeline in (
+                store.list_audit_timeline(delivered_conversation_id),
+                store.list_audit_timeline(failed_conversation_id),
+            )
+            for event in timeline["events"]
+            if event["source"] == "notification_outbox"
+        ]
+        self.assertEqual(
+            [
+                "notification_delivery_delivered",
+                "notification_delivery_retry_scheduled",
+                "notification_delivery_dead_lettered",
+            ],
+            [event["event_type"] for event in delivery_events],
+        )
+        self.assertEqual(
+            [None, "telegram_request_rejected", "telegram_request_rejected"],
+            [event["correlation"]["error_code"] for event in delivery_events],
+        )
+        self.assertTrue(all(event["authority_effect"] == "none" for event in delivery_events))
+        self.assertNotIn("Bounded notification-only test.", json.dumps(delivery_events))
 
         with patch("conversation_store.time.time", return_value=now + 902):
             self._record_decision(store, "0004")
@@ -241,6 +273,7 @@ class ConversationStoreChecks(unittest.TestCase):
         original = self.store()
         with patch("conversation_store.time.time", return_value=1_900_000_000):
             self._record_decision(original, "0003")
+        original._live.connection.execute("DROP TABLE notification_audit_events")
         original._live.connection.execute("DROP INDEX notification_outbox_delivery_order")
         original._live.connection.execute("DROP INDEX notification_outbox_owner_order")
         original._live.connection.execute("ALTER TABLE notification_outbox RENAME TO notification_outbox_new")
