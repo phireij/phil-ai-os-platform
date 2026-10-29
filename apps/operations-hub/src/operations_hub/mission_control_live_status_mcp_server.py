@@ -8,6 +8,7 @@ import os
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Callable
 
 from .mission_control_cto_auth0_verifier import CredentialRejected, verifier_from_environment
 from .mission_control_live_status import collect_live_status, load_manifest
@@ -18,6 +19,7 @@ from .mission_control_cto_tool import SCOPE, VerifiedContext
 LOOPBACK_HOST = "127.0.0.1"
 PUBLIC_CONTAINER_HOST = "0.0.0.0"
 PORT = 8788
+MAX_REQUEST_BYTES = 16 * 1024
 METADATA_URI = "https://miscon.phireij.cloud/.well-known/oauth-protected-resource/mcp/live-status"
 PROTECTED_RESOURCE_METADATA_PATHS = frozenset({
     "/.well-known/oauth-protected-resource/mcp/live-status",
@@ -84,6 +86,29 @@ def _bearer_credential(value: str | None) -> str | None:
         return None
     token = value.removeprefix("Bearer ")
     return token if token and token == token.strip() and " " not in token else None
+
+
+def _json_request(headers, read: Callable[[int], bytes]) -> dict[str, object]:
+    """Read one small JSON request; reject framing the server does not support."""
+
+    if headers.get("Transfer-Encoding") is not None:
+        raise ValueError("transfer_encoding_denied")
+    content_length = headers.get("Content-Length")
+    if not isinstance(content_length, str):
+        raise ValueError("content_length_required")
+    try:
+        byte_count = int(content_length)
+    except ValueError as exc:
+        raise ValueError("invalid_content_length") from exc
+    if byte_count < 1 or byte_count > MAX_REQUEST_BYTES:
+        raise ValueError("request_size_denied")
+    payload = read(byte_count)
+    if len(payload) != byte_count:
+        raise ValueError("incomplete_request")
+    request = json.loads(payload.decode("utf-8"))
+    if not isinstance(request, dict):
+        raise ValueError("invalid_request")
+    return request
 
 
 def protected_resource_metadata_for_path(path: str) -> dict[str, object] | None:
@@ -172,6 +197,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header(name, value)
         self.end_headers()
         self.wfile.write(payload)
+        self.close_connection = True
 
     def do_GET(self) -> None:  # noqa: N802
         if self.path == "/healthz":
@@ -186,7 +212,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {"status": "not_found"})
             return
         try:
-            request = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode("utf-8"))
+            request = _json_request(self.headers, self.rfile.read)
             method, request_id = request["method"], request.get("id")
         except (UnicodeDecodeError, ValueError, KeyError, TypeError):
             self._send(400, {"error": "invalid_request"})
