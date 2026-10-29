@@ -169,6 +169,9 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             'MISSION_CONTROL_ALLOW_TELEGRAM_ENABLEMENT=true',
             'if [[ "$IMAGE_DIGEST" == "$CURRENT_IMAGE_DIGEST" ]]',
             'MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION=true',
+            'test "$IMAGE_DIGEST" = "$CURRENT_IMAGE_DIGEST"',
+            'git merge-base --is-ancestor "$SOURCE_REVISION" HEAD',
+            'allowed_safety_only_delta=true',
             'controlled_test_pending=true',
         ):
             self.assertIn(marker, workflow)
