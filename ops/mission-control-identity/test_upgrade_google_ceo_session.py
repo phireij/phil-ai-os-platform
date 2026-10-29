@@ -141,6 +141,22 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
         ):
             self.assertNotIn(prohibited, workflow)
 
+    def test_rollback_inventory_is_read_only_and_does_not_expose_mount_names(self) -> None:
+        workflow = (
+            Path(__file__).parents[2] / ".github" / "workflows" /
+            "mission-control-google-ceo-session-rollback-inventory.yml"
+        ).read_text(encoding="utf-8")
+        for marker in (
+            "workflow_dispatch:",
+            "secret_volume_matches_current=",
+            "state_volume_matches_current=",
+            "content_accessed=false",
+            "authority_effect=none",
+        ):
+            self.assertIn(marker, workflow)
+        for prohibited in ("docker start", "docker stop", "docker rm", "docker run", "docker pull"):
+            self.assertNotIn(prohibited, workflow)
+
     def test_session_image_includes_conversation_store_dependency(self) -> None:
         dockerfile = (Path(__file__).parents[2] / "Dockerfile.mission-control-google-ceo-session").read_text(encoding="utf-8")
         self.assertIn("COPY ops/mission-control-identity/proposal_evidence.py /srv/proposal_evidence.py", dockerfile)
