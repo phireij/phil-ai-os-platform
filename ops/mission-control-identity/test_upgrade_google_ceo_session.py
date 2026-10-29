@@ -152,6 +152,8 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             "workflow_dispatch:",
             "secret_volume_matches_current=",
             "state_volume_matches_current=",
+            "legacy_archive_candidate=",
+            "image_matches=",
             "content_accessed=false",
             "authority_effect=none",
         ):
