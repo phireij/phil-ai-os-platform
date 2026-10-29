@@ -69,6 +69,8 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             "conversation_authority=enabled",
             "mission-control-google-ceo-session-recovery\\.yml",
             "mission-control-google-ceo-session-route-cutover\\.yml",
+            "mission-control-google-ceo-session-ci\\.yml",
+            "test_upgrade_google_ceo_session\\.py",
             "allowed_safety_only_delta=true",
         ):
             self.assertIn(marker, workflow)
