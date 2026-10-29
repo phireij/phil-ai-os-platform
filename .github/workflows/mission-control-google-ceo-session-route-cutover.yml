@@ -1,0 +1,83 @@
+name: Mission Control Google CEO Session Guarded Route Cutover
+
+on:
+  workflow_dispatch:
+    inputs:
+      current_session_image_digest:
+        description: Immutable digest of the running CEO-session container
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-control-google-identity-deploy
+  cancel-in-progress: false
+
+jobs:
+  cutover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      SESSION_IMAGE_DIGEST: ${{ inputs.current_session_image_digest }}
+      SESSION_IMAGE: ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
+      PROBE_IMAGE: ghcr.io/phireij/phil-ai-os-platform/mission-control-google-identity-probe@sha256:b99b286fd3787250c793c0bb4c4ac96b6a088489a9ad048c8192ac7d67c249db
+      SESSION: phil-ai-os-mission-control-google-ceo-session
+      PROBE: phil-ai-os-mission-control-google-identity-probe
+      HOSTNAME: miscon.phireij.cloud
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Remove only the verified legacy route and restore it on a failed session check
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "$SESSION_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          port="${VPS_PORT:-22}"
+          remote="$VPS_USER@$VPS_HOST"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          probe_stopped=false
+          restore_probe() {
+            status=$?
+            trap - ERR HUP INT TERM
+            if [[ "$probe_stopped" == true ]]; then
+              ssh "${ssh_opts[@]}" "$remote" "docker start '$PROBE' >/dev/null" || true
+            fi
+            echo "google_ceo_session_route_cutover_failed status=$status probe_restore_attempted=$probe_stopped" >&2
+            exit "$status"
+          }
+          trap restore_probe ERR HUP INT TERM
+          remote_command="set -euo pipefail
+          test \"\$(docker inspect '$SESSION' --format '{{.State.Running}}')\" = true
+          test \"\$(docker inspect '$SESSION' --format '{{.Config.Image}}')\" = '$SESSION_IMAGE@'$SESSION_IMAGE_DIGEST
+          test \"\$(docker inspect '$SESSION' --format '{{.HostConfig.NetworkMode}}')\" = bridge
+          test \"\$(docker inspect '$SESSION' --format '{{.HostConfig.ReadonlyRootfs}}')\" = true
+          test \"\$(docker inspect '$SESSION' --format '{{.HostConfig.Privileged}}')\" = false
+          test \"\$(docker inspect '$PROBE' --format '{{.State.Running}}')\" = true
+          test \"\$(docker inspect '$PROBE' --format '{{.Config.Image}}')\" = '$PROBE_IMAGE'
+          test \"\$(docker inspect '$PROBE' --format '{{.HostConfig.ReadonlyRootfs}}')\" = true
+          test \"\$(docker inspect '$PROBE' --format '{{.HostConfig.Privileged}}')\" = false
+          docker stop '$PROBE' >/dev/null
+          test \"\$(docker inspect '$PROBE' --format '{{.State.Running}}')\" = false
+          echo 'google_ceo_session_route_cutover_staged=true legacy_probe_stopped=true session_unchanged=true secrets_unchanged=true storage_unchanged=true'"
+          ssh "${ssh_opts[@]}" "$remote" "$remote_command"
+          probe_stopped=true
+          test "$(curl --fail-with-body --silent --show-error --max-time 15 "https://$HOSTNAME/auth/google/healthz")" = 'session_ready;conversation_authority=enabled'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 "https://$HOSTNAME/auth/google/session")" = 401
+          redirect_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 "https://$HOSTNAME/auth/google/start")"
+          test "$redirect_status" = 302
+          trap - ERR HUP INT TERM
+          echo 'google_ceo_session_route_cutover_completed=true public_health=green unauthenticated_session=401 google_start=302 legacy_probe_stopped=true session_unchanged=true secrets_unchanged=true storage_unchanged=true'
