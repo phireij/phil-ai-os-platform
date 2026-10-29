@@ -47,6 +47,16 @@ jobs:
           rollback_secret=\$(docker inspect '$ROLLBACK' --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}')
           current_state=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/var/lib/mission-control\"}}{{.Name}}{{end}}{{end}}')
           rollback_state=\$(docker inspect '$ROLLBACK' --format '{{range .Mounts}}{{if eq .Destination \"/var/lib/mission-control\"}}{{.Name}}{{end}}{{end}}')
-          [[ \"\$(docker inspect '$ROLLBACK' --format '{{.Config.Image}}')\" =~ ^ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session@sha256:[0-9a-f]{64}$ ]]
-          echo \"rollback_present=true running=\$(docker inspect '$ROLLBACK' --format '{{.State.Running}}') network=\$(docker inspect '$ROLLBACK' --format '{{.HostConfig.NetworkMode}}') readonly_rootfs=\$(docker inspect '$ROLLBACK' --format '{{.HostConfig.ReadonlyRootfs}}') restart_policy=\$(docker inspect '$ROLLBACK' --format '{{.HostConfig.RestartPolicy.Name}}') traefik_enabled=\$(docker inspect '$ROLLBACK' --format '{{index .Config.Labels \\\"traefik.enable\\\"}}') service_label=\$(docker inspect '$ROLLBACK' --format '{{index .Config.Labels \\\"traefik.http.routers.mission-control-google-ceo-session.service\\\"}}') secret_volume_matches_current=\$([[ \"\$rollback_secret\" = \"\$current_secret\" ]] && echo true || echo false) state_volume_matches_current=\$([[ \"\$rollback_state\" = \"\$current_state\" ]] && echo true || echo false) content_accessed=false authority_effect=none\""
+          running=\$(docker inspect '$ROLLBACK' --format '{{.State.Running}}')
+          network=\$(docker inspect '$ROLLBACK' --format '{{.HostConfig.NetworkMode}}')
+          readonly=\$(docker inspect '$ROLLBACK' --format '{{.HostConfig.ReadonlyRootfs}}')
+          restart=\$(docker inspect '$ROLLBACK' --format '{{.HostConfig.RestartPolicy.Name}}')
+          traefik=\$(docker inspect '$ROLLBACK' --format '{{index .Config.Labels \\\"traefik.enable\\\"}}')
+          service=\$(docker inspect '$ROLLBACK' --format '{{index .Config.Labels \\\"traefik.http.routers.mission-control-google-ceo-session.service\\\"}}')
+          image=\$(docker inspect '$ROLLBACK' --format '{{.Config.Image}}')
+          image_matches=false; [[ \"\$image\" =~ ^ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session@sha256:[0-9a-f]{64}$ ]] && image_matches=true
+          state_expected=false; [[ \"\$current_state\" = phil-ai-os-mission-control-conversation-state-v1 && \"\$rollback_state\" = phil-ai-os-mission-control-conversation-state-v1 ]] && state_expected=true
+          legacy_name_available=true; docker inspect '$ROLLBACK-legacy' >/dev/null 2>&1 && legacy_name_available=false
+          archive_candidate=false; [[ \"\$running\" = false && \"\$network\" = bridge && \"\$readonly\" = true && \"\$restart\" = no && -z \"\$traefik\" && -z \"\$service\" && \"\$rollback_secret\" = \"\$current_secret\" && \"\$state_expected\" = true && \"\$image_matches\" = true && \"\$legacy_name_available\" = true ]] && archive_candidate=true
+          echo \"rollback_present=true legacy_archive_candidate=\$archive_candidate image_matches=\$image_matches state_expected=\$state_expected legacy_name_available=\$legacy_name_available secret_volume_matches_current=\$([[ \"\$rollback_secret\" = \"\$current_secret\" ]] && echo true || echo false) state_volume_matches_current=\$([[ \"\$rollback_state\" = \"\$current_state\" ]] && echo true || echo false) content_accessed=false authority_effect=none\""
           ssh "${opts[@]}" "$remote" "$remote_command"
