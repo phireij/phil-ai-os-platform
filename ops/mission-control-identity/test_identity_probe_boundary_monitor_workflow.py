@@ -10,6 +10,23 @@ WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "miss
 
 
 class IdentityProbeBoundaryMonitorWorkflowTests(unittest.TestCase):
+    def test_keeps_a_bounded_cadence_and_read_only_workflow_permissions(self) -> None:
+        content = WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("schedule:\n    - cron: '17,47 * * * *'", content)
+        self.assertIn("permissions:\n  contents: read", content)
+        self.assertNotIn("contents: write", content)
+        self.assertNotIn("packages: write", content)
+
+    def test_never_loads_application_or_client_secret_material(self) -> None:
+        content = WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("Check active identity-probe boundary without secret access", content)
+        self.assertIn("VPS_SSH_KEY", content)
+        self.assertNotIn("MISSION_CONTROL_GOOGLE_CLIENT_SECRET", content)
+        self.assertNotIn("CLIENT_SECRET", content)
+        self.assertNotIn("/auth/google/start", content)
+
     def test_monitors_only_the_replacement_no_authority_probe(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("phil-ai-os-mission-control-google-identity-probe", content)
