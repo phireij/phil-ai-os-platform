@@ -5,12 +5,14 @@ on:
     paths:
       - 'Dockerfile.mission-control-google-identity-probe'
       - 'ops/mission-control-identity/**'
+      - '.github/workflows/mission-control-conversation-storage-monitor.yml'
       - '.github/workflows/mission-control-google-identity-probe-ci.yml'
   push:
     branches: [main]
     paths:
       - 'Dockerfile.mission-control-google-identity-probe'
       - 'ops/mission-control-identity/**'
+      - '.github/workflows/mission-control-conversation-storage-monitor.yml'
       - '.github/workflows/mission-control-google-identity-probe-ci.yml'
   workflow_dispatch:
 
@@ -31,6 +33,7 @@ jobs:
           source /tmp/mission-control-google-probe-venv/bin/activate
           python3 -m pip install --disable-pip-version-check google-auth==2.62.0 requests==2.34.2
           python3 ops/mission-control-identity/test_google_identity_probe.py
+          python3 ops/mission-control-identity/test_identity_probe_boundary_monitor_workflow.py
       - name: Build inactive probe image
         shell: bash
         run: |
