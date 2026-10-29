@@ -1,0 +1,40 @@
+name: Mission Control Live Status CI
+
+on:
+  pull_request:
+    paths:
+      - 'apps/operations-hub/src/operations_hub/mission_control_live_status.py'
+      - 'apps/operations-hub/src/operations_hub/mission_control_live_status_mcp.py'
+      - 'apps/operations-hub/src/operations_hub/mission_control_live_status_mcp_server.py'
+      - 'apps/operations-hub/src/operations_hub/mission_control_cto_auth0_verifier.py'
+      - 'apps/operations-hub/src/operations_hub/mission_control_cto_tool.py'
+      - 'apps/operations-hub/tests/test_mission_control_live_status.py'
+      - 'ops/mission-control-identity/compose.mcp-live-status.nonprod.yml'
+      - 'ops/mission-control-identity/compose.mcp-live-status.tunnel.nonprod.yml'
+      - 'ops/mission-control-identity/mc021-live-status-manifest.v1.json'
+      - '.github/workflows/mission-control-live-status-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/operations-hub/src/operations_hub/mission_control_live_status.py'
+      - 'apps/operations-hub/src/operations_hub/mission_control_live_status_mcp.py'
+      - 'apps/operations-hub/src/operations_hub/mission_control_live_status_mcp_server.py'
+      - 'apps/operations-hub/src/operations_hub/mission_control_cto_auth0_verifier.py'
+      - 'apps/operations-hub/src/operations_hub/mission_control_cto_tool.py'
+      - 'apps/operations-hub/tests/test_mission_control_live_status.py'
+      - 'ops/mission-control-identity/compose.mcp-live-status.nonprod.yml'
+      - 'ops/mission-control-identity/compose.mcp-live-status.tunnel.nonprod.yml'
+      - 'ops/mission-control-identity/mc021-live-status-manifest.v1.json'
+      - '.github/workflows/mission-control-live-status-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  live-status-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify the read-only live-status connector and Compose boundary
+        run: python3 apps/operations-hub/tests/test_mission_control_live_status.py
