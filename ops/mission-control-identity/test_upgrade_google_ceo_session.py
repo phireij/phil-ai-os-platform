@@ -109,6 +109,33 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
         ):
             self.assertNotIn(prohibited, workflow)
 
+    def test_route_cutover_restores_the_legacy_probe_when_session_boundary_fails(self) -> None:
+        workflow = (
+            Path(__file__).parents[2] / ".github" / "workflows" /
+            "mission-control-google-ceo-session-route-cutover.yml"
+        ).read_text(encoding="utf-8")
+        for marker in (
+            "workflow_dispatch:",
+            "current_session_image_digest:",
+            "docker stop '$PROBE'",
+            "docker start '$PROBE' >/dev/null",
+            "probe_restore_attempted=$probe_stopped",
+            "session_ready;conversation_authority=enabled",
+            "legacy_probe_stopped=true",
+            "session_unchanged=true",
+            "secrets_unchanged=true",
+            "storage_unchanged=true",
+        ):
+            self.assertIn(marker, workflow)
+        for prohibited in (
+            "docker rm",
+            "docker run",
+            "docker pull",
+            "docker volume create",
+            "MISSION_CONTROL_OPENAI_DISPATCH_ENABLED=true",
+        ):
+            self.assertNotIn(prohibited, workflow)
+
     def test_session_image_includes_conversation_store_dependency(self) -> None:
         dockerfile = (Path(__file__).parents[2] / "Dockerfile.mission-control-google-ceo-session").read_text(encoding="utf-8")
         self.assertIn("COPY ops/mission-control-identity/proposal_evidence.py /srv/proposal_evidence.py", dockerfile)
