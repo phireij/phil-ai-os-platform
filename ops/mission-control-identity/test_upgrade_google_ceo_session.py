@@ -21,6 +21,8 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             "google_ceo_session_upgrade_phase=prior_rollback_identity",
             "google_ceo_session_upgrade_phase=prior_rollback_replacement",
             "google_ceo_session_upgrade_phase=prior_rollback_legacy_archive",
+            "google_ceo_session_upgrade_phase=prior_rollback_route_less_legacy_archive",
+            "pre-route storage rollback has no restart policy or Traefik labels",
             "legacy_rollback_archive_unavailable",
             "LEGACY_ROLLBACK=\"${ROLLBACK}-legacy\"",
             "docker rename \"$ROLLBACK\" \"$LEGACY_ROLLBACK\"",
