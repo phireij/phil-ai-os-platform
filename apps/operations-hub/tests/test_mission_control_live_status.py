@@ -3,10 +3,15 @@ import os
 import re
 import sys
 import unittest
+from contextlib import contextmanager
 from datetime import datetime, timezone
+from http.server import ThreadingHTTPServer
 from io import BytesIO
 from pathlib import Path
+from socket import SHUT_WR, create_connection
+from threading import Thread
 from unittest.mock import Mock, patch
+from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -26,10 +31,13 @@ from operations_hub.mission_control_live_status_mcp import (  # noqa: E402
 )
 from operations_hub.mission_control_live_status_mcp_server import (  # noqa: E402
     LOOPBACK_HOST,
+    MAX_REQUEST_BYTES,
     PUBLIC_CONTAINER_HOST,
     PROTECTED_RESOURCE_METADATA_PATHS,
     SERVER_INFO,
+    Handler,
     _verification_result,
+    _json_request,
     initialize_result,
     listen_host,
     mcp_method_category,
@@ -55,6 +63,30 @@ class _Response(BytesIO):
 
     def __exit__(self, *_args):
         return False
+
+
+@contextmanager
+def _loopback_server():
+    server = ThreadingHTTPServer((LOOPBACK_HOST, 0), Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://{LOOPBACK_HOST}:{server.server_port}"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
+
+
+def _raw_loopback_request(base_url: str, request: bytes) -> bytes:
+    port = int(base_url.rsplit(":", 1)[1])
+    with create_connection((LOOPBACK_HOST, port), timeout=1) as client:
+        client.sendall(request)
+        client.shutdown(SHUT_WR)
+        chunks = []
+        while chunk := client.recv(4096):
+            chunks.append(chunk)
+    return b"".join(chunks)
 
 
 class LiveStatusTests(unittest.TestCase):
@@ -245,6 +277,61 @@ class LiveStatusTests(unittest.TestCase):
         self.assertNotIn("http://miscon.phireij.cloud", entrypoint)
         self.assertNotIn("https://miscon.phireij.cloud", entrypoint)
         self.assertNotIn("echo $CONTROL_PLANE_", entrypoint)
+
+    def test_loopback_handler_exposes_only_bounded_health_metadata_and_auth_challenge(self):
+        with patch.dict(
+            os.environ,
+            {"MCP_AUTHORIZATION_ISSUER": "https://issuer.example.test/"},
+        ), _loopback_server() as base_url:
+            with urlopen(f"{base_url}/healthz", timeout=1) as response:
+                self.assertEqual(response.status, 200)
+                self.assertEqual(json.load(response), {
+                    "authority_effect": "none",
+                    "live_data": "on_demand",
+                    "mode": "live_status_read_only",
+                    "status": "ok",
+                })
+            with urlopen(
+                f"{base_url}/.well-known/oauth-protected-resource/mcp/live-status",
+                timeout=1,
+            ) as response:
+                metadata = json.load(response)
+            self.assertEqual(metadata["resource"], CANONICAL_RESOURCE_URI)
+            self.assertEqual(metadata["authorization_servers"], ["https://issuer.example.test/"])
+
+            payload = json.dumps({
+                "jsonrpc": "2.0",
+                "id": "local-test",
+                "method": "tools/call",
+                "params": {"name": TOOL_NAME, "arguments": {}},
+            }).encode("utf-8")
+            response = _raw_loopback_request(
+                base_url,
+                (
+                    b"POST /mcp HTTP/1.1\r\n"
+                    b"Host: 127.0.0.1\r\n"
+                    b"Content-Type: application/json\r\n"
+                    + f"Content-Length: {len(payload)}\r\n".encode("ascii")
+                    + b"Connection: close\r\n\r\n"
+                    + payload
+                ),
+            )
+            headers, _body = response.split(b"\r\n\r\n", 1)
+            self.assertIn(b"HTTP/1.1 401", headers)
+            self.assertIn(b"resource_metadata=", headers)
+
+    def test_json_request_denies_chunked_missing_oversized_and_incomplete_bodies(self):
+        reader = Mock(return_value=b"{}")
+        self.assertEqual(_json_request({"Content-Length": "2"}, reader), {})
+        for headers in (
+            {"Transfer-Encoding": "chunked", "Content-Length": "2"},
+            {},
+            {"Content-Length": str(MAX_REQUEST_BYTES + 1)},
+        ):
+            with self.assertRaises(ValueError):
+                _json_request(headers, reader)
+        with self.assertRaises(ValueError):
+            _json_request({"Content-Length": "3"}, lambda _size: b"{}")
 
     def test_diagnostics_redact_untrusted_methods_and_tool_contents(self):
         self.assertEqual(mcp_method_category("tools/call"), "tools/call")
