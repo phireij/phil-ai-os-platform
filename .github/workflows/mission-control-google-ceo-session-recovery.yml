@@ -1,0 +1,69 @@
+name: Mission Control Google CEO Session Guarded Recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      current_image_digest:
+        description: Immutable digest of the stopped CEO-session container
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-control-google-identity-deploy
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      IMAGE_DIGEST: ${{ inputs.current_image_digest }}
+      IMAGE: ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
+      SESSION: phil-ai-os-mission-control-google-ceo-session
+      HOSTNAME: miscon.phireij.cloud
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Verify the stopped session and restart only its existing container
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          port="${VPS_PORT:-22}"
+          remote="$VPS_USER@$VPS_HOST"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          remote_command="set -euo pipefail
+          test \"\$(docker inspect '$SESSION' --format '{{.State.Running}}')\" = false
+          test \"\$(docker inspect '$SESSION' --format '{{.Config.Image}}')\" = '$IMAGE@'$IMAGE_DIGEST
+          test \"\$(docker inspect '$SESSION' --format '{{.HostConfig.NetworkMode}}')\" = bridge
+          test \"\$(docker inspect '$SESSION' --format '{{.HostConfig.ReadonlyRootfs}}')\" = true
+          test \"\$(docker inspect '$SESSION' --format '{{.HostConfig.Privileged}}')\" = false
+          test \"\$(docker inspect '$SESSION' --format '{{json .HostConfig.CapDrop}}')\" = '[\"ALL\"]'
+          secret_volume=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}')
+          [[ \"\$secret_volume\" =~ ^phil-ai-os-mc-google-session-secret-[0-9]+-[0-9]+$ ]]
+          state_volume=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/var/lib/mission-control\"}}{{.Name}}{{end}}{{end}}')
+          test -z \"\$state_volume\" || test \"\$state_volume\" = phil-ai-os-mission-control-conversation-state-v1
+          exit_code=\$(docker inspect '$SESSION' --format '{{.State.ExitCode}}')
+          restart_count=\$(docker inspect '$SESSION' --format '{{.RestartCount}}')
+          docker start '$SESSION' >/dev/null
+          test \"\$(docker inspect '$SESSION' --format '{{.State.Running}}')\" = true
+          echo \"google_ceo_session_recovered=true image='$IMAGE@'$IMAGE_DIGEST exit_code=\$exit_code restart_count=\$restart_count existing_container_restarted=true secrets_unchanged=true storage_unchanged=true\""
+          ssh "${ssh_opts[@]}" "$remote" "$remote_command"
+          test "$(curl --fail-with-body --silent --show-error --max-time 15 "https://$HOSTNAME/auth/google/healthz")" = 'session_ready;conversation_authority=enabled'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 "https://$HOSTNAME/auth/google/session")" = 401
+          echo 'google_ceo_session_recovery_completed=true public_health=green unauthenticated_session=401 existing_container_restarted=true secrets_unchanged=true storage_unchanged=true'
