@@ -1,0 +1,52 @@
+name: Mission Control CEO Session Rollback Topology Inventory
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-control-google-identity-deploy
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      SESSION: phil-ai-os-mission-control-google-ceo-session
+      ROLLBACK: phil-ai-os-mission-control-google-ceo-session-rollback
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Inventory rollback topology without content or authority access
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY"
+          port="${VPS_PORT:-22}"
+          remote="$VPS_USER@$VPS_HOST"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          remote_command="set -euo pipefail
+          test \"\$(docker inspect '$SESSION' --format '{{.State.Running}}')\" = true
+          if ! docker inspect '$ROLLBACK' >/dev/null 2>&1; then
+            echo 'rollback_topology_inventory_completed=true rollback_present=false content_accessed=false authority_effect=none'
+            exit 0
+          fi
+          current_secret=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}')
+          rollback_secret=\$(docker inspect '$ROLLBACK' --format '{{range .Mounts}}{{if eq .Destination \"/run/secrets\"}}{{.Name}}{{end}}{{end}}')
+          current_state=\$(docker inspect '$SESSION' --format '{{range .Mounts}}{{if eq .Destination \"/var/lib/mission-control\"}}{{.Name}}{{end}}{{end}}')
+          rollback_state=\$(docker inspect '$ROLLBACK' --format '{{range .Mounts}}{{if eq .Destination \"/var/lib/mission-control\"}}{{.Name}}{{end}}{{end}}')
+          [[ \"\$(docker inspect '$ROLLBACK' --format '{{.Config.Image}}')\" =~ ^ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session@sha256:[0-9a-f]{64}$ ]]
+          echo \"rollback_present=true running=\$(docker inspect '$ROLLBACK' --format '{{.State.Running}}') network=\$(docker inspect '$ROLLBACK' --format '{{.HostConfig.NetworkMode}}') readonly_rootfs=\$(docker inspect '$ROLLBACK' --format '{{.HostConfig.ReadonlyRootfs}}') restart_policy=\$(docker inspect '$ROLLBACK' --format '{{.HostConfig.RestartPolicy.Name}}') traefik_enabled=\$(docker inspect '$ROLLBACK' --format '{{index .Config.Labels \\\"traefik.enable\\\"}}') service_label=\$(docker inspect '$ROLLBACK' --format '{{index .Config.Labels \\\"traefik.http.routers.mission-control-google-ceo-session.service\\\"}}') secret_volume_matches_current=\$([[ \"\$rollback_secret\" = \"\$current_secret\" ]] && echo true || echo false) state_volume_matches_current=\$([[ \"\$rollback_state\" = \"\$current_state\" ]] && echo true || echo false) content_accessed=false authority_effect=none\""
+          ssh "${opts[@]}" "$remote" "$remote_command"
