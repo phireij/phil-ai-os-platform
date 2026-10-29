@@ -236,6 +236,7 @@ def _initialize_live(connection: sqlite3.Connection) -> None:
         """
     )
     _initialize_notification_outbox(connection)
+    _initialize_notification_audit_events(connection)
 
 
 def _create_notification_outbox(connection: sqlite3.Connection) -> None:
@@ -286,6 +287,43 @@ def _initialize_notification_outbox(connection: sqlite3.Connection) -> None:
                 "FROM notification_outbox_legacy"
             )
             connection.execute("DROP TABLE notification_outbox_legacy")
+
+
+def _initialize_notification_audit_events(connection: sqlite3.Connection) -> None:
+    """Create a durable, identifier-only history of delivery outcomes.
+
+    Existing outbox rows deliberately receive no synthetic events: an event is
+    evidence of an outcome observed after this boundary was introduced.
+    """
+
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS notification_audit_events (
+            event_id TEXT PRIMARY KEY,
+            notification_id TEXT NOT NULL REFERENCES notification_outbox(notification_id) ON DELETE CASCADE,
+            owner_digest BLOB NOT NULL,
+            event_type TEXT NOT NULL CHECK(event_type IN (
+                'notification_delivery_delivered',
+                'notification_delivery_retry_scheduled',
+                'notification_delivery_dead_lettered'
+            )),
+            occurred_at INTEGER NOT NULL,
+            delivery_state TEXT NOT NULL CHECK(delivery_state IN ('retry_wait','delivered','dead_letter')),
+            attempt_count INTEGER NOT NULL CHECK(attempt_count >= 1 AND attempt_count <= 2),
+            last_error TEXT CHECK(last_error IS NULL OR last_error IN (
+                'delivery_failed',
+                'delivery_interrupted',
+                'telegram_request_rejected',
+                'telegram_rate_limited',
+                'telegram_api_http_error',
+                'telegram_transport_unavailable'
+            )),
+            authority_effect TEXT NOT NULL CHECK(authority_effect='none')
+        );
+        CREATE INDEX IF NOT EXISTS notification_audit_events_owner_order
+            ON notification_audit_events(owner_digest, occurred_at, event_id);
+        """
+    )
 
 
 def _initialize_ledger(connection: sqlite3.Connection) -> None:
@@ -772,6 +810,16 @@ class ConversationStore:
                 "WHERE p.conversation_id=? AND d.owner_digest=? ORDER BY d.decided_at,d.decision_id",
                 (conversation_id, self._owner),
             ).fetchall()
+            notification_events = self._live.connection.execute(
+                "SELECT e.event_id,e.notification_id,e.event_type,e.occurred_at,e.delivery_state,"
+                "e.attempt_count,e.last_error,n.decision_id,n.proposal_id "
+                "FROM notification_audit_events e "
+                "JOIN notification_outbox n ON n.notification_id=e.notification_id "
+                "JOIN task_proposals p ON p.proposal_id=n.proposal_id "
+                "WHERE p.conversation_id=? AND e.owner_digest=? "
+                "ORDER BY e.occurred_at,e.event_id",
+                (conversation_id, self._owner),
+            ).fetchall()
 
         events: list[dict[str, Any]] = [
             {
@@ -826,11 +874,33 @@ class ConversationStore:
             }
             for row in decisions
         )
+        events.extend(
+            {
+                "event_id": f"notification:{row['event_id']}",
+                "event_type": row["event_type"],
+                "occurred_at": _iso(row["occurred_at"]),
+                "source": "notification_outbox",
+                "correlation": {
+                    "conversation_id": conversation_id,
+                    "notification_id": row["notification_id"],
+                    "proposal_id": row["proposal_id"],
+                    "decision_id": row["decision_id"],
+                    "delivery_state": row["delivery_state"],
+                    "attempt_count": row["attempt_count"],
+                    "error_code": row["last_error"],
+                },
+                "authority_effect": "none",
+            }
+            for row in notification_events
+        )
         event_order = {
             "conversation_created": 0,
             "ceo_message_submitted": 1,
             "task_proposal_drafted": 2,
             "ceo_decision_recorded": 3,
+            "notification_delivery_delivered": 4,
+            "notification_delivery_retry_scheduled": 4,
+            "notification_delivery_dead_lettered": 4,
         }
         events.sort(key=lambda event: (event["occurred_at"], event_order[event["event_type"]], event["event_id"]))
         page = events[cursor : cursor + limit]
@@ -955,7 +1025,7 @@ class ConversationStore:
                 interrupted = False
                 with self._live.connection:
                     interrupted_row = self._live.connection.execute(
-                        "SELECT notification_id FROM notification_outbox WHERE owner_digest=? AND delivery_state='in_flight' "
+                        "SELECT notification_id,attempt_count FROM notification_outbox WHERE owner_digest=? AND delivery_state='in_flight' "
                         "ORDER BY last_attempt_at,notification_id LIMIT 1",
                         (self._owner,),
                     ).fetchone()
@@ -964,6 +1034,14 @@ class ConversationStore:
                             "UPDATE notification_outbox SET delivery_state='dead_letter',next_attempt_at=NULL,last_error='delivery_interrupted' "
                             "WHERE notification_id=? AND owner_digest=? AND delivery_state='in_flight'",
                             (interrupted_row["notification_id"], self._owner),
+                        )
+                        self._record_notification_audit_event_locked(
+                            notification_id=interrupted_row["notification_id"],
+                            event_type="notification_delivery_dead_lettered",
+                            delivery_state="dead_letter",
+                            attempt_count=interrupted_row["attempt_count"],
+                            occurred_at=now,
+                            last_error="delivery_interrupted",
                         )
                         interrupted = True
                     else:
@@ -1009,11 +1087,49 @@ class ConversationStore:
                         "WHERE notification_id=? AND owner_digest=? AND delivery_state='in_flight'",
                         (outcome, next_attempt, error, notification["notification_id"], self._owner),
                     )
+                    self._record_notification_audit_event_locked(
+                        notification_id=notification["notification_id"],
+                        event_type={
+                            "delivered": "notification_delivery_delivered",
+                            "retry_wait": "notification_delivery_retry_scheduled",
+                            "dead_letter": "notification_delivery_dead_lettered",
+                        }[outcome],
+                        delivery_state=outcome,
+                        attempt_count=notification["attempt_count"],
+                        occurred_at=now,
+                        last_error=error,
+                    )
                 self._live.persist()
             except Exception:
                 self._live.connection.deserialize(before)
                 raise
         return True
+
+    def _record_notification_audit_event_locked(
+        self,
+        *,
+        notification_id: str,
+        event_type: str,
+        delivery_state: str,
+        attempt_count: int,
+        occurred_at: int,
+        last_error: str | None,
+    ) -> None:
+        self._live.connection.execute(
+            "INSERT INTO notification_audit_events "
+            "(event_id,notification_id,owner_digest,event_type,occurred_at,delivery_state,attempt_count,last_error,authority_effect) "
+            "VALUES (?,?,?,?,?,?,?,?, 'none')",
+            (
+                self._identifier("notification-event"),
+                notification_id,
+                self._owner,
+                event_type,
+                occurred_at,
+                delivery_state,
+                attempt_count,
+                last_error,
+            ),
+        )
 
     def dispatch_one_response(self, *, now: int) -> bool:
         """Claim+reserve durably before sending. Never replay ambiguous outcomes.
