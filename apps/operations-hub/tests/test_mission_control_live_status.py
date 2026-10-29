@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sys
 import unittest
 from datetime import datetime, timezone
@@ -38,6 +39,8 @@ from operations_hub.mission_control_live_status_mcp_server import (  # noqa: E40
 
 
 MANIFEST = ROOT.parents[1] / "ops" / "mission-control-identity" / "mc021-live-status-manifest.v1.json"
+BASE_COMPOSE = ROOT.parents[1] / "ops" / "mission-control-identity" / "compose.mcp-live-status.nonprod.yml"
+TUNNEL_COMPOSE = ROOT.parents[1] / "ops" / "mission-control-identity" / "compose.mcp-live-status.tunnel.nonprod.yml"
 NOW = datetime(2026, 10, 23, 12, 0, tzinfo=timezone.utc)
 
 
@@ -171,6 +174,48 @@ class LiveStatusTests(unittest.TestCase):
         with patch.dict(os.environ, {"MCP_LISTEN_HOST": "192.0.2.99"}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "mcp_listener_host_denied"):
                 listen_host()
+
+    def test_compose_contract_allows_only_two_oauth_routes_without_host_exposure(self):
+        compose = BASE_COMPOSE.read_text(encoding="utf-8")
+        self.assertIsNone(re.search(r"^\s*ports\s*:", compose, flags=re.MULTILINE))
+        self.assertIn("read_only: true", compose)
+        self.assertIn("cap_drop:\n      - ALL", compose)
+        self.assertIn("no-new-privileges:true", compose)
+        self.assertIn("network_mode: bridge", compose)
+        self.assertIn("MCP_LISTEN_HOST: 0.0.0.0", compose)
+        self.assertNotIn("privileged:", compose)
+        self.assertNotIn("cap_add:", compose)
+        self.assertIn("source: /etc/phil-ai-os/secrets/mc021-owner-subject", compose)
+        self.assertIn("target: /run/secrets/mc021_owner_subject", compose)
+        self.assertIn("read_only: true", compose)
+
+        router_rules = dict(re.findall(
+            r'^\s+traefik\.http\.routers\.([^.]+)\.rule: "([^"]+)"$',
+            compose,
+            flags=re.MULTILINE,
+        ))
+        self.assertEqual(router_rules, {
+            "mcp-live-status": "Host(`miscon.phireij.cloud`) && Path(`/mcp/live-status`)",
+            "mcp-live-status-metadata": (
+                "Host(`miscon.phireij.cloud`) && "
+                "Path(`/.well-known/oauth-protected-resource/mcp/live-status`)"
+            ),
+        })
+
+    def test_tunnel_overlay_cannot_add_an_ingress_route_or_embed_runtime_values(self):
+        overlay = TUNNEL_COMPOSE.read_text(encoding="utf-8")
+        self.assertIsNone(re.search(r"^\s*ports\s*:", overlay, flags=re.MULTILINE))
+        self.assertIsNone(re.search(r"^\s+traefik\.http\.routers\..*\.rule:", overlay, flags=re.MULTILINE))
+        self.assertNotIn("privileged:", overlay)
+        self.assertNotIn("cap_add:", overlay)
+        self.assertIn(
+            "CONTROL_PLANE_API_KEY: ${CONTROL_PLANE_API_KEY:?root-owned VPS runtime key is required}",
+            overlay,
+        )
+        self.assertIn(
+            "CONTROL_PLANE_TUNNEL_ID: ${CONTROL_PLANE_TUNNEL_ID:?root-owned VPS tunnel identity is required}",
+            overlay,
+        )
 
     def test_diagnostics_redact_untrusted_methods_and_tool_contents(self):
         self.assertEqual(mcp_method_category("tools/call"), "tools/call")
