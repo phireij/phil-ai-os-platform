@@ -1,8 +1,9 @@
 # MC-021 live-status tunnel activation
 
 This overlay is a separate, non-production, outbound-only connector for the
-read-only live-status MCP server.  It adds no public listener, Traefik route,
-or mutation capability.
+read-only live-status MCP server. It adds no host port, Traefik route beyond
+the base file's two approved OAuth-protected MCP/metadata paths, or mutation
+capability.
 
 ## VPS custody
 
@@ -37,12 +38,13 @@ valid owner credential invokes the sole read-only MCP tool.
 
 ## Discovery target boundary
 
-The runtime permits plaintext HTTP only for its trusted `127.0.0.1` MCP origin
-so tunnel-client can auto-register the protected-resource metadata endpoint as
-its Harpoon discovery target. This enables ChatGPT's internal discovery channel
-without exposing a route, permitting arbitrary URLs, supplying credentials to
-Harpoon, or authorizing a live-status request. The MCP listener and the
-tunnel-client health listener remain loopback-only.
+The runtime permits plaintext HTTP only for its trusted container-local MCP
+origin so tunnel-client can auto-register the protected-resource metadata
+endpoint as its Harpoon discovery target. This enables ChatGPT's internal
+discovery channel without adding a route beyond the base file's two approved
+OAuth-protected paths, permitting arbitrary URLs, supplying credentials to
+Harpoon, or authorizing a live-status request. No host port is published, and
+the tunnel-client health listener remains loopback-only.
 
 OAuth discovery trusts only the existing Auth0 issuer origin for its public
 metadata documents. This does not grant that issuer MCP, source, or tunnel

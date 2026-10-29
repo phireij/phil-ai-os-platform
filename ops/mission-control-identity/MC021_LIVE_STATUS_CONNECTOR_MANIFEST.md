@@ -1,8 +1,12 @@
 # MC-021 live-status connector manifest
 
-This connector is a separate, non-production, loopback-only workload.  It has
-one read-only tool, `get_mission_control_live_status`, and no mutation,
-approval, execution, delegation, credential-issuance, or public-listener path.
+This connector is a separate, non-production workload. It has one read-only
+tool, `get_mission_control_live_status`, and no mutation, approval, execution,
+delegation, or credential-issuance path. It publishes no host port. Its only
+public entrypoints are the existing OAuth-protected Traefik paths
+`/mcp/live-status` and
+`/.well-known/oauth-protected-resource/mcp/live-status`; no other public route
+is permitted.
 
 ## Fixed source allowlist
 
@@ -17,11 +21,11 @@ each discarded response at 16 KiB and each call at five seconds.
 
 ## Custody and activation boundary
 
-The base Compose file deliberately has no public port, tunnel client, OpenAI
-runtime key, or live credential.  The live-status connector uses its dedicated
-MC-021 Auth0 resource `https://miscon.phireij.cloud/mcp/live-status` and the
-already-approved read scope.  Its isolation comes from the separate tunnel
-workload, dedicated resource audience, one-tool contract, root-managed
-owner-subject file, and fixed source allowlist; it does not create a public
-route.  The runtime key and owner-subject file remain VPS-managed secrets; they
-must never be committed or printed.
+The base Compose file deliberately has no host port, tunnel client, OpenAI
+runtime key, or live credential. It defines only the two approved Traefik
+paths above, both bound to the dedicated MC-021 Auth0 resource
+`https://miscon.phireij.cloud/mcp/live-status` and the read-only scope. Its
+isolation comes from the separate tunnel workload, dedicated resource audience,
+one-tool contract, root-managed owner-subject file, and fixed source allowlist.
+The runtime key and owner-subject file remain VPS-managed secrets; they must
+never be committed or printed.
