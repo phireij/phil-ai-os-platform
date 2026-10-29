@@ -6,6 +6,11 @@ from scripts.validate_workflow_supply_chain import validate_repository, validate
 
 
 PINNED_CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+DEPRECATED_MISSION_CONTROL_DOCKER_ACTION_PINS = (
+    "docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f",
+    "docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9",
+)
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class WorkflowSupplyChainPolicyTests(unittest.TestCase):
@@ -62,6 +67,15 @@ class WorkflowSupplyChainPolicyTests(unittest.TestCase):
             errors = validate_repository(Path(temp_dir))
         self.assertEqual(len(errors), 1)
         self.assertIn("no GitHub Actions workflow files found", errors[0])
+
+    def test_mission_control_workflows_reject_known_node20_docker_action_pins(self):
+        workflows = sorted((ROOT / ".github" / "workflows").glob("mission-control-*.yml"))
+        self.assertTrue(workflows)
+        for workflow in workflows:
+            content = workflow.read_text(encoding="utf-8")
+            for pin in DEPRECATED_MISSION_CONTROL_DOCKER_ACTION_PINS:
+                with self.subTest(workflow=workflow.name, pin=pin):
+                    self.assertNotIn(pin, content)
 
 
 if __name__ == "__main__":
