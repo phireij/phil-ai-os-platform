@@ -192,6 +192,8 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             'test "$IMAGE_DIGEST" = "$CURRENT_IMAGE_DIGEST"',
             'git merge-base --is-ancestor "$SOURCE_REVISION" HEAD',
             'allowed_safety_only_delta=true',
+            'mission-control-google-ceo-session-rollback-inventory\\.yml',
+            'upgrade-google-ceo-session\\.sh',
             'controlled_test_pending=true',
         ):
             self.assertIn(marker, workflow)
