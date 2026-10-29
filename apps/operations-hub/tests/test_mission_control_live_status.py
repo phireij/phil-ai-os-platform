@@ -41,6 +41,9 @@ from operations_hub.mission_control_live_status_mcp_server import (  # noqa: E40
 MANIFEST = ROOT.parents[1] / "ops" / "mission-control-identity" / "mc021-live-status-manifest.v1.json"
 BASE_COMPOSE = ROOT.parents[1] / "ops" / "mission-control-identity" / "compose.mcp-live-status.nonprod.yml"
 TUNNEL_COMPOSE = ROOT.parents[1] / "ops" / "mission-control-identity" / "compose.mcp-live-status.tunnel.nonprod.yml"
+SERVER_DOCKERFILE = ROOT.parents[1] / "Dockerfile.mission-control-cto-mcp-live-status"
+TUNNEL_DOCKERFILE = ROOT.parents[1] / "Dockerfile.mission-control-cto-mcp-live-status-tunnel"
+TUNNEL_ENTRYPOINT = ROOT.parents[1] / "ops" / "mission-control-identity" / "mc021-live-status-tunnel-entrypoint.sh"
 NOW = datetime(2026, 10, 23, 12, 0, tzinfo=timezone.utc)
 
 
@@ -216,6 +219,32 @@ class LiveStatusTests(unittest.TestCase):
             "CONTROL_PLANE_TUNNEL_ID: ${CONTROL_PLANE_TUNNEL_ID:?root-owned VPS tunnel identity is required}",
             overlay,
         )
+
+    def test_container_images_are_pinned_nonroot_and_exclude_runtime_values(self):
+        server_image = SERVER_DOCKERFILE.read_text(encoding="utf-8")
+        tunnel_image = TUNNEL_DOCKERFILE.read_text(encoding="utf-8")
+        for image in (server_image, tunnel_image):
+            self.assertIsNotNone(re.search(
+                r"^FROM docker\.io/library/python@sha256:[0-9a-f]{64}$",
+                image,
+                flags=re.MULTILINE,
+            ))
+            self.assertIn("USER app", image)
+            self.assertNotIn("CONTROL_PLANE_API_KEY=", image)
+            self.assertNotIn("CONTROL_PLANE_TUNNEL_ID=", image)
+            self.assertNotIn("/etc/phil-ai-os/secrets/", image)
+        self.assertIn("sha256sum -c -", tunnel_image)
+        self.assertIn("curl --fail --location --proto '=https' --tlsv1.2", tunnel_image)
+
+    def test_tunnel_entrypoint_uses_only_loopback_mcp_and_health_endpoints(self):
+        entrypoint = TUNNEL_ENTRYPOINT.read_text(encoding="utf-8")
+        self.assertIn("TUNNEL_CLIENT_PROFILE_DIR", entrypoint)
+        self.assertIn("CONTROL_PLANE_TUNNEL_ID", entrypoint)
+        self.assertIn('--mcp-server-url "http://127.0.0.1:8788/mcp"', entrypoint)
+        self.assertIn('--health-listen-addr "127.0.0.1:18081"', entrypoint)
+        self.assertNotIn("http://miscon.phireij.cloud", entrypoint)
+        self.assertNotIn("https://miscon.phireij.cloud", entrypoint)
+        self.assertNotIn("echo $CONTROL_PLANE_", entrypoint)
 
     def test_diagnostics_redact_untrusted_methods_and_tool_contents(self):
         self.assertEqual(mcp_method_category("tools/call"), "tools/call")
