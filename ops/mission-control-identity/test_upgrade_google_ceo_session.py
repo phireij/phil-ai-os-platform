@@ -67,6 +67,9 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             "rollback",
             "encrypted_storage_preserved=true",
             "conversation_authority=enabled",
+            "mission-control-google-ceo-session-recovery\\.yml",
+            "mission-control-google-ceo-session-route-cutover\\.yml",
+            "allowed_safety_only_delta=true",
         ):
             self.assertIn(marker, workflow)
         for prohibited in ("docker volume create", "MISSION_CONTROL_CONVERSATION_ENABLED=true"):

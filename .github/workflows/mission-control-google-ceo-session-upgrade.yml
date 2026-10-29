@@ -61,12 +61,12 @@ jobs:
           current_main="$(git ls-remote origin refs/heads/main | cut -f1)"
           test "$(git rev-parse HEAD)" = "$current_main"
           git merge-base --is-ancestor "$SOURCE_REVISION" HEAD
-          unexpected_delta="$(git diff --name-only "$SOURCE_REVISION..HEAD" | grep -Ev '^(docs/MISSION_CONTROL_DELIVERY_TRACKER_2026-10-13\.md|\.github/workflows/mission-control-google-ceo-session-upgrade\.yml)$' || true)"
+          unexpected_delta="$(git diff --name-only "$SOURCE_REVISION..HEAD" | grep -Ev '^(docs/MISSION_CONTROL_DELIVERY_TRACKER_2026-10-13\.md|\.github/workflows/mission-control-google-ceo-session-upgrade\.yml|\.github/workflows/mission-control-google-ceo-session-recovery\.yml|\.github/workflows/mission-control-google-ceo-session-route-cutover\.yml)$' || true)"
           test -z "$unexpected_delta"
           printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
           manifest_digest="sha256:$(docker buildx imagetools inspect "$IMAGE:$SOURCE_REVISION" --raw | sha256sum | cut -d' ' -f1)"
           test "$manifest_digest" = "$IMAGE_DIGEST"
-          echo "source_revision=$SOURCE_REVISION current_main=$current_main image=$IMAGE@$IMAGE_DIGEST digest_match=true allowed_tracker_only_delta=true"
+          echo "source_revision=$SOURCE_REVISION current_main=$current_main image=$IMAGE@$IMAGE_DIGEST digest_match=true allowed_safety_only_delta=true"
       - name: Replace the CEO session while preserving encrypted conversation storage and rollback
         shell: bash
         env:
