@@ -64,7 +64,7 @@ jobs:
           # every newer delta is limited to reviewed deployment controls.
           test "$IMAGE_DIGEST" = "$CURRENT_IMAGE_DIGEST"
           git merge-base --is-ancestor "$SOURCE_REVISION" HEAD
-          unexpected_delta="$(git diff --name-only "$SOURCE_REVISION..HEAD" | grep -Ev '^(docs/MISSION_CONTROL_DELIVERY_TRACKER_2026-10-13\.md|\.github/workflows/mission-control-google-ceo-session-ci\.yml|\.github/workflows/mission-control-google-ceo-session-upgrade\.yml|\.github/workflows/mission-control-google-ceo-session-recovery\.yml|\.github/workflows/mission-control-google-ceo-session-route-cutover\.yml|\.github/workflows/mission-control-telegram-delivery-activate\.yml|ops/mission-control-identity/test_upgrade_google_ceo_session\.py)$' || true)"
+          unexpected_delta="$(git diff --name-only "$SOURCE_REVISION..HEAD" | grep -Ev '^(docs/MISSION_CONTROL_DELIVERY_TRACKER_2026-10-13\.md|\.github/workflows/mission-control-google-ceo-session-ci\.yml|\.github/workflows/mission-control-google-ceo-session-upgrade\.yml|\.github/workflows/mission-control-google-ceo-session-recovery\.yml|\.github/workflows/mission-control-google-ceo-session-route-cutover\.yml|\.github/workflows/mission-control-google-ceo-session-rollback-inventory\.yml|\.github/workflows/mission-control-telegram-delivery-activate\.yml|ops/mission-control-identity/test_upgrade_google_ceo_session\.py|ops/mission-control-identity/upgrade-google-ceo-session\.sh)$' || true)"
           test -z "$unexpected_delta"
           echo 'telegram_delivery_source_lineage=verified allowed_safety_only_delta=true'
           port="${VPS_PORT:-22}"; remote="$VPS_USER@$VPS_HOST"
