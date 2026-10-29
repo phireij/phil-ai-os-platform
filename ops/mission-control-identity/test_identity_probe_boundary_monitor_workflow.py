@@ -27,6 +27,24 @@ class IdentityProbeBoundaryMonitorWorkflowTests(unittest.TestCase):
         self.assertNotIn("CLIENT_SECRET", content)
         self.assertNotIn("/auth/google/start", content)
 
+    def test_remote_and_public_checks_remain_inspection_only(self) -> None:
+        content = WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("docker inspect", content)
+        for command in (
+            "docker run",
+            "docker start",
+            "docker stop",
+            "docker restart",
+            "docker rm",
+            "docker rename",
+            "docker volume",
+        ):
+            self.assertNotIn(command, content)
+        self.assertNotIn("--data", content)
+        self.assertNotRegex(content, r"curl[^\n]*(?:\s-d(?:\s|=)|\s--data(?:\s|=))")
+        self.assertIn('test "$post_status" = 405', content)
+
     def test_monitors_only_the_replacement_no_authority_probe(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("phil-ai-os-mission-control-google-identity-probe", content)
