@@ -239,6 +239,22 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             self.assertIn(marker, workflow)
         self.assertNotIn("sendMessage", workflow)
 
+    def test_release_inventory_rejects_a_running_retired_identity_probe(self) -> None:
+        workflow = (
+            Path(__file__).parents[2]
+            / ".github"
+            / "workflows"
+            / "mission-control-release-inventory.yml"
+        ).read_text(encoding="utf-8")
+        for marker in (
+            'probe=phil-ai-os-mission-control-google-identity-probe',
+            'docker inspect "$probe" >/dev/null 2>&1',
+            'docker inspect "$probe" --format \'{{.State.Running}}\'',
+            'retired_identity_probe_running=false',
+        ):
+            self.assertIn(marker, workflow)
+        self.assertNotIn('docker start "$probe"', workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
