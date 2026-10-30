@@ -38,7 +38,7 @@ class ConversationStorageMonitorChecks(unittest.TestCase):
         self.assertIn(r'Z\.enc", path.name)', script)
         self.assertNotIn(r'Z\\.enc", path.name)', script)
 
-    def test_workflow_is_scheduled_and_checks_the_replacement_probe_boundary(self) -> None:
+    def test_workflow_is_scheduled_and_checks_the_active_session_boundary(self) -> None:
         workflow = (
             Path(__file__).parents[2]
             / ".github"
@@ -48,18 +48,16 @@ class ConversationStorageMonitorChecks(unittest.TestCase):
         for marker in (
             "schedule:",
             "17,47 * * * *",
-            "phil-ai-os-mission-control-google-identity-probe",
+            "phil-ai-os-mission-control-google-ceo-session",
             "ReadonlyRootfs",
             "CapDrop",
-            "probe_ready;authority_effect=none",
+            "session_ready;conversation_authority=enabled",
             "session_status",
-            "test \"$session_status\" = 404",
+            "test \"$session_status\" = 401",
             "authority_effect=none",
         ):
             self.assertIn(marker, workflow)
         for prohibited in (
-            "google-ceo-session",
-            "conversation_authority=enabled",
             "docker start",
             "docker stop",
             "docker rm",

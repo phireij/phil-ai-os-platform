@@ -1,4 +1,4 @@
-name: Mission Control Identity Probe Boundary Monitor
+name: Mission Control CEO Session Boundary Monitor
 
 on:
   schedule:
@@ -21,38 +21,38 @@ jobs:
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_PORT: ${{ secrets.VPS_PORT }}
       HOSTNAME: miscon.phireij.cloud
-      CONTAINER: phil-ai-os-mission-control-google-identity-probe
+      CONTAINER: phil-ai-os-mission-control-google-ceo-session
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
-      - name: Check active identity-probe boundary without secret access
+      - name: Check active CEO-session boundary without secret or content access
         shell: bash
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
           set -euo pipefail
-          test -n "$VPS_HOST"
-          test -n "$VPS_USER"
-          test -n "$VPS_SSH_KEY"
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY"
           port="${VPS_PORT:-22}"
           remote="$VPS_USER@$VPS_HOST"
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh_opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
           remote_command="set -euo pipefail
           test \"\$(docker inspect '$CONTAINER' --format '{{.State.Running}}')\" = true
           test \"\$(docker inspect '$CONTAINER' --format '{{.HostConfig.ReadonlyRootfs}}')\" = true
           test \"\$(docker inspect '$CONTAINER' --format '{{.HostConfig.Privileged}}')\" = false
           test \"\$(docker inspect '$CONTAINER' --format '{{json .HostConfig.CapDrop}}')\" = '[\"ALL\"]'
-          case \"\$(docker inspect '$CONTAINER' --format '{{.Config.Image}}')\" in ghcr.io/phireij/phil-ai-os-platform/mission-control-google-identity-probe@sha256:*) ;; *) exit 1 ;; esac
-          test \"\$(docker inspect '$CONTAINER' --format '{{range .Mounts}}{{if .RW}}{{.Destination}}{{end}}{{end}}')\" = ''"
-          ssh "${ssh_opts[@]}" "$remote" "$remote_command"
+          test \"\$(docker inspect '$CONTAINER' --format '{{.HostConfig.NetworkMode}}')\" = bridge
+          test \"\$(docker inspect '$CONTAINER' --format '{{.HostConfig.RestartPolicy.Name}}')\" = unless-stopped
+          case \"\$(docker inspect '$CONTAINER' --format '{{.Config.Image}}')\" in ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session@sha256:*) ;; *) exit 1 ;; esac
+          test \"\$(docker inspect '$CONTAINER' --format '{{range .Mounts}}{{if .RW}}{{.Destination}}{{end}}{{end}}')\" = /var/lib/mission-control"
+          ssh "${opts[@]}" "$remote" "$remote_command"
           health="$(curl --fail-with-body --silent --show-error --max-time 15 "https://$HOSTNAME/auth/google/healthz")"
-          test "$health" = 'probe_ready;authority_effect=none'
+          test "$health" = 'session_ready;conversation_authority=enabled'
           post_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 -X POST "https://$HOSTNAME/auth/google/healthz")"
           test "$post_status" = 405
           session_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 "https://$HOSTNAME/auth/google/session")"
-          test "$session_status" = 404
-          echo 'identity_probe_boundary_monitor_completed=true public_health=green session_route=absent authority_effect=none'
+          test "$session_status" = 401
+          echo 'ceo_session_boundary_monitor_completed=true public_health=green unauthenticated_session=401 content_accessed=false authority_effect=none'
