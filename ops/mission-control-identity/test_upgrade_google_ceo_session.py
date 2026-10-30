@@ -200,7 +200,8 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             'allowed_safety_only_delta=true',
             'mission-control-google-ceo-session-rollback-inventory\\.yml',
             'upgrade-google-ceo-session\\.sh',
-            'controlled_test_pending=true',
+            'direct_send=false',
+            'authenticated_ceo_decision_required_for_delivery=true',
         ):
             self.assertIn(marker, workflow)
         self.assertNotIn("sendMessage", workflow)
