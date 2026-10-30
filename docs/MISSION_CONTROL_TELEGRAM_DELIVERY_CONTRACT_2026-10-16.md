@@ -52,6 +52,10 @@ destination, response payload, conversation body, or decision rationale.
 ## Activation gate
 
 This contract and implementation do not deploy the image, enable the flag,
-mount the dedicated secrets, or send a Telegram message. Those actions require
-a reviewed storage-preserving deployment procedure and separate owner approval
-for the single controlled message test.
+mount the dedicated secrets, or directly send a Telegram message. Enablement
+requires a reviewed storage-preserving deployment procedure. The dedicated
+activation workflow is deliberately no-send: only a new authenticated CEO
+decision can enqueue normal identifier-only delivery through the durable
+outbox. Recipient-confirmed MC-015 delivery acceptance already exists, so
+re-enablement alone does not justify replaying or creating another test
+notification.

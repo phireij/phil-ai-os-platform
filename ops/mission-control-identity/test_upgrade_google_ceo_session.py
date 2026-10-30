@@ -255,6 +255,21 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             self.assertIn(marker, workflow)
         self.assertNotIn('docker start "$probe"', workflow)
 
+    def test_telegram_contract_preserves_the_no_replay_activation_boundary(self) -> None:
+        contract = (
+            Path(__file__).parents[2]
+            / "docs"
+            / "MISSION_CONTROL_TELEGRAM_DELIVERY_CONTRACT_2026-10-16.md"
+        ).read_text(encoding="utf-8")
+        for marker in (
+            "activation workflow is deliberately no-send",
+            "new authenticated CEO\ndecision",
+            "Recipient-confirmed MC-015 delivery acceptance already exists",
+            "does not justify replaying",
+        ):
+            self.assertIn(marker, contract)
+        self.assertNotIn("separate owner approval\nfor the single controlled message test", contract)
+
 
 if __name__ == "__main__":
     unittest.main()
