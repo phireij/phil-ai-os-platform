@@ -270,6 +270,23 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             self.assertIn(marker, contract)
         self.assertNotIn("separate owner approval\nfor the single controlled message test", contract)
 
+    def test_session_ci_and_image_share_exact_pinned_dependencies(self) -> None:
+        root = Path(__file__).parents[2]
+        requirements = (Path(__file__).parent / "requirements.txt").read_text(encoding="utf-8")
+        dockerfile = (root / "Dockerfile.mission-control-google-ceo-session").read_text(encoding="utf-8")
+        workflow = (
+            root / ".github" / "workflows" / "mission-control-google-ceo-session-ci.yml"
+        ).read_text(encoding="utf-8")
+        for package in (
+            "google-auth==2.62.0",
+            "requests==2.34.2",
+            "cryptography==50.0.2",
+        ):
+            self.assertIn(package, requirements)
+        self.assertIn("COPY ops/mission-control-identity/requirements.txt /tmp/mission-control-requirements.txt", dockerfile)
+        self.assertIn("-r /tmp/mission-control-requirements.txt", dockerfile)
+        self.assertIn("-r ops/mission-control-identity/requirements.txt", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

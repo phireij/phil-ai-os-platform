@@ -1,7 +1,8 @@
 FROM python:3.12-alpine
 
 WORKDIR /srv
-RUN pip install --no-cache-dir --disable-pip-version-check google-auth==2.62.0 requests==2.34.2 \
+COPY ops/mission-control-identity/requirements.txt /tmp/mission-control-requirements.txt
+RUN pip install --no-cache-dir --disable-pip-version-check -r /tmp/mission-control-requirements.txt \
     && addgroup -S -g 10003 app \
     && adduser -S -D -u 10003 -G app app
 COPY ops/mission-control-identity/google_oidc_config.py /srv/google_oidc_config.py
