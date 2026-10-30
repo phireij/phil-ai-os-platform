@@ -30,6 +30,12 @@ task packet or record one result. Result text and evidence references stay
 encrypted and are omitted from the identifier-only audit timeline. A result is
 not execution evidence and cannot authorize a mutation.
 
+The CEO UI control is capability-gated. It stays hidden unless the deployed
+CEO-session endpoint explicitly reports `cto_handoff_recording=true`; older
+images do not report that field and therefore cannot accidentally expose the
+new control. Even when visible, the control only writes the encrypted
+`awaiting_connector` record and does not contact a CTO.
+
 ## Not yet implemented or authorized
 
 The following remain separate gates and must not be inferred from this

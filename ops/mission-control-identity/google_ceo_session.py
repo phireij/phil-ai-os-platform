@@ -249,6 +249,7 @@ class SessionHandler(ProbeHandler):
             "authenticated": True,
             "scope": "mission_control:conversation" if self.server.conversations is not None else "mission_control:session",  # type: ignore[attr-defined]
             "conversation_authority": self.server.conversations is not None,  # type: ignore[attr-defined]
+            "cto_handoff_recording": self.server.conversations is not None,  # type: ignore[attr-defined]
             "idle_seconds": IDLE_SECONDS,
             "absolute_seconds": ABSOLUTE_SECONDS,
             "csrf_token": item.csrf_token,

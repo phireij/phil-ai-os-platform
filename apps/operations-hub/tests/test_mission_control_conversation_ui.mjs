@@ -17,6 +17,9 @@ for (const id of [
   "governed-decision-form",
   "decision-proposal",
   "decision-record",
+  "cto-handoff-form",
+  "cto-handoff-proposal",
+  "cto-handoff-record",
   "conversation-lifecycle-state",
   "conversation-lifecycle-list",
 ]) {
@@ -28,7 +31,7 @@ assert.match(html, /id="conversation-message"[^>]*maxlength="20000"[^>]*disabled
 assert.match(html, /id="decision-request-button"[^>]*disabled/);
 assert.match(html, /Conversation text can never authorize delegation or execution/);
 
-assert.equal((moduleSource.match(/method: "POST"/g) ?? []).length, 5);
+assert.equal((moduleSource.match(/method: "POST"/g) ?? []).length, 6);
 assert.doesNotMatch(moduleSource, /method: "(?:PUT|PATCH|DELETE)"/);
 assert.doesNotMatch(moduleSource, /localStorage|sessionStorage|indexedDB/);
 assert.doesNotMatch(moduleSource, /innerHTML|insertAdjacentHTML|document\.write/);
@@ -46,6 +49,10 @@ assert.match(moduleSource, /"body" in event|"rationale" in event/);
 assert.match(moduleSource, /source_evidence_refs: \[\]/);
 assert.match(moduleSource, /proposal draft recorded · no authority/);
 assert.match(moduleSource, /CEO decision recorded · no authority/);
+assert.match(moduleSource, /conversationSession\?\.cto_handoff_recording !== true/);
+assert.match(moduleSource, /\/api\/task-proposals\/\$\{encodeURIComponent\(proposalId\)\}\/cto-handoffs/);
+assert.match(moduleSource, /CTO handoff recorded · connector pending · no authority/);
+assert.match(moduleSource, /handoff\.dispatch_authorized !== false/);
 assert.match(moduleSource, /assignment_id !== null \|\| proposal\.execution_authorized !== false/);
 assert.match(moduleSource, /recordedDecisionProposalIds\.has\(proposal\.proposal_id\)/);
 assert.match(moduleSource, /renderGovernedProposals\(\{ proposals: activeGovernedProposals \}, \{ live: true \}\);/);

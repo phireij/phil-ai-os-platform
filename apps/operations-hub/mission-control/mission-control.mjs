@@ -40,6 +40,8 @@ let conversationEpoch = 0;
 let activeConversationMessages = [];
 let activeGovernedProposals = [];
 let recordedDecisionProposalIds = new Set();
+let approvedDecisionProposalIds = new Set();
+let activeCtoHandoffs = [];
 
 function text(value) {
   return String(value ?? "—");
@@ -562,7 +564,8 @@ function renderGovernedProposals(data, { live = false } = {}) {
     const meta = document.createElement("div");
     meta.className = "lifecycle-meta";
     const decisionRecorded = Boolean(proposal.decision_id) || recordedDecisionProposalIds.has(proposal.proposal_id);
-    for (const [name, value] of [["Conversation", proposal.conversation_id], ["CEO decision", decisionRecorded ? "recorded · no authority" : "not recorded"], ["Assignment / execution", "disabled"]]) {
+    const handoff = activeCtoHandoffs.find((item) => item.proposal_id === proposal.proposal_id);
+    for (const [name, value] of [["Conversation", proposal.conversation_id], ["CEO decision", decisionRecorded ? "recorded · no authority" : "not recorded"], ["CTO handoff", handoff ? `${pretty(handoff.state)} · connector pending` : "not recorded"], ["Assignment / execution", "disabled"]]) {
       const cell = document.createElement("span");
       cell.textContent = name;
       const strong = document.createElement("strong");
@@ -602,6 +605,20 @@ async function loadGovernedProposals(conversationId, epoch = conversationEpoch) 
   const state = document.querySelector("#governed-proposals-state");
   state.textContent = `${payload.proposals.length} stored draft${payload.proposals.length === 1 ? "" : "s"} · no authority`;
   state.className = "state-chip safe";
+}
+
+async function loadCtoHandoffs(conversationId, epoch = conversationEpoch) {
+  if (conversationSession?.cto_handoff_recording !== true) return;
+  const response = await conversationRequest(`/api/conversations/${encodeURIComponent(conversationId)}/cto-handoffs?limit=100`);
+  if (!response.ok) throw new Error(`CTO handoffs HTTP ${response.status}`);
+  const payload = await response.json();
+  if (epoch !== conversationEpoch || conversationId !== activeConversationId || !Array.isArray(payload)) return;
+  for (const handoff of payload) {
+    if (!handoff.handoff_id || !handoff.proposal_id || handoff.recipient !== "cto" || !["awaiting_connector", "result_recorded"].includes(handoff.state) || handoff.dispatch_authorized !== false || handoff.execution_authorized !== false || handoff.mutation_authorized !== false || handoff.authority_effect !== "none") throw new Error("Unsafe CTO handoff response");
+  }
+  activeCtoHandoffs = payload;
+  renderGovernedProposals({ proposals: activeGovernedProposals }, { live: true });
+  syncGovernedControls();
 }
 
 function renderConversationLifecycle(timeline, notifications) {
@@ -666,6 +683,9 @@ async function loadConversationLifecycle(conversationId, epoch = conversationEpo
   recordedDecisionProposalIds = new Set(timeline.events
     .filter((event) => event.event_type === "ceo_decision_recorded")
     .map((event) => event.correlation.proposal_id));
+  approvedDecisionProposalIds = new Set(timeline.events
+    .filter((event) => event.event_type === "ceo_decision_recorded" && event.correlation.decision === "approved")
+    .map((event) => event.correlation.proposal_id));
   renderGovernedProposals({ proposals: activeGovernedProposals }, { live: true });
   syncGovernedControls();
   renderConversationLifecycle(timeline, notifications);
@@ -695,8 +715,10 @@ function syncGovernedControls() {
   const enabled = Boolean(conversationSession?.conversation_authority && activeConversationId);
   const proposalForm = document.querySelector("#governed-proposal-form");
   const decisionForm = document.querySelector("#governed-decision-form");
+  const handoffForm = document.querySelector("#cto-handoff-form");
   proposalForm.hidden = !enabled;
   decisionForm.hidden = !enabled;
+  handoffForm.hidden = !enabled || conversationSession?.cto_handoff_recording !== true;
   const proposalSource = document.querySelector("#proposal-source-message");
   const ceoMessages = activeConversationMessages.filter((message) => message.sender === "ceo");
   proposalSource.replaceChildren(...ceoMessages.map((message) => new Option(`CEO message · ${new Date(message.created_at).toLocaleString()}`, message.message_id)));
@@ -711,6 +733,12 @@ function syncGovernedControls() {
     document.querySelector(selector).disabled = !enabled;
   }
   document.querySelector("#decision-record").disabled = !enabled || undecided.length === 0;
+  const handoffProposal = document.querySelector("#cto-handoff-proposal");
+  const requested = new Set(activeCtoHandoffs.map((handoff) => handoff.proposal_id));
+  const handoffCandidates = activeGovernedProposals.filter((proposal) => approvedDecisionProposalIds.has(proposal.proposal_id) && !requested.has(proposal.proposal_id));
+  handoffProposal.replaceChildren(...handoffCandidates.map((proposal) => new Option(`${proposal.proposal_id} · ${proposal.scope.slice(0, 160)}`, proposal.proposal_id)));
+  handoffProposal.disabled = !enabled || conversationSession?.cto_handoff_recording !== true;
+  document.querySelector("#cto-handoff-record").disabled = !enabled || conversationSession?.cto_handoff_recording !== true || handoffCandidates.length === 0;
 }
 
 function renderConversationMessages(messages) {
@@ -732,6 +760,8 @@ function resetConversationView(message = "sample only · no live chat") {
   activeConversationMessages = [];
   activeGovernedProposals = [];
   recordedDecisionProposalIds = new Set();
+  approvedDecisionProposalIds = new Set();
+  activeCtoHandoffs = [];
   if (sampleConversation) renderConversation(sampleConversation);
   if (sampleGovernedProposals) renderGovernedProposals(sampleGovernedProposals);
   document.querySelector("#governed-proposals-state").textContent = "sample only · no authority";
@@ -797,6 +827,7 @@ async function loadConversationSession() {
     await loadConversationMessages(activeConversationId, epoch);
     await loadGovernedProposals(activeConversationId, epoch);
     await loadConversationLifecycle(activeConversationId, epoch);
+    await loadCtoHandoffs(activeConversationId, epoch);
   } else {
     renderConversationMessages([]);
     setConversationControls(false);
@@ -976,6 +1007,34 @@ function installConversationConnection() {
       setConversationState("CEO decision recorded · no authority", true);
     } catch (error) {
       setConversationState(`decision unavailable · ${error.message}`);
+    } finally {
+      syncGovernedControls();
+    }
+  });
+
+  document.querySelector("#cto-handoff-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!conversationSession?.conversation_authority || conversationSession?.cto_handoff_recording !== true) return;
+    const proposalId = document.querySelector("#cto-handoff-proposal").value;
+    if (!proposalId) return;
+    const button = document.querySelector("#cto-handoff-record");
+    button.disabled = true;
+    try {
+      const response = await conversationRequest(`/api/task-proposals/${encodeURIComponent(proposalId)}/cto-handoffs`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": conversationIdempotencyKey("cto-handoff"),
+          "X-MC-CSRF": conversationSession.csrf_token,
+        },
+        body: "{}",
+      });
+      if (!response.ok) throw new Error(`CTO handoff HTTP ${response.status}`);
+      await loadCtoHandoffs(activeConversationId);
+      await loadConversationLifecycle(activeConversationId);
+      setConversationState("CTO handoff recorded · connector pending · no authority", true);
+    } catch (error) {
+      setConversationState(`CTO handoff unavailable · ${error.message}`);
     } finally {
       syncGovernedControls();
     }
