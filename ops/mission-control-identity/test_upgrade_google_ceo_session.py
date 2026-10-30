@@ -153,6 +153,8 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
             "secret_volume_matches_current=",
             "state_volume_matches_current=",
             "legacy_archive_candidate=",
+            "running_stopped=",
+            "service_absent=",
             "image_matches=",
             "content_accessed=false",
             "authority_effect=none",
