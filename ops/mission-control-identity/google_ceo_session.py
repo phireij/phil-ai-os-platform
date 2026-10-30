@@ -183,6 +183,8 @@ class SessionHandler(ProbeHandler):
             self._list_task_proposals(path.path.split("/")[3], path.query)
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/cto-handoffs", path.path):
             self._list_cto_handoffs(path.path.split("/")[3], path.query)
+        elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/cto-handoff-results", path.path):
+            self._list_cto_handoff_results(path.path.split("/")[3], path.query)
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/audit-timeline", path.path):
             self._list_audit_timeline(path.path.split("/")[3], path.query)
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/responses/[A-Za-z0-9_-]{16,200}", path.path) and not path.query:
@@ -250,6 +252,7 @@ class SessionHandler(ProbeHandler):
             "scope": "mission_control:conversation" if self.server.conversations is not None else "mission_control:session",  # type: ignore[attr-defined]
             "conversation_authority": self.server.conversations is not None,  # type: ignore[attr-defined]
             "cto_handoff_recording": self.server.conversations is not None,  # type: ignore[attr-defined]
+            "cto_handoff_results": self.server.conversations is not None,  # type: ignore[attr-defined]
             "idle_seconds": IDLE_SECONDS,
             "absolute_seconds": ABSOLUTE_SECONDS,
             "csrf_token": item.csrf_token,
@@ -395,6 +398,20 @@ class SessionHandler(ProbeHandler):
             return
         try:
             result = self.server.conversations.list_cto_handoffs(conversation_id, self._query_limit(query))  # type: ignore[attr-defined]
+        except ConversationRequestError as error:
+            self._conversation_error(error)
+            return
+        self._send(HTTPStatus.OK, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
+
+    def _list_cto_handoff_results(self, conversation_id: str, query: str) -> None:
+        if self.server.conversations is None:  # type: ignore[attr-defined]
+            self._send(HTTPStatus.NOT_FOUND, "Not found")
+            return
+        if self._conversation_session() is None:
+            self._send(HTTPStatus.UNAUTHORIZED, '{"error":"unauthorized"}', content_type="application/json; charset=utf-8")
+            return
+        try:
+            result = self.server.conversations.list_cto_handoff_results(conversation_id, self._query_limit(query))  # type: ignore[attr-defined]
         except ConversationRequestError as error:
             self._conversation_error(error)
             return

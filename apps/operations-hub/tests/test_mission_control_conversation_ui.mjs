@@ -53,6 +53,9 @@ assert.match(moduleSource, /conversationSession\?\.cto_handoff_recording !== tru
 assert.match(moduleSource, /\/api\/task-proposals\/\$\{encodeURIComponent\(proposalId\)\}\/cto-handoffs/);
 assert.match(moduleSource, /CTO handoff recorded · connector pending · no authority/);
 assert.match(moduleSource, /handoff\.dispatch_authorized !== false/);
+assert.match(moduleSource, /conversationSession\?\.cto_handoff_results !== true/);
+assert.match(moduleSource, /\/api\/conversations\/\$\{encodeURIComponent\(conversationId\)\}\/cto-handoff-results\?limit=100/);
+assert.match(moduleSource, /result\.execution_authorized !== false/);
 assert.match(moduleSource, /assignment_id !== null \|\| proposal\.execution_authorized !== false/);
 assert.match(moduleSource, /recordedDecisionProposalIds\.has\(proposal\.proposal_id\)/);
 assert.match(moduleSource, /renderGovernedProposals\(\{ proposals: activeGovernedProposals \}, \{ live: true \}\);/);
