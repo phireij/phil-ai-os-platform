@@ -7,6 +7,8 @@
 **Target operational acceptance:** **Tuesday, 20 October 2026 (JST)**
 **Scope:** Custom Phil AI OS Mission Control only. Ruby's Cake Delights application work remains deferred. No replacement open-source product is being adopted. Hermes and existing workloads must remain untouched.
 
+**Program end-state and reporting contract:** [Mission Control program charter](MISSION_CONTROL_PROGRAM_CHARTER.md). This tracker is task/evidence detail; the charter prevents a component-level status from being confused with the full CEO-to-CTO/agent automation outcome.
+
 This is a working delivery baseline, not a guarantee. Dates are reviewed against verified deliverables, not files written or design completed. A milestone is complete only when its acceptance evidence exists in the intended environment. The existing Mission Control operational acceptance gate remains authoritative for what “operational” means.
 
 ## Current position
