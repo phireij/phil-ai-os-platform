@@ -61,6 +61,13 @@ if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
   ROLLBACK_STATE_VOLUME="$(docker inspect "$ROLLBACK" --format '{{range .Mounts}}{{if eq .Destination "/var/lib/mission-control"}}{{.Name}}{{end}}{{end}}')"
   ROLLBACK_ENV="$(docker inspect "$ROLLBACK" --format '{{range .Config.Env}}{{println .}}{{end}}')"
   ROLLBACK_IMAGE="$(docker inspect "$ROLLBACK" --format '{{.Config.Image}}')"
+  ROLLBACK_TRAEFIK_ENABLED="$(docker inspect "$ROLLBACK" --format '{{index .Config.Labels "traefik.enable"}}')"
+  ROLLBACK_SERVICE_LABEL="$(docker inspect "$ROLLBACK" --format '{{index .Config.Labels "traefik.http.routers.mission-control-google-ceo-session.service"}}')"
+  LEGACY_ROUTE_LABELS=false
+  if [[ -z "$ROLLBACK_TRAEFIK_ENABLED" && -z "$ROLLBACK_SERVICE_LABEL" ]] || \
+     [[ "$ROLLBACK_TRAEFIK_ENABLED" == true && "$ROLLBACK_SERVICE_LABEL" == mission-control-google-ceo-session ]]; then
+    LEGACY_ROUTE_LABELS=true
+  fi
   # A pre-route storage rollback has no restart policy or Traefik labels. It
   # is not a viable online rollback, but may retain useful forensic metadata.
   # Archive only that exact stopped, immutable, volume-compatible shape.
@@ -68,8 +75,7 @@ if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
      [[ "$(docker inspect "$ROLLBACK" --format '{{.HostConfig.NetworkMode}}')" == bridge ]] && \
      [[ "$(docker inspect "$ROLLBACK" --format '{{.HostConfig.ReadonlyRootfs}}')" == true ]] && \
      [[ "$(docker inspect "$ROLLBACK" --format '{{.HostConfig.RestartPolicy.Name}}')" == no ]] && \
-     [[ "$(docker inspect "$ROLLBACK" --format '{{index .Config.Labels "traefik.enable"}}')" == "" ]] && \
-     [[ "$(docker inspect "$ROLLBACK" --format '{{index .Config.Labels "traefik.http.routers.mission-control-google-ceo-session.service"}}')" == "" ]] && \
+     [[ "$LEGACY_ROUTE_LABELS" == true ]] && \
      [[ "$ROLLBACK_SECRET_VOLUME" == "$CURRENT_SECRET_VOLUME" ]] && \
      [[ "$CURRENT_STATE_VOLUME" == "$STATE_VOLUME" ]] && \
      [[ "$ROLLBACK_STATE_VOLUME" == "$STATE_VOLUME" ]] && \
@@ -78,7 +84,7 @@ if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
       echo 'google_ceo_session_upgrade_blocked=legacy_rollback_archive_unavailable rollback_attempted=false' >&2
       exit 1
     fi
-    echo 'google_ceo_session_upgrade_phase=prior_rollback_route_less_legacy_archive'
+    echo 'google_ceo_session_upgrade_phase=prior_rollback_legacy_archive'
     docker rename "$ROLLBACK" "$LEGACY_ROLLBACK"
   else
   if [[ "$(docker inspect "$ROLLBACK" --format '{{.State.Running}}')" != false ]] || \
