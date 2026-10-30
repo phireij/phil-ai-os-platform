@@ -1,0 +1,56 @@
+name: Mission Control Live Status Connector Read-Only Preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-control-live-status-deploy
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Verify root-managed inputs and Compose contract without starting workloads
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY"
+          port="${VPS_PORT:-22}"
+          remote="$VPS_USER@$VPS_HOST"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          opts=(-4 -p "$port" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          ssh "${opts[@]}" "$remote" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          root=/opt/phil-ai-os-platform/mc021-main-runtime
+          tunnel_env=/etc/phil-ai-os/secrets/mc021-live-status-tunnel.env
+          owner_subject=/etc/phil-ai-os/secrets/mc021-owner-subject
+          test -d "$root"
+          test "$(stat -c '%u:%a' "$tunnel_env")" = 0:600
+          test "$(stat -c '%u:%a' "$owner_subject")" = 0:400
+          set -a
+          . "$tunnel_env"
+          set +a
+          test -n "$CONTROL_PLANE_API_KEY" && test -n "$CONTROL_PLANE_TUNNEL_ID"
+          cd "$root"
+          docker compose -f ops/mission-control-identity/compose.mcp-live-status.nonprod.yml -f ops/mission-control-identity/compose.mcp-live-status.tunnel.nonprod.yml config --quiet
+          unset CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID
+          existing=false
+          docker inspect phil-ai-os-mc021-live-status-nonprod-mcp-live-status-1 >/dev/null 2>&1 && existing=true
+          echo "mc021_live_status_preflight_completed=true root_managed_inputs=verified compose_contract=valid workload_present=$existing content_accessed=false authority_effect=none"
+          REMOTE

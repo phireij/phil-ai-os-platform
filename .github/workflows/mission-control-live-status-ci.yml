@@ -16,6 +16,7 @@ on:
       - 'ops/mission-control-identity/mc021-live-status-tunnel-entrypoint.sh'
       - 'ops/mission-control-identity/mc021-live-status-manifest.v1.json'
       - '.github/workflows/mission-control-live-status-ci.yml'
+      - '.github/workflows/mission-control-live-status-preflight.yml'
   push:
     branches: [main]
     paths:
@@ -32,6 +33,7 @@ on:
       - 'ops/mission-control-identity/mc021-live-status-tunnel-entrypoint.sh'
       - 'ops/mission-control-identity/mc021-live-status-manifest.v1.json'
       - '.github/workflows/mission-control-live-status-ci.yml'
+      - '.github/workflows/mission-control-live-status-preflight.yml'
 
 permissions:
   contents: read
