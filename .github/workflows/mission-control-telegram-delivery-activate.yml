@@ -16,7 +16,7 @@ on:
         required: true
         type: string
       confirmation:
-        description: Type ENABLE_DEDICATED_TELEGRAM_TEST to authorize installation, enablement, and one controlled test
+        description: Type ENABLE_DEDICATED_TELEGRAM_TEST to authorize protected-secret installation and delivery enablement; this workflow never sends a message
         required: true
         type: string
 
@@ -80,4 +80,4 @@ jobs:
           if [[ "$IMAGE_DIGEST" == "$CURRENT_IMAGE_DIGEST" ]]; then same_image_guard="MISSION_CONTROL_ALLOW_SAME_IMAGE_RECONFIGURATION=true "; fi
           ssh "${ssh_opts[@]}" "$remote" "DOCKER_CONFIG='$config' IMAGE_DIGEST='$IMAGE_DIGEST' CURRENT_IMAGE_DIGEST='$CURRENT_IMAGE_DIGEST' HOSTNAME=miscon.phireij.cloud MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED=true MISSION_CONTROL_ALLOW_TELEGRAM_ENABLEMENT=true ${same_image_guard}bash /tmp/upgrade-google-ceo-session.sh"
           test "$(curl --silent --show-error --fail --max-time 15 https://miscon.phireij.cloud/auth/google/healthz)" = session_ready\;conversation_authority=enabled
-          echo 'telegram_delivery_enabled=true controlled_test_pending=true authority_effect=none'
+          echo 'telegram_delivery_enabled=true direct_send=false authenticated_ceo_decision_required_for_delivery=true authority_effect=none'
