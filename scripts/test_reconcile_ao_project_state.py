@@ -33,6 +33,6 @@ assert "Fresh staging runtime evidence is not yet represented" in kcfc["blockers
 phil = next(p for p in projects if p["project_id"] == "phil-ai-os")
 assert phil["status"] == "unknown"
 assert phil["repository_state"]["ref"] == "main"
-assert phil["repository_state"]["verified_head"] == "3d8942017803bb760c0ff889c30c714349b42007"
+assert phil["repository_state"]["verified_head"] == "6925416b98794376dc571ffb325757571fa2694d"
 assert "Fresh successful AO-MVP CI evidence is missing" in phil["blockers"]
 print("AO-1 static reconciler contract: GREEN")
