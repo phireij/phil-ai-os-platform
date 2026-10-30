@@ -55,7 +55,15 @@ jobs:
           inventory_component phil-ai-os-mission-control-readonly ghcr.io/phireij/phil-ai-os-platform/mission-control-readonly
           inventory_component phil-ai-os-mission-control-google-ceo-session ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session
           inventory_component phil-ai-os-mission-control-read-model-bridge ghcr.io/phireij/phil-ai-os-platform/mission-control-read-model-bridge
-          inventory_component phil-ai-os-mission-control-google-identity-probe ghcr.io/phireij/phil-ai-os-platform/mission-control-google-identity-probe
+          probe=phil-ai-os-mission-control-google-identity-probe
+          inventory_component "$probe" ghcr.io/phireij/phil-ai-os-platform/mission-control-google-identity-probe
+          # Route cutover retires this predecessor.  Its absence is acceptable,
+          # but an extant container must remain stopped so the inventory cannot
+          # treat a dual-route regression as healthy.
+          if docker inspect "$probe" >/dev/null 2>&1; then
+            test "$(docker inspect "$probe" --format '{{.State.Running}}')" = false
+          fi
+          echo 'retired_identity_probe_running=false'
           after="$(workload_fingerprint)"
           test "$before" = "$after"
           echo 'mission_control_release_inventory_completed=true existing_workloads_unchanged=true content_accessed=false authority_effect=none'
