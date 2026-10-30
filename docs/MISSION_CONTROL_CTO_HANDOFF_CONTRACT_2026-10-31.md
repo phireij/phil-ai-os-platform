@@ -22,15 +22,24 @@ checks, owner binding, encrypted snapshot persistence, bounded request body,
 and idempotency checks. A duplicate handoff for the same proposal is rejected;
 an idempotent replay returns the original record.
 
+The encrypted store also defines internal-only packet and result methods for a
+future connector. They have no HTTP route or default identity. A future adapter
+must independently verify a CTO token, inject that verified subject, and match
+it exactly against a protected expected subject before it can read one bounded
+task packet or record one result. Result text and evidence references stay
+encrypted and are omitted from the identifier-only audit timeline. A result is
+not execution evidence and cannot authorize a mutation.
+
 ## Not yet implemented or authorized
 
 The following remain separate gates and must not be inferred from this
 checkpoint:
 
 1. A verified CTO/agent connector identity and its least-privilege scope.
-2. Connector retrieval of the task package and authenticated acknowledgement.
-3. Authenticated result return, result validation, and result presentation to
-   the CEO.
+2. A real connector retrieval path, acknowledgement, and result callback using
+   the independently verified identity boundary.
+3. Result presentation to the CEO through a separately reviewed session/UI
+   path.
 4. Any task dispatch, automatic execution, retry, external mutation, or
    provider call.
 5. Deployment of a session image containing this change and its associated

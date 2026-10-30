@@ -205,6 +205,47 @@ class ConversationStoreChecks(unittest.TestCase):
         with self.assertRaisesRegex(ConversationRequestError, "handoff_already_recorded"):
             store.create_cto_handoff(proposal["proposal_id"], "handoff-proposal-0002", b"{}")
 
+        with self.assertRaisesRegex(ConversationRequestError, "cto_identity_not_authorized"):
+            store.get_cto_handoff_packet(
+                handoff["handoff_id"],
+                verified_cto_subject="auth0|wrong-cto",
+                expected_cto_subject="auth0|approved-cto",
+            )
+        packet = store.get_cto_handoff_packet(
+            handoff["handoff_id"],
+            verified_cto_subject="auth0|approved-cto",
+            expected_cto_subject="auth0|approved-cto",
+        )
+        self.assertEqual("Review one bounded artifact.", packet["scope"])
+        self.assertFalse(packet["dispatch_authorized"])
+        self.assertNotIn("Proceed only through a later gate.", json.dumps(packet))
+        result_body = b'{"outcome":"completed","summary":"Reviewed the bounded artifact.","evidence_refs":["review:artifact-1"]}'
+        result = store.record_cto_handoff_result(
+            handoff["handoff_id"], "cto-result-handoff-0001", result_body,
+            verified_cto_subject="auth0|approved-cto",
+            expected_cto_subject="auth0|approved-cto",
+        )
+        self.assertEqual("completed", result["outcome"])
+        self.assertFalse(result["execution_authorized"])
+        self.assertEqual(
+            result,
+            store.record_cto_handoff_result(
+                handoff["handoff_id"], "cto-result-handoff-0001", result_body,
+                verified_cto_subject="auth0|approved-cto",
+                expected_cto_subject="auth0|approved-cto",
+            ),
+        )
+        self.assertEqual("result_recorded", store.list_cto_handoffs(conversation["conversation_id"])[0]["state"])
+        with self.assertRaisesRegex(ConversationRequestError, "handoff_closed"):
+            store.get_cto_handoff_packet(
+                handoff["handoff_id"],
+                verified_cto_subject="auth0|approved-cto",
+                expected_cto_subject="auth0|approved-cto",
+            )
+        timeline = store.list_audit_timeline(conversation["conversation_id"])
+        self.assertIn("cto_handoff_result_recorded", [event["event_type"] for event in timeline["events"]])
+        self.assertNotIn("Reviewed the bounded artifact.", json.dumps(timeline))
+
     def test_enabled_delivery_is_identifier_only_retries_once_then_dead_letters(self) -> None:
         now = 1_900_000_000
         with patch("conversation_store.time.time", return_value=now):
