@@ -233,6 +233,21 @@ def _initialize_live(connection: sqlite3.Connection) -> None:
             execution_authorized INTEGER NOT NULL CHECK(execution_authorized=0),
             mutation_authorized INTEGER NOT NULL CHECK(mutation_authorized=0)
         );
+        CREATE TABLE IF NOT EXISTS cto_handoffs (
+            handoff_id TEXT PRIMARY KEY,
+            owner_digest BLOB NOT NULL,
+            decision_id TEXT NOT NULL UNIQUE REFERENCES ceo_decisions(decision_id) ON DELETE CASCADE,
+            proposal_id TEXT NOT NULL UNIQUE REFERENCES task_proposals(proposal_id) ON DELETE CASCADE,
+            conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+            state TEXT NOT NULL CHECK(state='awaiting_connector'),
+            created_at INTEGER NOT NULL,
+            authority_effect TEXT NOT NULL CHECK(authority_effect='none'),
+            dispatch_authorized INTEGER NOT NULL CHECK(dispatch_authorized=0),
+            execution_authorized INTEGER NOT NULL CHECK(execution_authorized=0),
+            mutation_authorized INTEGER NOT NULL CHECK(mutation_authorized=0)
+        );
+        CREATE INDEX IF NOT EXISTS cto_handoffs_owner_conversation_order
+            ON cto_handoffs(owner_digest, conversation_id, created_at, handoff_id);
         """
     )
     _initialize_notification_outbox(connection)
@@ -775,6 +790,104 @@ class ConversationStore:
             rows = self._live.connection.execute("SELECT * FROM task_proposals WHERE conversation_id=? AND owner_digest=? ORDER BY created_at,proposal_id LIMIT ?", (conversation_id, self._owner, limit)).fetchall()
         return [self._proposal_result(row) for row in rows]
 
+    @staticmethod
+    def _handoff_result(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "handoff_id": row["handoff_id"],
+            "decision_id": row["decision_id"],
+            "proposal_id": row["proposal_id"],
+            "conversation_id": row["conversation_id"],
+            "recipient": "cto",
+            "state": row["state"],
+            "created_at": _iso(row["created_at"]),
+            "dispatch_authorized": False,
+            "execution_authorized": False,
+            "mutation_authorized": False,
+            "authority_effect": "none",
+        }
+
+    def create_cto_handoff(self, proposal_id: str, idempotency_key: str, request_body: bytes) -> dict[str, Any]:
+        """Record a CEO-requested CTO handoff without contacting any executor.
+
+        The persisted record is an explicit bridge between an approved CEO
+        decision and a future CTO connector.  It is deliberately not an
+        assignment or a dispatch: no connector identity, endpoint, task body,
+        network call, or execution capability is present here.
+        """
+        if not ID_PATTERN.fullmatch(proposal_id) or request_body not in {b"", b"{}"}:
+            raise ConversationRequestError("invalid_request", 400)
+        now, key_hash = int(time.time()), self._idempotency(idempotency_key)
+        operation = f"cto-handoff:{proposal_id}"
+        request_hash = self._request_hash(b"{}")
+        with self._lock:
+            self._purge_if_due_locked(now)
+            row = self._live.connection.execute(
+                "SELECT p.conversation_id,d.decision_id,d.decision,d.expires_at "
+                "FROM task_proposals p JOIN ceo_decisions d ON d.proposal_id=p.proposal_id "
+                "WHERE p.proposal_id=? AND p.owner_digest=? AND d.owner_digest=?",
+                (proposal_id, self._owner, self._owner),
+            ).fetchone()
+            if row is None:
+                raise ConversationRequestError("not_found", 404)
+            existing = self._live.connection.execute(
+                "SELECT request_hash,response_json FROM idempotency_results "
+                "WHERE owner_digest=? AND operation=? AND idempotency_hash=?",
+                (self._owner, operation, key_hash),
+            ).fetchone()
+            if existing:
+                if not hmac.compare_digest(existing["request_hash"], request_hash):
+                    raise ConversationRequestError("idempotency_conflict", 409)
+                return json.loads(existing["response_json"])
+            if row["decision"] != "approved":
+                raise ConversationRequestError("decision_not_approved", 409)
+            if row["expires_at"] <= now:
+                raise ConversationRequestError("decision_expired", 409)
+            if self._live.connection.execute(
+                "SELECT 1 FROM cto_handoffs WHERE proposal_id=?", (proposal_id,)
+            ).fetchone():
+                raise ConversationRequestError("handoff_already_recorded", 409)
+            handoff_id = self._identifier("handoff")
+            result = {
+                "handoff_id": handoff_id,
+                "decision_id": row["decision_id"],
+                "proposal_id": proposal_id,
+                "conversation_id": row["conversation_id"],
+                "recipient": "cto",
+                "state": "awaiting_connector",
+                "created_at": _iso(now),
+                "dispatch_authorized": False,
+                "execution_authorized": False,
+                "mutation_authorized": False,
+                "authority_effect": "none",
+            }
+            before = self._live.connection.serialize()
+            try:
+                with self._live.connection:
+                    self._live.connection.execute(
+                        "INSERT INTO cto_handoffs VALUES (?,?,?,?,?,'awaiting_connector',?,'none',0,0,0)",
+                        (handoff_id, self._owner, row["decision_id"], proposal_id, row["conversation_id"], now),
+                    )
+                    self._live.connection.execute(
+                        "INSERT INTO idempotency_results VALUES (?,?,?,?,?,?,?)",
+                        (self._owner, operation, key_hash, request_hash, json.dumps(result), proposal_id, now),
+                    )
+                self._live.persist()
+            except Exception:
+                self._live.connection.deserialize(before)
+                raise
+            return result
+
+    def list_cto_handoffs(self, conversation_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        if not ID_PATTERN.fullmatch(conversation_id) or limit < 1 or limit > MAX_PAGE_SIZE:
+            raise ConversationRequestError("not_found", 404)
+        with self._lock:
+            rows = self._live.connection.execute(
+                "SELECT * FROM cto_handoffs WHERE conversation_id=? AND owner_digest=? "
+                "ORDER BY created_at,handoff_id LIMIT ?",
+                (conversation_id, self._owner, limit),
+            ).fetchall()
+        return [self._handoff_result(row) for row in rows]
+
     def list_audit_timeline(self, conversation_id: str, limit: int = 50, cursor: int = 0) -> dict[str, Any]:
         """Return identifier-only audit events for one owner-bound conversation.
 
@@ -808,6 +921,11 @@ class ConversationStore:
                 "SELECT d.decision_id,d.proposal_id,d.decision,d.decided_at FROM ceo_decisions d "
                 "JOIN task_proposals p ON p.proposal_id=d.proposal_id "
                 "WHERE p.conversation_id=? AND d.owner_digest=? ORDER BY d.decided_at,d.decision_id",
+                (conversation_id, self._owner),
+            ).fetchall()
+            handoffs = self._live.connection.execute(
+                "SELECT handoff_id,decision_id,proposal_id,created_at,state FROM cto_handoffs "
+                "WHERE conversation_id=? AND owner_digest=? ORDER BY created_at,handoff_id",
                 (conversation_id, self._owner),
             ).fetchall()
             notification_events = self._live.connection.execute(
@@ -876,6 +994,23 @@ class ConversationStore:
         )
         events.extend(
             {
+                "event_id": f"cto_handoff:{row['handoff_id']}",
+                "event_type": "cto_handoff_requested",
+                "occurred_at": _iso(row["created_at"]),
+                "source": "conversation_store.cto_handoffs",
+                "correlation": {
+                    "conversation_id": conversation_id,
+                    "handoff_id": row["handoff_id"],
+                    "proposal_id": row["proposal_id"],
+                    "decision_id": row["decision_id"],
+                    "state": row["state"],
+                },
+                "authority_effect": "none",
+            }
+            for row in handoffs
+        )
+        events.extend(
+            {
                 "event_id": f"notification:{row['event_id']}",
                 "event_type": row["event_type"],
                 "occurred_at": _iso(row["occurred_at"]),
@@ -898,9 +1033,10 @@ class ConversationStore:
             "ceo_message_submitted": 1,
             "task_proposal_drafted": 2,
             "ceo_decision_recorded": 3,
-            "notification_delivery_delivered": 4,
-            "notification_delivery_retry_scheduled": 4,
-            "notification_delivery_dead_lettered": 4,
+            "cto_handoff_requested": 4,
+            "notification_delivery_delivered": 5,
+            "notification_delivery_retry_scheduled": 5,
+            "notification_delivery_dead_lettered": 5,
         }
         events.sort(key=lambda event: (event["occurred_at"], event_order[event["event_type"]], event["event_id"]))
         page = events[cursor : cursor + limit]
@@ -914,8 +1050,9 @@ class ConversationStore:
                 {"source": "conversation_store.messages", "status": "available"},
                 {"source": "conversation_store.task_proposals", "status": "available"},
                 {"source": "conversation_store.ceo_decisions", "status": "available"},
+                {"source": "conversation_store.cto_handoffs", "status": "available"},
                 {"source": "notification_outbox", "status": "available"},
-                {"source": "task_assignment", "status": "not_available"},
+                {"source": "task_assignment", "status": "awaiting_connector"},
                 {"source": "task_execution", "status": "not_available"},
                 {"source": "provider_runtime", "status": "not_available"},
             ],

@@ -236,6 +236,52 @@ class SessionHttpChecks(unittest.TestCase):
         )
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body)["messages"][0]["body"], "synthetic confidential marker")
+        proposal_headers = {
+            **request_headers,
+            "Idempotency-Key": "proposal-conversation-0001",
+        }
+        status, _, body = self.request(
+            "POST",
+            f"/api/conversations/{conversation_id}/task-proposals",
+            proposal_headers,
+            json.dumps({
+                "source_message_id": json.loads(body)["messages"][0]["message_id"],
+                "project_id": "phil-ai-os",
+                "task_class": "general",
+                "scope": "Review one bounded artifact.",
+                "expected_result": "A review note.",
+                "required_authority": "A1",
+                "source_evidence_refs": [],
+            }).encode(),
+        )
+        self.assertEqual(status, 201)
+        proposal_id = json.loads(body)["proposal_id"]
+        decision_headers = {
+            **request_headers,
+            "Idempotency-Key": "decision-proposal-0001",
+        }
+        status, _, body = self.request(
+            "POST",
+            f"/api/task-proposals/{proposal_id}/decisions",
+            decision_headers,
+            b'{"decision":"approved","rationale":"Bounded handoff only.","expires_at":"2030-01-01T00:00:00Z"}',
+        )
+        self.assertEqual(status, 201)
+        handoff_headers = {
+            **request_headers,
+            "Idempotency-Key": "handoff-proposal-0001",
+        }
+        status, _, body = self.request(
+            "POST", f"/api/task-proposals/{proposal_id}/cto-handoffs", handoff_headers, b"{}"
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual("awaiting_connector", json.loads(body)["state"])
+        self.assertFalse(json.loads(body)["dispatch_authorized"])
+        status, _, body = self.request(
+            "GET", f"/api/conversations/{conversation_id}/cto-handoffs", {"Cookie": cookie}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(1, len(json.loads(body)))
         status, _, body = self.request(
             "GET", f"/api/conversations/{conversation_id}/audit-timeline?limit=100", {"Cookie": cookie}
         )
@@ -244,11 +290,14 @@ class SessionHttpChecks(unittest.TestCase):
         self.assertEqual("none", timeline["authority_effect"])
         self.assertNotIn("synthetic confidential marker", body.decode())
         self.assertEqual("available", {item["source"]: item["status"] for item in timeline["source_coverage"]}["notification_outbox"])
+        self.assertEqual("awaiting_connector", {item["source"]: item["status"] for item in timeline["source_coverage"]}["task_assignment"])
         status, _, body = self.request("GET", "/api/notifications?limit=100", {"Cookie": cookie})
         self.assertEqual(status, 200)
         notifications = json.loads(body)
         self.assertEqual("not_configured", notifications["transport_status"])
-        self.assertEqual([], notifications["notifications"])
+        self.assertEqual(1, len(notifications["notifications"]))
+        self.assertEqual("ceo_decision_recorded", notifications["notifications"][0]["kind"])
+        self.assertEqual("not_configured", notifications["notifications"][0]["delivery_state"])
         self.assertEqual(
             self.request(
                 "DELETE",
