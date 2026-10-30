@@ -77,7 +77,12 @@
         <input id="decision-expiry" type="datetime-local" required disabled>
         <button id="decision-record" type="submit" disabled>Record CEO decision</button>
       </form>
-      <p class="operator-note compact">This local example shows correlation only. A proposal draft and any later CEO decision do not assign work, authorize execution, mutate a system, or call a provider.</p>
+      <form id="cto-handoff-form" class="conversation-composer" hidden>
+        <label for="cto-handoff-proposal">Approved proposal</label>
+        <select id="cto-handoff-proposal" required disabled></select>
+        <button id="cto-handoff-record" type="submit" disabled>Record CTO handoff request</button>
+      </form>
+      <p class="operator-note compact">This local example shows correlation only. A proposal draft and any later CEO decision do not assign work, authorize execution, mutate a system, or call a provider. A recorded CTO handoff is encrypted evidence only: it waits for the separately approved connector and does not contact a CTO.</p>
     </section>
 
     <section class="panel" aria-labelledby="conversation-lifecycle-title">

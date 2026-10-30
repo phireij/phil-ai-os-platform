@@ -131,6 +131,7 @@ class SessionHttpChecks(unittest.TestCase):
         payload = json.loads(body)
         self.assertTrue(payload["authenticated"])
         self.assertFalse(payload["conversation_authority"])
+        self.assertFalse(payload["cto_handoff_recording"])
         self.assertEqual(payload["scope"], "mission_control:session")
         self.assertGreater(len(payload["csrf_token"]), 32)
 
@@ -201,6 +202,7 @@ class SessionHttpChecks(unittest.TestCase):
         session = json.loads(body)
         self.assertEqual(status, 200)
         self.assertTrue(session["conversation_authority"])
+        self.assertTrue(session["cto_handoff_recording"])
         self.assertEqual(session["scope"], "mission_control:conversation")
         status, _, callback_body = self.sign_in()
         self.assertEqual(status, 303)

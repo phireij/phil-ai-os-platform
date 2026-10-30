@@ -246,14 +246,17 @@ def main() -> None:
 
     if "/api/decision-requests" in js:
         fail("read-only Mission Control UI must not contain a decision-request mutation path")
-    if js.count('method: "POST"') != 5:
-        fail("only sign-out, conversation, message, governed-proposal, and CEO-decision POSTs are allowed")
+    if js.count('method: "POST"') != 6:
+        fail("only sign-out, conversation, message, governed-proposal, CEO-decision, and connector-pending CTO-handoff POSTs are allowed")
     for endpoint in (
         "/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals",
         "/api/task-proposals/${encodeURIComponent(proposalId)}/decisions",
+        "/api/task-proposals/${encodeURIComponent(proposalId)}/cto-handoffs",
     ):
         if endpoint not in js:
             fail("governed-record UI endpoint missing")
+    if 'conversationSession?.cto_handoff_recording !== true' not in js or "connector pending · no authority" not in js:
+        fail("CTO handoff control must be capability-gated and non-authorizing")
     if "source_evidence_refs: []" not in js or "proposal draft recorded · no authority" not in js or "CEO decision recorded · no authority" not in js:
         fail("governed-record UI must stay evidence-empty and non-authorizing")
     required_conversation_guards = (
