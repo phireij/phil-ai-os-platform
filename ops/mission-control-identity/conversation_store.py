@@ -32,8 +32,10 @@ MAX_MESSAGE_CHARACTERS = 20_000
 MAX_PAGE_SIZE = 100
 MAX_PROPOSAL_SCOPE = 20_000
 MAX_EXPECTED_RESULT = 5_000
+MAX_CTO_RESULT_SUMMARY = 5_000
 ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{16,200}")
 IDEMPOTENCY_PATTERN = re.compile(r"[A-Za-z0-9._~-]{16,128}")
+CTO_SUBJECT_PATTERN = re.compile(r"[A-Za-z0-9|_@.-]{1,255}")
 SAFE_NOTIFICATION_FAILURE_CODES = frozenset({
     "telegram_request_rejected",
     "telegram_rate_limited",
@@ -248,6 +250,21 @@ def _initialize_live(connection: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS cto_handoffs_owner_conversation_order
             ON cto_handoffs(owner_digest, conversation_id, created_at, handoff_id);
+        CREATE TABLE IF NOT EXISTS cto_handoff_results (
+            result_id TEXT PRIMARY KEY,
+            handoff_id TEXT NOT NULL UNIQUE REFERENCES cto_handoffs(handoff_id) ON DELETE CASCADE,
+            owner_digest BLOB NOT NULL,
+            cto_subject_digest BLOB NOT NULL,
+            outcome TEXT NOT NULL CHECK(outcome IN ('completed','failed')),
+            summary TEXT NOT NULL,
+            evidence_refs TEXT NOT NULL,
+            recorded_at INTEGER NOT NULL,
+            authority_effect TEXT NOT NULL CHECK(authority_effect='none'),
+            execution_authorized INTEGER NOT NULL CHECK(execution_authorized=0),
+            mutation_authorized INTEGER NOT NULL CHECK(mutation_authorized=0)
+        );
+        CREATE INDEX IF NOT EXISTS cto_handoff_results_owner_order
+            ON cto_handoff_results(owner_digest, recorded_at, result_id);
         """
     )
     _initialize_notification_outbox(connection)
@@ -798,13 +815,29 @@ class ConversationStore:
             "proposal_id": row["proposal_id"],
             "conversation_id": row["conversation_id"],
             "recipient": "cto",
-            "state": row["state"],
+            "state": "result_recorded" if row["result_id"] is not None else row["state"],
             "created_at": _iso(row["created_at"]),
             "dispatch_authorized": False,
             "execution_authorized": False,
             "mutation_authorized": False,
             "authority_effect": "none",
         }
+
+    def _cto_subject_digest(self, subject: str) -> bytes:
+        if not isinstance(subject, str) or not CTO_SUBJECT_PATTERN.fullmatch(subject):
+            raise ConversationRequestError("cto_identity_not_authorized", 403)
+        return hmac.new(
+            _derived_key(self._key, b"cto-connector-subject"),
+            subject.encode("ascii"),
+            hashlib.sha256,
+        ).digest()
+
+    def _require_cto_identity(self, verified_subject: str, expected_subject: str) -> bytes:
+        verified = self._cto_subject_digest(verified_subject)
+        expected = self._cto_subject_digest(expected_subject)
+        if not hmac.compare_digest(verified, expected):
+            raise ConversationRequestError("cto_identity_not_authorized", 403)
+        return verified
 
     def create_cto_handoff(self, proposal_id: str, idempotency_key: str, request_body: bytes) -> dict[str, Any]:
         """Record a CEO-requested CTO handoff without contacting any executor.
@@ -882,11 +915,157 @@ class ConversationStore:
             raise ConversationRequestError("not_found", 404)
         with self._lock:
             rows = self._live.connection.execute(
-                "SELECT * FROM cto_handoffs WHERE conversation_id=? AND owner_digest=? "
+                "SELECT h.*,r.result_id FROM cto_handoffs h "
+                "LEFT JOIN cto_handoff_results r ON r.handoff_id=h.handoff_id "
+                "WHERE h.conversation_id=? AND h.owner_digest=? "
                 "ORDER BY created_at,handoff_id LIMIT ?",
                 (conversation_id, self._owner, limit),
             ).fetchall()
         return [self._handoff_result(row) for row in rows]
+
+    def get_cto_handoff_packet(
+        self,
+        handoff_id: str,
+        *,
+        verified_cto_subject: str,
+        expected_cto_subject: str,
+    ) -> dict[str, Any]:
+        """Return one bounded task packet after a future transport verifies CTO identity.
+
+        This method has no route and no default identity configuration. A future
+        connector must validate a token independently and pass its verified
+        subject plus a protected, exact expected subject. It cannot use a
+        browser session, caller-supplied task ID, or unverified claim as a
+        substitute for that boundary.
+        """
+        if not ID_PATTERN.fullmatch(handoff_id):
+            raise ConversationRequestError("not_found", 404)
+        subject_digest = self._require_cto_identity(verified_cto_subject, expected_cto_subject)
+        now = int(time.time())
+        with self._lock:
+            self._purge_if_due_locked(now)
+            row = self._live.connection.execute(
+                "SELECT h.handoff_id,h.decision_id,h.proposal_id,h.conversation_id,h.created_at,"
+                "p.project_id,p.task_class,p.scope,p.expected_result,p.required_authority,"
+                "d.expires_at,r.result_id "
+                "FROM cto_handoffs h JOIN task_proposals p ON p.proposal_id=h.proposal_id "
+                "JOIN ceo_decisions d ON d.decision_id=h.decision_id "
+                "LEFT JOIN cto_handoff_results r ON r.handoff_id=h.handoff_id "
+                "WHERE h.handoff_id=? AND h.owner_digest=? AND p.owner_digest=? AND d.owner_digest=?",
+                (handoff_id, self._owner, self._owner, self._owner),
+            ).fetchone()
+            if row is None:
+                raise ConversationRequestError("not_found", 404)
+            if row["expires_at"] <= now:
+                raise ConversationRequestError("decision_expired", 409)
+            if row["result_id"] is not None:
+                raise ConversationRequestError("handoff_closed", 409)
+        return {
+            "handoff_id": row["handoff_id"],
+            "decision_id": row["decision_id"],
+            "proposal_id": row["proposal_id"],
+            "conversation_id": row["conversation_id"],
+            "recipient": "cto",
+            "project_id": row["project_id"],
+            "task_class": row["task_class"],
+            "scope": row["scope"],
+            "expected_result": row["expected_result"],
+            "required_authority": row["required_authority"],
+            "expires_at": _iso(row["expires_at"]),
+            "cto_subject_digest_bound": bool(subject_digest),
+            "dispatch_authorized": False,
+            "execution_authorized": False,
+            "mutation_authorized": False,
+            "authority_effect": "none",
+        }
+
+    @staticmethod
+    def _cto_result_payload(request_body: bytes) -> dict[str, Any]:
+        try:
+            value = json.loads(request_body)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ConversationRequestError("invalid_request", 400) from exc
+        if not isinstance(value, dict) or set(value) != {"outcome", "summary", "evidence_refs"}:
+            raise ConversationRequestError("invalid_request", 400)
+        if value["outcome"] not in {"completed", "failed"}:
+            raise ConversationRequestError("invalid_request", 400)
+        if not isinstance(value["summary"], str) or not value["summary"].strip() or len(value["summary"]) > MAX_CTO_RESULT_SUMMARY:
+            raise ConversationRequestError("invalid_request", 400)
+        refs = value["evidence_refs"]
+        if not isinstance(refs, list) or len(refs) > 20 or len(set(refs)) != len(refs) or any(not isinstance(item, str) or not item or len(item) > 500 for item in refs):
+            raise ConversationRequestError("invalid_request", 400)
+        return value
+
+    def record_cto_handoff_result(
+        self,
+        handoff_id: str,
+        idempotency_key: str,
+        request_body: bytes,
+        *,
+        verified_cto_subject: str,
+        expected_cto_subject: str,
+    ) -> dict[str, Any]:
+        """Persist a verified CTO result without treating it as execution evidence."""
+        if not ID_PATTERN.fullmatch(handoff_id):
+            raise ConversationRequestError("not_found", 404)
+        subject_digest = self._require_cto_identity(verified_cto_subject, expected_cto_subject)
+        value = self._cto_result_payload(request_body)
+        normalized = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+        now, key_hash = int(time.time()), self._idempotency(idempotency_key)
+        operation = f"cto-result:{handoff_id}"
+        with self._lock:
+            self._purge_if_due_locked(now)
+            row = self._live.connection.execute(
+                "SELECT h.decision_id,h.proposal_id,h.conversation_id,d.expires_at "
+                "FROM cto_handoffs h JOIN ceo_decisions d ON d.decision_id=h.decision_id "
+                "WHERE h.handoff_id=? AND h.owner_digest=? AND d.owner_digest=?",
+                (handoff_id, self._owner, self._owner),
+            ).fetchone()
+            if row is None:
+                raise ConversationRequestError("not_found", 404)
+            existing = self._live.connection.execute(
+                "SELECT request_hash,response_json FROM idempotency_results "
+                "WHERE owner_digest=? AND operation=? AND idempotency_hash=?",
+                (self._owner, operation, key_hash),
+            ).fetchone()
+            if existing:
+                if not hmac.compare_digest(existing["request_hash"], self._request_hash(normalized)):
+                    raise ConversationRequestError("idempotency_conflict", 409)
+                return json.loads(existing["response_json"])
+            if row["expires_at"] <= now:
+                raise ConversationRequestError("decision_expired", 409)
+            if self._live.connection.execute(
+                "SELECT 1 FROM cto_handoff_results WHERE handoff_id=?", (handoff_id,)
+            ).fetchone():
+                raise ConversationRequestError("result_already_recorded", 409)
+            result = {
+                "result_id": self._identifier("cto_result"),
+                "handoff_id": handoff_id,
+                "decision_id": row["decision_id"],
+                "proposal_id": row["proposal_id"],
+                "conversation_id": row["conversation_id"],
+                "outcome": value["outcome"],
+                "recorded_at": _iso(now),
+                "execution_authorized": False,
+                "mutation_authorized": False,
+                "authority_effect": "none",
+            }
+            before = self._live.connection.serialize()
+            try:
+                with self._live.connection:
+                    self._live.connection.execute(
+                        "INSERT INTO cto_handoff_results VALUES (?,?,?,?,?,?,?,?,'none',0,0)",
+                        (result["result_id"], handoff_id, self._owner, subject_digest, value["outcome"], value["summary"], json.dumps(value["evidence_refs"]), now),
+                    )
+                    self._live.connection.execute(
+                        "INSERT INTO idempotency_results VALUES (?,?,?,?,?,?,?)",
+                        (self._owner, operation, key_hash, self._request_hash(normalized), json.dumps(result), handoff_id, now),
+                    )
+                self._live.persist()
+            except Exception:
+                self._live.connection.deserialize(before)
+                raise
+            return result
 
     def list_audit_timeline(self, conversation_id: str, limit: int = 50, cursor: int = 0) -> dict[str, Any]:
         """Return identifier-only audit events for one owner-bound conversation.
@@ -926,6 +1105,12 @@ class ConversationStore:
             handoffs = self._live.connection.execute(
                 "SELECT handoff_id,decision_id,proposal_id,created_at,state FROM cto_handoffs "
                 "WHERE conversation_id=? AND owner_digest=? ORDER BY created_at,handoff_id",
+                (conversation_id, self._owner),
+            ).fetchall()
+            handoff_results = self._live.connection.execute(
+                "SELECT r.result_id,r.handoff_id,r.outcome,r.recorded_at,h.decision_id,h.proposal_id "
+                "FROM cto_handoff_results r JOIN cto_handoffs h ON h.handoff_id=r.handoff_id "
+                "WHERE h.conversation_id=? AND r.owner_digest=? ORDER BY r.recorded_at,r.result_id",
                 (conversation_id, self._owner),
             ).fetchall()
             notification_events = self._live.connection.execute(
@@ -1011,6 +1196,24 @@ class ConversationStore:
         )
         events.extend(
             {
+                "event_id": f"cto_result:{row['result_id']}",
+                "event_type": "cto_handoff_result_recorded",
+                "occurred_at": _iso(row["recorded_at"]),
+                "source": "conversation_store.cto_handoff_results",
+                "correlation": {
+                    "conversation_id": conversation_id,
+                    "handoff_id": row["handoff_id"],
+                    "proposal_id": row["proposal_id"],
+                    "decision_id": row["decision_id"],
+                    "result_id": row["result_id"],
+                    "outcome": row["outcome"],
+                },
+                "authority_effect": "none",
+            }
+            for row in handoff_results
+        )
+        events.extend(
+            {
                 "event_id": f"notification:{row['event_id']}",
                 "event_type": row["event_type"],
                 "occurred_at": _iso(row["occurred_at"]),
@@ -1034,9 +1237,10 @@ class ConversationStore:
             "task_proposal_drafted": 2,
             "ceo_decision_recorded": 3,
             "cto_handoff_requested": 4,
-            "notification_delivery_delivered": 5,
-            "notification_delivery_retry_scheduled": 5,
-            "notification_delivery_dead_lettered": 5,
+            "cto_handoff_result_recorded": 5,
+            "notification_delivery_delivered": 6,
+            "notification_delivery_retry_scheduled": 6,
+            "notification_delivery_dead_lettered": 6,
         }
         events.sort(key=lambda event: (event["occurred_at"], event_order[event["event_type"]], event["event_id"]))
         page = events[cursor : cursor + limit]
@@ -1051,6 +1255,7 @@ class ConversationStore:
                 {"source": "conversation_store.task_proposals", "status": "available"},
                 {"source": "conversation_store.ceo_decisions", "status": "available"},
                 {"source": "conversation_store.cto_handoffs", "status": "available"},
+                {"source": "conversation_store.cto_handoff_results", "status": "available"},
                 {"source": "notification_outbox", "status": "available"},
                 {"source": "task_assignment", "status": "awaiting_connector"},
                 {"source": "task_execution", "status": "not_available"},
