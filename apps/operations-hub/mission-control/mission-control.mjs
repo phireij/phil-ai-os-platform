@@ -42,6 +42,7 @@ let activeGovernedProposals = [];
 let recordedDecisionProposalIds = new Set();
 let approvedDecisionProposalIds = new Set();
 let activeCtoHandoffs = [];
+let activeCtoHandoffResults = [];
 
 function text(value) {
   return String(value ?? "—");
@@ -565,7 +566,8 @@ function renderGovernedProposals(data, { live = false } = {}) {
     meta.className = "lifecycle-meta";
     const decisionRecorded = Boolean(proposal.decision_id) || recordedDecisionProposalIds.has(proposal.proposal_id);
     const handoff = activeCtoHandoffs.find((item) => item.proposal_id === proposal.proposal_id);
-    for (const [name, value] of [["Conversation", proposal.conversation_id], ["CEO decision", decisionRecorded ? "recorded · no authority" : "not recorded"], ["CTO handoff", handoff ? `${pretty(handoff.state)} · connector pending` : "not recorded"], ["Assignment / execution", "disabled"]]) {
+    const result = activeCtoHandoffResults.find((item) => item.proposal_id === proposal.proposal_id);
+    for (const [name, value] of [["Conversation", proposal.conversation_id], ["CEO decision", decisionRecorded ? "recorded · no authority" : "not recorded"], ["CTO handoff", handoff ? `${pretty(handoff.state)} · connector pending` : "not recorded"], ["CTO result", result ? pretty(result.outcome) : "not recorded"], ["Assignment / execution", "disabled"]]) {
       const cell = document.createElement("span");
       cell.textContent = name;
       const strong = document.createElement("strong");
@@ -586,6 +588,19 @@ function renderGovernedProposals(data, { live = false } = {}) {
         details.append(cell);
       }
       article.append(details);
+      if (result) {
+        const resultDetails = document.createElement("div");
+        resultDetails.className = "lifecycle-meta";
+        for (const [name, value] of [["CTO result", result.summary], ["Evidence references", result.evidence_refs.join(", ") || "none"], ["Recorded", result.recorded_at]]) {
+          const cell = document.createElement("span");
+          cell.textContent = name;
+          const strong = document.createElement("strong");
+          strong.textContent = value;
+          cell.append(strong);
+          resultDetails.append(cell);
+        }
+        article.append(resultDetails);
+      }
     }
     return article;
   }));
@@ -619,6 +634,19 @@ async function loadCtoHandoffs(conversationId, epoch = conversationEpoch) {
   activeCtoHandoffs = payload;
   renderGovernedProposals({ proposals: activeGovernedProposals }, { live: true });
   syncGovernedControls();
+}
+
+async function loadCtoHandoffResults(conversationId, epoch = conversationEpoch) {
+  if (conversationSession?.cto_handoff_results !== true) return;
+  const response = await conversationRequest(`/api/conversations/${encodeURIComponent(conversationId)}/cto-handoff-results?limit=100`);
+  if (!response.ok) throw new Error(`CTO handoff results HTTP ${response.status}`);
+  const payload = await response.json();
+  if (epoch !== conversationEpoch || conversationId !== activeConversationId || !Array.isArray(payload)) return;
+  for (const result of payload) {
+    if (!result.result_id || !result.handoff_id || !result.proposal_id || !["completed", "failed"].includes(result.outcome) || typeof result.summary !== "string" || !result.summary || !Array.isArray(result.evidence_refs) || result.execution_authorized !== false || result.mutation_authorized !== false || result.authority_effect !== "none") throw new Error("Unsafe CTO handoff result response");
+  }
+  activeCtoHandoffResults = payload;
+  renderGovernedProposals({ proposals: activeGovernedProposals }, { live: true });
 }
 
 function renderConversationLifecycle(timeline, notifications) {
@@ -762,6 +790,7 @@ function resetConversationView(message = "sample only · no live chat") {
   recordedDecisionProposalIds = new Set();
   approvedDecisionProposalIds = new Set();
   activeCtoHandoffs = [];
+  activeCtoHandoffResults = [];
   if (sampleConversation) renderConversation(sampleConversation);
   if (sampleGovernedProposals) renderGovernedProposals(sampleGovernedProposals);
   document.querySelector("#governed-proposals-state").textContent = "sample only · no authority";
@@ -828,6 +857,7 @@ async function loadConversationSession() {
     await loadGovernedProposals(activeConversationId, epoch);
     await loadConversationLifecycle(activeConversationId, epoch);
     await loadCtoHandoffs(activeConversationId, epoch);
+    await loadCtoHandoffResults(activeConversationId, epoch);
   } else {
     renderConversationMessages([]);
     setConversationControls(false);

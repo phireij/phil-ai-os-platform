@@ -227,6 +227,11 @@ class ConversationStoreChecks(unittest.TestCase):
         )
         self.assertEqual("completed", result["outcome"])
         self.assertFalse(result["execution_authorized"])
+        results = store.list_cto_handoff_results(conversation["conversation_id"])
+        self.assertEqual(1, len(results))
+        self.assertEqual("Reviewed the bounded artifact.", results[0]["summary"])
+        self.assertEqual(["review:artifact-1"], results[0]["evidence_refs"])
+        self.assertFalse(results[0]["mutation_authorized"])
         self.assertEqual(
             result,
             store.record_cto_handoff_result(

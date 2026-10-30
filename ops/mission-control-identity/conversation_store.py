@@ -1067,6 +1067,37 @@ class ConversationStore:
                 raise
             return result
 
+    def list_cto_handoff_results(self, conversation_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        """Return encrypted, owner-scoped result details to the CEO session only."""
+        if not ID_PATTERN.fullmatch(conversation_id) or limit < 1 or limit > MAX_PAGE_SIZE:
+            raise ConversationRequestError("not_found", 404)
+        with self._lock:
+            rows = self._live.connection.execute(
+                "SELECT r.result_id,r.handoff_id,r.outcome,r.summary,r.evidence_refs,r.recorded_at,"
+                "h.decision_id,h.proposal_id,h.conversation_id "
+                "FROM cto_handoff_results r JOIN cto_handoffs h ON h.handoff_id=r.handoff_id "
+                "WHERE h.conversation_id=? AND r.owner_digest=? AND h.owner_digest=? "
+                "ORDER BY r.recorded_at,r.result_id LIMIT ?",
+                (conversation_id, self._owner, self._owner, limit),
+            ).fetchall()
+        return [
+            {
+                "result_id": row["result_id"],
+                "handoff_id": row["handoff_id"],
+                "decision_id": row["decision_id"],
+                "proposal_id": row["proposal_id"],
+                "conversation_id": row["conversation_id"],
+                "outcome": row["outcome"],
+                "summary": row["summary"],
+                "evidence_refs": json.loads(row["evidence_refs"]),
+                "recorded_at": _iso(row["recorded_at"]),
+                "execution_authorized": False,
+                "mutation_authorized": False,
+                "authority_effect": "none",
+            }
+            for row in rows
+        ]
+
     def list_audit_timeline(self, conversation_id: str, limit: int = 50, cursor: int = 0) -> dict[str, Any]:
         """Return identifier-only audit events for one owner-bound conversation.
 

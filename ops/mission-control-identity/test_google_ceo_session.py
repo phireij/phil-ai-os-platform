@@ -132,6 +132,7 @@ class SessionHttpChecks(unittest.TestCase):
         self.assertTrue(payload["authenticated"])
         self.assertFalse(payload["conversation_authority"])
         self.assertFalse(payload["cto_handoff_recording"])
+        self.assertFalse(payload["cto_handoff_results"])
         self.assertEqual(payload["scope"], "mission_control:session")
         self.assertGreater(len(payload["csrf_token"]), 32)
 
@@ -203,6 +204,7 @@ class SessionHttpChecks(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(session["conversation_authority"])
         self.assertTrue(session["cto_handoff_recording"])
+        self.assertTrue(session["cto_handoff_results"])
         self.assertEqual(session["scope"], "mission_control:conversation")
         status, _, callback_body = self.sign_in()
         self.assertEqual(status, 303)
@@ -277,13 +279,28 @@ class SessionHttpChecks(unittest.TestCase):
             "POST", f"/api/task-proposals/{proposal_id}/cto-handoffs", handoff_headers, b"{}"
         )
         self.assertEqual(status, 201)
-        self.assertEqual("awaiting_connector", json.loads(body)["state"])
-        self.assertFalse(json.loads(body)["dispatch_authorized"])
+        handoff = json.loads(body)
+        self.assertEqual("awaiting_connector", handoff["state"])
+        self.assertFalse(handoff["dispatch_authorized"])
         status, _, body = self.request(
             "GET", f"/api/conversations/{conversation_id}/cto-handoffs", {"Cookie": cookie}
         )
         self.assertEqual(status, 200)
         self.assertEqual(1, len(json.loads(body)))
+        self.server.conversations.record_cto_handoff_result(  # type: ignore[attr-defined]
+            handoff["handoff_id"], "cto-result-handoff-0001",
+            b'{"outcome":"completed","summary":"Reviewed through the synthetic connector.","evidence_refs":[]}',
+            verified_cto_subject="auth0|approved-cto",
+            expected_cto_subject="auth0|approved-cto",
+        )
+        status, _, body = self.request(
+            "GET", f"/api/conversations/{conversation_id}/cto-handoff-results", {"Cookie": cookie}
+        )
+        self.assertEqual(status, 200)
+        results = json.loads(body)
+        self.assertEqual("completed", results[0]["outcome"])
+        self.assertEqual("Reviewed through the synthetic connector.", results[0]["summary"])
+        self.assertFalse(results[0]["execution_authorized"])
         status, _, body = self.request(
             "GET", f"/api/conversations/{conversation_id}/audit-timeline?limit=100", {"Cookie": cookie}
         )

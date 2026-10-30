@@ -36,6 +36,11 @@ images do not report that field and therefore cannot accidentally expose the
 new control. Even when visible, the control only writes the encrypted
 `awaiting_connector` record and does not contact a CTO.
 
+An equally capability-gated CEO result read model returns the encrypted result
+summary and evidence references only to the owner-bound CEO session. It is not
+part of the identifier-only audit timeline and remains unavailable until a
+reviewed session image explicitly reports `cto_handoff_results=true`.
+
 ## Not yet implemented or authorized
 
 The following remain separate gates and must not be inferred from this
@@ -44,8 +49,8 @@ checkpoint:
 1. A verified CTO/agent connector identity and its least-privilege scope.
 2. A real connector retrieval path, acknowledgement, and result callback using
    the independently verified identity boundary.
-3. Result presentation to the CEO through a separately reviewed session/UI
-   path.
+3. Deployment and acceptance of the staged CEO result presentation through the
+   reviewed session/UI path.
 4. Any task dispatch, automatic execution, retry, external mutation, or
    provider call.
 5. Deployment of a session image containing this change and its associated
