@@ -192,6 +192,19 @@ class ConversationStoreChecks(unittest.TestCase):
         self.assertEqual(0, notification["attempt_count"])
         self.assertNotIn("Proceed only through a later gate.", json.dumps(notifications))
 
+        handoff = store.create_cto_handoff(proposal["proposal_id"], "handoff-proposal-0001", b"{}")
+        self.assertEqual("awaiting_connector", handoff["state"])
+        self.assertFalse(handoff["dispatch_authorized"])
+        self.assertEqual(handoff, store.create_cto_handoff(proposal["proposal_id"], "handoff-proposal-0001", b"{}"))
+        self.assertEqual([handoff], store.list_cto_handoffs(conversation["conversation_id"]))
+        timeline = store.list_audit_timeline(conversation["conversation_id"])
+        self.assertIn("cto_handoff_requested", [event["event_type"] for event in timeline["events"]])
+        coverage = {entry["source"]: entry["status"] for entry in timeline["source_coverage"]}
+        self.assertEqual("available", coverage["conversation_store.cto_handoffs"])
+        self.assertEqual("awaiting_connector", coverage["task_assignment"])
+        with self.assertRaisesRegex(ConversationRequestError, "handoff_already_recorded"):
+            store.create_cto_handoff(proposal["proposal_id"], "handoff-proposal-0002", b"{}")
+
     def test_enabled_delivery_is_identifier_only_retries_once_then_dead_letters(self) -> None:
         now = 1_900_000_000
         with patch("conversation_store.time.time", return_value=now):
