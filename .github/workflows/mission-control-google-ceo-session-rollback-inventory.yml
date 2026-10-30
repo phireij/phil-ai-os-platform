@@ -51,8 +51,8 @@ jobs:
           network=\$(docker inspect '$ROLLBACK' --format '{{.HostConfig.NetworkMode}}')
           readonly=\$(docker inspect '$ROLLBACK' --format '{{.HostConfig.ReadonlyRootfs}}')
           restart=\$(docker inspect '$ROLLBACK' --format '{{.HostConfig.RestartPolicy.Name}}')
-          traefik=\$(docker inspect '$ROLLBACK' --format '{{index .Config.Labels \\\"traefik.enable\\\"}}')
-          service=\$(docker inspect '$ROLLBACK' --format '{{index .Config.Labels \\\"traefik.http.routers.mission-control-google-ceo-session.service\\\"}}')
+          traefik=\$(docker inspect '$ROLLBACK' --format '{{index .Config.Labels \"traefik.enable\"}}')
+          service=\$(docker inspect '$ROLLBACK' --format '{{index .Config.Labels \"traefik.http.routers.mission-control-google-ceo-session.service\"}}')
           image=\$(docker inspect '$ROLLBACK' --format '{{.Config.Image}}')
           image_matches=false; [[ \"\$image\" =~ ^ghcr.io/phireij/phil-ai-os-platform/mission-control-google-ceo-session@sha256:[0-9a-f]{64}$ ]] && image_matches=true
           state_expected=false; [[ \"\$current_state\" = phil-ai-os-mission-control-conversation-state-v1 && \"\$rollback_state\" = phil-ai-os-mission-control-conversation-state-v1 ]] && state_expected=true
