@@ -11,7 +11,7 @@ past component inventory evidence with integrated operational acceptance.
 
 | Area | Evidence | What it establishes |
 |---|---|---|
-| Protected main | `92e9ed6b0dcc07b149a98db4124bea10ad9379e1` | Current source includes the MC-021 request-boundary hardening, MC-018 snapshot reconciliation, and their tracker evidence. It does not identify a production runtime image or release candidate. |
+| Protected main | `a1dff119e5d442a596654ef23363d7df047ef65b` | Current source includes the MC-021 request-boundary hardening, MC-018 snapshot reconciliation, and the owner-selected manual MC-015 escalation procedure. It does not identify a production runtime image or release candidate. |
 | MC-021 request boundary | [PR #739](https://github.com/phireij/phil-ai-os-platform/pull/739), [exact-main CI 41153615730](https://github.com/phireij/phil-ai-os-platform/actions/runs/41153615730), [integrated CI 41153615720](https://github.com/phireij/phil-ai-os-platform/actions/runs/41153615720) | The public MCP parser fails closed on ambiguous request framing and JSON shapes. This is source/CI evidence only; the connector is not running and no live read occurred. |
 | MC-018 source context | [PR #741](https://github.com/phireij/phil-ai-os-platform/pull/741), [exact-main observation CI 41154127786](https://github.com/phireij/phil-ai-os-platform/actions/runs/41154127786) | The committed master snapshot matches its deterministic reconciler and includes the 30 October CI observation. Phil AI OS remains `unknown` because the latest observation lacks the required AO-MVP CI facts; provider, runtime, and connector sources remain unobserved. |
 | Runtime inventory | [read-only run 41000737938](https://github.com/phireij/phil-ai-os-platform/actions/runs/41000737938) | On 30 October, the static UI, CEO session, and read-model bridge were observed running with read-only roots and no privileged container. The observation is not an exact-current release-candidate inventory. |
@@ -23,7 +23,7 @@ past component inventory evidence with integrated operational acceptance.
 |---|---|---|
 | MC-010 provider dispatch | **Blocked** | No protected OpenAI key or reviewed policy file is installed; `openai_dispatch_enabled=false`. No provider request has been made. |
 | MC-021 live-status connector | **Blocked** | The approved Auth0 owner-subject file is absent or has unsuitable custody. The connector remains unstarted and no live read occurred. |
-| MC-015 failure/dead-letter escalation coverage | **In progress** | Identifier-only retry/dead-letter behavior exists, but integrated escalation coverage is not accepted as a release gate. |
+| MC-015 failure/dead-letter escalation coverage | **In progress** | An owner-selected identifier-only manual procedure now covers a future real dead letter; it configures no automatic destination and has no incident exercise or integrated release acceptance. |
 | MC-017 integrated security/recovery acceptance | **In progress** | Component-level backup, restore, rollback, inventory, and health evidence exists; an exact-release integrated rehearsal is still absent. |
 | MC-018 source context | **In progress** | The current committed snapshot is internally consistent, but runtime/provider/connector observations remain explicitly unobserved. |
 | MC-019 exact release candidate | **Blocked** | No exact runtime candidate, current immutable-image inventory, or integrated acceptance result has been established. |
