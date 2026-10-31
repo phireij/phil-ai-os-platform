@@ -135,6 +135,17 @@ class SessionHttpChecks(unittest.TestCase):
         self.assertFalse(payload["cto_handoff_results"])
         self.assertEqual(payload["scope"], "mission_control:session")
         self.assertGreater(len(payload["csrf_token"]), 32)
+        # A caller cannot bypass the capability-gated UI while the server has
+        # no conversation authority or handoff/result store.
+        conversation_id = "conv_" + "a" * 16
+        self.assertEqual(
+            self.request("GET", f"/api/conversations/{conversation_id}/cto-handoffs", {"Cookie": token_cookie})[0],
+            404,
+        )
+        self.assertEqual(
+            self.request("GET", f"/api/conversations/{conversation_id}/cto-handoff-results", {"Cookie": token_cookie})[0],
+            404,
+        )
 
     def test_logout_requires_exact_origin_and_csrf_then_revokes(self) -> None:
         status, headers, _ = self.sign_in()
