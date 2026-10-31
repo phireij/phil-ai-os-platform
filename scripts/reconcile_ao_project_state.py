@@ -87,7 +87,7 @@ def reconcile(p:dict[str,Any], obs:list[dict[str,Any]])->dict[str,Any]:
 def build()->dict[str,Any]:
     registry=load(REGISTRY); by_project=observations()
     states=[reconcile(p,by_project.get(p["project_id"],[])) for p in sorted(registry["projects"],key=lambda x:x["priority"])]
-    return {"schema":"phil-ai-os-master-project-status","version":1,"authority_effect":"none","autonomy_ceiling":"A0","projects":states}
+    return {"schema":"phil-ai-os-master-project-status","version":1,"generated_from":"AO-1 explicit project observations","overall_status":"unknown","authority_effect":"none","autonomy_ceiling":"A0","projects":states}
 
 def main()->None:
     print(json.dumps(build(),indent=2,sort_keys=True))
