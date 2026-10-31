@@ -122,11 +122,32 @@ def _json_request_content_type(headers: object) -> bool:
     return media_type == "application/json"
 
 
+def _json_object_without_duplicate_keys(pairs: list[tuple[object, object]]) -> dict[object, object]:
+    """Build a JSON object only when each key appears once."""
+
+    result: dict[object, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate_json_key")
+        result[key] = value
+    return result
+
+
+def _deny_json_constant(_value: str) -> object:
+    """Reject non-standard numeric constants accepted by Python's decoder."""
+
+    raise ValueError("non_standard_json_constant")
+
+
 def _parse_json_rpc_request(payload: bytes) -> dict[str, object] | None:
     """Parse only the bounded JSON-RPC request shape the server supports."""
 
     try:
-        request = json.loads(payload.decode("utf-8"))
+        request = json.loads(
+            payload.decode("utf-8"),
+            object_pairs_hook=_json_object_without_duplicate_keys,
+            parse_constant=_deny_json_constant,
+        )
     except (UnicodeDecodeError, ValueError, TypeError, RecursionError):
         return None
     if (

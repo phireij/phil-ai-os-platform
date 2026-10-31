@@ -364,6 +364,8 @@ class LiveStatusTests(unittest.TestCase):
             b'{"jsonrpc":"2.0","method":"initialize","params":[]}',
             b'{"jsonrpc":"2.0","method":"initialize","id":true}',
             b'{"jsonrpc":"2.0","method":"initialize","id":{}}',
+            b'{"jsonrpc":"2.0","method":"initialize","id":NaN}',
+            b'{"jsonrpc":"2.0","method":"initialize","params":{"name":"first","name":"second"}}',
             ("[" * 1100 + "]" * 1100).encode("ascii"),
         ):
             self.assertIsNone(_parse_json_rpc_request(payload))
