@@ -2,6 +2,7 @@
 """Self-contained AO-1 reconciler contract checks."""
 from __future__ import annotations
 import importlib.util
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +14,8 @@ mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
 data = mod.build()
+snapshot = json.loads((ROOT / "ops" / "project-state" / "master-project-status.v1.json").read_text(encoding="utf-8"))
+assert data == snapshot
 assert data["authority_effect"] == "none"
 assert data["autonomy_ceiling"] == "A0"
 projects = data["projects"]

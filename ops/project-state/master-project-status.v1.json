@@ -33,6 +33,12 @@
           "kind": "github_ci",
           "observed_at": "2026-10-28T16:07:54Z",
           "ref": "ops/project-state/observations/phil-ai-os-main-ci-20261028.v1.json"
+        },
+        {
+          "freshness": "fresh",
+          "kind": "github_ci",
+          "observed_at": "2026-10-30T10:28:02Z",
+          "ref": "ops/project-state/observations/phil-ai-os-mission-control-ci-20261030.v1.json"
         }
       ],
       "in_progress": [
@@ -48,8 +54,8 @@
       "repository_state": {
         "ref": "main",
         "repository": "phireij/phil-ai-os-platform",
-        "verified_at": "2026-10-28T16:07:54Z",
-        "verified_head": "3d8942017803bb760c0ff889c30c714349b42007"
+        "verified_at": "2026-10-30T10:28:02Z",
+        "verified_head": "6925416b98794376dc571ffb325757571fa2694d"
       },
       "schema_version": 1,
       "status": "unknown"
