@@ -282,6 +282,17 @@ class SessionHttpChecks(unittest.TestCase):
         handoff = json.loads(body)
         self.assertEqual("awaiting_connector", handoff["state"])
         self.assertFalse(handoff["dispatch_authorized"])
+        # The future CTO packet/result interface stays internal-only.  The
+        # CEO session must not accidentally expose either half over HTTP.
+        status, _, _ = self.request(
+            "GET", f"/api/cto-handoffs/{handoff['handoff_id']}/packet", {"Cookie": cookie}
+        )
+        self.assertEqual(status, 404)
+        status, _, _ = self.request(
+            "POST", f"/api/cto-handoffs/{handoff['handoff_id']}/result", handoff_headers,
+            b'{"outcome":"completed","summary":"must remain internal","evidence_refs":[]}',
+        )
+        self.assertEqual(status, 405)
         status, _, body = self.request(
             "GET", f"/api/conversations/{conversation_id}/cto-handoffs", {"Cookie": cookie}
         )
