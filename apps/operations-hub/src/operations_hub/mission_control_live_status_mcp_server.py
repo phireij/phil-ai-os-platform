@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Callable
 
 from .mission_control_cto_auth0_verifier import CredentialRejected, verifier_from_environment
 from .mission_control_live_status import collect_live_status, load_manifest
@@ -88,26 +88,58 @@ def _bearer_credential(value: str | None) -> str | None:
     return token if token and token == token.strip() and " " not in token else None
 
 
-def _json_request(headers, read: Callable[[int], bytes]) -> dict[str, object]:
-    """Read one small JSON request; reject framing the server does not support."""
+def _request_content_length(headers: object) -> int | None:
+    """Return one canonical content length, or reject unsupported framing.
 
-    if headers.get("Transfer-Encoding") is not None:
-        raise ValueError("transfer_encoding_denied")
-    content_length = headers.get("Content-Length")
-    if not isinstance(content_length, str):
-        raise ValueError("content_length_required")
+    This server does not decode transfer-encoded requests. Refusing them and
+    requiring one decimal Content-Length prevents proxy/server framing
+    disagreement before an OAuth-protected request is parsed.
+    """
+
+    get = getattr(headers, "get", None)
+    get_all = getattr(headers, "get_all", None)
+    if not callable(get) or not callable(get_all) or get("Transfer-Encoding") is not None:
+        return None
+    values = get_all("Content-Length", [])
+    if not isinstance(values, list) or len(values) != 1 or not isinstance(values[0], str):
+        return None
+    value = values[0]
+    if not re.fullmatch(r"(?:0|[1-9][0-9]*)", value):
+        return None
+    return int(value)
+
+
+def _json_request_content_type(headers: object) -> bool:
+    """Accept exactly one JSON media type before parsing a public request."""
+
+    get_all = getattr(headers, "get_all", None)
+    if not callable(get_all):
+        return False
+    values = get_all("Content-Type", [])
+    if not isinstance(values, list) or len(values) != 1 or not isinstance(values[0], str):
+        return False
+    media_type = values[0].split(";", 1)[0].strip().lower()
+    return media_type == "application/json"
+
+
+def _parse_json_rpc_request(payload: bytes) -> dict[str, object] | None:
+    """Parse only the bounded JSON-RPC request shape the server supports."""
+
     try:
-        byte_count = int(content_length)
-    except ValueError as exc:
-        raise ValueError("invalid_content_length") from exc
-    if byte_count < 1 or byte_count > MAX_REQUEST_BYTES:
-        raise ValueError("request_size_denied")
-    payload = read(byte_count)
-    if len(payload) != byte_count:
-        raise ValueError("incomplete_request")
-    request = json.loads(payload.decode("utf-8"))
-    if not isinstance(request, dict):
-        raise ValueError("invalid_request")
+        request = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, TypeError, RecursionError):
+        return None
+    if (
+        not isinstance(request, dict)
+        or request.get("jsonrpc") != "2.0"
+        or not isinstance(request.get("method"), str)
+        or ("params" in request and not isinstance(request["params"], dict))
+    ):
+        return None
+    if "id" in request:
+        request_id = request["id"]
+        if isinstance(request_id, bool) or not isinstance(request_id, (str, int, float, type(None))):
+            return None
     return request
 
 
@@ -211,13 +243,25 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/mcp":
             self._send(404, {"status": "not_found"})
             return
-        try:
-            request = _json_request(self.headers, self.rfile.read)
-            method, request_id = request["method"], request.get("id")
-        except (UnicodeDecodeError, ValueError, KeyError, TypeError):
+        if not _json_request_content_type(self.headers):
+            self._send(415, {"error": "unsupported_media_type"})
+            log_mcp_outcome(None, "unsupported_media_type", 415)
+            return
+        content_length = _request_content_length(self.headers)
+        if content_length is None:
             self._send(400, {"error": "invalid_request"})
             log_mcp_outcome(None, "invalid_request", 400)
             return
+        if content_length > MAX_REQUEST_BYTES:
+            self._send(413, {"error": "request_too_large"})
+            log_mcp_outcome(None, "request_too_large", 413)
+            return
+        request = _parse_json_rpc_request(self.rfile.read(content_length))
+        if request is None:
+            self._send(400, {"error": "invalid_request"})
+            log_mcp_outcome(None, "invalid_request", 400)
+            return
+        method, request_id = request["method"], request.get("id")
         resource = _resource()
         if method == "initialize":
             result = initialize_result()
@@ -227,6 +271,7 @@ class Handler(BaseHTTPRequestHandler):
             outcome = "tools_listed"
         elif method == "tools/call":
             params = request.get("params", {})
+            assert isinstance(params, dict)
             credential = _bearer_credential(self.headers.get("Authorization"))
             context, verification_outcome = _verification_result(credential)
             result = resource.call_tool(

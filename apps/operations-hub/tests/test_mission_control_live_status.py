@@ -5,6 +5,7 @@ import sys
 import unittest
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from email.message import Message
 from http.server import ThreadingHTTPServer
 from io import BytesIO
 from pathlib import Path
@@ -36,8 +37,10 @@ from operations_hub.mission_control_live_status_mcp_server import (  # noqa: E40
     PROTECTED_RESOURCE_METADATA_PATHS,
     SERVER_INFO,
     Handler,
+    _json_request_content_type,
+    _parse_json_rpc_request,
+    _request_content_length,
     _verification_result,
-    _json_request,
     initialize_result,
     listen_host,
     mcp_method_category,
@@ -87,6 +90,13 @@ def _raw_loopback_request(base_url: str, request: bytes) -> bytes:
         while chunk := client.recv(4096):
             chunks.append(chunk)
     return b"".join(chunks)
+
+
+def _headers(*items: tuple) -> Message:
+    headers = Message()
+    for name, value in items:
+        headers.add_header(name, value)
+    return headers
 
 
 class LiveStatusTests(unittest.TestCase):
@@ -320,18 +330,70 @@ class LiveStatusTests(unittest.TestCase):
             self.assertIn(b"HTTP/1.1 401", headers)
             self.assertIn(b"resource_metadata=", headers)
 
-    def test_json_request_denies_chunked_missing_oversized_and_incomplete_bodies(self):
-        reader = Mock(return_value=b"{}")
-        self.assertEqual(_json_request({"Content-Length": "2"}, reader), {})
+    def test_request_content_length_requires_one_canonical_unencoded_value(self):
+        self.assertEqual(_request_content_length(_headers(("Content-Length", "16"))), 16)
         for headers in (
-            {"Transfer-Encoding": "chunked", "Content-Length": "2"},
-            {},
-            {"Content-Length": str(MAX_REQUEST_BYTES + 1)},
+            _headers(),
+            _headers(("Content-Length", "01")),
+            _headers(("Content-Length", "-1")),
+            _headers(("Content-Length", "+1")),
+            _headers(("Content-Length", "1"), ("Content-Length", "1")),
+            _headers(("Transfer-Encoding", "chunked"), ("Content-Length", "16")),
         ):
-            with self.assertRaises(ValueError):
-                _json_request(headers, reader)
-        with self.assertRaises(ValueError):
-            _json_request({"Content-Length": "3"}, lambda _size: b"{}")
+            self.assertIsNone(_request_content_length(headers))
+
+    def test_request_content_type_requires_one_json_media_type(self):
+        self.assertTrue(_json_request_content_type(_headers(("Content-Type", "Application/JSON; charset=utf-8"))))
+        for headers in (
+            _headers(),
+            _headers(("Content-Type", "text/plain")),
+            _headers(("Content-Type", "application/json"), ("Content-Type", "application/json")),
+        ):
+            self.assertFalse(_json_request_content_type(headers))
+
+    def test_json_rpc_request_requires_the_supported_closed_shape(self):
+        self.assertEqual(
+            _parse_json_rpc_request(b'{"jsonrpc":"2.0","id":1,"method":"initialize"}'),
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+        )
+        for payload in (
+            b"not-json",
+            b"[]",
+            b'{"jsonrpc":"2.0"}',
+            b'{"jsonrpc":"1.0","method":"initialize"}',
+            b'{"jsonrpc":"2.0","method":"initialize","params":[]}',
+            b'{"jsonrpc":"2.0","method":"initialize","id":true}',
+            b'{"jsonrpc":"2.0","method":"initialize","id":{}}',
+            ("[" * 1100 + "]" * 1100).encode("ascii"),
+        ):
+            self.assertIsNone(_parse_json_rpc_request(payload))
+
+    def test_loopback_handler_rejects_unsupported_request_boundaries_before_parsing(self):
+        with _loopback_server() as base_url:
+            cases = (
+                (
+                    b"POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                    b"Content-Length: 0\r\nConnection: close\r\n\r\n",
+                    b"HTTP/1.1 415",
+                ),
+                (
+                    b"POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                    b"Content-Type: application/json\r\nTransfer-Encoding: chunked\r\n"
+                    b"Connection: close\r\n\r\n",
+                    b"HTTP/1.1 400",
+                ),
+                (
+                    b"POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                    b"Content-Type: application/json\r\n"
+                    + f"Content-Length: {MAX_REQUEST_BYTES + 1}\r\n".encode("ascii")
+                    + b"Connection: close\r\n\r\n",
+                    b"HTTP/1.1 413",
+                ),
+            )
+            for request, expected_status in cases:
+                response = _raw_loopback_request(base_url, request)
+                headers, _body = response.split(b"\r\n\r\n", 1)
+                self.assertIn(expected_status, headers)
 
     def test_diagnostics_redact_untrusted_methods_and_tool_contents(self):
         self.assertEqual(mcp_method_category("tools/call"), "tools/call")
