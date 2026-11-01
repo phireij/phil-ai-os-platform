@@ -152,6 +152,7 @@ def _parse_json_rpc_request(payload: bytes) -> dict[str, object] | None:
         return None
     if (
         not isinstance(request, dict)
+        or set(request) - {"jsonrpc", "id", "method", "params"}
         or request.get("jsonrpc") != "2.0"
         or not isinstance(request.get("method"), str)
         or ("params" in request and not isinstance(request["params"], dict))
