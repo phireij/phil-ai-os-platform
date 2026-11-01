@@ -70,7 +70,8 @@ jobs:
             [[ "$(docker inspect "$workload" --format '{{.HostConfig.Privileged}}')" == false ]] && unprivileged=true
             [[ "$(docker inspect "$workload" --format '{{json .HostConfig.CapDrop}}')" == '["ALL"]' ]] && capabilities_dropped=true
             [[ "$(docker inspect "$workload" --format '{{.HostConfig.NetworkMode}}')" == bridge ]] && bridge_network=true
-            [[ "$(docker inspect "$workload" --format '{{json .HostConfig.PortBindings}}')" == null ]] && host_port_absent=true
+            host_port_bindings="$(docker inspect "$workload" --format '{{json .HostConfig.PortBindings}}')"
+            [[ "$host_port_bindings" == null || "$host_port_bindings" == '{}' ]] && host_port_absent=true
             [[ "$(docker inspect "$workload" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets/mc021_owner_subject"}}{{.Type}} {{.RW}}{{end}}{{end}}')" == 'bind false' ]] && owner_subject_mount_read_only=true
           fi
           echo "mc021_live_status_preflight root_exists=$root_exists tunnel_custody=$tunnel_custody owner_custody=$owner_custody inputs_present=$inputs_present compose_contract=$compose_contract workload_present=$existing workload_running=$running workload_read_only=$read_only workload_unprivileged=$unprivileged workload_capabilities_dropped=$capabilities_dropped workload_bridge_network=$bridge_network workload_host_port_absent=$host_port_absent owner_subject_mount_read_only=$owner_subject_mount_read_only content_accessed=false authority_effect=none"

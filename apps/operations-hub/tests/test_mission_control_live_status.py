@@ -299,6 +299,8 @@ class LiveStatusTests(unittest.TestCase):
             "workload_capabilities_dropped=",
             "workload_bridge_network=",
             "workload_host_port_absent=",
+            "host_port_bindings=",
+            "== '{}'",
             "owner_subject_mount_read_only=",
             "content_accessed=false",
             "authority_effect=none",
