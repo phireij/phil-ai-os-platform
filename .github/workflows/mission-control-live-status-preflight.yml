@@ -55,7 +55,12 @@ jobs:
             unset CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID
           fi
           existing=false
-          docker inspect phil-ai-os-mc021-live-status-nonprod-mcp-live-status-1 >/dev/null 2>&1 && existing=true
-          echo "mc021_live_status_preflight root_exists=$root_exists tunnel_custody=$tunnel_custody owner_custody=$owner_custody inputs_present=$inputs_present compose_contract=$compose_contract workload_present=$existing content_accessed=false authority_effect=none"
+          running=false
+          workload=phil-ai-os-mc021-live-status-nonprod-mcp-live-status-1
+          if docker inspect "$workload" >/dev/null 2>&1; then
+            existing=true
+            [[ "$(docker inspect "$workload" --format '{{.State.Running}}')" == true ]] && running=true
+          fi
+          echo "mc021_live_status_preflight root_exists=$root_exists tunnel_custody=$tunnel_custody owner_custody=$owner_custody inputs_present=$inputs_present compose_contract=$compose_contract workload_present=$existing workload_running=$running content_accessed=false authority_effect=none"
           test "$root_exists" = true && test "$tunnel_custody" = true && test "$owner_custody" = true && test "$inputs_present" = true && test "$compose_contract" = true
           REMOTE
