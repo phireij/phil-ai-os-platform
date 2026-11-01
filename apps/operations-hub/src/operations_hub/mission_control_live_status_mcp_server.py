@@ -40,6 +40,7 @@ MCP_METHODS = frozenset({"initialize", "tools/list", "tools/call"})
 VERIFICATION_OUTCOMES = frozenset({
     "token_missing",
     "owner_mapping_invalid",
+    "verifier_unavailable",
     "owner_mismatch",
     "scope_missing",
     "token_expired",
