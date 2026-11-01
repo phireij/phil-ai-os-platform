@@ -221,6 +221,8 @@ class Auth0VerifierTests(unittest.TestCase):
             ("InvalidIssuedAtError", "token_claim_invalid"),
             ("ImmatureSignatureError", "token_not_active"),
             ("PyJWKError", "signature_unavailable"),
+            ("PyJWKSetError", "signature_unavailable"),
+            ("PyJWKClientConnectionError", "signature_unavailable"),
         ):
             error_type = type(exception_name, (Exception,), {})
             verifier = Auth0JwtVerifier(
