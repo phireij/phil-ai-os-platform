@@ -10,7 +10,7 @@ import threading
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlsplit
 
 from conversation_store import ConversationConfig, ConversationStore
@@ -20,6 +20,7 @@ from google_ceo_session import (
     SESSION_COOKIE,
     SessionHandler,
     SessionStore,
+    _serve_session,
     load_ceo_subject,
 )
 from google_identity_probe import FlowStore
@@ -359,6 +360,25 @@ class SessionHttpChecks(unittest.TestCase):
             )[0],
             404,
         )
+
+
+class ProviderDispatchGateChecks(unittest.TestCase):
+    def test_configured_provider_is_not_constructed_without_dispatch(self) -> None:
+        """Configuration alone must never construct a provider runtime or worker."""
+
+        provider_config = Mock()
+        with patch("google_ceo_session.ThreadingHTTPServer") as http_server, \
+                patch("google_ceo_session.ConversationStore") as conversations, \
+                patch("google_ceo_session.ProviderResponseWorker") as provider_worker:
+            server = http_server.return_value
+            _serve_session(
+                Mock(), "synthetic-ceo-subject", object(), None, provider_config, False
+            )
+        provider_config.runtime.assert_not_called()
+        provider_worker.assert_not_called()
+        self.assertIsNone(conversations.call_args.kwargs["provider_runtime"])
+        server.serve_forever.assert_called_once_with()
+        server.server_close.assert_called_once_with()
 
 
 if __name__ == "__main__":
