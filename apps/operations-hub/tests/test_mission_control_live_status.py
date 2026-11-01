@@ -440,6 +440,8 @@ class LiveStatusTests(unittest.TestCase):
     def test_diagnostics_classify_owner_scope_and_generic_verification_without_credentials(self, verifier):
         verifier.side_effect = CredentialRejected("owner_mismatch")
         self.assertEqual(_verification_result("synthetic.jwt.value"), (None, "owner_mismatch"))
+        verifier.side_effect = CredentialRejected("token_malformed")
+        self.assertEqual(_verification_result("synthetic.jwt.value"), (None, "token_malformed"))
         verifier.side_effect = ValueError("opaque verifier detail")
         self.assertEqual(_verification_result("synthetic.jwt.value"), (None, "token_verification_failed"))
         verifier.side_effect = None

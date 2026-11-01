@@ -132,7 +132,15 @@ def _jwt_rejection_category(exc: Exception) -> str:
         "InvalidIssuerError": "issuer_mismatch",
         "InvalidSignatureError": "signature_invalid",
         "InvalidAlgorithmError": "signature_invalid",
+        # These remain deliberately broad, fixed diagnostic labels.  They
+        # distinguish malformed, not-yet-valid, and otherwise invalid claim
+        # sets without retaining a token, claim value, or exception detail.
+        "DecodeError": "token_malformed",
+        "InvalidTokenError": "token_malformed",
+        "InvalidIssuedAtError": "token_claim_invalid",
+        "ImmatureSignatureError": "token_not_active",
         "MissingRequiredClaimError": "required_claim_missing",
+        "PyJWKError": "signature_unavailable",
         "PyJWKClientError": "signature_unavailable",
     }.get(type(exc).__name__, "token_verification_failed")
 
