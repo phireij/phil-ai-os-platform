@@ -223,6 +223,8 @@ class Auth0VerifierTests(unittest.TestCase):
             ("PyJWKError", "signature_unavailable"),
             ("PyJWKSetError", "signature_unavailable"),
             ("PyJWKClientConnectionError", "signature_unavailable"),
+            ("InvalidSubjectError", "token_claim_invalid"),
+            ("InvalidJTIError", "token_claim_invalid"),
         ):
             error_type = type(exception_name, (Exception,), {})
             verifier = Auth0JwtVerifier(
@@ -236,6 +238,15 @@ class Auth0VerifierTests(unittest.TestCase):
             with self.subTest(exception_name=exception_name):
                 with self.assertRaisesRegex(CredentialRejected, expected_category):
                     verifier("synthetic.jwt.value")
+
+    def test_verifier_fails_closed_when_jwt_primitives_are_unavailable(self):
+        verifier = Auth0JwtVerifier(
+            "https://dev.example.test/", CANONICAL_RESOURCE_URI,
+            "https://dev.example.test/.well-known/jwks.json", "auth0|owner",
+        )
+        with patch.object(Auth0JwtVerifier, "_jwt_primitives", side_effect=RuntimeError("opaque")):
+            with self.assertRaisesRegex(CredentialRejected, "verifier_unavailable"):
+                verifier("synthetic.jwt.value")
 
     def test_verifier_reads_owner_only_from_the_credential_mount(self):
         environment = {

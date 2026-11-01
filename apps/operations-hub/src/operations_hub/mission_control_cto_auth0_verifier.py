@@ -88,7 +88,10 @@ class Auth0JwtVerifier:
         # until a later, separately approved owner-identity mapping exists.
         if not self.owner_subject or not isinstance(credential, str) or not credential:
             raise CredentialRejected("owner_mapping_invalid")
-        decode, signing_key = self._jwt_primitives()
+        try:
+            decode, signing_key = self._jwt_primitives()
+        except Exception as exc:
+            raise CredentialRejected("verifier_unavailable") from exc
         try:
             claims = decode(
                 credential,
@@ -126,7 +129,7 @@ class Auth0JwtVerifier:
 def _jwt_rejection_category(exc: Exception) -> str:
     """Map verifier failures to fixed labels without retaining exception detail."""
 
-    return {
+    categories = {
         "ExpiredSignatureError": "token_expired",
         "InvalidAudienceError": "audience_mismatch",
         "InvalidIssuerError": "issuer_mismatch",
@@ -139,14 +142,26 @@ def _jwt_rejection_category(exc: Exception) -> str:
         "InvalidTokenError": "token_malformed",
         "InvalidIssuedAtError": "token_claim_invalid",
         "ImmatureSignatureError": "token_not_active",
+        "InvalidSubjectError": "token_claim_invalid",
+        "InvalidJTIError": "token_claim_invalid",
         "MissingRequiredClaimError": "required_claim_missing",
+        "InvalidKeyError": "signature_unavailable",
+        "MissingCryptographyError": "signature_unavailable",
         "PyJWKError": "signature_unavailable",
         "PyJWKSetError": "signature_unavailable",
         "PyJWKClientError": "signature_unavailable",
         # PyJWT raises this subclass when it cannot refresh the Auth0 JWKS.
         # Retain only the fixed availability category, never transport detail.
         "PyJWKClientConnectionError": "signature_unavailable",
-    }.get(type(exc).__name__, "token_verification_failed")
+    }
+    # PyJWT publishes several concrete subclasses.  Matching its MRO preserves
+    # fail-closed behavior while categorizing all descendants of the reviewed
+    # fixed base errors without logging implementation detail.
+    for error_type in type(exc).__mro__:
+        category = categories.get(error_type.__name__)
+        if category is not None:
+            return category
+    return "token_verification_failed"
 
 
 def verifier_from_environment(audience: str) -> Auth0JwtVerifier:
