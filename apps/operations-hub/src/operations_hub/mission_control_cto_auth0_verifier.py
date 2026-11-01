@@ -141,7 +141,11 @@ def _jwt_rejection_category(exc: Exception) -> str:
         "ImmatureSignatureError": "token_not_active",
         "MissingRequiredClaimError": "required_claim_missing",
         "PyJWKError": "signature_unavailable",
+        "PyJWKSetError": "signature_unavailable",
         "PyJWKClientError": "signature_unavailable",
+        # PyJWT raises this subclass when it cannot refresh the Auth0 JWKS.
+        # Retain only the fixed availability category, never transport detail.
+        "PyJWKClientConnectionError": "signature_unavailable",
     }.get(type(exc).__name__, "token_verification_failed")
 
 
