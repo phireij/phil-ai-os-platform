@@ -56,11 +56,23 @@ jobs:
           fi
           existing=false
           running=false
+          read_only=false
+          unprivileged=false
+          capabilities_dropped=false
+          bridge_network=false
+          host_port_absent=false
+          owner_subject_mount_read_only=false
           workload=phil-ai-os-mc021-live-status-nonprod-mcp-live-status-1
           if docker inspect "$workload" >/dev/null 2>&1; then
             existing=true
             [[ "$(docker inspect "$workload" --format '{{.State.Running}}')" == true ]] && running=true
+            [[ "$(docker inspect "$workload" --format '{{.HostConfig.ReadonlyRootfs}}')" == true ]] && read_only=true
+            [[ "$(docker inspect "$workload" --format '{{.HostConfig.Privileged}}')" == false ]] && unprivileged=true
+            [[ "$(docker inspect "$workload" --format '{{json .HostConfig.CapDrop}}')" == '["ALL"]' ]] && capabilities_dropped=true
+            [[ "$(docker inspect "$workload" --format '{{.HostConfig.NetworkMode}}')" == bridge ]] && bridge_network=true
+            [[ "$(docker inspect "$workload" --format '{{json .HostConfig.PortBindings}}')" == null ]] && host_port_absent=true
+            [[ "$(docker inspect "$workload" --format '{{range .Mounts}}{{if eq .Destination "/run/secrets/mc021_owner_subject"}}{{.Type}} {{.RW}}{{end}}{{end}}')" == 'bind false' ]] && owner_subject_mount_read_only=true
           fi
-          echo "mc021_live_status_preflight root_exists=$root_exists tunnel_custody=$tunnel_custody owner_custody=$owner_custody inputs_present=$inputs_present compose_contract=$compose_contract workload_present=$existing workload_running=$running content_accessed=false authority_effect=none"
-          test "$root_exists" = true && test "$tunnel_custody" = true && test "$owner_custody" = true && test "$inputs_present" = true && test "$compose_contract" = true
+          echo "mc021_live_status_preflight root_exists=$root_exists tunnel_custody=$tunnel_custody owner_custody=$owner_custody inputs_present=$inputs_present compose_contract=$compose_contract workload_present=$existing workload_running=$running workload_read_only=$read_only workload_unprivileged=$unprivileged workload_capabilities_dropped=$capabilities_dropped workload_bridge_network=$bridge_network workload_host_port_absent=$host_port_absent owner_subject_mount_read_only=$owner_subject_mount_read_only content_accessed=false authority_effect=none"
+          test "$root_exists" = true && test "$tunnel_custody" = true && test "$owner_custody" = true && test "$inputs_present" = true && test "$compose_contract" = true && test "$existing" = true && test "$running" = true && test "$read_only" = true && test "$unprivileged" = true && test "$capabilities_dropped" = true && test "$bridge_network" = true && test "$host_port_absent" = true && test "$owner_subject_mount_read_only" = true
           REMOTE

@@ -55,6 +55,7 @@ TUNNEL_COMPOSE = ROOT.parents[1] / "ops" / "mission-control-identity" / "compose
 SERVER_DOCKERFILE = ROOT.parents[1] / "Dockerfile.mission-control-cto-mcp-live-status"
 TUNNEL_DOCKERFILE = ROOT.parents[1] / "Dockerfile.mission-control-cto-mcp-live-status-tunnel"
 TUNNEL_ENTRYPOINT = ROOT.parents[1] / "ops" / "mission-control-identity" / "mc021-live-status-tunnel-entrypoint.sh"
+PREFLIGHT_WORKFLOW = ROOT.parents[1] / ".github" / "workflows" / "mission-control-live-status-preflight.yml"
 NOW = datetime(2026, 10, 23, 12, 0, tzinfo=timezone.utc)
 
 
@@ -287,6 +288,25 @@ class LiveStatusTests(unittest.TestCase):
         self.assertNotIn("http://miscon.phireij.cloud", entrypoint)
         self.assertNotIn("https://miscon.phireij.cloud", entrypoint)
         self.assertNotIn("echo $CONTROL_PLANE_", entrypoint)
+
+    def test_runtime_custody_preflight_checks_hardening_without_touching_the_workload(self):
+        workflow = PREFLIGHT_WORKFLOW.read_text(encoding="utf-8")
+        for marker in (
+            "workflow_dispatch:",
+            "workload_running=",
+            "workload_read_only=",
+            "workload_unprivileged=",
+            "workload_capabilities_dropped=",
+            "workload_bridge_network=",
+            "workload_host_port_absent=",
+            "owner_subject_mount_read_only=",
+            "content_accessed=false",
+            "authority_effect=none",
+            "docker inspect",
+        ):
+            self.assertIn(marker, workflow)
+        for prohibited in ("docker start", "docker stop", "docker rm", "docker compose up", "curl "):
+            self.assertNotIn(prohibited, workflow)
 
     def test_loopback_handler_exposes_only_bounded_health_metadata_and_auth_challenge(self):
         with patch.dict(
