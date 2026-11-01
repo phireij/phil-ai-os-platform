@@ -214,6 +214,27 @@ class Auth0VerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(CredentialRejected, "owner_mismatch"):
             owner_verifier("synthetic.jwt.value")
 
+    def test_verifier_classifies_redacted_decode_and_claim_failures(self):
+        for exception_name, expected_category in (
+            ("DecodeError", "token_malformed"),
+            ("InvalidTokenError", "token_malformed"),
+            ("InvalidIssuedAtError", "token_claim_invalid"),
+            ("ImmatureSignatureError", "token_not_active"),
+            ("PyJWKError", "signature_unavailable"),
+        ):
+            error_type = type(exception_name, (Exception,), {})
+            verifier = Auth0JwtVerifier(
+                "https://dev.example.test/", CANONICAL_RESOURCE_URI,
+                "https://dev.example.test/.well-known/jwks.json", "auth0|owner",
+                _decode=lambda *_args, _error=error_type, **_kwargs: (
+                    _ for _ in ()
+                ).throw(_error()),
+                _signing_key=lambda _token: object(),
+            )
+            with self.subTest(exception_name=exception_name):
+                with self.assertRaisesRegex(CredentialRejected, expected_category):
+                    verifier("synthetic.jwt.value")
+
     def test_verifier_reads_owner_only_from_the_credential_mount(self):
         environment = {
             ISSUER_ENV: "https://dev.example.test/",
