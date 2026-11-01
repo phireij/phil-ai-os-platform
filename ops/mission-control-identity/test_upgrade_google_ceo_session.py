@@ -93,6 +93,40 @@ class GoogleCeoSessionUpgradeChecks(unittest.TestCase):
         self.assertNotIn("--env 'MISSION_CONTROL_OPENAI_DISPATCH_ENABLED=true'", script)
         self.assertNotIn("MISSION_CONTROL_OPENAI_DISPATCH_ENABLED=true", workflow)
 
+    def test_provider_custody_preflight_is_manual_read_only_and_never_dispatches(self) -> None:
+        workflow = (
+            Path(__file__).parents[2] / ".github" / "workflows" /
+            "mission-control-provider-custody-preflight.yml"
+        ).read_text(encoding="utf-8")
+        for marker in (
+            "workflow_dispatch:",
+            "mission-control-google-identity-deploy",
+            "provider_environment_absent=",
+            "dispatch_disabled=",
+            "provider_secret_custody=",
+            "content_accessed=false",
+            "provider_worker_started=false",
+            "provider_request_made=false",
+            "authority_effect=none",
+            "--network none",
+            "--read-only",
+            "--cap-drop ALL",
+            "no-new-privileges:true",
+            "/run/secrets/openai/api_key",
+            "/run/secrets/openai/policy.json",
+        ):
+            self.assertIn(marker, workflow)
+        for prohibited in (
+            "docker start",
+            "docker stop",
+            "docker rm",
+            "docker pull",
+            "MISSION_CONTROL_OPENAI_ENABLED=true",
+            "--env 'MISSION_CONTROL_OPENAI_DISPATCH_ENABLED=true'",
+            "from provider_activation",
+        ):
+            self.assertNotIn(prohibited, workflow)
+
     def test_stopped_session_recovery_restarts_only_the_verified_existing_container(self) -> None:
         workflow = (
             Path(__file__).parents[2] / ".github" / "workflows" /
