@@ -1531,7 +1531,8 @@ class ConversationStore:
         with self._lock:
             self._purge_if_due_locked(now)
             row = self._live.connection.execute(
-                "SELECT h.decision_id,h.proposal_id,h.conversation_id,d.expires_at,a.acknowledgement_id "
+                "SELECT h.decision_id,h.proposal_id,h.conversation_id,d.expires_at,"
+                "a.acknowledgement_id,a.cto_subject_digest AS acknowledgement_subject_digest "
                 "FROM cto_handoffs h JOIN ceo_decisions d ON d.decision_id=h.decision_id "
                 "LEFT JOIN cto_handoff_acknowledgements a ON a.handoff_id=h.handoff_id "
                 "WHERE h.handoff_id=? AND h.owner_digest=? AND d.owner_digest=?",
@@ -1539,6 +1540,15 @@ class ConversationStore:
             ).fetchone()
             if row is None:
                 raise ConversationRequestError("not_found", 404)
+            # The result must come from the same independently verified CTO
+            # identity that durably acknowledged this packet.  A future
+            # connector cannot replace that actor by injecting a different
+            # expected subject between acknowledgement and result submission.
+            if (
+                row["acknowledgement_id"] is not None
+                and not hmac.compare_digest(row["acknowledgement_subject_digest"], subject_digest)
+            ):
+                raise ConversationRequestError("cto_acknowledgement_identity_mismatch", 403)
             existing = self._live.connection.execute(
                 "SELECT request_hash,response_json FROM idempotency_results "
                 "WHERE owner_digest=? AND operation=? AND idempotency_hash=?",
