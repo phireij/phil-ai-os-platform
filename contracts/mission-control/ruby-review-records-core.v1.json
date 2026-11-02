@@ -9,15 +9,16 @@
   "transport": "not_assigned",
   "identity_binding": "authenticated Core owner plus protected project registry; caller text is not authority",
   "required_policy": ["project access", "retention and deletion", "redaction and backup treatment", "operator access", "export permissions"],
-  "projection_allowlist": ["schema_version", "catalog_revision", "source_packet_fingerprint", "source_review_ref", "correlation_ref", "items.sku", "items.quantity", "items.item_subtotal_minor", "fulfillment_preference", "unresolved_blockers", "customer_confirmation"],
+  "projection_allowlist": ["schema_version", "project_id", "catalog_revision", "source_packet_fingerprint", "source_review_ref", "correlation_ref", "items.sku", "items.quantity", "items.item_subtotal_minor", "fulfillment_preference", "unresolved_blockers", "customer_confirmation"],
   "prohibited_data": ["raw channel payloads", "image bytes", "image URLs", "tokens", "payment links", "sender profile fields", "notes", "requested dates", "shipping", "add-ons", "custom quotes"],
   "invariants": {
     "idempotency": "same authenticated owner project record kind and request fingerprint returns the original receipt; changed content conflicts",
     "revisions": "edits require the exact prior revision and append a linked revision; stale revisions reject",
     "durability": "record and receipt persist atomically in the encrypted Core snapshot; reads reconcile an uncertain transport outcome before retry",
     "reads": "owner and project scoped, bounded, paginated and non-mutating",
-    "audit": "record, rejection, conflict, revision and reads use identifier and fingerprint correlation only",
+    "audit": "record creation and revision append durable identifier-only audit events; audit reads are non-mutating, and production read-access capture requires a separate activation-time policy",
     "authority": "records never approve, assign, dispatch, execute, mutate, message a provider, create a Woo order, take payment or change inventory"
   },
-  "acceptance": ["duplicate and concurrent submissions yield one record", "changed-content key reuse conflicts", "stale revision rejects", "cross-owner and cross-project access rejects", "missing policy rejects", "restart preserves records", "no business mutation or approval promotion occurs"]
+  "activation_gates": ["protected project registry and required retention/access policy", "production read-access audit policy", "authenticated route design and security review", "transport and deployment approval"],
+  "acceptance": ["duplicate and concurrent submissions yield one record", "changed-content key reuse conflicts", "stale revision rejects", "cross-owner and cross-project access rejects", "missing policy rejects", "restart preserves records and identifier-only create/revision audit events", "no business mutation or approval promotion occurs"]
 }
