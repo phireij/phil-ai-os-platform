@@ -10,12 +10,13 @@
   "identity_binding": "authenticated Core owner plus protected project registry; caller text is not authority",
   "required_policy": ["project access", "retention and deletion", "redaction and backup treatment", "operator access", "export permissions"],
   "projection_allowlist": ["schema_version", "project_id", "catalog_revision", "source_packet_fingerprint", "source_review_ref", "correlation_ref", "items.sku", "items.quantity", "items.item_subtotal_minor", "fulfillment_preference", "unresolved_blockers", "customer_confirmation"],
+  "catalog_value_validation": "SKU and fulfillment values are bounded exact printable catalog strings; Core does not pad, replace, normalize, or infer them",
   "prohibited_data": ["raw channel payloads", "image bytes", "image URLs", "tokens", "payment links", "sender profile fields", "notes", "requested dates", "shipping", "add-ons", "custom quotes"],
   "invariants": {
     "idempotency": "same authenticated owner project record kind and request fingerprint returns the original receipt; changed content conflicts",
     "revisions": "edits require the exact prior revision and append a linked revision; stale revisions reject",
     "durability": "record and receipt persist atomically in the encrypted Core snapshot; reads reconcile an uncertain transport outcome before retry",
-    "reads": "owner and project scoped, bounded, paginated and non-mutating",
+    "reads": "owner scoped, bounded, paginated and non-mutating; list, direct record and audit reads all enforce the current permitted-project policy",
     "audit": "record creation and revision append durable identifier-only audit events; audit reads are non-mutating, and production read-access capture requires a separate activation-time policy",
     "authority": "records never approve, assign, dispatch, execute, mutate, message a provider, create a Woo order, take payment or change inventory"
   },
