@@ -250,6 +250,18 @@ def _initialize_live(connection: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS cto_handoffs_owner_conversation_order
             ON cto_handoffs(owner_digest, conversation_id, created_at, handoff_id);
+        CREATE TABLE IF NOT EXISTS cto_handoff_acknowledgements (
+            acknowledgement_id TEXT PRIMARY KEY,
+            handoff_id TEXT NOT NULL UNIQUE REFERENCES cto_handoffs(handoff_id) ON DELETE CASCADE,
+            owner_digest BLOB NOT NULL,
+            cto_subject_digest BLOB NOT NULL,
+            acknowledged_at INTEGER NOT NULL,
+            authority_effect TEXT NOT NULL CHECK(authority_effect='none'),
+            execution_authorized INTEGER NOT NULL CHECK(execution_authorized=0),
+            mutation_authorized INTEGER NOT NULL CHECK(mutation_authorized=0)
+        );
+        CREATE INDEX IF NOT EXISTS cto_handoff_acknowledgements_owner_order
+            ON cto_handoff_acknowledgements(owner_digest, acknowledged_at, acknowledgement_id);
         CREATE TABLE IF NOT EXISTS cto_handoff_results (
             result_id TEXT PRIMARY KEY,
             handoff_id TEXT NOT NULL UNIQUE REFERENCES cto_handoffs(handoff_id) ON DELETE CASCADE,
@@ -1067,13 +1079,18 @@ class ConversationStore:
 
     @staticmethod
     def _handoff_result(row: sqlite3.Row) -> dict[str, Any]:
+        state = (
+            "result_recorded" if row["result_id"] is not None
+            else "acknowledged" if row["acknowledgement_id"] is not None
+            else row["state"]
+        )
         return {
             "handoff_id": row["handoff_id"],
             "decision_id": row["decision_id"],
             "proposal_id": row["proposal_id"],
             "conversation_id": row["conversation_id"],
             "recipient": "cto",
-            "state": "result_recorded" if row["result_id"] is not None else row["state"],
+            "state": state,
             "created_at": _iso(row["created_at"]),
             "dispatch_authorized": False,
             "execution_authorized": False,
@@ -1173,13 +1190,92 @@ class ConversationStore:
             raise ConversationRequestError("not_found", 404)
         with self._lock:
             rows = self._live.connection.execute(
-                "SELECT h.*,r.result_id FROM cto_handoffs h "
+                "SELECT h.*,a.acknowledgement_id,r.result_id FROM cto_handoffs h "
+                "LEFT JOIN cto_handoff_acknowledgements a ON a.handoff_id=h.handoff_id "
                 "LEFT JOIN cto_handoff_results r ON r.handoff_id=h.handoff_id "
                 "WHERE h.conversation_id=? AND h.owner_digest=? "
                 "ORDER BY created_at,handoff_id LIMIT ?",
                 (conversation_id, self._owner, limit),
             ).fetchall()
         return [self._handoff_result(row) for row in rows]
+
+    def acknowledge_cto_handoff(
+        self,
+        handoff_id: str,
+        idempotency_key: str,
+        request_body: bytes,
+        *,
+        verified_cto_subject: str,
+        expected_cto_subject: str,
+    ) -> dict[str, Any]:
+        """Durably acknowledge a bounded packet without dispatching or executing it.
+
+        This internal-only contract requires an independently verified CTO
+        identity.  It has no route, token verifier, transport, or default
+        identity configuration; a future connector must supply those gates.
+        """
+        if not ID_PATTERN.fullmatch(handoff_id) or request_body not in {b"", b"{}"}:
+            raise ConversationRequestError("invalid_request", 400)
+        subject_digest = self._require_cto_identity(verified_cto_subject, expected_cto_subject)
+        now, key_hash = int(time.time()), self._idempotency(idempotency_key)
+        operation = f"cto-acknowledgement:{handoff_id}"
+        request_hash = self._request_hash(b"{}")
+        with self._lock:
+            self._purge_if_due_locked(now)
+            row = self._live.connection.execute(
+                "SELECT h.decision_id,h.proposal_id,h.conversation_id,d.expires_at,r.result_id "
+                "FROM cto_handoffs h JOIN ceo_decisions d ON d.decision_id=h.decision_id "
+                "LEFT JOIN cto_handoff_results r ON r.handoff_id=h.handoff_id "
+                "WHERE h.handoff_id=? AND h.owner_digest=? AND d.owner_digest=?",
+                (handoff_id, self._owner, self._owner),
+            ).fetchone()
+            if row is None:
+                raise ConversationRequestError("not_found", 404)
+            existing = self._live.connection.execute(
+                "SELECT request_hash,response_json FROM idempotency_results "
+                "WHERE owner_digest=? AND operation=? AND idempotency_hash=?",
+                (self._owner, operation, key_hash),
+            ).fetchone()
+            if existing:
+                if not hmac.compare_digest(existing["request_hash"], request_hash):
+                    raise ConversationRequestError("idempotency_conflict", 409)
+                return json.loads(existing["response_json"])
+            if row["expires_at"] <= now:
+                raise ConversationRequestError("decision_expired", 409)
+            if row["result_id"] is not None:
+                raise ConversationRequestError("handoff_closed", 409)
+            if self._live.connection.execute(
+                "SELECT 1 FROM cto_handoff_acknowledgements WHERE handoff_id=?", (handoff_id,)
+            ).fetchone():
+                raise ConversationRequestError("handoff_already_acknowledged", 409)
+            result = {
+                "acknowledgement_id": self._identifier("cto_acknowledgement"),
+                "handoff_id": handoff_id,
+                "decision_id": row["decision_id"],
+                "proposal_id": row["proposal_id"],
+                "conversation_id": row["conversation_id"],
+                "acknowledged_at": _iso(now),
+                "dispatch_authorized": False,
+                "execution_authorized": False,
+                "mutation_authorized": False,
+                "authority_effect": "none",
+            }
+            before = self._live.connection.serialize()
+            try:
+                with self._live.connection:
+                    self._live.connection.execute(
+                        "INSERT INTO cto_handoff_acknowledgements VALUES (?,?,?,?,?,'none',0,0)",
+                        (result["acknowledgement_id"], handoff_id, self._owner, subject_digest, now),
+                    )
+                    self._live.connection.execute(
+                        "INSERT INTO idempotency_results VALUES (?,?,?,?,?,?,?)",
+                        (self._owner, operation, key_hash, request_hash, json.dumps(result), handoff_id, now),
+                    )
+                self._live.persist()
+            except Exception:
+                self._live.connection.deserialize(before)
+                raise
+            return result
 
     def get_cto_handoff_packet(
         self,
@@ -1274,8 +1370,9 @@ class ConversationStore:
         with self._lock:
             self._purge_if_due_locked(now)
             row = self._live.connection.execute(
-                "SELECT h.decision_id,h.proposal_id,h.conversation_id,d.expires_at "
+                "SELECT h.decision_id,h.proposal_id,h.conversation_id,d.expires_at,a.acknowledgement_id "
                 "FROM cto_handoffs h JOIN ceo_decisions d ON d.decision_id=h.decision_id "
+                "LEFT JOIN cto_handoff_acknowledgements a ON a.handoff_id=h.handoff_id "
                 "WHERE h.handoff_id=? AND h.owner_digest=? AND d.owner_digest=?",
                 (handoff_id, self._owner, self._owner),
             ).fetchone()
@@ -1292,6 +1389,8 @@ class ConversationStore:
                 return json.loads(existing["response_json"])
             if row["expires_at"] <= now:
                 raise ConversationRequestError("decision_expired", 409)
+            if row["acknowledgement_id"] is None:
+                raise ConversationRequestError("handoff_not_acknowledged", 409)
             if self._live.connection.execute(
                 "SELECT 1 FROM cto_handoff_results WHERE handoff_id=?", (handoff_id,)
             ).fetchone():
@@ -1396,6 +1495,12 @@ class ConversationStore:
                 "WHERE conversation_id=? AND owner_digest=? ORDER BY created_at,handoff_id",
                 (conversation_id, self._owner),
             ).fetchall()
+            handoff_acknowledgements = self._live.connection.execute(
+                "SELECT a.acknowledgement_id,a.handoff_id,a.acknowledged_at,h.decision_id,h.proposal_id "
+                "FROM cto_handoff_acknowledgements a JOIN cto_handoffs h ON h.handoff_id=a.handoff_id "
+                "WHERE h.conversation_id=? AND a.owner_digest=? ORDER BY a.acknowledged_at,a.acknowledgement_id",
+                (conversation_id, self._owner),
+            ).fetchall()
             handoff_results = self._live.connection.execute(
                 "SELECT r.result_id,r.handoff_id,r.outcome,r.recorded_at,h.decision_id,h.proposal_id "
                 "FROM cto_handoff_results r JOIN cto_handoffs h ON h.handoff_id=r.handoff_id "
@@ -1423,6 +1528,23 @@ class ConversationStore:
                 "authority_effect": "none",
             }
         ]
+        events.extend(
+            {
+                "event_id": f"cto_acknowledgement:{row['acknowledgement_id']}",
+                "event_type": "cto_handoff_acknowledged",
+                "occurred_at": _iso(row["acknowledged_at"]),
+                "source": "conversation_store.cto_handoff_acknowledgements",
+                "correlation": {
+                    "conversation_id": conversation_id,
+                    "handoff_id": row["handoff_id"],
+                    "proposal_id": row["proposal_id"],
+                    "decision_id": row["decision_id"],
+                    "acknowledgement_id": row["acknowledgement_id"],
+                },
+                "authority_effect": "none",
+            }
+            for row in handoff_acknowledgements
+        )
         events.extend(
             {
                 "event_id": f"message:{row['message_id']}",
@@ -1526,10 +1648,11 @@ class ConversationStore:
             "task_proposal_drafted": 2,
             "ceo_decision_recorded": 3,
             "cto_handoff_requested": 4,
-            "cto_handoff_result_recorded": 5,
-            "notification_delivery_delivered": 6,
-            "notification_delivery_retry_scheduled": 6,
-            "notification_delivery_dead_lettered": 6,
+            "cto_handoff_acknowledged": 5,
+            "cto_handoff_result_recorded": 6,
+            "notification_delivery_delivered": 7,
+            "notification_delivery_retry_scheduled": 7,
+            "notification_delivery_dead_lettered": 7,
         }
         events.sort(key=lambda event: (event["occurred_at"], event_order[event["event_type"]], event["event_id"]))
         page = events[cursor : cursor + limit]
@@ -1544,6 +1667,7 @@ class ConversationStore:
                 {"source": "conversation_store.task_proposals", "status": "available"},
                 {"source": "conversation_store.ceo_decisions", "status": "available"},
                 {"source": "conversation_store.cto_handoffs", "status": "available"},
+                {"source": "conversation_store.cto_handoff_acknowledgements", "status": "available"},
                 {"source": "conversation_store.cto_handoff_results", "status": "available"},
                 {"source": "notification_outbox", "status": "available"},
                 {"source": "task_assignment", "status": "awaiting_connector"},
