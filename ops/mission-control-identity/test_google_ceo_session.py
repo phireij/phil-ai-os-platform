@@ -17,6 +17,7 @@ from conversation_store import ConversationConfig, ConversationStore
 from google_ceo_session import (
     ABSOLUTE_SECONDS,
     IDLE_SECONDS,
+    ORIGIN,
     SESSION_COOKIE,
     SessionHandler,
     SessionStore,
@@ -24,6 +25,7 @@ from google_ceo_session import (
     load_ceo_subject,
 )
 from google_identity_probe import FlowStore
+from ruby_review_transport import build_disposable_synthetic_binding
 from http.server import ThreadingHTTPServer
 
 
@@ -74,6 +76,7 @@ class SessionHttpChecks(unittest.TestCase):
         self.server.ceo_subject = "synthetic-ceo-subject"  # type: ignore[attr-defined]
         self.server.conversations = None  # type: ignore[attr-defined]
         self.server.ruby_review_synthetic_surface_enabled = False  # type: ignore[attr-defined]
+        self.server.ruby_review_transport_binding = None  # type: ignore[attr-defined]
         self.temp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -191,6 +194,52 @@ class SessionHttpChecks(unittest.TestCase):
         status, _, body = self.request("GET", "/auth/google/session", {"Cookie": cookie})
         self.assertEqual(status, 200)
         self.assertTrue(json.loads(body)["ruby_review_synthetic"])
+
+    def test_ruby_synthetic_record_transport_is_disabled_then_owner_project_bound_and_read_only(self) -> None:
+        self.assertEqual(self.request("GET", "/api/ruby-review-synthetic/records")[0], 404)
+        root = Path(self.temp.name)
+        key = root / "ruby-transport-key"
+        key.write_text("66" * 32, encoding="ascii")
+        config = ConversationConfig(root / "ruby-transport-state", root / "ruby-transport-ledger", key)
+        binding = build_disposable_synthetic_binding(
+            config, owner_subject="synthetic-ceo-subject", issuer="https://accounts.google.com"
+        )
+        self.server.ruby_review_transport_binding = binding  # type: ignore[attr-defined]
+        self.assertEqual(self.request("GET", "/api/ruby-review-synthetic/records")[0], 401)
+        status, headers, _ = self.sign_in()
+        self.assertEqual(status, 303)
+        cookie = next(value.split(";", 1)[0] for name, value in headers if name.lower() == "set-cookie" and value.startswith(SESSION_COOKIE + "="))
+        self.assertEqual(self.request("GET", "/api/ruby-review-synthetic/records", {"Cookie": cookie, "Origin": "https://evil.example"})[0], 403)
+        self.assertEqual(self.request("GET", "/api/ruby-review-synthetic/records", {"Cookie": cookie, "Sec-Fetch-Site": "cross-site"})[0], 403)
+        self.assertEqual(self.request("GET", "/api/ruby-review-synthetic/records?export=1", {"Cookie": cookie})[0], 404)
+        self.assertEqual(self.request("GET", "/api/ruby-review-synthetic/records%2Fanything", {"Cookie": cookie})[0], 404)
+        before = config.state_file.read_bytes()
+        status, headers, body = self.request("GET", "/api/ruby-review-synthetic/records", {"Cookie": cookie})
+        self.assertEqual(status, 200)
+        self.assertFalse(any(name.lower() == "access-control-allow-origin" for name, _value in headers))
+        records = json.loads(body)["records"]
+        self.assertEqual(3, len(records))
+        self.assertEqual({"store pickup", "Yamato delivery", "Ruby car delivery"}, {record["fulfillment_preference"] for record in records})
+        record_id = records[0]["record_id"]
+        self.assertEqual(self.request("GET", f"/api/ruby-review-synthetic/records/{record_id}?export=1", {"Cookie": cookie})[0], 404)
+        status, _, detail = self.request("GET", f"/api/ruby-review-synthetic/records/{record_id}", {"Cookie": cookie})
+        self.assertEqual(status, 200)
+        self.assertNotIn("source_review_ref", detail.decode())
+        self.assertEqual(self.request("GET", "/api/ruby-review-synthetic/records/ruby-review-other-owner-0001", {"Cookie": cookie})[0], 404)
+        status, _, audit = self.request("GET", f"/api/ruby-review-synthetic/records/{record_id}/audit", {"Cookie": cookie})
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(audit)["events"])
+        status, _, body = self.request("GET", "/auth/google/session", {"Cookie": cookie})
+        csrf = json.loads(body)["csrf_token"]
+        self.assertEqual(self.request("POST", "/api/ruby-review-synthetic/receipts/create-pickup", {"Cookie": cookie, "Content-Type": "application/json"}, b"{}")[0], 403)
+        self.assertEqual(self.request("POST", "/api/ruby-review-synthetic/receipts/create-pickup", {"Cookie": cookie, "Content-Type": "application/json", "Origin": ORIGIN, "X-MC-CSRF": "wrong"}, b"{}")[0], 403)
+        status, _, receipt = self.request("POST", "/api/ruby-review-synthetic/receipts/create-pickup", {"Cookie": cookie, "Content-Type": "application/json", "Origin": ORIGIN, "X-MC-CSRF": csrf}, b"{}")
+        self.assertEqual(status, 200)
+        receipt_payload = json.loads(receipt)
+        self.assertEqual("committed", receipt_payload["state"])
+        self.assertFalse(receipt_payload["retry_authorized"])
+        self.assertNotIn("projection", receipt.decode())
+        self.assertEqual(before, config.state_file.read_bytes())
 
     def test_new_sign_in_with_wrong_account_revokes_previous_session(self) -> None:
         status, headers, _ = self.sign_in()
