@@ -131,6 +131,43 @@ class RubyReviewRecordChecks(unittest.TestCase):
             with self.assertRaisesRegex(ConversationRequestError, "invalid_request"):
                 store.create_ruby_review_record(f"ruby-review-create-00{index}", body)
 
+    def test_original_receipt_recovery_is_bound_and_never_infers_noncommit(self) -> None:
+        store = self.store()
+        create_key, create_body = "ruby-receipt-create-0001", self.payload(fingerprint="d" * 64)
+        created = store.create_ruby_review_record(create_key, create_body)
+        create_receipt = store.resolve_ruby_review_create_receipt(create_key, create_body)
+        self.assertEqual("committed", create_receipt["state"])
+        self.assertEqual(created["revision_id"], create_receipt["receipt"]["revision_id"])
+        self.assertNotIn(create_key, json.dumps(create_receipt))
+        self.assertNotIn("source_review_ref", json.dumps(create_receipt))
+
+        revision_body = json.dumps({
+            "expected_revision_id": created["revision_id"],
+            "projection": json.loads(self.payload(fingerprint="e" * 64)),
+        }, separators=(",", ":")).encode()
+        revised = store.revise_ruby_review_record(created["record_id"], "ruby-receipt-revise-0001", revision_body)
+        later_body = json.dumps({
+            "expected_revision_id": revised["revision_id"],
+            "projection": json.loads(self.payload(fingerprint="f" * 64)),
+        }, separators=(",", ":")).encode()
+        store.revise_ruby_review_record(created["record_id"], "ruby-receipt-revise-0002", later_body)
+        revision_receipt = store.resolve_ruby_review_revision_receipt(
+            created["record_id"], "ruby-receipt-revise-0001", revision_body
+        )
+        self.assertEqual(revised["revision_id"], revision_receipt["receipt"]["revision_id"])
+        self.assertEqual(2, revision_receipt["receipt"]["revision_number"])
+        self.assertEqual(created["revision_id"], create_receipt["receipt"]["revision_id"])
+        self.assertEqual(1, create_receipt["receipt"]["revision_number"])
+        with self.assertRaisesRegex(ConversationRequestError, "idempotency_conflict"):
+            store.resolve_ruby_review_create_receipt(create_key, self.payload(fingerprint="0" * 64))
+        unknown = store.resolve_ruby_review_create_receipt("ruby-receipt-unknown-0001", self.payload(fingerprint="1" * 64))
+        self.assertEqual({"state": "unknown", "reason": "receipt_unavailable"}, {
+            "state": unknown["state"], "reason": unknown["reason"],
+        })
+        with self.assertRaisesRegex(ConversationRequestError, "project_not_allowed"):
+            self.store(projects=frozenset({"another-project"})).resolve_ruby_review_create_receipt(create_key, create_body)
+        self.assertEqual("unknown", self.store("other-owner").resolve_ruby_review_create_receipt(create_key, create_body)["state"])
+
 
 if __name__ == "__main__":
     unittest.main()

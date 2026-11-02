@@ -13,11 +13,12 @@
   "catalog_value_validation": "SKU and fulfillment values are bounded exact printable catalog strings; Core does not pad, replace, normalize, or infer them",
   "source_reference_validation": "source_review_ref and correlation_ref are bounded exact printable source strings up to 200 characters, including an existing colon-separated namespace; Core does not fabricate a record ID or transform source spelling",
   "blocker_validation": "each unresolved_blockers entry is a bounded exact printable diagnostic string up to 500 characters; v1 preserves both machine-readable codes and human-readable policy text without an unapproved code/text remapping",
+  "receipt_recovery": "internal-only owner/project/operation-bound lookup uses an original idempotency key plus exact original request identity against encrypted receipt storage; it returns a safe original receipt or non-authoritative unknown, never a raw key, request payload, inferred noncommit, or retry permission",
   "prohibited_data": ["raw channel payloads", "image bytes", "image URLs", "tokens", "payment links", "sender profile fields", "notes", "requested dates", "shipping", "add-ons", "custom quotes"],
   "invariants": {
     "idempotency": "same authenticated owner project record kind and request fingerprint returns the original receipt; changed content conflicts",
     "revisions": "edits require the exact prior revision and append a linked revision; stale revisions reject",
-    "durability": "record and receipt persist atomically in the encrypted Core snapshot; reads reconcile an uncertain transport outcome before retry",
+    "durability": "record and receipt persist atomically in the encrypted Core snapshot; receipt recovery verifies the original create/revision binding and returns unknown when retained history is unavailable rather than inferring noncommit or retry permission",
     "reads": "owner scoped, bounded, paginated and non-mutating; list, direct record and audit reads all enforce the current permitted-project policy",
     "audit": "record creation and revision append durable identifier-only audit events; audit reads are non-mutating, and production read-access capture requires a separate activation-time policy",
     "authority": "records never approve, assign, dispatch, execute, mutate, message a provider, create a Woo order, take payment or change inventory"
