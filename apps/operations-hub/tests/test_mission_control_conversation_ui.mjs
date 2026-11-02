@@ -4,6 +4,7 @@ import { runInNewContext } from "node:vm";
 
 const moduleSource = readFileSync(new URL("../mission-control/mission-control.mjs", import.meta.url), "utf8");
 const html = readFileSync(new URL("../mission-control/index.html", import.meta.url), "utf8");
+const deployWorkflow = readFileSync(new URL("../../../.github/workflows/mission-control-readonly-deploy.yml", import.meta.url), "utf8");
 
 for (const id of [
   "conversation-sign-in",
@@ -38,7 +39,23 @@ assert.match(rubyPanel, /hidden/);
 assert.match(rubyPanel, /Synthetic fixture only/);
 assert.doesNotMatch(rubyPanel, /<button\b|<form\b|<input\b|<select\b|<textarea\b/);
 
-assert.equal((moduleSource.match(/method: "POST"/g) ?? []).length, 6);
+const approvedPostRoutes = [
+  '"/auth/google/logout"',
+  '"/api/conversations"',
+  '`/api/conversations/${encodeURIComponent(activeConversationId)}/messages`',
+  '`/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals`',
+  '`/api/task-proposals/${encodeURIComponent(proposalId)}/decisions`',
+  '`/api/task-proposals/${encodeURIComponent(proposalId)}/cto-handoffs`',
+];
+const postRoutes = [...moduleSource.matchAll(/conversationRequest\(\s*(["`])([^"`]+)\1\s*,\s*\{\s*method: "POST"/g)]
+  .map((match) => `${match[1]}${match[2]}${match[1]}`);
+assert.deepEqual(postRoutes.sort(), approvedPostRoutes.slice().sort());
+assert.doesNotMatch(moduleSource, /\/api\/decision-requests/);
+assert.equal((deployWorkflow.match(/approved_post_routes = \(/g) ?? []).length, 2);
+for (const route of approvedPostRoutes) {
+  const escaped = route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  assert.equal((deployWorkflow.match(new RegExp(escaped, "g")) ?? []).length, 2, `${route} must be enforced before publish and after deployment`);
+}
 assert.doesNotMatch(moduleSource, /method: "(?:PUT|PATCH|DELETE)"/);
 assert.doesNotMatch(moduleSource, /localStorage|sessionStorage|indexedDB/);
 assert.doesNotMatch(moduleSource, /innerHTML|insertAdjacentHTML|document\.write/);

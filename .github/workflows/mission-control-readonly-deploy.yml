@@ -57,8 +57,22 @@ jobs:
           missing = [label for label in required_labels if label not in html]
           if missing:
               raise SystemExit(f"Mission Control UI is missing required sample labels: {missing}")
-          if "/api/decision-requests" in module or module.count('method: "POST"') != 5:
-              raise SystemExit("Mission Control UI contains an unapproved mutation request path")
+          approved_post_routes = (
+              '"/auth/google/logout"',
+              '"/api/conversations"',
+              '`/api/conversations/${encodeURIComponent(activeConversationId)}/messages`',
+              '`/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals`',
+              '`/api/task-proposals/${encodeURIComponent(proposalId)}/decisions`',
+              '`/api/task-proposals/${encodeURIComponent(proposalId)}/cto-handoffs`',
+          )
+          post_routes = tuple(
+              quote + route + quote
+              for quote, route in re.findall(
+                  r'conversationRequest\(\s*(["`])([^"`]+)\1\s*,\s*\{\s*method: "POST"', module,
+              )
+          )
+          if "/api/decision-requests" in module or set(post_routes) != set(approved_post_routes) or len(post_routes) != len(approved_post_routes):
+              raise SystemExit("Mission Control UI POST routes differ from the approved endpoint inventory")
           governed_endpoints = (
               "/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals",
               "/api/task-proposals/${encodeURIComponent(proposalId)}/decisions",
@@ -259,8 +273,22 @@ jobs:
           missing = [label for label in required_labels if label not in html]
           if missing:
               raise SystemExit(f"Public UI is missing required sample labels: {missing}")
-          if "/api/decision-requests" in module or module.count('method: "POST"') != 5:
-              raise SystemExit("Public UI contains an unapproved mutation request path")
+          approved_post_routes = (
+              '"/auth/google/logout"',
+              '"/api/conversations"',
+              '`/api/conversations/${encodeURIComponent(activeConversationId)}/messages`',
+              '`/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals`',
+              '`/api/task-proposals/${encodeURIComponent(proposalId)}/decisions`',
+              '`/api/task-proposals/${encodeURIComponent(proposalId)}/cto-handoffs`',
+          )
+          post_routes = tuple(
+              quote + route + quote
+              for quote, route in re.findall(
+                  r'conversationRequest\(\s*(["`])([^"`]+)\1\s*,\s*\{\s*method: "POST"', module,
+              )
+          )
+          if "/api/decision-requests" in module or set(post_routes) != set(approved_post_routes) or len(post_routes) != len(approved_post_routes):
+              raise SystemExit("Public UI POST routes differ from the approved endpoint inventory")
           governed_endpoints = (
               "/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals",
               "/api/task-proposals/${encodeURIComponent(proposalId)}/decisions",
