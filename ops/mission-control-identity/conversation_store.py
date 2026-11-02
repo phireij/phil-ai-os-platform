@@ -920,6 +920,106 @@ class ConversationStore:
                 raise
             return result
 
+    @staticmethod
+    def _ruby_receipt_unknown(operation: str) -> dict[str, Any]:
+        """Return a non-authoritative result when retained receipt history is absent."""
+        return {
+            "state": "unknown", "reason": "receipt_unavailable", "operation": operation,
+            "authority_effect": "none", "execution_authorized": False,
+            "mutation_authorized": False,
+        }
+
+    def _ruby_receipt_from_stored_result_locked(
+        self,
+        response_json: str,
+        *,
+        operation: str,
+        project_id: str,
+        request_fingerprint: str,
+        expected_record_id: str | None,
+        expected_prior_revision_id: str | None,
+    ) -> dict[str, Any]:
+        """Return a safe original receipt only when its durable binding verifies.
+
+        The idempotency response contains a useful original projection, but a
+        reconciliation lookup deliberately returns only receipt fields.  It
+        never returns the raw key or source request body.
+        """
+        try:
+            stored = json.loads(response_json)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ConversationRequestError("receipt_binding_mismatch", 409) from exc
+        required = {
+            "record_id", "project_id", "state", "revision_id", "revision_number",
+            "request_fingerprint", "created_at", "updated_at", "authority_effect",
+            "execution_authorized", "mutation_authorized",
+        }
+        if (
+            not isinstance(stored, dict) or not required.issubset(stored)
+            or not isinstance(stored["record_id"], str) or not ID_PATTERN.fullmatch(stored["record_id"])
+            or not isinstance(stored["revision_id"], str) or not ID_PATTERN.fullmatch(stored["revision_id"])
+            or stored["project_id"] != project_id or stored["state"] != "pending_review"
+            or not isinstance(stored["revision_number"], int) or stored["revision_number"] < 1
+            or stored["request_fingerprint"] != request_fingerprint
+            or stored["authority_effect"] != "none"
+            or stored["execution_authorized"] is not False or stored["mutation_authorized"] is not False
+        ):
+            raise ConversationRequestError("receipt_binding_mismatch", 409)
+        if expected_record_id is not None and stored["record_id"] != expected_record_id:
+            raise ConversationRequestError("receipt_binding_mismatch", 409)
+        binding = self._live.connection.execute(
+            "SELECT r.record_id,r.project_id,v.revision_id,v.revision_number,v.prior_revision_id,"
+            "v.request_fingerprint FROM ruby_review_records r "
+            "JOIN ruby_review_record_revisions v ON v.record_id=r.record_id "
+            "WHERE r.record_id=? AND r.owner_digest=? AND v.revision_id=? AND v.owner_digest=?",
+            (stored["record_id"], self._owner, stored["revision_id"], self._owner),
+        ).fetchone()
+        if (
+            binding is None or binding["project_id"] != project_id
+            or binding["revision_number"] != stored["revision_number"]
+            or binding["prior_revision_id"] != expected_prior_revision_id
+            or binding["request_fingerprint"] != request_fingerprint
+        ):
+            raise ConversationRequestError("receipt_binding_mismatch", 409)
+        return {
+            "state": "committed", "operation": operation,
+            "receipt": {
+                "record_id": stored["record_id"], "project_id": stored["project_id"],
+                "state": stored["state"], "revision_id": stored["revision_id"],
+                "revision_number": stored["revision_number"],
+                "request_fingerprint": stored["request_fingerprint"],
+                "created_at": stored["created_at"], "updated_at": stored["updated_at"],
+                "authority_effect": "none", "execution_authorized": False,
+                "mutation_authorized": False,
+            },
+            "authority_effect": "none", "execution_authorized": False,
+            "mutation_authorized": False,
+        }
+
+    def resolve_ruby_review_create_receipt(
+        self, idempotency_key: str, request_body: bytes
+    ) -> dict[str, Any]:
+        """Read an original create receipt without treating absence as noncommit."""
+        value = self._ruby_review_payload(request_body)
+        normalized = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        operation = f"ruby-review:create:{value['project_id']}"
+        key_hash = self._idempotency(idempotency_key)
+        with self._lock:
+            existing = self._live.connection.execute(
+                "SELECT request_hash,response_json FROM idempotency_results "
+                "WHERE owner_digest=? AND operation=? AND idempotency_hash=?",
+                (self._owner, operation, key_hash),
+            ).fetchone()
+            if existing is None:
+                return self._ruby_receipt_unknown("create")
+            if not hmac.compare_digest(existing["request_hash"], self._request_hash(normalized)):
+                raise ConversationRequestError("idempotency_conflict", 409)
+            return self._ruby_receipt_from_stored_result_locked(
+                existing["response_json"], operation="create", project_id=value["project_id"],
+                request_fingerprint=value["source_packet_fingerprint"], expected_record_id=None,
+                expected_prior_revision_id=None,
+            )
+
     def get_ruby_review_record(self, record_id: str) -> dict[str, Any]:
         if not ID_PATTERN.fullmatch(record_id):
             raise ConversationRequestError("not_found", 404)
@@ -982,9 +1082,7 @@ class ConversationStore:
             "authority_effect": "none",
         }
 
-    def revise_ruby_review_record(self, record_id: str, idempotency_key: str, request_body: bytes) -> dict[str, Any]:
-        if not ID_PATTERN.fullmatch(record_id):
-            raise ConversationRequestError("not_found", 404)
+    def _ruby_review_revision_request(self, request_body: bytes) -> tuple[dict[str, Any], dict[str, Any], bytes]:
         try:
             envelope = json.loads(request_body)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -993,6 +1091,12 @@ class ConversationStore:
             raise ConversationRequestError("invalid_request", 400)
         projection = self._ruby_review_payload(json.dumps(envelope["projection"], separators=(",", ":")).encode("utf-8"))
         normalized = json.dumps({"expected_revision_id": envelope["expected_revision_id"], "projection": projection}, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return envelope, projection, normalized
+
+    def revise_ruby_review_record(self, record_id: str, idempotency_key: str, request_body: bytes) -> dict[str, Any]:
+        if not ID_PATTERN.fullmatch(record_id):
+            raise ConversationRequestError("not_found", 404)
+        envelope, projection, normalized = self._ruby_review_revision_request(request_body)
         now, key_hash = int(time.time()), self._idempotency(idempotency_key)
         operation = f"ruby-review:revise:{record_id}"
         with self._lock:
@@ -1023,6 +1127,40 @@ class ConversationStore:
                 self._live.connection.deserialize(before)
                 raise
             return result
+
+    def resolve_ruby_review_revision_receipt(
+        self, record_id: str, idempotency_key: str, request_body: bytes
+    ) -> dict[str, Any]:
+        """Read an original revision receipt without inferring a retry outcome."""
+        if not ID_PATTERN.fullmatch(record_id):
+            raise ConversationRequestError("not_found", 404)
+        envelope, projection, normalized = self._ruby_review_revision_request(request_body)
+        operation = f"ruby-review:revise:{record_id}"
+        key_hash = self._idempotency(idempotency_key)
+        with self._lock:
+            record = self._live.connection.execute(
+                "SELECT record_id,project_id FROM ruby_review_records WHERE record_id=? AND owner_digest=?",
+                (record_id, self._owner),
+            ).fetchone()
+            if record is None:
+                return self._ruby_receipt_unknown("revise")
+            self._require_ruby_review_read_project(record)
+            if record["project_id"] != projection["project_id"]:
+                raise ConversationRequestError("receipt_binding_mismatch", 409)
+            existing = self._live.connection.execute(
+                "SELECT request_hash,response_json FROM idempotency_results "
+                "WHERE owner_digest=? AND operation=? AND idempotency_hash=?",
+                (self._owner, operation, key_hash),
+            ).fetchone()
+            if existing is None:
+                return self._ruby_receipt_unknown("revise")
+            if not hmac.compare_digest(existing["request_hash"], self._request_hash(normalized)):
+                raise ConversationRequestError("idempotency_conflict", 409)
+            return self._ruby_receipt_from_stored_result_locked(
+                existing["response_json"], operation="revise", project_id=projection["project_id"],
+                request_fingerprint=projection["source_packet_fingerprint"],
+                expected_record_id=record_id, expected_prior_revision_id=envelope["expected_revision_id"],
+            )
 
     def _proposal_payload(self, request_body: bytes) -> dict[str, Any]:
         try:
