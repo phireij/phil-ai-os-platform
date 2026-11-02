@@ -257,6 +257,8 @@ def main() -> None:
             fail("governed-record UI endpoint missing")
     if 'conversationSession?.cto_handoff_recording !== true' not in js or "connector pending · no authority" not in js:
         fail("CTO handoff control must be capability-gated and non-authorizing")
+    if '"awaiting_connector", "acknowledged", "result_recorded"' not in js or 'acknowledged: "acknowledged · no authority"' not in js:
+        fail("CTO handoff read model must safely represent acknowledgement without authority")
     if "source_evidence_refs: []" not in js or "proposal draft recorded · no authority" not in js or "CEO decision recorded · no authority" not in js:
         fail("governed-record UI must stay evidence-empty and non-authorizing")
     required_conversation_guards = (
