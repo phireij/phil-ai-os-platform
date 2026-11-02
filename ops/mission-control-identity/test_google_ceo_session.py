@@ -101,6 +101,25 @@ class SessionHttpChecks(unittest.TestCase):
         connection.close()
         return result
 
+    def raw_request(
+        self,
+        method: str,
+        path: str,
+        headers: list[tuple[str, str]],
+        body: bytes = b"",
+    ) -> tuple[int, list[tuple[str, str]], bytes]:
+        """Send deliberately duplicate headers for request-framing regression tests."""
+        connection = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+        connection.putrequest(method, path, skip_host=True, skip_accept_encoding=True)
+        connection.putheader("Host", HOST)
+        for name, value in headers:
+            connection.putheader(name, value)
+        connection.endheaders(body)
+        response = connection.getresponse()
+        result = response.status, response.getheaders(), response.read()
+        connection.close()
+        return result
+
     def start_flow(self) -> tuple[str, str]:
         status, headers, _ = self.request("GET", "/auth/google/start")
         self.assertEqual(status, 302)
@@ -209,6 +228,25 @@ class SessionHttpChecks(unittest.TestCase):
         status, headers, _ = self.sign_in()
         self.assertEqual(status, 303)
         cookie = next(value.split(";", 1)[0] for name, value in headers if name.lower() == "set-cookie" and value.startswith(SESSION_COOKIE + "="))
+        with patch.object(binding, "list_records", side_effect=AssertionError("store read must not occur")):
+            self.assertEqual(
+                self.raw_request("GET", "/api/ruby-review-synthetic/records", [
+                    ("Cookie", cookie), ("Origin", ORIGIN), ("Origin", ORIGIN),
+                ])[0],
+                400,
+            )
+            self.assertEqual(
+                self.raw_request("GET", "/api/ruby-review-synthetic/records", [
+                    ("Cookie", cookie), ("Content-Length", "0"), ("Content-Length", "0"),
+                ])[0],
+                400,
+            )
+            self.assertEqual(
+                self.raw_request("GET", "/api/ruby-review-synthetic/records", [
+                    ("Cookie", cookie), ("Content-Length", "2"),
+                ], b"{}")[0],
+                400,
+            )
         self.assertEqual(self.request("GET", "/api/ruby-review-synthetic/records", {"Cookie": cookie, "Origin": "https://evil.example"})[0], 403)
         self.assertEqual(self.request("GET", "/api/ruby-review-synthetic/records", {"Cookie": cookie, "Sec-Fetch-Site": "cross-site"})[0], 403)
         self.assertEqual(self.request("GET", "/api/ruby-review-synthetic/records?export=1", {"Cookie": cookie})[0], 404)
@@ -231,6 +269,14 @@ class SessionHttpChecks(unittest.TestCase):
         self.assertTrue(json.loads(audit)["events"])
         status, _, body = self.request("GET", "/auth/google/session", {"Cookie": cookie})
         csrf = json.loads(body)["csrf_token"]
+        with patch.object(binding, "resolve_receipt", side_effect=AssertionError("store read must not occur")):
+            self.assertEqual(
+                self.raw_request("POST", "/api/ruby-review-synthetic/receipts/create-pickup", [
+                    ("Cookie", cookie), ("Content-Length", "2"), ("Content-Type", "application/json"),
+                    ("Origin", ORIGIN), ("X-MC-CSRF", csrf), ("X-MC-CSRF", csrf),
+                ], b"{}")[0],
+                400,
+            )
         self.assertEqual(self.request("POST", "/api/ruby-review-synthetic/receipts/create-pickup", {"Cookie": cookie, "Content-Type": "application/json"}, b"{}")[0], 403)
         self.assertEqual(self.request("POST", "/api/ruby-review-synthetic/receipts/create-pickup", {"Cookie": cookie, "Content-Type": "application/json", "Origin": ORIGIN, "X-MC-CSRF": "wrong"}, b"{}")[0], 403)
         status, _, receipt = self.request("POST", "/api/ruby-review-synthetic/receipts/create-pickup", {"Cookie": cookie, "Content-Type": "application/json", "Origin": ORIGIN, "X-MC-CSRF": csrf}, b"{}")

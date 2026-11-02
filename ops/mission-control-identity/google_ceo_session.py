@@ -421,11 +421,26 @@ class SessionHandler(ProbeHandler):
         )
 
     def _ruby_review_transport_binding(self, *, receipt: bool = False) -> RubySyntheticReadBinding | None:
+        origin_values = self.headers.get_all("Origin") or []
+        content_length_values = self.headers.get_all("Content-Length") or []
+        csrf_values = self.headers.get_all("X-MC-CSRF") or []
+        if any(len(values) > 1 for values in (origin_values, content_length_values, csrf_values)):
+            # Receipt bodies are closed to exactly two bytes.  Drain that one
+            # unambiguous size before rejecting duplicate framing so a client
+            # cannot race a second request onto the same connection.
+            if receipt and content_length_values == ["2"]:
+                self.rfile.read(2)
+            self._send(HTTPStatus.BAD_REQUEST, "Invalid request")
+            return None
+        origin = origin_values[0] if origin_values else None
+        content_length = content_length_values[0] if content_length_values else None
+        if self.command == "GET" and (self.headers.get_all("Transfer-Encoding") or (content_length is not None and content_length != "0")):
+            self._send(HTTPStatus.BAD_REQUEST, "Invalid request")
+            return None
         binding = getattr(self.server, "ruby_review_transport_binding", None)
         if not isinstance(binding, RubySyntheticReadBinding) or not binding.is_available_for(self.server.ceo_subject):  # type: ignore[attr-defined]
             self._send(HTTPStatus.NOT_FOUND, "Not found")
             return None
-        origin = self.headers.get("Origin")
         if (origin is not None and origin != ORIGIN) or self.headers.get("Sec-Fetch-Site") == "cross-site":
             self._send(HTTPStatus.FORBIDDEN, "Request not authorized")
             return None
@@ -435,10 +450,12 @@ class SessionHandler(ProbeHandler):
             self._send(HTTPStatus.UNAUTHORIZED, '{"error":"unauthorized"}', content_type="application/json; charset=utf-8")
             return None
         if receipt:
-            if origin != ORIGIN or self.headers.get("Transfer-Encoding") or self.headers.get("Content-Type") != "application/json" or self.headers.get("X-MC-CSRF", "") != item.csrf_token:
+            content_type_values = self.headers.get_all("Content-Type") or []
+            csrf = csrf_values[0] if csrf_values else ""
+            if len(content_type_values) != 1 or origin != ORIGIN or self.headers.get_all("Transfer-Encoding") or content_type_values[0] != "application/json" or not hmac.compare_digest(csrf, item.csrf_token):
                 self._send(HTTPStatus.FORBIDDEN, "Request not authorized")
                 return None
-            if self.headers.get("Content-Length") != "2" or self.rfile.read(2) != b"{}":
+            if content_length != "2" or self.rfile.read(2) != b"{}":
                 self._send(HTTPStatus.BAD_REQUEST, "Invalid request")
                 return None
         return binding

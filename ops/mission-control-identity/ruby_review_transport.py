@@ -48,11 +48,13 @@ class RubySyntheticReadBinding:
         self,
         *,
         store: ConversationStore,
+        issuer: str,
         owner_subject: str,
         project_id: str,
         records: tuple[SyntheticRecord, ...],
     ) -> None:
         self.store = store
+        self.issuer = issuer
         self.owner_subject = owner_subject
         self.project_id = project_id
         self.records = records
@@ -69,10 +71,21 @@ class RubySyntheticReadBinding:
             bool(self.records)
             and self.project_id == RUBY_PROJECT
             and hmac.compare_digest(self.owner_subject, server_owner_subject)
+            and self.store.matches_owner_context(self.issuer, self.owner_subject)
             and self.project_id in self.store._ruby_review_projects
         )
 
+    def _require_exact_store_context(self) -> None:
+        if not (
+            bool(self.records)
+            and self.project_id == RUBY_PROJECT
+            and self.store.matches_owner_context(self.issuer, self.owner_subject)
+            and self.project_id in self.store._ruby_review_projects
+        ):
+            raise ConversationRequestError("synthetic_binding_unavailable", 503)
+
     def _record(self, record_id: str) -> SyntheticRecord:
+        self._require_exact_store_context()
         record = self._by_record.get(record_id)
         if record is None:
             raise ConversationRequestError("not_found", 404)
@@ -100,6 +113,7 @@ class RubySyntheticReadBinding:
         }
 
     def list_records(self) -> dict[str, Any]:
+        self._require_exact_store_context()
         result = self.store.list_ruby_review_records(self.project_id, limit=50)
         records = [
             self._safe_record(value) for value in result["records"]
@@ -124,6 +138,7 @@ class RubySyntheticReadBinding:
         }
 
     def resolve_receipt(self, reference: str) -> dict[str, Any]:
+        self._require_exact_store_context()
         receipt = self._by_receipt.get(reference)
         if receipt is None:
             raise ConversationRequestError("not_found", 404)
@@ -217,5 +232,5 @@ def build_disposable_synthetic_binding(
             store.revise_ruby_review_record(created["record_id"], "ruby-transport-revise-pickup-0002", later_body)
         records.append(SyntheticRecord(created["record_id"], RUBY_PROJECT, create_receipt, revision_receipt))
     return RubySyntheticReadBinding(
-        store=store, owner_subject=owner_subject, project_id=RUBY_PROJECT, records=tuple(records)
+        store=store, issuer=issuer, owner_subject=owner_subject, project_id=RUBY_PROJECT, records=tuple(records)
     )

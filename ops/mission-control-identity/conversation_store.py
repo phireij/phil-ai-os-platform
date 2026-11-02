@@ -525,6 +525,11 @@ class ConversationStore:
                 self._live.connection.execute("UPDATE provider_attempts SET state='unknown' WHERE state='in_flight'")
                 self._live.persist()
 
+    def matches_owner_context(self, issuer: str, subject: str) -> bool:
+        """Return only whether a caller matches this store's protected owner."""
+        expected = owner_digest(_derived_key(self._key, b"owner"), issuer, subject)
+        return hmac.compare_digest(self._owner, expected)
+
     def _provider_anchor_value_locked(self) -> bytes:
         # Unlike the conversation snapshot, this file is excluded from the
         # conversation recovery package. A restored older snapshot cannot
