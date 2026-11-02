@@ -310,6 +310,11 @@ class SessionHttpChecks(unittest.TestCase):
         )
         self.assertEqual(status, 200)
         self.assertEqual(1, len(json.loads(body)))
+        self.server.conversations.acknowledge_cto_handoff(  # type: ignore[attr-defined]
+            handoff["handoff_id"], "cto-acknowledgement-0001", b"{}",
+            verified_cto_subject="auth0|approved-cto",
+            expected_cto_subject="auth0|approved-cto",
+        )
         self.server.conversations.record_cto_handoff_result(  # type: ignore[attr-defined]
             handoff["handoff_id"], "cto-result-handoff-0001",
             b'{"outcome":"completed","summary":"Reviewed through the synthetic connector.","evidence_refs":[]}',

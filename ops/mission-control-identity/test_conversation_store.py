@@ -220,6 +220,34 @@ class ConversationStoreChecks(unittest.TestCase):
         self.assertFalse(packet["dispatch_authorized"])
         self.assertNotIn("Proceed only through a later gate.", json.dumps(packet))
         result_body = b'{"outcome":"completed","summary":"Reviewed the bounded artifact.","evidence_refs":["review:artifact-1"]}'
+        with self.assertRaisesRegex(ConversationRequestError, "handoff_not_acknowledged"):
+            store.record_cto_handoff_result(
+                handoff["handoff_id"], "cto-result-handoff-0001", result_body,
+                verified_cto_subject="auth0|approved-cto",
+                expected_cto_subject="auth0|approved-cto",
+            )
+        with self.assertRaisesRegex(ConversationRequestError, "cto_identity_not_authorized"):
+            store.acknowledge_cto_handoff(
+                handoff["handoff_id"], "cto-acknowledgement-0001", b"{}",
+                verified_cto_subject="auth0|wrong-cto",
+                expected_cto_subject="auth0|approved-cto",
+            )
+        acknowledgement = store.acknowledge_cto_handoff(
+            handoff["handoff_id"], "cto-acknowledgement-0001", b"{}",
+            verified_cto_subject="auth0|approved-cto",
+            expected_cto_subject="auth0|approved-cto",
+        )
+        self.assertFalse(acknowledgement["dispatch_authorized"])
+        self.assertEqual(
+            acknowledgement,
+            store.acknowledge_cto_handoff(
+                handoff["handoff_id"], "cto-acknowledgement-0001", b"{}",
+                verified_cto_subject="auth0|approved-cto",
+                expected_cto_subject="auth0|approved-cto",
+            ),
+        )
+        self.assertEqual("acknowledged", store.list_cto_handoffs(conversation["conversation_id"])[0]["state"])
+        self.assertEqual("acknowledged", self.store().list_cto_handoffs(conversation["conversation_id"])[0]["state"])
         result = store.record_cto_handoff_result(
             handoff["handoff_id"], "cto-result-handoff-0001", result_body,
             verified_cto_subject="auth0|approved-cto",
@@ -248,6 +276,7 @@ class ConversationStoreChecks(unittest.TestCase):
                 expected_cto_subject="auth0|approved-cto",
             )
         timeline = store.list_audit_timeline(conversation["conversation_id"])
+        self.assertIn("cto_handoff_acknowledged", [event["event_type"] for event in timeline["events"]])
         self.assertIn("cto_handoff_result_recorded", [event["event_type"] for event in timeline["events"]])
         self.assertNotIn("Reviewed the bounded artifact.", json.dumps(timeline))
 
