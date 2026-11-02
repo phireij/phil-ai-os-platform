@@ -133,6 +133,29 @@ class RubySyntheticHarnessChecks(unittest.TestCase):
                 self.create()
         self.assertEqual([], list(self.scope.iterdir()))
 
+    def test_reopen_rejects_ambient_manifest_without_reading_or_mutating_run_artifacts(self) -> None:
+        harness = self.create()
+        self.addCleanup(harness.cleanup)
+        external_manifest = Path(self.temp.name) / "external-reopen-manifest.json"
+        external_manifest.write_text('{"sentinel":"preserve"}', encoding="utf-8")
+        before = {
+            path.name: path.read_bytes()
+            for path in harness.run_directory.iterdir()
+            if path.is_file()
+        }
+        with mock.patch.dict(os.environ, {"MISSION_CONTROL_EVIDENCE_MANIFEST_FILE": str(external_manifest)}):
+            with mock.patch("conversation_store.EvidenceReferenceVerifier.from_file") as read_manifest:
+                with self.assertRaisesRegex(RubySyntheticHarnessError, "ambient_core_configuration_forbidden"):
+                    harness.reopen_binding(owner_subject=OWNER, issuer=ISSUER)
+                read_manifest.assert_not_called()
+        after = {
+            path.name: path.read_bytes()
+            for path in harness.run_directory.iterdir()
+            if path.is_file()
+        }
+        self.assertEqual(before, after)
+        self.assertEqual('{"sentinel":"preserve"}', external_manifest.read_text(encoding="utf-8"))
+
     def test_cleanup_removes_only_its_own_run_directory(self) -> None:
         sibling = self.scope / "ruby-synthetic-harness-not-owned"
         sibling.mkdir()

@@ -90,6 +90,7 @@ class DisposableRubySyntheticHarness:
     def reopen_binding(self, *, owner_subject: str, issuer: str) -> RubySyntheticReadBinding:
         """Reopen this exact disposable Core without silently changing its owner."""
         self._require_owner_context(owner_subject=owner_subject, issuer=issuer)
+        _reject_ambient_core_configuration()
         store = ConversationStore(
             self.config,
             self.issuer,
