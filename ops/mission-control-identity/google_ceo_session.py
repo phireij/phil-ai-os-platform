@@ -186,7 +186,7 @@ class SessionHandler(ProbeHandler):
         elif re.fullmatch(r"/api/ruby-review-synthetic/records/[A-Za-z0-9_-]{16,200}", path.path) and not path.query:
             self._ruby_review_record(path.path.rsplit("/", 1)[1])
         elif re.fullmatch(r"/api/ruby-review-synthetic/records/[A-Za-z0-9_-]{16,200}/audit", path.path) and not path.query:
-            self._ruby_review_audit(path.path.split("/")[5])
+            self._ruby_review_audit(path.path.split("/")[4])
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/messages", path.path):
             self._list_messages(path.path.split("/")[3], path.query)
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/task-proposals", path.path):
