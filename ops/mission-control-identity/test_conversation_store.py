@@ -42,7 +42,12 @@ class ConversationStoreChecks(unittest.TestCase):
         return ConversationStore(self.config, ISSUER, subject)
 
     @staticmethod
-    def _record_decision(store: ConversationStore, suffix: str) -> dict:
+    def _record_decision(
+        store: ConversationStore,
+        suffix: str,
+        *,
+        expires_at: str = "2035-01-01T00:00:00Z",
+    ) -> dict:
         conversation = store.create_conversation(f"create-notification-{suffix}", b"{}")
         message = store.submit_message(
             conversation["conversation_id"], f"submit-notification-{suffix}", b'{"body":"bounded notification test"}'
@@ -60,7 +65,11 @@ class ConversationStoreChecks(unittest.TestCase):
         return store.record_task_decision(
             proposal["proposal_id"],
             f"decision-notification-{suffix}",
-            b'{"decision":"approved","rationale":"Bounded notification-only test.","expires_at":"2035-01-01T00:00:00Z"}',
+            json.dumps({
+                "decision": "approved",
+                "rationale": "Bounded notification-only test.",
+                "expires_at": expires_at,
+            }, separators=(",", ":")).encode(),
         )
 
     def test_disabled_by_default_and_protected_configuration_fail_closed(self) -> None:
@@ -266,8 +275,21 @@ class ConversationStoreChecks(unittest.TestCase):
                 verified_cto_subject="auth0|different-cto",
                 expected_cto_subject="auth0|different-cto",
             )
+        rollback_result_key = "cto-result-rollback-0001"
+        with patch.object(store._live, "persist", side_effect=OSError("synthetic failure")):
+            with self.assertRaises(OSError):
+                store.record_cto_handoff_result(
+                    handoff["handoff_id"], rollback_result_key, result_body,
+                    verified_cto_subject="auth0|approved-cto",
+                    expected_cto_subject="auth0|approved-cto",
+                )
+        self.assertEqual("acknowledged", store.list_cto_handoffs(conversation["conversation_id"])[0]["state"])
+        self.assertEqual([], store.list_cto_handoff_results(conversation["conversation_id"]))
+        self.assertNotIn("cto_handoff_result_recorded", [
+            event["event_type"] for event in store.list_audit_timeline(conversation["conversation_id"])["events"]
+        ])
         result = store.record_cto_handoff_result(
-            handoff["handoff_id"], "cto-result-handoff-0001", result_body,
+            handoff["handoff_id"], rollback_result_key, result_body,
             verified_cto_subject="auth0|approved-cto",
             expected_cto_subject="auth0|approved-cto",
         )
@@ -281,14 +303,14 @@ class ConversationStoreChecks(unittest.TestCase):
         self.assertEqual(
             result,
             store.record_cto_handoff_result(
-                handoff["handoff_id"], "cto-result-handoff-0001", result_body,
+                handoff["handoff_id"], rollback_result_key, result_body,
                 verified_cto_subject="auth0|approved-cto",
                 expected_cto_subject="auth0|approved-cto",
             ),
         )
         with self.assertRaisesRegex(ConversationRequestError, "cto_acknowledgement_identity_mismatch"):
             store.record_cto_handoff_result(
-                handoff["handoff_id"], "cto-result-handoff-0001", result_body,
+                handoff["handoff_id"], rollback_result_key, result_body,
                 verified_cto_subject="auth0|different-cto",
                 expected_cto_subject="auth0|different-cto",
             )
@@ -303,6 +325,52 @@ class ConversationStoreChecks(unittest.TestCase):
         self.assertIn("cto_handoff_acknowledged", [event["event_type"] for event in timeline["events"]])
         self.assertIn("cto_handoff_result_recorded", [event["event_type"] for event in timeline["events"]])
         self.assertNotIn("Reviewed the bounded artifact.", json.dumps(timeline))
+
+    def test_cto_handoff_expiry_after_packet_leaves_no_acknowledgement_or_result_receipt(self) -> None:
+        now = 1_700_000_000
+        with patch("conversation_store.time.time", return_value=now):
+            store = self.store()
+            decision = self._record_decision(
+                store,
+                "expiry-race",
+                expires_at="2023-11-15T00:00:00Z",
+            )
+            handoff = store.create_cto_handoff(
+                decision["proposal_id"], "handoff-expiry-race-0001", b"{}",
+            )
+            packet = store.get_cto_handoff_packet(
+                handoff["handoff_id"],
+                verified_cto_subject="auth0|approved-cto",
+                expected_cto_subject="auth0|approved-cto",
+            )
+        self.assertEqual(handoff["handoff_id"], packet["handoff_id"])
+        result_body = b'{"outcome":"completed","summary":"Not recorded after expiry.","evidence_refs":[]}'
+        with patch("conversation_store.time.time", return_value=now + 10_000):
+            with self.assertRaisesRegex(ConversationRequestError, "decision_expired"):
+                store.acknowledge_cto_handoff(
+                    handoff["handoff_id"], "cto-acknowledgement-expiry-race-0001", b"{}",
+                    verified_cto_subject="auth0|approved-cto",
+                    expected_cto_subject="auth0|approved-cto",
+                )
+            with self.assertRaisesRegex(ConversationRequestError, "decision_expired"):
+                store.record_cto_handoff_result(
+                    handoff["handoff_id"], "cto-result-expiry-race-0001", result_body,
+                    verified_cto_subject="auth0|approved-cto",
+                    expected_cto_subject="auth0|approved-cto",
+                )
+            self.assertEqual("awaiting_connector", store.list_cto_handoffs(handoff["conversation_id"])[0]["state"])
+            self.assertEqual([], store.list_cto_handoff_results(handoff["conversation_id"]))
+            timeline = store.list_audit_timeline(handoff["conversation_id"])
+        self.assertNotIn("cto_handoff_acknowledged", [event["event_type"] for event in timeline["events"]])
+        self.assertNotIn("cto_handoff_result_recorded", [event["event_type"] for event in timeline["events"]])
+        receipt_count = store._live.connection.execute(
+            "SELECT COUNT(*) FROM idempotency_results WHERE operation IN (?, ?)",
+            (
+                f"cto-acknowledgement:{handoff['handoff_id']}",
+                f"cto-result:{handoff['handoff_id']}",
+            ),
+        ).fetchone()[0]
+        self.assertEqual(0, receipt_count)
 
     def test_enabled_delivery_is_identifier_only_retries_once_then_dead_letters(self) -> None:
         now = 1_900_000_000

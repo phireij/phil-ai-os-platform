@@ -788,6 +788,71 @@ function renderConversationMessages(messages) {
   syncGovernedControls();
 }
 
+function assertRubySyntheticReview(payload) {
+  const required = [
+    "activation_authorized", "audit", "authority_effect", "execution_authorized", "exports_enabled",
+    "mode", "mutation_authorized", "owner_access", "project_id", "records", "schema",
+  ].sort().join("|");
+  if (!payload || typeof payload !== "object" || Object.keys(payload).sort().join("|") !== required || payload.schema !== "ruby-review-synthetic.v1" || payload.mode !== "synthetic_fixture" || payload.project_id !== "rubys-cake-delights-hq" || payload.owner_access !== "same_origin_session_only" || payload.exports_enabled !== false || payload.activation_authorized !== false || payload.execution_authorized !== false || payload.mutation_authorized !== false || payload.authority_effect !== "none" || !Array.isArray(payload.records) || payload.records.length !== 1 || !Array.isArray(payload.audit) || payload.audit.length !== 1) throw new Error("Unsafe Ruby synthetic review response");
+  const [record] = payload.records;
+  const [audit] = payload.audit;
+  if (!record || typeof record !== "object" || record.project_id !== payload.project_id || record.state !== "pending_review" || record.revision_number !== 1 || record.synthetic !== true || typeof record.record_id !== "string" || !record.record_id || record.record_id.length > 200) throw new Error("Unsafe Ruby synthetic review record");
+  if (!audit || typeof audit !== "object" || audit.record_id !== record.record_id || audit.event_type !== "record_created" || audit.identifier_only !== true || audit.synthetic !== true || typeof audit.event_id !== "string" || !audit.event_id || audit.event_id.length > 200) throw new Error("Unsafe Ruby synthetic review audit");
+  return { record, audit };
+}
+
+function renderRubySyntheticReview(payload) {
+  const { record, audit } = assertRubySyntheticReview(payload);
+  const rows = [
+    ["Record", record.record_id],
+    ["Project", record.project_id],
+    ["State", record.state],
+    ["Revision", String(record.revision_number)],
+    ["Audit event", audit.event_id],
+    ["Audit type", audit.event_type],
+  ];
+  const target = document.querySelector("#ruby-review-synthetic-list");
+  target.replaceChildren(...rows.map(([label, value]) => {
+    const item = document.createElement("article");
+    item.className = "lifecycle";
+    const field = document.createElement("span");
+    field.className = "lifecycle-id";
+    field.textContent = label;
+    const detail = document.createElement("p");
+    detail.className = "load-state";
+    detail.textContent = value;
+    item.append(field, detail);
+    return item;
+  }));
+  const panel = document.querySelector("#ruby-review-synthetic-panel");
+  panel.hidden = false;
+  const state = document.querySelector("#ruby-review-synthetic-state");
+  state.textContent = "synthetic fixture · no authority";
+  state.className = "state-chip safe";
+}
+
+function resetRubySyntheticReview(message = "disabled · no authority") {
+  const panel = document.querySelector("#ruby-review-synthetic-panel");
+  panel.hidden = true;
+  const state = document.querySelector("#ruby-review-synthetic-state");
+  state.textContent = message;
+  state.className = "state-chip safe";
+  document.querySelector("#ruby-review-synthetic-list").replaceChildren(Object.assign(document.createElement("p"), {
+    className: "load-state",
+    textContent: "The synthetic review fixture is disabled.",
+  }));
+}
+
+async function loadRubySyntheticReview() {
+  if (conversationSession?.ruby_review_synthetic !== true) {
+    resetRubySyntheticReview();
+    return;
+  }
+  const response = await conversationRequest("/api/ruby-review-synthetic");
+  if (!response.ok) throw new Error(`Ruby synthetic review HTTP ${response.status}`);
+  renderRubySyntheticReview(await response.json());
+}
+
 function resetConversationView(message = "sample only · no live chat") {
   conversationSession = null;
   activeConversationId = null;
@@ -798,6 +863,7 @@ function resetConversationView(message = "sample only · no live chat") {
   approvedDecisionProposalIds = new Set();
   activeCtoHandoffs = [];
   activeCtoHandoffResults = [];
+  resetRubySyntheticReview();
   if (sampleConversation) renderConversation(sampleConversation);
   if (sampleGovernedProposals) renderGovernedProposals(sampleGovernedProposals);
   document.querySelector("#governed-proposals-state").textContent = "sample only · no authority";
@@ -844,6 +910,11 @@ async function loadConversationSession() {
   }
   conversationSession = session;
   setConversationControls(false);
+  try {
+    await loadRubySyntheticReview();
+  } catch (_error) {
+    resetRubySyntheticReview("unavailable · no authority");
+  }
   if (session.conversation_authority !== true) {
     setConversationState("signed in · storage inactive", true);
     document.querySelector("#conversation-note").textContent = "CEO identity is verified. Conversation storage is not activated, and this sample cannot authorize actions.";
