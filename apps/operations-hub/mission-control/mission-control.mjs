@@ -567,7 +567,14 @@ function renderGovernedProposals(data, { live = false } = {}) {
     const decisionRecorded = Boolean(proposal.decision_id) || recordedDecisionProposalIds.has(proposal.proposal_id);
     const handoff = activeCtoHandoffs.find((item) => item.proposal_id === proposal.proposal_id);
     const result = activeCtoHandoffResults.find((item) => item.proposal_id === proposal.proposal_id);
-    for (const [name, value] of [["Conversation", proposal.conversation_id], ["CEO decision", decisionRecorded ? "recorded · no authority" : "not recorded"], ["CTO handoff", handoff ? `${pretty(handoff.state)} · connector pending` : "not recorded"], ["CTO result", result ? pretty(result.outcome) : "not recorded"], ["Assignment / execution", "disabled"]]) {
+    const handoffStatus = handoff
+      ? ({
+          awaiting_connector: "awaiting connector · no authority",
+          acknowledged: "acknowledged · no authority",
+          result_recorded: "result recorded · no authority",
+        }[handoff.state] ?? "unknown · no authority")
+      : "not recorded";
+    for (const [name, value] of [["Conversation", proposal.conversation_id], ["CEO decision", decisionRecorded ? "recorded · no authority" : "not recorded"], ["CTO handoff", handoffStatus], ["CTO result", result ? pretty(result.outcome) : "not recorded"], ["Assignment / execution", "disabled"]]) {
       const cell = document.createElement("span");
       cell.textContent = name;
       const strong = document.createElement("strong");
@@ -629,7 +636,7 @@ async function loadCtoHandoffs(conversationId, epoch = conversationEpoch) {
   const payload = await response.json();
   if (epoch !== conversationEpoch || conversationId !== activeConversationId || !Array.isArray(payload)) return;
   for (const handoff of payload) {
-    if (!handoff.handoff_id || !handoff.proposal_id || handoff.recipient !== "cto" || !["awaiting_connector", "result_recorded"].includes(handoff.state) || handoff.dispatch_authorized !== false || handoff.execution_authorized !== false || handoff.mutation_authorized !== false || handoff.authority_effect !== "none") throw new Error("Unsafe CTO handoff response");
+    if (!handoff.handoff_id || !handoff.proposal_id || handoff.recipient !== "cto" || !["awaiting_connector", "acknowledged", "result_recorded"].includes(handoff.state) || handoff.dispatch_authorized !== false || handoff.execution_authorized !== false || handoff.mutation_authorized !== false || handoff.authority_effect !== "none") throw new Error("Unsafe CTO handoff response");
   }
   activeCtoHandoffs = payload;
   renderGovernedProposals({ proposals: activeGovernedProposals }, { live: true });

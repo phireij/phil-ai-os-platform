@@ -53,6 +53,8 @@ assert.match(moduleSource, /conversationSession\?\.cto_handoff_recording !== tru
 assert.match(moduleSource, /\/api\/task-proposals\/\$\{encodeURIComponent\(proposalId\)\}\/cto-handoffs/);
 assert.match(moduleSource, /CTO handoff recorded · connector pending · no authority/);
 assert.match(moduleSource, /handoff\.dispatch_authorized !== false/);
+assert.match(moduleSource, /"awaiting_connector", "acknowledged", "result_recorded"/);
+assert.match(moduleSource, /acknowledged: "acknowledged · no authority"/);
 assert.match(moduleSource, /conversationSession\?\.cto_handoff_results !== true/);
 assert.match(moduleSource, /\/api\/conversations\/\$\{encodeURIComponent\(conversationId\)\}\/cto-handoff-results\?limit=100/);
 assert.match(moduleSource, /result\.execution_authorized !== false/);
