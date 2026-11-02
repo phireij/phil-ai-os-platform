@@ -52,8 +52,14 @@ class RubyReviewRecordChecks(unittest.TestCase):
             store.create_ruby_review_record("ruby-review-create-0001", self.payload(fingerprint="b" * 64))
         self.assertEqual(created, self.store().get_ruby_review_record(created["record_id"]))
         self.assertEqual([created], self.store().list_ruby_review_records(PROJECT)["records"])
+        audit = self.store().list_ruby_review_audit(created["record_id"])
+        self.assertEqual(["record_created"], [event["event_type"] for event in audit["events"]])
+        self.assertEqual(created["revision_id"], audit["events"][0]["revision_id"])
+        self.assertNotIn("projection", audit["events"][0])
         with self.assertRaisesRegex(ConversationRequestError, "not_found"):
             self.store("other-owner").get_ruby_review_record(created["record_id"])
+        with self.assertRaisesRegex(ConversationRequestError, "not_found"):
+            self.store("other-owner").list_ruby_review_audit(created["record_id"])
 
     def test_policy_fail_closed_project_denial_and_explicit_revision(self) -> None:
         disabled = ConversationStore(self.config, "https://issuer.example", "owner")
@@ -64,6 +70,9 @@ class RubyReviewRecordChecks(unittest.TestCase):
         revised_body = b'{"expected_revision_id":"' + created["revision_id"].encode() + b'","projection":' + self.payload(fingerprint="c" * 64) + b'}'
         revised = store.revise_ruby_review_record(created["record_id"], "ruby-review-revise-0001", revised_body)
         self.assertEqual(2, revised["revision_number"])
+        audit = store.list_ruby_review_audit(created["record_id"])
+        self.assertEqual(["record_created", "record_revised"], [event["event_type"] for event in audit["events"]])
+        self.assertEqual(revised["revision_id"], audit["events"][1]["revision_id"])
         with self.assertRaisesRegex(ConversationRequestError, "stale_revision"):
             store.revise_ruby_review_record(created["record_id"], "ruby-review-revise-0002", revised_body)
         self.assertEqual("none", revised["authority_effect"])

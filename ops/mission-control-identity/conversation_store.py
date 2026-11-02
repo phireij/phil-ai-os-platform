@@ -293,6 +293,17 @@ def _initialize_live(connection: sqlite3.Connection) -> None:
             authority_effect TEXT NOT NULL CHECK(authority_effect='none'),
             UNIQUE(record_id, revision_number)
         );
+        CREATE TABLE IF NOT EXISTS ruby_review_audit_events (
+            event_id TEXT PRIMARY KEY,
+            record_id TEXT NOT NULL REFERENCES ruby_review_records(record_id) ON DELETE CASCADE,
+            owner_digest BLOB NOT NULL,
+            event_type TEXT NOT NULL CHECK(event_type IN ('record_created','record_revised')),
+            revision_id TEXT NOT NULL REFERENCES ruby_review_record_revisions(revision_id) ON DELETE CASCADE,
+            occurred_at INTEGER NOT NULL,
+            authority_effect TEXT NOT NULL CHECK(authority_effect='none')
+        );
+        CREATE INDEX IF NOT EXISTS ruby_review_audit_events_owner_record_order
+            ON ruby_review_audit_events(owner_digest, record_id, occurred_at, event_id);
         """
     )
     _initialize_notification_outbox(connection)
@@ -816,6 +827,20 @@ class ConversationStore:
             "execution_authorized": False, "mutation_authorized": False,
         }
 
+    def _record_ruby_review_audit_event_locked(
+        self, *, record_id: str, revision_id: str, event_type: str, occurred_at: int
+    ) -> None:
+        """Persist an identifier-only event within the record transaction."""
+        self._live.connection.execute(
+            "INSERT INTO ruby_review_audit_events "
+            "(event_id,record_id,owner_digest,event_type,revision_id,occurred_at,authority_effect) "
+            "VALUES (?,?,?,?,?,?, 'none')",
+            (
+                self._identifier("ruby-review-audit"), record_id, self._owner,
+                event_type, revision_id, occurred_at,
+            ),
+        )
+
     def create_ruby_review_record(self, idempotency_key: str, request_body: bytes) -> dict[str, Any]:
         value = self._ruby_review_payload(request_body)
         normalized = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -834,6 +859,7 @@ class ConversationStore:
                 with self._live.connection:
                     self._live.connection.execute("INSERT INTO ruby_review_records VALUES (?,?,?,?,?,?,?,?,?,'none',0,0)", (record_id, self._owner, value["project_id"], revision_id, 1, value["source_packet_fingerprint"], normalized.decode("utf-8"), now, now))
                     self._live.connection.execute("INSERT INTO ruby_review_record_revisions VALUES (?,?,?,?,?,?,?,?, 'none')", (revision_id, record_id, self._owner, 1, None, value["source_packet_fingerprint"], normalized.decode("utf-8"), now))
+                    self._record_ruby_review_audit_event_locked(record_id=record_id, revision_id=revision_id, event_type="record_created", occurred_at=now)
                     row = self._live.connection.execute("SELECT * FROM ruby_review_records WHERE record_id=?", (record_id,)).fetchone()
                     result = self._ruby_review_result(row)
                     self._live.connection.execute("INSERT INTO idempotency_results VALUES (?,?,?,?,?,?,?)", (self._owner, operation, key_hash, self._request_hash(normalized), json.dumps(result), record_id, now))
@@ -862,6 +888,46 @@ class ConversationStore:
         with self._lock:
             rows = self._live.connection.execute("SELECT * FROM ruby_review_records WHERE owner_digest=? AND project_id=? ORDER BY created_at,record_id LIMIT ? OFFSET ?", (self._owner, project_id, limit + 1, cursor)).fetchall()
         return {"records": [self._ruby_review_result(row) for row in rows[:limit]], "next_cursor": str(cursor + limit) if len(rows) > limit else None, "authority_effect": "none"}
+
+    def list_ruby_review_audit(self, record_id: str, limit: int = 50, cursor: int = 0) -> dict[str, Any]:
+        """Return the owner-bound, identifier-only durable record history.
+
+        Audit reads deliberately add no new event.  Production read-access
+        capture remains an activation-time policy decision, avoiding an
+        unreviewed side effect in the offline-safe Core contract.
+        """
+        if not ID_PATTERN.fullmatch(record_id):
+            raise ConversationRequestError("not_found", 404)
+        if limit < 1 or limit > MAX_PAGE_SIZE or cursor < 0 or cursor > 100_000:
+            raise ConversationRequestError("invalid_query", 400)
+        with self._lock:
+            owned = self._live.connection.execute(
+                "SELECT record_id FROM ruby_review_records WHERE record_id=? AND owner_digest=?",
+                (record_id, self._owner),
+            ).fetchone()
+            if owned is None:
+                raise ConversationRequestError("not_found", 404)
+            rows = self._live.connection.execute(
+                "SELECT e.event_id,e.event_type,e.revision_id,e.occurred_at,e.authority_effect "
+                "FROM ruby_review_audit_events e "
+                "JOIN ruby_review_record_revisions r ON r.revision_id=e.revision_id "
+                "WHERE e.record_id=? AND e.owner_digest=? "
+                "ORDER BY r.revision_number,e.event_id LIMIT ? OFFSET ?",
+                (record_id, self._owner, limit + 1, cursor),
+            ).fetchall()
+        return {
+            "events": [
+                {
+                    "event_id": row["event_id"], "event_type": row["event_type"],
+                    "record_id": record_id, "revision_id": row["revision_id"],
+                    "occurred_at": _iso(row["occurred_at"]),
+                    "authority_effect": row["authority_effect"],
+                }
+                for row in rows[:limit]
+            ],
+            "next_cursor": str(cursor + limit) if len(rows) > limit else None,
+            "authority_effect": "none",
+        }
 
     def revise_ruby_review_record(self, record_id: str, idempotency_key: str, request_body: bytes) -> dict[str, Any]:
         if not ID_PATTERN.fullmatch(record_id):
@@ -895,6 +961,7 @@ class ConversationStore:
                 with self._live.connection:
                     self._live.connection.execute("UPDATE ruby_review_records SET revision_id=?,revision_number=?,request_fingerprint=?,projection_json=?,updated_at=? WHERE record_id=? AND owner_digest=?", (revision_id, number, projection["source_packet_fingerprint"], json.dumps(projection, sort_keys=True, separators=(",", ":")), now, record_id, self._owner))
                     self._live.connection.execute("INSERT INTO ruby_review_record_revisions VALUES (?,?,?,?,?,?,?,?, 'none')", (revision_id, record_id, self._owner, number, row["revision_id"], projection["source_packet_fingerprint"], json.dumps(projection, sort_keys=True, separators=(",", ":")), now))
+                    self._record_ruby_review_audit_event_locked(record_id=record_id, revision_id=revision_id, event_type="record_revised", occurred_at=now)
                     current = self._live.connection.execute("SELECT * FROM ruby_review_records WHERE record_id=?", (record_id,)).fetchone()
                     result = self._ruby_review_result(current)
                     self._live.connection.execute("INSERT INTO idempotency_results VALUES (?,?,?,?,?,?,?)", (self._owner, operation, key_hash, self._request_hash(normalized), json.dumps(result), record_id, now))
