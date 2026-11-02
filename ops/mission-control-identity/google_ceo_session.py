@@ -39,6 +39,7 @@ from provider_activation import (
     acquire_provider_writer_lock,
 )
 from ruby_review_synthetic import ruby_review_synthetic_surface, synthetic_surface_enabled
+from ruby_review_transport import RubySyntheticReadBinding
 
 from google_identity_probe import (
     COOKIE_NAME as FLOW_COOKIE,
@@ -180,6 +181,12 @@ class SessionHandler(ProbeHandler):
             self._list_notifications(path.query)
         elif path.path == "/api/ruby-review-synthetic" and not path.query:
             self._ruby_review_synthetic()
+        elif path.path == "/api/ruby-review-synthetic/records" and not path.query:
+            self._ruby_review_records()
+        elif re.fullmatch(r"/api/ruby-review-synthetic/records/[A-Za-z0-9_-]{16,200}", path.path) and not path.query:
+            self._ruby_review_record(path.path.rsplit("/", 1)[1])
+        elif re.fullmatch(r"/api/ruby-review-synthetic/records/[A-Za-z0-9_-]{16,200}/audit", path.path) and not path.query:
+            self._ruby_review_audit(path.path.split("/")[5])
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/messages", path.path):
             self._list_messages(path.path.split("/")[3], path.query)
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/task-proposals", path.path):
@@ -413,6 +420,66 @@ class SessionHandler(ProbeHandler):
             content_type="application/json; charset=utf-8",
         )
 
+    def _ruby_review_transport_binding(self, *, receipt: bool = False) -> RubySyntheticReadBinding | None:
+        binding = getattr(self.server, "ruby_review_transport_binding", None)
+        if not isinstance(binding, RubySyntheticReadBinding) or not binding.is_available_for(self.server.ceo_subject):  # type: ignore[attr-defined]
+            self._send(HTTPStatus.NOT_FOUND, "Not found")
+            return None
+        origin = self.headers.get("Origin")
+        if (origin is not None and origin != ORIGIN) or self.headers.get("Sec-Fetch-Site") == "cross-site":
+            self._send(HTTPStatus.FORBIDDEN, "Request not authorized")
+            return None
+        token = _session_cookie(self.headers.get("Cookie", ""))
+        item = self.server.sessions.get(token)  # type: ignore[attr-defined]
+        if item is None:
+            self._send(HTTPStatus.UNAUTHORIZED, '{"error":"unauthorized"}', content_type="application/json; charset=utf-8")
+            return None
+        if receipt:
+            if origin != ORIGIN or self.headers.get("Transfer-Encoding") or self.headers.get("Content-Type") != "application/json" or self.headers.get("X-MC-CSRF", "") != item.csrf_token:
+                self._send(HTTPStatus.FORBIDDEN, "Request not authorized")
+                return None
+            if self.headers.get("Content-Length") != "2" or self.rfile.read(2) != b"{}":
+                self._send(HTTPStatus.BAD_REQUEST, "Invalid request")
+                return None
+        return binding
+
+    def _ruby_review_transport_error(self, error: ConversationRequestError) -> None:
+        code = "conflict" if error.status == 409 else "not_found" if error.status == 404 else "unavailable"
+        self._send(HTTPStatus(error.status), json.dumps({"error": code}), content_type="application/json; charset=utf-8")
+
+    def _ruby_review_records(self) -> None:
+        binding = self._ruby_review_transport_binding()
+        if binding is None:
+            return
+        try:
+            result = binding.list_records()
+        except ConversationRequestError as error:
+            self._ruby_review_transport_error(error)
+            return
+        self._send(HTTPStatus.OK, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
+
+    def _ruby_review_record(self, record_id: str) -> None:
+        binding = self._ruby_review_transport_binding()
+        if binding is None:
+            return
+        try:
+            result = binding.get_record(record_id)
+        except ConversationRequestError as error:
+            self._ruby_review_transport_error(error)
+            return
+        self._send(HTTPStatus.OK, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
+
+    def _ruby_review_audit(self, record_id: str) -> None:
+        binding = self._ruby_review_transport_binding()
+        if binding is None:
+            return
+        try:
+            result = binding.list_audit(record_id)
+        except ConversationRequestError as error:
+            self._ruby_review_transport_error(error)
+            return
+        self._send(HTTPStatus.OK, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
+
     def _list_cto_handoffs(self, conversation_id: str, query: str) -> None:
         if self.server.conversations is None:  # type: ignore[attr-defined]
             self._send(HTTPStatus.NOT_FOUND, "Not found")
@@ -446,6 +513,10 @@ class SessionHandler(ProbeHandler):
         if self.headers.get("Host") != "miscon.phireij.cloud":
             self._send(HTTPStatus.BAD_REQUEST, "Invalid host")
             return
+        receipt = re.fullmatch(r"/api/ruby-review-synthetic/receipts/([A-Za-z0-9_-]{1,80})", path.path)
+        if receipt and not path.query:
+            self._ruby_review_receipt(receipt.group(1))
+            return
         if path.path == "/auth/google/logout" and not path.query:
             self._logout()
             return
@@ -466,6 +537,17 @@ class SessionHandler(ProbeHandler):
         if match and not path.query:
             self._create_cto_handoff(match.group(1)); return
         self._send(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed")
+
+    def _ruby_review_receipt(self, reference: str) -> None:
+        binding = self._ruby_review_transport_binding(receipt=True)
+        if binding is None:
+            return
+        try:
+            result = binding.resolve_receipt(reference)
+        except ConversationRequestError as error:
+            self._ruby_review_transport_error(error)
+            return
+        self._send(HTTPStatus.OK, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
 
     def _authorized_write(self, maximum_body: int) -> tuple[LiveSession, bytes] | None:
         if self.server.conversations is None:  # type: ignore[attr-defined]
@@ -617,6 +699,7 @@ def _serve_session(config, subject, conversation_config, delivery_config, provid
     server.secret_file = config.client_secret_file  # type: ignore[attr-defined]
     server.ceo_subject = subject  # type: ignore[attr-defined]
     server.ruby_review_synthetic_surface_enabled = synthetic_surface_enabled()  # type: ignore[attr-defined]
+    server.ruby_review_transport_binding = None  # type: ignore[attr-defined]
     server.conversations = (  # type: ignore[attr-defined]
         ConversationStore(
             conversation_config,
