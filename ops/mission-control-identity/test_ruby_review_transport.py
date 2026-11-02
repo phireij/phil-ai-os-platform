@@ -63,7 +63,7 @@ class RubySyntheticTransportChecks(unittest.TestCase):
             self.config, "https://accounts.google.com", "synthetic-ceo-subject", ruby_review_projects=frozenset({RUBY_PROJECT})
         )
         rebound = RubySyntheticReadBinding(
-            store=fresh, owner_subject="synthetic-ceo-subject", project_id=RUBY_PROJECT, records=self.binding.records
+            store=fresh, issuer="https://accounts.google.com", owner_subject="synthetic-ceo-subject", project_id=RUBY_PROJECT, records=self.binding.records
         )
         self.assertEqual(3, len(rebound.list_records()["records"]))
         create = next(item.create_receipt for item in rebound.records if item.create_receipt.reference == "create-yamato")
@@ -85,9 +85,25 @@ class RubySyntheticTransportChecks(unittest.TestCase):
 
         no_policy = ConversationStore(self.config, "https://accounts.google.com", "synthetic-ceo-subject")
         unavailable = RubySyntheticReadBinding(
-            store=no_policy, owner_subject="synthetic-ceo-subject", project_id=RUBY_PROJECT, records=self.binding.records
+            store=no_policy, issuer="https://accounts.google.com", owner_subject="synthetic-ceo-subject", project_id=RUBY_PROJECT, records=self.binding.records
         )
         self.assertFalse(unavailable.is_available_for("synthetic-ceo-subject"))
+
+    def test_binding_rejects_mismatched_store_owner_or_issuer_before_reading(self) -> None:
+        for issuer, owner_subject in (
+            ("https://accounts.google.com", "different-owner"),
+            ("https://issuer.example", "synthetic-ceo-subject"),
+        ):
+            mismatch = RubySyntheticReadBinding(
+                store=self.binding.store,
+                issuer=issuer,
+                owner_subject=owner_subject,
+                project_id=RUBY_PROJECT,
+                records=self.binding.records,
+            )
+            self.assertFalse(mismatch.is_available_for(owner_subject))
+            with self.assertRaisesRegex(ConversationRequestError, "synthetic_binding_unavailable"):
+                mismatch.list_records()
 
 
 if __name__ == "__main__":
