@@ -47,11 +47,43 @@ const approvedPostRoutes = [
   '`/api/task-proposals/${encodeURIComponent(proposalId)}/decisions`',
   '`/api/task-proposals/${encodeURIComponent(proposalId)}/cto-handoffs`',
 ];
-const postRoutes = [...moduleSource.matchAll(/conversationRequest\(\s*(["`])([^"`]+)\1\s*,\s*\{\s*method: "POST"/g)]
-  .map((match) => `${match[1]}${match[2]}${match[1]}`);
-assert.deepEqual(postRoutes.sort(), approvedPostRoutes.slice().sort());
+const postMethodCount = (source) => [...source.matchAll(/(?:\bmethod\b|["']method["'])\s*:\s*(["'`])POST\1/g)].length;
+const requestStart = /conversationRequest\(\s*(["'`])([^"'`]+)\1\s*,\s*\{/g;
+function balancedObject(source, start) {
+  let depth = 0;
+  let quote = null;
+  let escaped = false;
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = null;
+    } else if ('"\'`'.includes(character)) quote = character;
+    else if (character === "{") depth += 1;
+    else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+  }
+  return "";
+}
+function conversationPostRoutes(source) {
+  return [...source.matchAll(requestStart)]
+    .filter((match) => /(?:\bmethod\b|["']method["'])\s*:\s*(["'`])POST\1/.test(balancedObject(source, match.index + match[0].length - 1)))
+    .map((match) => `${match[1]}${match[2]}${match[1]}`);
+}
+function assertApprovedPostInventory(source) {
+  assert.equal(postMethodCount(source), approvedPostRoutes.length);
+  assert.deepEqual(conversationPostRoutes(source).sort(), approvedPostRoutes.slice().sort());
+}
+assertApprovedPostInventory(moduleSource);
+assert.throws(() => assertApprovedPostInventory(`${moduleSource}\nconversationRequest("/api/unapproved", { headers: {}, method: "POST" });`));
+assert.throws(() => assertApprovedPostInventory(`${moduleSource}\nfetch("/api/unapproved", { headers: {}, method: "POST" });`));
 assert.doesNotMatch(moduleSource, /\/api\/decision-requests/);
 assert.equal((deployWorkflow.match(/approved_post_routes = \(/g) ?? []).length, 2);
+assert.equal((deployWorkflow.match(/def _conversation_request_post_routes/g) ?? []).length, 2);
+assert.equal((deployWorkflow.match(/post_method_count = len\(post_method\.findall\(module\)\)/g) ?? []).length, 2);
 for (const route of approvedPostRoutes) {
   const escaped = route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   assert.equal((deployWorkflow.match(new RegExp(escaped, "g")) ?? []).length, 2, `${route} must be enforced before publish and after deployment`);
