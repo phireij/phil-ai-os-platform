@@ -586,6 +586,13 @@ class ConversationStore:
                 self._live.connection.executemany(
                     "DELETE FROM conversations WHERE conversation_id=?", markers
                 )
+                # Match normal deletion when replaying durable deletion markers.
+                self._live.connection.executemany(
+                    "DELETE FROM idempotency_results WHERE owner_digest=? AND resource_id=?",
+                    self._ledger.connection.execute(
+                        "SELECT owner_digest,conversation_id FROM deletion_markers"
+                    ).fetchall(),
+                )
                 self._live.connection.execute("DELETE FROM messages WHERE created_at <= ?", (cutoff,))
                 self._live.connection.execute(
                     "DELETE FROM conversations WHERE last_activity_at <= ?",
