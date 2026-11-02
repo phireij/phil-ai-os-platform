@@ -968,14 +968,22 @@ class ConversationStore:
         if expected_record_id is not None and stored["record_id"] != expected_record_id:
             raise ConversationRequestError("receipt_binding_mismatch", 409)
         binding = self._live.connection.execute(
-            "SELECT r.record_id,r.project_id,v.revision_id,v.revision_number,v.prior_revision_id,"
-            "v.request_fingerprint FROM ruby_review_records r "
+            "SELECT r.record_id,r.owner_digest AS record_owner_digest,r.project_id,"
+            "v.revision_id,v.owner_digest AS revision_owner_digest,v.revision_number,"
+            "v.prior_revision_id,v.request_fingerprint FROM ruby_review_records r "
             "JOIN ruby_review_record_revisions v ON v.record_id=r.record_id "
-            "WHERE r.record_id=? AND r.owner_digest=? AND v.revision_id=? AND v.owner_digest=?",
-            (stored["record_id"], self._owner, stored["revision_id"], self._owner),
+            "WHERE r.record_id=? AND v.revision_id=?",
+            (stored["record_id"], stored["revision_id"]),
         ).fetchone()
+        # A retained idempotency result without its original record or revision
+        # is uncertain history, not proof that the write did not commit.  Keep
+        # this distinct from a retained, contradictory binding below.
+        if binding is None:
+            return self._ruby_receipt_unknown(operation)
         if (
-            binding is None or binding["project_id"] != project_id
+            binding["record_owner_digest"] != self._owner
+            or binding["revision_owner_digest"] != self._owner
+            or binding["project_id"] != project_id
             or binding["revision_number"] != stored["revision_number"]
             or binding["prior_revision_id"] != expected_prior_revision_id
             or binding["request_fingerprint"] != request_fingerprint

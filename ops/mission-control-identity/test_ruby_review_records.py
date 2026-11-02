@@ -168,6 +168,57 @@ class RubyReviewRecordChecks(unittest.TestCase):
             self.store(projects=frozenset({"another-project"})).resolve_ruby_review_create_receipt(create_key, create_body)
         self.assertEqual("unknown", self.store("other-owner").resolve_ruby_review_create_receipt(create_key, create_body)["state"])
 
+    def test_missing_receipt_history_is_unknown_but_retained_conflicts_reject(self) -> None:
+        store = self.store()
+        create_body = self.payload(fingerprint="2" * 64)
+        created = store.create_ruby_review_record("ruby-history-create-0001", create_body)
+        revision_body = json.dumps({
+            "expected_revision_id": created["revision_id"],
+            "projection": json.loads(self.payload(fingerprint="3" * 64)),
+        }, separators=(",", ":")).encode()
+        revised = store.revise_ruby_review_record(
+            created["record_id"], "ruby-history-revise-0001", revision_body
+        )
+
+        # These destructive changes model expired/deleted history in a
+        # disposable synthetic store.  They retain idempotency rows only.
+        store._live.connection.execute(
+            "DELETE FROM ruby_review_record_revisions WHERE revision_id=?", (created["revision_id"],)
+        )
+        self.assertEqual("unknown", store.resolve_ruby_review_create_receipt(
+            "ruby-history-create-0001", create_body
+        )["state"])
+        store._live.connection.execute(
+            "DELETE FROM ruby_review_record_revisions WHERE revision_id=?", (revised["revision_id"],)
+        )
+        self.assertEqual("unknown", store.resolve_ruby_review_revision_receipt(
+            created["record_id"], "ruby-history-revise-0001", revision_body
+        )["state"])
+
+        record_missing = self.store()
+        missing_body = self.payload(fingerprint="4" * 64)
+        missing = record_missing.create_ruby_review_record("ruby-history-create-0002", missing_body)
+        record_missing._live.connection.execute(
+            "DELETE FROM ruby_review_records WHERE record_id=?", (missing["record_id"],)
+        )
+        self.assertEqual("unknown", record_missing.resolve_ruby_review_create_receipt(
+            "ruby-history-create-0002", missing_body
+        )["state"])
+
+        contradictory = self.store()
+        contradictory_body = self.payload(fingerprint="5" * 64)
+        contradictory_created = contradictory.create_ruby_review_record(
+            "ruby-history-create-0003", contradictory_body
+        )
+        contradictory._live.connection.execute(
+            "UPDATE ruby_review_records SET project_id=? WHERE record_id=?",
+            ("contradictory-project", contradictory_created["record_id"]),
+        )
+        with self.assertRaisesRegex(ConversationRequestError, "receipt_binding_mismatch"):
+            contradictory.resolve_ruby_review_create_receipt(
+                "ruby-history-create-0003", contradictory_body
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
