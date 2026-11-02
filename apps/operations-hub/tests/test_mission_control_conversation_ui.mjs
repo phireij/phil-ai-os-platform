@@ -22,6 +22,9 @@ for (const id of [
   "cto-handoff-record",
   "conversation-lifecycle-state",
   "conversation-lifecycle-list",
+  "ruby-review-synthetic-panel",
+  "ruby-review-synthetic-state",
+  "ruby-review-synthetic-list",
 ]) {
   assert.match(html, new RegExp(`id=["']${id}["']`), `${id} must exist`);
 }
@@ -30,6 +33,10 @@ assert.match(html, /id="conversation-sign-out"[^>]*disabled/);
 assert.match(html, /id="conversation-message"[^>]*maxlength="20000"[^>]*disabled/);
 assert.match(html, /id="decision-request-button"[^>]*disabled/);
 assert.match(html, /Conversation text can never authorize delegation or execution/);
+const rubyPanel = html.slice(html.indexOf('id="ruby-review-synthetic-panel"'), html.indexOf('id="governed-proposals-title"'));
+assert.match(rubyPanel, /hidden/);
+assert.match(rubyPanel, /Synthetic fixture only/);
+assert.doesNotMatch(rubyPanel, /<button\b|<form\b|<input\b|<select\b|<textarea\b/);
 
 assert.equal((moduleSource.match(/method: "POST"/g) ?? []).length, 6);
 assert.doesNotMatch(moduleSource, /method: "(?:PUT|PATCH|DELETE)"/);
@@ -58,6 +65,14 @@ assert.match(moduleSource, /acknowledged: "acknowledged · no authority"/);
 assert.match(moduleSource, /conversationSession\?\.cto_handoff_results !== true/);
 assert.match(moduleSource, /\/api\/conversations\/\$\{encodeURIComponent\(conversationId\)\}\/cto-handoff-results\?limit=100/);
 assert.match(moduleSource, /result\.execution_authorized !== false/);
+assert.match(moduleSource, /conversationSession\?\.ruby_review_synthetic !== true/);
+assert.match(moduleSource, /conversationRequest\("\/api\/ruby-review-synthetic"\)/);
+assert.match(moduleSource, /payload\.exports_enabled !== false/);
+assert.match(moduleSource, /payload\.activation_authorized !== false/);
+assert.match(moduleSource, /record\.synthetic !== true/);
+assert.match(moduleSource, /audit\.identifier_only !== true/);
+assert.match(moduleSource, /detail\.textContent = value/);
+assert.match(moduleSource, /panel\.hidden = true/);
 assert.match(moduleSource, /assignment_id !== null \|\| proposal\.execution_authorized !== false/);
 assert.match(moduleSource, /recordedDecisionProposalIds\.has\(proposal\.proposal_id\)/);
 assert.match(moduleSource, /renderGovernedProposals\(\{ proposals: activeGovernedProposals \}, \{ live: true \}\);/);
@@ -77,5 +92,38 @@ assert.equal(
   conversationIdempotencyKey("submit"),
   "submit-00000000-0000-4000-8000-000000000001",
 );
+
+const rubyStart = moduleSource.indexOf("function assertRubySyntheticReview(payload) {");
+const rubyEnd = moduleSource.indexOf("\nfunction resetConversationView", rubyStart);
+assert.ok(rubyStart >= 0 && rubyEnd > rubyStart, "Ruby synthetic review renderer must exist");
+const created = [];
+const target = { replaceChildren(...children) { this.children = children; } };
+const panel = { hidden: true };
+const state = { textContent: "", className: "" };
+const fakeDocument = {
+  querySelector(selector) {
+    return ({ "#ruby-review-synthetic-list": target, "#ruby-review-synthetic-panel": panel, "#ruby-review-synthetic-state": state })[selector];
+  },
+  createElement() {
+    const node = { className: "", textContent: "", children: [], append(...children) { this.children.push(...children); } };
+    created.push(node);
+    return node;
+  },
+};
+const renderRubySyntheticReview = runInNewContext(
+  `${moduleSource.slice(rubyStart, rubyEnd)}\nrenderRubySyntheticReview`,
+  { document: fakeDocument, Object, Array, String, Error },
+);
+const unsafe = '<img src=x onerror="unsafe-marker">';
+renderRubySyntheticReview({
+  schema: "ruby-review-synthetic.v1", mode: "synthetic_fixture", project_id: "rubys-cake-delights-hq",
+  owner_access: "same_origin_session_only", exports_enabled: false, activation_authorized: false,
+  records: [{ record_id: unsafe, project_id: "rubys-cake-delights-hq", state: "pending_review", revision_number: 1, synthetic: true }],
+  audit: [{ event_id: unsafe, record_id: unsafe, event_type: "record_created", identifier_only: true, synthetic: true }],
+  authority_effect: "none", execution_authorized: false, mutation_authorized: false,
+});
+assert.equal(panel.hidden, false);
+assert.equal(state.textContent, "synthetic fixture · no authority");
+assert.ok(created.some((node) => node.textContent === unsafe), "fixture data must be assigned as text, not markup");
 
 console.log("Mission Control conversation UI security contract: GREEN");
