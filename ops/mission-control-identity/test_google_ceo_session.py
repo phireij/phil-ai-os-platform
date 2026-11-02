@@ -279,6 +279,7 @@ class SessionHttpChecks(unittest.TestCase):
             )
         self.assertEqual(self.request("POST", "/api/ruby-review-synthetic/receipts/create-pickup", {"Cookie": cookie, "Content-Type": "application/json"}, b"{}")[0], 403)
         self.assertEqual(self.request("POST", "/api/ruby-review-synthetic/receipts/create-pickup", {"Cookie": cookie, "Content-Type": "application/json", "Origin": ORIGIN, "X-MC-CSRF": "wrong"}, b"{}")[0], 403)
+        self.assertEqual(self.request("POST", "/api/ruby-review-synthetic/receipts/create-pickup", {"Cookie": cookie, "Content-Type": "application/json", "Origin": ORIGIN, "X-MC-CSRF": "é"}, b"{}")[0], 403)
         status, _, receipt = self.request("POST", "/api/ruby-review-synthetic/receipts/create-pickup", {"Cookie": cookie, "Content-Type": "application/json", "Origin": ORIGIN, "X-MC-CSRF": csrf}, b"{}")
         self.assertEqual(status, 200)
         receipt_payload = json.loads(receipt)

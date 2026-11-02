@@ -452,7 +452,8 @@ class SessionHandler(ProbeHandler):
         if receipt:
             content_type_values = self.headers.get_all("Content-Type") or []
             csrf = csrf_values[0] if csrf_values else ""
-            if len(content_type_values) != 1 or origin != ORIGIN or self.headers.get_all("Transfer-Encoding") or content_type_values[0] != "application/json" or not hmac.compare_digest(csrf, item.csrf_token):
+            csrf_is_valid = csrf.isascii() and 1 <= len(csrf) <= 128
+            if len(content_type_values) != 1 or origin != ORIGIN or self.headers.get_all("Transfer-Encoding") or content_type_values[0] != "application/json" or not csrf_is_valid or not hmac.compare_digest(csrf, item.csrf_token):
                 self._send(HTTPStatus.FORBIDDEN, "Request not authorized")
                 return None
             if content_length != "2" or self.rfile.read(2) != b"{}":
