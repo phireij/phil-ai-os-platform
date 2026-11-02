@@ -260,6 +260,12 @@ class ConversationStoreChecks(unittest.TestCase):
         )
         self.assertEqual("acknowledged", store.list_cto_handoffs(conversation["conversation_id"])[0]["state"])
         self.assertEqual("acknowledged", self.store().list_cto_handoffs(conversation["conversation_id"])[0]["state"])
+        with self.assertRaisesRegex(ConversationRequestError, "cto_acknowledgement_identity_mismatch"):
+            store.record_cto_handoff_result(
+                handoff["handoff_id"], "cto-result-other-identity-0001", result_body,
+                verified_cto_subject="auth0|different-cto",
+                expected_cto_subject="auth0|different-cto",
+            )
         result = store.record_cto_handoff_result(
             handoff["handoff_id"], "cto-result-handoff-0001", result_body,
             verified_cto_subject="auth0|approved-cto",
@@ -280,6 +286,12 @@ class ConversationStoreChecks(unittest.TestCase):
                 expected_cto_subject="auth0|approved-cto",
             ),
         )
+        with self.assertRaisesRegex(ConversationRequestError, "cto_acknowledgement_identity_mismatch"):
+            store.record_cto_handoff_result(
+                handoff["handoff_id"], "cto-result-handoff-0001", result_body,
+                verified_cto_subject="auth0|different-cto",
+                expected_cto_subject="auth0|different-cto",
+            )
         self.assertEqual("result_recorded", store.list_cto_handoffs(conversation["conversation_id"])[0]["state"])
         with self.assertRaisesRegex(ConversationRequestError, "handoff_closed"):
             store.get_cto_handoff_packet(

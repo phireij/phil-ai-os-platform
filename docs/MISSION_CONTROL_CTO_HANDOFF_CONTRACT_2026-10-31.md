@@ -26,9 +26,11 @@ The encrypted store also defines internal-only packet and result methods for a
 future connector. They have no HTTP route or default identity. A future adapter
 must independently verify a CTO token, inject that verified subject, and match
 it exactly against a protected expected subject before it can read one bounded
-task packet or record one result. Result text and evidence references stay
-encrypted and are omitted from the identifier-only audit timeline. A result is
-not execution evidence and cannot authorize a mutation.
+task packet or acknowledge it. A later result must be submitted by that same
+acknowledging subject; a different injected identity fails closed. Result text
+and evidence references stay encrypted and are omitted from the identifier-only
+audit timeline. A result is not execution evidence and cannot authorize a
+mutation.
 
 The CEO UI control is capability-gated. It stays hidden unless the deployed
 CEO-session endpoint explicitly reports `cto_handoff_recording=true`; older
