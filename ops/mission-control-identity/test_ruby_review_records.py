@@ -37,16 +37,19 @@ class RubyReviewRecordChecks(unittest.TestCase):
     def payload(
         *, fingerprint: str = "a" * 64, sku: str = "sku_0123456789abcdef",
         fulfillment: str = "pickup_0123456789abcdef",
+        source_review_ref: object = "review_0123456789abcdef",
+        correlation_ref: object = "correlation_0123456789abcdef",
+        blockers: object = None,
     ) -> bytes:
         return json.dumps({
             "schema_version": "ruby.pending-review.v1", "project_id": PROJECT,
             "catalog_revision": "catalog_0123456789abcdef",
             "source_packet_fingerprint": "sha256:" + fingerprint,
-            "source_review_ref": "review_0123456789abcdef",
-            "correlation_ref": "correlation_0123456789abcdef",
+            "source_review_ref": source_review_ref,
+            "correlation_ref": correlation_ref,
             "items": [{"sku": sku, "quantity": 2, "item_subtotal_minor": 1200}],
             "fulfillment_preference": fulfillment,
-            "unresolved_blockers": ["blocker_0123456789abcdef"],
+            "unresolved_blockers": ["blocker_0123456789abcdef"] if blockers is None else blockers,
             "customer_confirmation": False,
         }, separators=(",", ":")).encode()
 
@@ -106,6 +109,27 @@ class RubyReviewRecordChecks(unittest.TestCase):
         ), start=5):
             with self.assertRaisesRegex(ConversationRequestError, "invalid_request"):
                 store.create_ruby_review_record(f"ruby-review-create-000{index}", body)
+
+    def test_producer_references_and_diagnostic_blockers_preserve_exact_meaning(self) -> None:
+        store = self.store()
+        producer_ref = "cart-order-request:68b25062a47063630c5b4320"
+        producer_blocker = "quantity-dependent package rule requires final package policy"
+        cases = (
+            ("source_review_ref", self.payload(source_review_ref=producer_ref)),
+            ("correlation_ref", self.payload(correlation_ref=producer_ref)),
+            ("unresolved_blockers", self.payload(blockers=[producer_blocker])),
+        )
+        for index, (field, body) in enumerate(cases, start=8):
+            created = store.create_ruby_review_record(f"ruby-review-create-000{index}", body)
+            expected = [producer_blocker] if field == "unresolved_blockers" else producer_ref
+            self.assertEqual(expected, created["projection"][field])
+        for index, body in enumerate((
+            self.payload(source_review_ref=42),
+            self.payload(correlation_ref=producer_ref + "\x00"),
+            self.payload(blockers=["x" * 501]),
+        ), start=11):
+            with self.assertRaisesRegex(ConversationRequestError, "invalid_request"):
+                store.create_ruby_review_record(f"ruby-review-create-00{index}", body)
 
 
 if __name__ == "__main__":
