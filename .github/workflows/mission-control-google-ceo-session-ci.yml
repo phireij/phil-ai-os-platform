@@ -94,3 +94,9 @@ jobs:
         run: |
           set -euo pipefail
           docker build --file Dockerfile.mission-control-google-ceo-session --tag mission-control-google-ceo-session:review .
+      - name: Smoke-test packaged CEO session entrypoint imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --entrypoint python3 mission-control-google-ceo-session:review \
+            -c 'import runpy; runpy.run_path("/srv/google_ceo_session.py", run_name="__packaging_smoke__")'
