@@ -73,6 +73,7 @@ class SessionHttpChecks(unittest.TestCase):
         self.server.secret_file = Path("/unused-synthetic-secret")  # type: ignore[attr-defined]
         self.server.ceo_subject = "synthetic-ceo-subject"  # type: ignore[attr-defined]
         self.server.conversations = None  # type: ignore[attr-defined]
+        self.server.ruby_review_synthetic_surface_enabled = False  # type: ignore[attr-defined]
         self.temp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -163,6 +164,33 @@ class SessionHttpChecks(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(any("Max-Age=0" in value for key, value in headers if key.lower() == "set-cookie"))
         self.assertEqual(self.request("GET", "/auth/google/session", {"Cookie": cookie})[0], 401)
+
+    def test_ruby_synthetic_review_surface_is_disabled_then_owner_only(self) -> None:
+        self.assertEqual(self.request("GET", "/api/ruby-review-synthetic")[0], 404)
+        status, headers, _ = self.sign_in()
+        self.assertEqual(status, 303)
+        cookie = next(
+            value.split(";", 1)[0]
+            for name, value in headers
+            if name.lower() == "set-cookie" and value.startswith(SESSION_COOKIE + "=")
+        )
+        self.server.ruby_review_synthetic_surface_enabled = True  # type: ignore[attr-defined]
+        self.assertEqual(self.request("GET", "/api/ruby-review-synthetic")[0], 401)
+        self.assertEqual(self.request("GET", "/api/ruby-review-synthetic?export=1", {"Cookie": cookie})[0], 404)
+        status, _, body = self.request("GET", "/api/ruby-review-synthetic", {"Cookie": cookie})
+        self.assertEqual(status, 200)
+        payload = json.loads(body)
+        self.assertEqual("synthetic_fixture", payload["mode"])
+        self.assertEqual("same_origin_session_only", payload["owner_access"])
+        self.assertFalse(payload["exports_enabled"])
+        self.assertFalse(payload["activation_authorized"])
+        self.assertEqual("rubys-cake-delights-hq", payload["records"][0]["project_id"])
+        self.assertTrue(payload["records"][0]["synthetic"])
+        self.assertTrue(payload["audit"][0]["identifier_only"])
+        self.assertNotIn("projection", json.dumps(payload))
+        status, _, body = self.request("GET", "/auth/google/session", {"Cookie": cookie})
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(body)["ruby_review_synthetic"])
 
     def test_new_sign_in_with_wrong_account_revokes_previous_session(self) -> None:
         status, headers, _ = self.sign_in()

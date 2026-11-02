@@ -38,6 +38,7 @@ from provider_activation import (
     ProviderResponseWorker,
     acquire_provider_writer_lock,
 )
+from ruby_review_synthetic import ruby_review_synthetic_surface, synthetic_surface_enabled
 
 from google_identity_probe import (
     COOKIE_NAME as FLOW_COOKIE,
@@ -177,6 +178,8 @@ class SessionHandler(ProbeHandler):
             self._list_conversations(path.query)
         elif path.path == "/api/notifications":
             self._list_notifications(path.query)
+        elif path.path == "/api/ruby-review-synthetic" and not path.query:
+            self._ruby_review_synthetic()
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/messages", path.path):
             self._list_messages(path.path.split("/")[3], path.query)
         elif re.fullmatch(r"/api/conversations/[A-Za-z0-9_-]{16,200}/task-proposals", path.path):
@@ -253,6 +256,7 @@ class SessionHandler(ProbeHandler):
             "conversation_authority": self.server.conversations is not None,  # type: ignore[attr-defined]
             "cto_handoff_recording": self.server.conversations is not None,  # type: ignore[attr-defined]
             "cto_handoff_results": self.server.conversations is not None,  # type: ignore[attr-defined]
+            "ruby_review_synthetic": bool(self.server.ruby_review_synthetic_surface_enabled),  # type: ignore[attr-defined]
             "idle_seconds": IDLE_SECONDS,
             "absolute_seconds": ABSOLUTE_SECONDS,
             "csrf_token": item.csrf_token,
@@ -388,6 +392,26 @@ class SessionHandler(ProbeHandler):
             self._conversation_error(error)
             return
         self._send(HTTPStatus.OK, json.dumps(result, separators=(",", ":")), content_type="application/json; charset=utf-8")
+
+    def _ruby_review_synthetic(self) -> None:
+        """Expose the one fixture-only Gate A review projection to the owner.
+
+        This handler deliberately does not use ConversationStore's Ruby record
+        APIs: the Gate A surface must remain synthetic until separate access,
+        retention, route/security, and activation reviews are complete.
+        """
+        if not self.server.ruby_review_synthetic_surface_enabled:  # type: ignore[attr-defined]
+            self._send(HTTPStatus.NOT_FOUND, "Not found")
+            return
+        token = _session_cookie(self.headers.get("Cookie", ""))
+        if self.server.sessions.get(token) is None:  # type: ignore[attr-defined]
+            self._send(HTTPStatus.UNAUTHORIZED, '{"error":"unauthorized"}', content_type="application/json; charset=utf-8")
+            return
+        self._send(
+            HTTPStatus.OK,
+            json.dumps(ruby_review_synthetic_surface(), separators=(",", ":")),
+            content_type="application/json; charset=utf-8",
+        )
 
     def _list_cto_handoffs(self, conversation_id: str, query: str) -> None:
         if self.server.conversations is None:  # type: ignore[attr-defined]
@@ -592,6 +616,7 @@ def _serve_session(config, subject, conversation_config, delivery_config, provid
     server.sessions = SessionStore()  # type: ignore[attr-defined]
     server.secret_file = config.client_secret_file  # type: ignore[attr-defined]
     server.ceo_subject = subject  # type: ignore[attr-defined]
+    server.ruby_review_synthetic_surface_enabled = synthetic_surface_enabled()  # type: ignore[attr-defined]
     server.conversations = (  # type: ignore[attr-defined]
         ConversationStore(
             conversation_config,
