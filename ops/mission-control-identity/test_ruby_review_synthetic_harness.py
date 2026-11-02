@@ -6,6 +6,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from conversation_store import ConversationRequestError, ConversationStore
 from ruby_review_synthetic_harness import (
@@ -48,6 +49,25 @@ class RubySyntheticHarnessChecks(unittest.TestCase):
                 )
         self.assertEqual([], list(self.scope.iterdir()))
 
+    def test_invalid_owner_or_issuer_is_rejected_before_artifact_creation(self) -> None:
+        invalid_contexts = (
+            (None, ISSUER, "owner_invalid"),
+            ("owner\u00e9", ISSUER, "owner_invalid"),
+            ("o" * 256, ISSUER, "owner_invalid"),
+            (OWNER, None, "issuer_invalid"),
+            (OWNER, "https://issuer.\u4f8b", "issuer_invalid"),
+            (OWNER, "https://" + "a" * 248, "issuer_invalid"),
+        )
+        for owner_subject, issuer, code in invalid_contexts:
+            with self.assertRaisesRegex(RubySyntheticHarnessError, code):
+                DisposableRubySyntheticHarness.create(
+                    storage_scope=self.scope,
+                    opt_in=HARNESS_OPT_IN,
+                    owner_subject=owner_subject,  # type: ignore[arg-type]
+                    issuer=issuer,  # type: ignore[arg-type]
+                )
+        self.assertEqual([], list(self.scope.iterdir()))
+
     def test_malformed_storage_scope_is_rejected_without_writes(self) -> None:
         invalid = self.scope / "not-a-directory"
         invalid.write_text("sentinel", encoding="utf-8")
@@ -79,6 +99,8 @@ class RubySyntheticHarnessChecks(unittest.TestCase):
         self.addCleanup(harness.cleanup)
         with self.assertRaisesRegex(RubySyntheticHarnessError, "owner_context_mismatch"):
             harness.reopen_binding(owner_subject="different-owner", issuer=ISSUER)
+        with self.assertRaisesRegex(RubySyntheticHarnessError, "owner_context_invalid"):
+            harness.reopen_binding(owner_subject="owner\u00e9", issuer=ISSUER)
         foreign_store = ConversationStore(
             harness.config,
             ISSUER,
@@ -94,6 +116,22 @@ class RubySyntheticHarnessChecks(unittest.TestCase):
         )
         with self.assertRaisesRegex(ConversationRequestError, "synthetic_binding_unavailable"):
             foreign_binding.list_records()
+
+    def test_ambient_core_configuration_is_rejected_without_external_read_or_artifacts(self) -> None:
+        external_manifest = Path(self.temp.name) / "external-manifest.json"
+        external_manifest.write_text('{"sentinel":"preserve"}', encoding="utf-8")
+        with mock.patch.dict(os.environ, {"MISSION_CONTROL_EVIDENCE_MANIFEST_FILE": str(external_manifest)}):
+            with mock.patch("conversation_store.EvidenceReferenceVerifier.from_file") as read_manifest:
+                with self.assertRaisesRegex(RubySyntheticHarnessError, "ambient_core_configuration_forbidden"):
+                    self.create()
+                read_manifest.assert_not_called()
+        self.assertEqual('{"sentinel":"preserve"}', external_manifest.read_text(encoding="utf-8"))
+        self.assertEqual([], list(self.scope.iterdir()))
+
+        with mock.patch.dict(os.environ, {"MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT": "true"}):
+            with self.assertRaisesRegex(RubySyntheticHarnessError, "ambient_core_configuration_forbidden"):
+                self.create()
+        self.assertEqual([], list(self.scope.iterdir()))
 
     def test_cleanup_removes_only_its_own_run_directory(self) -> None:
         sibling = self.scope / "ruby-synthetic-harness-not-owned"

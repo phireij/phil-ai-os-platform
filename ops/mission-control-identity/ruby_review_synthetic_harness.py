@@ -24,6 +24,11 @@ from ruby_review_transport import RUBY_PROJECT, RubySyntheticReadBinding, build_
 HARNESS_OPT_IN = "ruby-synthetic-harness-v1"
 _RUN_PREFIX = "ruby-synthetic-harness-"
 _MARKER_NAME = ".ruby-synthetic-harness.json"
+_MAX_OWNER_OR_ISSUER_LENGTH = 255
+_AMBIENT_CORE_CONFIGURATION = (
+    "MISSION_CONTROL_EVIDENCE_MANIFEST_FILE",
+    "MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT",
+)
 
 
 class RubySyntheticHarnessError(ValueError):
@@ -54,10 +59,11 @@ class DisposableRubySyntheticHarness:
     ) -> "DisposableRubySyntheticHarness":
         if opt_in != HARNESS_OPT_IN:
             raise RubySyntheticHarnessError("ruby_synthetic_harness_opt_in_required")
-        if not isinstance(owner_subject, str) or not owner_subject:
+        if not _is_bounded_ascii(owner_subject):
             raise RubySyntheticHarnessError("ruby_synthetic_harness_owner_invalid")
-        if not isinstance(issuer, str) or not issuer.startswith("https://"):
+        if not _is_bounded_ascii(issuer) or not issuer.startswith("https://"):
             raise RubySyntheticHarnessError("ruby_synthetic_harness_issuer_invalid")
+        _reject_ambient_core_configuration()
         if not isinstance(storage_scope, Path) or storage_scope.is_symlink():
             raise RubySyntheticHarnessError("ruby_synthetic_harness_storage_scope_invalid")
         try:
@@ -99,7 +105,11 @@ class DisposableRubySyntheticHarness:
         )
 
     def _require_owner_context(self, *, owner_subject: str, issuer: str) -> None:
-        if not isinstance(owner_subject, str) or not isinstance(issuer, str):
+        if (
+            not _is_bounded_ascii(owner_subject)
+            or not _is_bounded_ascii(issuer)
+            or not issuer.startswith("https://")
+        ):
             raise RubySyntheticHarnessError("ruby_synthetic_harness_owner_context_invalid")
         if not hmac.compare_digest(self.owner_subject, owner_subject) or not hmac.compare_digest(self.issuer, issuer):
             raise RubySyntheticHarnessError("ruby_synthetic_harness_owner_context_mismatch")
@@ -138,3 +148,17 @@ def _write_private_file(path: Path, value: bytes) -> None:
         handle.write(value)
     if os.name != "nt":
         os.chmod(path, 0o600)
+
+
+def _is_bounded_ascii(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and 0 < len(value) <= _MAX_OWNER_OR_ISSUER_LENGTH
+        and value.isascii()
+        and all("!" <= character <= "~" for character in value)
+    )
+
+
+def _reject_ambient_core_configuration() -> None:
+    if any(os.environ.get(variable, "") for variable in _AMBIENT_CORE_CONFIGURATION):
+        raise RubySyntheticHarnessError("ruby_synthetic_harness_ambient_core_configuration_forbidden")
