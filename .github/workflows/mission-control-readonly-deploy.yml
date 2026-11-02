@@ -57,8 +57,47 @@ jobs:
           missing = [label for label in required_labels if label not in html]
           if missing:
               raise SystemExit(f"Mission Control UI is missing required sample labels: {missing}")
-          if "/api/decision-requests" in module or module.count('method: "POST"') != 5:
-              raise SystemExit("Mission Control UI contains an unapproved mutation request path")
+          approved_post_routes = (
+              '"/auth/google/logout"',
+              '"/api/conversations"',
+              '`/api/conversations/${encodeURIComponent(activeConversationId)}/messages`',
+              '`/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals`',
+              '`/api/task-proposals/${encodeURIComponent(proposalId)}/decisions`',
+              '`/api/task-proposals/${encodeURIComponent(proposalId)}/cto-handoffs`',
+          )
+          post_method = re.compile(r'(?:\bmethod\b|["\']method["\'])\s*:\s*(["\'`])POST\1')
+          request_start = re.compile(r'conversationRequest\(\s*(["\'`])([^"\'`]+)\1\s*,\s*\{')
+          def _balanced_object(source, start):
+              depth, quote, escaped = 0, None, False
+              for index in range(start, len(source)):
+                  character = source[index]
+                  if quote:
+                      if escaped:
+                          escaped = False
+                      elif character == "\\":
+                          escaped = True
+                      elif character == quote:
+                          quote = None
+                  elif character in "\"'`":
+                      quote = character
+                  elif character == "{":
+                      depth += 1
+                  elif character == "}":
+                      depth -= 1
+                      if depth == 0:
+                          return source[start:index + 1]
+              return ""
+          def _conversation_request_post_routes(source):
+              routes = []
+              for match in request_start.finditer(source):
+                  options = _balanced_object(source, match.end() - 1)
+                  if post_method.search(options):
+                      routes.append(match.group(1) + match.group(2) + match.group(1))
+              return tuple(routes)
+          post_routes = _conversation_request_post_routes(module)
+          post_method_count = len(post_method.findall(module))
+          if "/api/decision-requests" in module or post_method_count != len(approved_post_routes) or set(post_routes) != set(approved_post_routes) or len(post_routes) != len(approved_post_routes):
+              raise SystemExit("Mission Control UI POST routes differ from the approved endpoint inventory")
           governed_endpoints = (
               "/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals",
               "/api/task-proposals/${encodeURIComponent(proposalId)}/decisions",
@@ -259,8 +298,47 @@ jobs:
           missing = [label for label in required_labels if label not in html]
           if missing:
               raise SystemExit(f"Public UI is missing required sample labels: {missing}")
-          if "/api/decision-requests" in module or module.count('method: "POST"') != 5:
-              raise SystemExit("Public UI contains an unapproved mutation request path")
+          approved_post_routes = (
+              '"/auth/google/logout"',
+              '"/api/conversations"',
+              '`/api/conversations/${encodeURIComponent(activeConversationId)}/messages`',
+              '`/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals`',
+              '`/api/task-proposals/${encodeURIComponent(proposalId)}/decisions`',
+              '`/api/task-proposals/${encodeURIComponent(proposalId)}/cto-handoffs`',
+          )
+          post_method = re.compile(r'(?:\bmethod\b|["\']method["\'])\s*:\s*(["\'`])POST\1')
+          request_start = re.compile(r'conversationRequest\(\s*(["\'`])([^"\'`]+)\1\s*,\s*\{')
+          def _balanced_object(source, start):
+              depth, quote, escaped = 0, None, False
+              for index in range(start, len(source)):
+                  character = source[index]
+                  if quote:
+                      if escaped:
+                          escaped = False
+                      elif character == "\\":
+                          escaped = True
+                      elif character == quote:
+                          quote = None
+                  elif character in "\"'`":
+                      quote = character
+                  elif character == "{":
+                      depth += 1
+                  elif character == "}":
+                      depth -= 1
+                      if depth == 0:
+                          return source[start:index + 1]
+              return ""
+          def _conversation_request_post_routes(source):
+              routes = []
+              for match in request_start.finditer(source):
+                  options = _balanced_object(source, match.end() - 1)
+                  if post_method.search(options):
+                      routes.append(match.group(1) + match.group(2) + match.group(1))
+              return tuple(routes)
+          post_routes = _conversation_request_post_routes(module)
+          post_method_count = len(post_method.findall(module))
+          if "/api/decision-requests" in module or post_method_count != len(approved_post_routes) or set(post_routes) != set(approved_post_routes) or len(post_routes) != len(approved_post_routes):
+              raise SystemExit("Public UI POST routes differ from the approved endpoint inventory")
           governed_endpoints = (
               "/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals",
               "/api/task-proposals/${encodeURIComponent(proposalId)}/decisions",
