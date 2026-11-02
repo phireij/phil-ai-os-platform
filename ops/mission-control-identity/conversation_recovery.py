@@ -218,6 +218,11 @@ def restore_to_quarantine(
         cutoff = current_time - RETENTION_SECONDS
         with live:
             live.executemany("DELETE FROM conversations WHERE conversation_id=?", markers)
+            # Current deletion markers must suppress old replay receipts too.
+            live.executemany(
+                "DELETE FROM idempotency_results WHERE owner_digest=? AND resource_id=?",
+                ledger.execute("SELECT owner_digest,conversation_id FROM deletion_markers").fetchall(),
+            )
             live.execute("DELETE FROM messages WHERE created_at <= ?", (cutoff,))
             live.execute("DELETE FROM conversations WHERE last_activity_at <= ?", (cutoff,))
             live.execute("DELETE FROM idempotency_results WHERE created_at <= ?", (cutoff,))
