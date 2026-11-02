@@ -11,6 +11,8 @@
   "required_policy": ["project access", "retention and deletion", "redaction and backup treatment", "operator access", "export permissions"],
   "projection_allowlist": ["schema_version", "project_id", "catalog_revision", "source_packet_fingerprint", "source_review_ref", "correlation_ref", "items.sku", "items.quantity", "items.item_subtotal_minor", "fulfillment_preference", "unresolved_blockers", "customer_confirmation"],
   "catalog_value_validation": "SKU and fulfillment values are bounded exact printable catalog strings; Core does not pad, replace, normalize, or infer them",
+  "source_reference_validation": "source_review_ref and correlation_ref are bounded exact printable source strings up to 200 characters, including an existing colon-separated namespace; Core does not fabricate a record ID or transform source spelling",
+  "blocker_validation": "each unresolved_blockers entry is a bounded exact printable diagnostic string up to 500 characters; v1 preserves both machine-readable codes and human-readable policy text without an unapproved code/text remapping",
   "prohibited_data": ["raw channel payloads", "image bytes", "image URLs", "tokens", "payment links", "sender profile fields", "notes", "requested dates", "shipping", "add-ons", "custom quotes"],
   "invariants": {
     "idempotency": "same authenticated owner project record kind and request fingerprint returns the original receipt; changed content conflicts",

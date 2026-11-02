@@ -815,7 +815,7 @@ class ConversationStore:
         if not isinstance(fingerprint, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", fingerprint):
             raise ConversationRequestError("invalid_request", 400)
         for name in ("source_review_ref", "correlation_ref"):
-            if not isinstance(value[name], str) or not ID_PATTERN.fullmatch(value[name]):
+            if not self._ruby_source_reference(value[name]):
                 raise ConversationRequestError("invalid_request", 400)
         if not self._ruby_catalog_value(value["fulfillment_preference"]):
             raise ConversationRequestError("invalid_request", 400)
@@ -826,24 +826,39 @@ class ConversationStore:
             if not isinstance(item, dict) or set(item) != {"sku", "quantity", "item_subtotal_minor"} or not self._ruby_catalog_value(item["sku"]) or not isinstance(item["quantity"], int) or item["quantity"] < 1 or item["quantity"] > 1000 or not isinstance(item["item_subtotal_minor"], int) or item["item_subtotal_minor"] < 0:
                 raise ConversationRequestError("invalid_request", 400)
         blockers = value["unresolved_blockers"]
-        if not isinstance(blockers, list) or len(blockers) > 20 or any(not isinstance(entry, str) or not ID_PATTERN.fullmatch(entry) for entry in blockers) or len(set(blockers)) != len(blockers) or value["customer_confirmation"] is not False:
+        if not isinstance(blockers, list) or len(blockers) > 20 or any(not self._ruby_blocker_value(entry) for entry in blockers) or len(set(blockers)) != len(blockers) or value["customer_confirmation"] is not False:
             raise ConversationRequestError("invalid_request", 400)
         return value
 
     @staticmethod
-    def _ruby_catalog_value(value: object) -> bool:
+    def _ruby_exact_printable(value: object, maximum_length: int) -> bool:
+        """Accept one bounded source string without normalizing it."""
+        return (
+            isinstance(value, str)
+            and 1 <= len(value) <= maximum_length
+            and value == value.strip()
+            and value.isprintable()
+        )
+
+    @classmethod
+    def _ruby_catalog_value(cls, value: object) -> bool:
         """Accept a bounded, exact catalog value without normalizing it.
 
         Ruby SKU and fulfillment values are catalog-owned strings, not Core IDs.
         Their original spelling is therefore retained; blank, padded, control, and
         unbounded values fail closed instead of being silently rewritten.
         """
-        return (
-            isinstance(value, str)
-            and 1 <= len(value) <= 128
-            and value == value.strip()
-            and value.isprintable()
-        )
+        return cls._ruby_exact_printable(value, 128)
+
+    @classmethod
+    def _ruby_source_reference(cls, value: object) -> bool:
+        """Accept the producer's exact bounded correlation/reference namespace."""
+        return cls._ruby_exact_printable(value, 200)
+
+    @classmethod
+    def _ruby_blocker_value(cls, value: object) -> bool:
+        """Accept one exact bounded diagnostic string, including human-readable text."""
+        return cls._ruby_exact_printable(value, 500)
 
     def _require_ruby_review_read_project(self, row: sqlite3.Row) -> None:
         """Apply the current project policy to direct record and audit reads."""
