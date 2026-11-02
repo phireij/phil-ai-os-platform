@@ -17,7 +17,7 @@ SYNTHETIC_SURFACE_ENV = "MISSION_CONTROL_RUBY_REVIEW_SYNTHETIC_SURFACE_ENABLED"
 
 
 def synthetic_surface_enabled() -> bool:
-    """Return false unless the narrow, non-production fixture flag is exact."""
+    """Return false unless the narrow fixture flag has its exact value."""
     return os.environ.get(SYNTHETIC_SURFACE_ENV) == "true"
 
 
