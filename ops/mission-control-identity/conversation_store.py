@@ -265,6 +265,34 @@ def _initialize_live(connection: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS cto_handoff_results_owner_order
             ON cto_handoff_results(owner_digest, recorded_at, result_id);
+        CREATE TABLE IF NOT EXISTS ruby_review_records (
+            record_id TEXT PRIMARY KEY,
+            owner_digest BLOB NOT NULL,
+            project_id TEXT NOT NULL,
+            revision_id TEXT NOT NULL UNIQUE,
+            revision_number INTEGER NOT NULL CHECK(revision_number >= 1),
+            request_fingerprint TEXT NOT NULL,
+            projection_json TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            authority_effect TEXT NOT NULL CHECK(authority_effect='none'),
+            execution_authorized INTEGER NOT NULL CHECK(execution_authorized=0),
+            mutation_authorized INTEGER NOT NULL CHECK(mutation_authorized=0)
+        );
+        CREATE INDEX IF NOT EXISTS ruby_review_records_owner_project_order
+            ON ruby_review_records(owner_digest, project_id, created_at, record_id);
+        CREATE TABLE IF NOT EXISTS ruby_review_record_revisions (
+            revision_id TEXT PRIMARY KEY,
+            record_id TEXT NOT NULL REFERENCES ruby_review_records(record_id) ON DELETE CASCADE,
+            owner_digest BLOB NOT NULL,
+            revision_number INTEGER NOT NULL,
+            prior_revision_id TEXT,
+            request_fingerprint TEXT NOT NULL,
+            projection_json TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            authority_effect TEXT NOT NULL CHECK(authority_effect='none'),
+            UNIQUE(record_id, revision_number)
+        );
         """
     )
     _initialize_notification_outbox(connection)
@@ -441,6 +469,7 @@ class ConversationStore:
         *,
         notification_delivery_enabled: bool = False,
         provider_runtime: ProviderRuntime | None = None,
+        ruby_review_projects: frozenset[str] = frozenset(),
     ) -> None:
         readonly_preflight = os.environ.get("MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT", "")
         if readonly_preflight not in {"", "true"}:
@@ -456,6 +485,7 @@ class ConversationStore:
         self._lock = threading.Lock()
         self._notification_delivery_enabled = notification_delivery_enabled
         self._provider_runtime = provider_runtime
+        self._ruby_review_projects = ruby_review_projects
         self._provider_anchor_path = config.state_file.with_name("provider-budget.anchor") if provider_runtime is not None and not self._readonly_preflight else None
         self._live = EncryptedSnapshot(config.state_file, _derived_key(self._key, b"live"), _initialize_live)
         self._ledger = EncryptedSnapshot(config.deletion_ledger_file, _derived_key(self._key, b"ledger"), _initialize_ledger)
@@ -738,6 +768,141 @@ class ConversationStore:
             "error_code": row["error_code"],
             "authority_effect": "none",
         }
+
+    def _ruby_review_payload(self, request_body: bytes) -> dict[str, Any]:
+        """Validate the minimal, non-executing Ruby staff-review projection."""
+        try:
+            value = json.loads(request_body)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ConversationRequestError("invalid_request", 400) from exc
+        required = {
+            "schema_version", "project_id", "catalog_revision", "source_packet_fingerprint",
+            "source_review_ref", "correlation_ref", "items", "fulfillment_preference",
+            "unresolved_blockers", "customer_confirmation",
+        }
+        if not isinstance(value, dict) or set(value) != required:
+            raise ConversationRequestError("invalid_request", 400)
+        if not self._ruby_review_projects:
+            raise ConversationRequestError("ruby_review_policy_unavailable", 503)
+        if value["project_id"] not in self._ruby_review_projects:
+            raise ConversationRequestError("ruby_review_project_not_allowed", 403)
+        if value["schema_version"] != "ruby.pending-review.v1" or not isinstance(value["catalog_revision"], str) or not ID_PATTERN.fullmatch(value["catalog_revision"]):
+            raise ConversationRequestError("invalid_request", 400)
+        fingerprint = value["source_packet_fingerprint"]
+        if not isinstance(fingerprint, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", fingerprint):
+            raise ConversationRequestError("invalid_request", 400)
+        for name in ("source_review_ref", "correlation_ref", "fulfillment_preference"):
+            if not isinstance(value[name], str) or not ID_PATTERN.fullmatch(value[name]):
+                raise ConversationRequestError("invalid_request", 400)
+        items = value["items"]
+        if not isinstance(items, list) or not items or len(items) > 100:
+            raise ConversationRequestError("invalid_request", 400)
+        for item in items:
+            if not isinstance(item, dict) or set(item) != {"sku", "quantity", "item_subtotal_minor"} or not isinstance(item["sku"], str) or not ID_PATTERN.fullmatch(item["sku"]) or not isinstance(item["quantity"], int) or item["quantity"] < 1 or item["quantity"] > 1000 or not isinstance(item["item_subtotal_minor"], int) or item["item_subtotal_minor"] < 0:
+                raise ConversationRequestError("invalid_request", 400)
+        blockers = value["unresolved_blockers"]
+        if not isinstance(blockers, list) or len(blockers) > 20 or any(not isinstance(entry, str) or not ID_PATTERN.fullmatch(entry) for entry in blockers) or len(set(blockers)) != len(blockers) or value["customer_confirmation"] is not False:
+            raise ConversationRequestError("invalid_request", 400)
+        return value
+
+    @staticmethod
+    def _ruby_review_result(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "record_id": row["record_id"], "project_id": row["project_id"],
+            "state": "pending_review", "revision_id": row["revision_id"],
+            "revision_number": row["revision_number"], "request_fingerprint": row["request_fingerprint"],
+            "projection": json.loads(row["projection_json"]), "created_at": _iso(row["created_at"]),
+            "updated_at": _iso(row["updated_at"]), "authority_effect": "none",
+            "execution_authorized": False, "mutation_authorized": False,
+        }
+
+    def create_ruby_review_record(self, idempotency_key: str, request_body: bytes) -> dict[str, Any]:
+        value = self._ruby_review_payload(request_body)
+        normalized = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        now, key_hash = int(time.time()), self._idempotency(idempotency_key)
+        operation = f"ruby-review:create:{value['project_id']}"
+        with self._lock:
+            self._purge_if_due_locked(now)
+            existing = self._live.connection.execute("SELECT request_hash,response_json FROM idempotency_results WHERE owner_digest=? AND operation=? AND idempotency_hash=?", (self._owner, operation, key_hash)).fetchone()
+            if existing:
+                if not hmac.compare_digest(existing["request_hash"], self._request_hash(normalized)):
+                    raise ConversationRequestError("idempotency_conflict", 409)
+                return json.loads(existing["response_json"])
+            record_id, revision_id = self._identifier("ruby-review"), self._identifier("ruby-review-revision")
+            before = self._live.connection.serialize()
+            try:
+                with self._live.connection:
+                    self._live.connection.execute("INSERT INTO ruby_review_records VALUES (?,?,?,?,?,?,?,?,?,'none',0,0)", (record_id, self._owner, value["project_id"], revision_id, 1, value["source_packet_fingerprint"], normalized.decode("utf-8"), now, now))
+                    self._live.connection.execute("INSERT INTO ruby_review_record_revisions VALUES (?,?,?,?,?,?,?,?, 'none')", (revision_id, record_id, self._owner, 1, None, value["source_packet_fingerprint"], normalized.decode("utf-8"), now))
+                    row = self._live.connection.execute("SELECT * FROM ruby_review_records WHERE record_id=?", (record_id,)).fetchone()
+                    result = self._ruby_review_result(row)
+                    self._live.connection.execute("INSERT INTO idempotency_results VALUES (?,?,?,?,?,?,?)", (self._owner, operation, key_hash, self._request_hash(normalized), json.dumps(result), record_id, now))
+                self._live.persist()
+            except Exception:
+                self._live.connection.deserialize(before)
+                raise
+            return result
+
+    def get_ruby_review_record(self, record_id: str) -> dict[str, Any]:
+        if not ID_PATTERN.fullmatch(record_id):
+            raise ConversationRequestError("not_found", 404)
+        with self._lock:
+            row = self._live.connection.execute("SELECT * FROM ruby_review_records WHERE record_id=? AND owner_digest=?", (record_id, self._owner)).fetchone()
+        if row is None:
+            raise ConversationRequestError("not_found", 404)
+        return self._ruby_review_result(row)
+
+    def list_ruby_review_records(self, project_id: str, limit: int = 50, cursor: int = 0) -> dict[str, Any]:
+        if not self._ruby_review_projects:
+            raise ConversationRequestError("ruby_review_policy_unavailable", 503)
+        if project_id not in self._ruby_review_projects:
+            raise ConversationRequestError("ruby_review_project_not_allowed", 403)
+        if limit < 1 or limit > MAX_PAGE_SIZE or cursor < 0 or cursor > 100_000:
+            raise ConversationRequestError("invalid_query", 400)
+        with self._lock:
+            rows = self._live.connection.execute("SELECT * FROM ruby_review_records WHERE owner_digest=? AND project_id=? ORDER BY created_at,record_id LIMIT ? OFFSET ?", (self._owner, project_id, limit + 1, cursor)).fetchall()
+        return {"records": [self._ruby_review_result(row) for row in rows[:limit]], "next_cursor": str(cursor + limit) if len(rows) > limit else None, "authority_effect": "none"}
+
+    def revise_ruby_review_record(self, record_id: str, idempotency_key: str, request_body: bytes) -> dict[str, Any]:
+        if not ID_PATTERN.fullmatch(record_id):
+            raise ConversationRequestError("not_found", 404)
+        try:
+            envelope = json.loads(request_body)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ConversationRequestError("invalid_request", 400) from exc
+        if not isinstance(envelope, dict) or set(envelope) != {"expected_revision_id", "projection"} or not isinstance(envelope["expected_revision_id"], str) or not ID_PATTERN.fullmatch(envelope["expected_revision_id"]):
+            raise ConversationRequestError("invalid_request", 400)
+        projection = self._ruby_review_payload(json.dumps(envelope["projection"], separators=(",", ":")).encode("utf-8"))
+        normalized = json.dumps({"expected_revision_id": envelope["expected_revision_id"], "projection": projection}, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        now, key_hash = int(time.time()), self._idempotency(idempotency_key)
+        operation = f"ruby-review:revise:{record_id}"
+        with self._lock:
+            row = self._live.connection.execute("SELECT * FROM ruby_review_records WHERE record_id=? AND owner_digest=?", (record_id, self._owner)).fetchone()
+            if row is None:
+                raise ConversationRequestError("not_found", 404)
+            if row["project_id"] != projection["project_id"]:
+                raise ConversationRequestError("ruby_review_project_not_allowed", 403)
+            existing = self._live.connection.execute("SELECT request_hash,response_json FROM idempotency_results WHERE owner_digest=? AND operation=? AND idempotency_hash=?", (self._owner, operation, key_hash)).fetchone()
+            if existing:
+                if not hmac.compare_digest(existing["request_hash"], self._request_hash(normalized)):
+                    raise ConversationRequestError("idempotency_conflict", 409)
+                return json.loads(existing["response_json"])
+            if row["revision_id"] != envelope["expected_revision_id"]:
+                raise ConversationRequestError("stale_revision", 409)
+            revision_id, number = self._identifier("ruby-review-revision"), int(row["revision_number"]) + 1
+            before = self._live.connection.serialize()
+            try:
+                with self._live.connection:
+                    self._live.connection.execute("UPDATE ruby_review_records SET revision_id=?,revision_number=?,request_fingerprint=?,projection_json=?,updated_at=? WHERE record_id=? AND owner_digest=?", (revision_id, number, projection["source_packet_fingerprint"], json.dumps(projection, sort_keys=True, separators=(",", ":")), now, record_id, self._owner))
+                    self._live.connection.execute("INSERT INTO ruby_review_record_revisions VALUES (?,?,?,?,?,?,?,?, 'none')", (revision_id, record_id, self._owner, number, row["revision_id"], projection["source_packet_fingerprint"], json.dumps(projection, sort_keys=True, separators=(",", ":")), now))
+                    current = self._live.connection.execute("SELECT * FROM ruby_review_records WHERE record_id=?", (record_id,)).fetchone()
+                    result = self._ruby_review_result(current)
+                    self._live.connection.execute("INSERT INTO idempotency_results VALUES (?,?,?,?,?,?,?)", (self._owner, operation, key_hash, self._request_hash(normalized), json.dumps(result), record_id, now))
+                self._live.persist()
+            except Exception:
+                self._live.connection.deserialize(before)
+                raise
+            return result
 
     def _proposal_payload(self, request_body: bytes) -> dict[str, Any]:
         try:
