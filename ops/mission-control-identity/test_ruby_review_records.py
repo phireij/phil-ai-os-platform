@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -27,19 +28,27 @@ class RubyReviewRecordChecks(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def store(self, subject: str = "synthetic-ruby-owner") -> ConversationStore:
-        return ConversationStore(self.config, "https://issuer.example", subject, ruby_review_projects=frozenset({PROJECT}))
+    def store(
+        self, subject: str = "synthetic-ruby-owner", projects: frozenset[str] = frozenset({PROJECT})
+    ) -> ConversationStore:
+        return ConversationStore(self.config, "https://issuer.example", subject, ruby_review_projects=projects)
 
     @staticmethod
-    def payload(*, fingerprint: str = "a" * 64) -> bytes:
-        return (
-            '{"schema_version":"ruby.pending-review.v1","project_id":"rubys-cake-delights-hq",'
-            '"catalog_revision":"catalog_0123456789abcdef","source_packet_fingerprint":"sha256:' + fingerprint + '",'
-            '"source_review_ref":"review_0123456789abcdef","correlation_ref":"correlation_0123456789abcdef",'
-            '"items":[{"sku":"sku_0123456789abcdef","quantity":2,"item_subtotal_minor":1200}],'
-            '"fulfillment_preference":"pickup_0123456789abcdef","unresolved_blockers":["blocker_0123456789abcdef"],'
-            '"customer_confirmation":false}'
-        ).encode()
+    def payload(
+        *, fingerprint: str = "a" * 64, sku: str = "sku_0123456789abcdef",
+        fulfillment: str = "pickup_0123456789abcdef",
+    ) -> bytes:
+        return json.dumps({
+            "schema_version": "ruby.pending-review.v1", "project_id": PROJECT,
+            "catalog_revision": "catalog_0123456789abcdef",
+            "source_packet_fingerprint": "sha256:" + fingerprint,
+            "source_review_ref": "review_0123456789abcdef",
+            "correlation_ref": "correlation_0123456789abcdef",
+            "items": [{"sku": sku, "quantity": 2, "item_subtotal_minor": 1200}],
+            "fulfillment_preference": fulfillment,
+            "unresolved_blockers": ["blocker_0123456789abcdef"],
+            "customer_confirmation": False,
+        }, separators=(",", ":")).encode()
 
     def test_policy_identity_idempotency_and_durable_receipt(self) -> None:
         store = self.store()
@@ -60,6 +69,11 @@ class RubyReviewRecordChecks(unittest.TestCase):
             self.store("other-owner").get_ruby_review_record(created["record_id"])
         with self.assertRaisesRegex(ConversationRequestError, "not_found"):
             self.store("other-owner").list_ruby_review_audit(created["record_id"])
+        revoked = self.store(projects=frozenset({"another-project"}))
+        with self.assertRaisesRegex(ConversationRequestError, "project_not_allowed"):
+            revoked.get_ruby_review_record(created["record_id"])
+        with self.assertRaisesRegex(ConversationRequestError, "project_not_allowed"):
+            revoked.list_ruby_review_audit(created["record_id"])
 
     def test_policy_fail_closed_project_denial_and_explicit_revision(self) -> None:
         disabled = ConversationStore(self.config, "https://issuer.example", "owner")
@@ -76,6 +90,22 @@ class RubyReviewRecordChecks(unittest.TestCase):
         with self.assertRaisesRegex(ConversationRequestError, "stale_revision"):
             store.revise_ruby_review_record(created["record_id"], "ruby-review-revise-0002", revised_body)
         self.assertEqual("none", revised["authority_effect"])
+
+    def test_catalog_values_are_exact_bounded_values_not_core_identifiers(self) -> None:
+        store = self.store()
+        actual = store.create_ruby_review_record(
+            "ruby-review-create-0004",
+            self.payload(sku="RCD-MCH-RD", fulfillment="store pickup"),
+        )
+        self.assertEqual("RCD-MCH-RD", actual["projection"]["items"][0]["sku"])
+        self.assertEqual("store pickup", actual["projection"]["fulfillment_preference"])
+        for index, body in enumerate((
+            self.payload(sku=" RCD-MCH-RD"),
+            self.payload(fulfillment="pickup\n"),
+            self.payload(sku="x" * 129),
+        ), start=5):
+            with self.assertRaisesRegex(ConversationRequestError, "invalid_request"):
+                store.create_ruby_review_record(f"ruby-review-create-000{index}", body)
 
 
 if __name__ == "__main__":

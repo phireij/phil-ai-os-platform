@@ -802,19 +802,43 @@ class ConversationStore:
         fingerprint = value["source_packet_fingerprint"]
         if not isinstance(fingerprint, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", fingerprint):
             raise ConversationRequestError("invalid_request", 400)
-        for name in ("source_review_ref", "correlation_ref", "fulfillment_preference"):
+        for name in ("source_review_ref", "correlation_ref"):
             if not isinstance(value[name], str) or not ID_PATTERN.fullmatch(value[name]):
                 raise ConversationRequestError("invalid_request", 400)
+        if not self._ruby_catalog_value(value["fulfillment_preference"]):
+            raise ConversationRequestError("invalid_request", 400)
         items = value["items"]
         if not isinstance(items, list) or not items or len(items) > 100:
             raise ConversationRequestError("invalid_request", 400)
         for item in items:
-            if not isinstance(item, dict) or set(item) != {"sku", "quantity", "item_subtotal_minor"} or not isinstance(item["sku"], str) or not ID_PATTERN.fullmatch(item["sku"]) or not isinstance(item["quantity"], int) or item["quantity"] < 1 or item["quantity"] > 1000 or not isinstance(item["item_subtotal_minor"], int) or item["item_subtotal_minor"] < 0:
+            if not isinstance(item, dict) or set(item) != {"sku", "quantity", "item_subtotal_minor"} or not self._ruby_catalog_value(item["sku"]) or not isinstance(item["quantity"], int) or item["quantity"] < 1 or item["quantity"] > 1000 or not isinstance(item["item_subtotal_minor"], int) or item["item_subtotal_minor"] < 0:
                 raise ConversationRequestError("invalid_request", 400)
         blockers = value["unresolved_blockers"]
         if not isinstance(blockers, list) or len(blockers) > 20 or any(not isinstance(entry, str) or not ID_PATTERN.fullmatch(entry) for entry in blockers) or len(set(blockers)) != len(blockers) or value["customer_confirmation"] is not False:
             raise ConversationRequestError("invalid_request", 400)
         return value
+
+    @staticmethod
+    def _ruby_catalog_value(value: object) -> bool:
+        """Accept a bounded, exact catalog value without normalizing it.
+
+        Ruby SKU and fulfillment values are catalog-owned strings, not Core IDs.
+        Their original spelling is therefore retained; blank, padded, control, and
+        unbounded values fail closed instead of being silently rewritten.
+        """
+        return (
+            isinstance(value, str)
+            and 1 <= len(value) <= 128
+            and value == value.strip()
+            and value.isprintable()
+        )
+
+    def _require_ruby_review_read_project(self, row: sqlite3.Row) -> None:
+        """Apply the current project policy to direct record and audit reads."""
+        if not self._ruby_review_projects:
+            raise ConversationRequestError("ruby_review_policy_unavailable", 503)
+        if row["project_id"] not in self._ruby_review_projects:
+            raise ConversationRequestError("ruby_review_project_not_allowed", 403)
 
     @staticmethod
     def _ruby_review_result(row: sqlite3.Row) -> dict[str, Any]:
@@ -876,6 +900,7 @@ class ConversationStore:
             row = self._live.connection.execute("SELECT * FROM ruby_review_records WHERE record_id=? AND owner_digest=?", (record_id, self._owner)).fetchone()
         if row is None:
             raise ConversationRequestError("not_found", 404)
+        self._require_ruby_review_read_project(row)
         return self._ruby_review_result(row)
 
     def list_ruby_review_records(self, project_id: str, limit: int = 50, cursor: int = 0) -> dict[str, Any]:
@@ -902,11 +927,12 @@ class ConversationStore:
             raise ConversationRequestError("invalid_query", 400)
         with self._lock:
             owned = self._live.connection.execute(
-                "SELECT record_id FROM ruby_review_records WHERE record_id=? AND owner_digest=?",
+                "SELECT record_id,project_id FROM ruby_review_records WHERE record_id=? AND owner_digest=?",
                 (record_id, self._owner),
             ).fetchone()
             if owned is None:
                 raise ConversationRequestError("not_found", 404)
+            self._require_ruby_review_read_project(owned)
             rows = self._live.connection.execute(
                 "SELECT e.event_id,e.event_type,e.revision_id,e.occurred_at,e.authority_effect "
                 "FROM ruby_review_audit_events e "
