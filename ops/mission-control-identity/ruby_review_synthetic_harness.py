@@ -92,6 +92,7 @@ class DisposableRubySyntheticHarness:
         )
         return RubySyntheticReadBinding(
             store=store,
+            issuer=self.issuer,
             owner_subject=self.owner_subject,
             project_id=RUBY_PROJECT,
             records=self.binding.records,

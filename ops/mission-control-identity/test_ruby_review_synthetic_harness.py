@@ -23,13 +23,11 @@ ISSUER = "https://accounts.google.com"
 class RubySyntheticHarnessChecks(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent)
+        self.addCleanup(self.temp.cleanup)
         self.scope = Path(self.temp.name) / "scope"
         self.scope.mkdir()
         if os.name != "nt":
             os.chmod(self.scope, 0o700)
-
-    def tearDown(self) -> None:
-        self.temp.cleanup()
 
     def create(self) -> DisposableRubySyntheticHarness:
         return DisposableRubySyntheticHarness.create(
@@ -89,6 +87,7 @@ class RubySyntheticHarnessChecks(unittest.TestCase):
         )
         foreign_binding = RubySyntheticReadBinding(
             store=foreign_store,
+            issuer=ISSUER,
             owner_subject=OWNER,
             project_id=RUBY_PROJECT,
             records=harness.binding.records,
