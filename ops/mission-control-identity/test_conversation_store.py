@@ -232,8 +232,20 @@ class ConversationStoreChecks(unittest.TestCase):
                 verified_cto_subject="auth0|wrong-cto",
                 expected_cto_subject="auth0|approved-cto",
             )
+        rollback_key = "cto-acknowledgement-rollback-0001"
+        with patch.object(store._live, "persist", side_effect=OSError("synthetic failure")):
+            with self.assertRaises(OSError):
+                store.acknowledge_cto_handoff(
+                    handoff["handoff_id"], rollback_key, b"{}",
+                    verified_cto_subject="auth0|approved-cto",
+                    expected_cto_subject="auth0|approved-cto",
+                )
+        self.assertEqual("awaiting_connector", store.list_cto_handoffs(conversation["conversation_id"])[0]["state"])
+        self.assertNotIn("cto_handoff_acknowledged", [
+            event["event_type"] for event in store.list_audit_timeline(conversation["conversation_id"])["events"]
+        ])
         acknowledgement = store.acknowledge_cto_handoff(
-            handoff["handoff_id"], "cto-acknowledgement-0001", b"{}",
+            handoff["handoff_id"], rollback_key, b"{}",
             verified_cto_subject="auth0|approved-cto",
             expected_cto_subject="auth0|approved-cto",
         )
@@ -241,7 +253,7 @@ class ConversationStoreChecks(unittest.TestCase):
         self.assertEqual(
             acknowledgement,
             store.acknowledge_cto_handoff(
-                handoff["handoff_id"], "cto-acknowledgement-0001", b"{}",
+                handoff["handoff_id"], rollback_key, b"{}",
                 verified_cto_subject="auth0|approved-cto",
                 expected_cto_subject="auth0|approved-cto",
             ),
