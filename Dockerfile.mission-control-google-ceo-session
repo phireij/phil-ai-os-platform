@@ -8,6 +8,8 @@ RUN pip install --no-cache-dir --disable-pip-version-check -r /tmp/mission-contr
 COPY ops/mission-control-identity/google_oidc_config.py /srv/google_oidc_config.py
 COPY ops/mission-control-identity/google_identity_probe.py /srv/google_identity_probe.py
 COPY ops/mission-control-identity/conversation_store.py /srv/conversation_store.py
+COPY ops/mission-control-identity/ruby_inquiry.py /srv/ruby_inquiry.py
+COPY ops/mission-control-identity/inquiry_persistence.py /srv/inquiry_persistence.py
 COPY ops/mission-control-identity/provider_runtime.py /srv/provider_runtime.py
 COPY ops/mission-control-identity/provider_activation.py /srv/provider_activation.py
 COPY ops/mission-control-identity/notification_delivery.py /srv/notification_delivery.py

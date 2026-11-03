@@ -15,10 +15,14 @@ import secrets
 import sqlite3
 import threading
 import time
+import weakref
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from inquiry_persistence import StoreLease, FencedStoreLock, read_preflight_snapshots, synchronize_snapshot
+from ruby_inquiry import RubyInquiryMixin, PolicyResolver, initialize_inquiries
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from proposal_evidence import EvidenceReferenceVerifier, EvidenceVerificationError
@@ -320,6 +324,7 @@ def _initialize_live(connection: sqlite3.Connection) -> None:
     )
     _initialize_notification_outbox(connection)
     _initialize_notification_audit_events(connection)
+    initialize_inquiries(connection)
 
 
 def _create_notification_outbox(connection: sqlite3.Connection) -> None:
@@ -423,16 +428,23 @@ def _initialize_ledger(connection: sqlite3.Connection) -> None:
 
 
 class EncryptedSnapshot:
-    def __init__(self, path: Path, key: bytes, initializer: Any) -> None:
+    def __init__(self, path: Path, key: bytes, initializer: Any, *, on_failure: Any = None, before_persist: Any = None, encoded: bytes | None = None) -> None:
+        self.on_failure = on_failure
+        self.before_persist = before_persist
         self.path = path
         self.key = key
         self.connection = _connect()
-        if path.exists():
-            self._load()
-        initializer(self.connection)
+        try:
+            if encoded is not None or path.exists():
+                self._load(encoded)
+            initializer(self.connection)
+        except Exception:
+            self.connection.close()
+            raise
 
-    def _load(self) -> None:
-        encoded = self.path.read_bytes()
+    def _load(self, encoded: bytes | None = None) -> None:
+        if encoded is None:
+            encoded = self.path.read_bytes()
         if not encoded.startswith(MAGIC) or len(encoded) < len(MAGIC) + 12 + 16:
             raise ConversationConfigurationError("conversation_snapshot_invalid")
         nonce = encoded[len(MAGIC):len(MAGIC) + 12]
@@ -448,10 +460,17 @@ class EncryptedSnapshot:
             raise ConversationConfigurationError("conversation_snapshot_unavailable") from exc
 
     def persist(self, *, overwrite: bool = True) -> None:
-        plaintext = self.connection.serialize()
-        nonce = secrets.token_bytes(12)
-        encoded = MAGIC + nonce + AESGCM(self.key).encrypt(nonce, plaintext, MAGIC)
-        _atomic_write_private(self.path, encoded, overwrite=overwrite)
+        if self.before_persist is not None:
+            self.before_persist()
+        try:
+            plaintext = self.connection.serialize()
+            nonce = secrets.token_bytes(12)
+            encoded = MAGIC + nonce + AESGCM(self.key).encrypt(nonce, plaintext, MAGIC)
+            _atomic_write_private(self.path, encoded, overwrite=overwrite)
+        except Exception:
+            if self.on_failure is not None:
+                self.on_failure()
+            raise
 
 
 def _atomic_write_private(path: Path, encoded: bytes, *, overwrite: bool) -> None:
@@ -483,7 +502,7 @@ def _atomic_write_private(path: Path, encoded: bytes, *, overwrite: bool) -> Non
         temporary.unlink(missing_ok=True)
 
 
-class ConversationStore:
+class ConversationStore(RubyInquiryMixin):
     def __init__(
         self,
         config: ConversationConfig,
@@ -493,6 +512,7 @@ class ConversationStore:
         notification_delivery_enabled: bool = False,
         provider_runtime: ProviderRuntime | None = None,
         ruby_review_projects: frozenset[str] = frozenset(),
+        ruby_inquiry_policy: PolicyResolver | None = None,
     ) -> None:
         readonly_preflight = os.environ.get("MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT", "")
         if readonly_preflight not in {"", "true"}:
@@ -505,25 +525,147 @@ class ConversationStore:
             self._evidence_verifier = EvidenceReferenceVerifier.from_file(manifest, _derived_key(self._key, b"evidence-manifest")) if manifest else None
         except EvidenceVerificationError as exc:
             raise ConversationConfigurationError(str(exc)) from exc
-        self._lock = threading.Lock()
+        self._closed = False
+        self._persistence_fenced = False
+        self._ruby_inquiry_policy = ruby_inquiry_policy
+        if ruby_inquiry_policy is not None and (not callable(ruby_inquiry_policy) or provider_runtime is not None or notification_delivery_enabled):
+            raise ConversationConfigurationError("inquiry_synthetic_mode_required")
+        self._lock = FencedStoreLock(self)
         self._notification_delivery_enabled = notification_delivery_enabled
         self._provider_runtime = provider_runtime
         self._ruby_review_projects = ruby_review_projects
         self._provider_anchor_path = config.state_file.with_name("provider-budget.anchor") if provider_runtime is not None and not self._readonly_preflight else None
-        self._live = EncryptedSnapshot(config.state_file, _derived_key(self._key, b"live"), _initialize_live)
-        self._ledger = EncryptedSnapshot(config.deletion_ledger_file, _derived_key(self._key, b"ledger"), _initialize_ledger)
-        self._last_purge = 0
-        with self._lock:
-            # A storage-preserving image upgrade starts an isolated, no-network
-            # candidate against the active encrypted volume. Its startup must
-            # decrypt and validate both snapshots without rewriting either.
-            if not self._readonly_preflight:
+        self._lease = None if self._readonly_preflight else StoreLease(config.state_file, exclusive=ruby_inquiry_policy is not None)
+        ref = weakref.ref(self)
+        def on_failure():
+            store = ref()
+            if store is not None:
+                store._persistence_fenced = True
+        def before_persist():
+            store = ref()
+            if store is None or store._closed or store._persistence_fenced:
+                raise ConversationRequestError("conversation_store_fenced", 503)
+            if store._readonly_preflight:
+                raise ConversationRequestError("conversation_readonly_preflight", 503)
+        self._snapshot_callbacks = {"on_failure": on_failure, "before_persist": before_persist}
+        try:
+            encoded_live, encoded_ledger = read_preflight_snapshots(config.state_file, config.deletion_ledger_file) if self._readonly_preflight else (None, None)
+            self._live = EncryptedSnapshot(config.state_file, _derived_key(self._key, b"live"), _initialize_live, encoded=encoded_live, **self._snapshot_callbacks)
+            self._ledger = EncryptedSnapshot(config.deletion_ledger_file, _derived_key(self._key, b"ledger"), _initialize_ledger, encoded=encoded_ledger, **self._snapshot_callbacks)
+            # An unconfigured legacy store must never rewrite retained inquiries.
+            # This check occurs before purge, response updates, or any snapshot write.
+            if not self._readonly_preflight and ruby_inquiry_policy is None and self._live.connection.execute("SELECT 1 FROM ruby_custom_inquiries LIMIT 1").fetchone():
+                raise ConversationConfigurationError("inquiry_policy_required_for_custody")
+            self._last_purge = 0
+            with self._lock:
+                if self._readonly_preflight:
+                    self._prepare_readonly_preflight()
+                else:
+                    if self._provider_anchor_path is not None:
+                        self._verify_provider_anchor_locked()
+                    self._purge_locked(int(time.time()))
+                    self._live.connection.execute("UPDATE response_states SET state='failed',completed_at=?,error_code='provider_outcome_unknown' WHERE state='responding'", (int(time.time()),))
+                    self._live.connection.execute("UPDATE provider_attempts SET state='unknown' WHERE state='in_flight'")
+                    self._live.persist()
+        except Exception:
+            self.close()
+            raise
+
+    def close(self) -> None:
+        """Release the stable writer lease; closing cannot un-fence a live object."""
+        with self._lock.raw:
+            if self._closed:
+                return
+            self._closed = True
+            for name in ("_live", "_ledger"):
+                snapshot = getattr(self, name, None)
+                if snapshot is not None:
+                    snapshot.connection.close()
+            if self._lease is not None:
+                self._lease.close()
+
+    def _prepare_readonly_preflight(self) -> None:
+        """Validate an ephemeral view, replay durable suppression, then seal it.
+
+        No retention purge, provider recovery, snapshot write, or inquiry access
+        is authorized by preflight. A successful startup validates only the pair
+        observed at capture time, not a live read model or deployment approval.
+        """
+        for snapshot in (self._live, self._ledger):
+            if snapshot.connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok" or snapshot.connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                raise ConversationConfigurationError("conversation_snapshot_invalid")
+        markers = self._ledger.connection.execute("SELECT owner_digest,conversation_id FROM deletion_markers").fetchall()
+        self._live.connection.executemany("DELETE FROM conversations WHERE owner_digest=? AND conversation_id=?", markers)
+        self._live.connection.executemany("DELETE FROM idempotency_results WHERE owner_digest=? AND resource_id=?", markers)
+        # SQLite rejects mutation before it changes memory. This also covers
+        # legacy write methods without changing their normal-runtime semantics.
+        # Snapshot callbacks independently prohibit all persistence.
+        for snapshot in (self._live, self._ledger):
+            snapshot.connection.execute("PRAGMA query_only=ON")
+
+    def reconcile_persistence(self, issuer: str, subject: str, *, inquiry_context=None) -> dict[str, Any]:
+        """Explicitly reload both authoritative encrypted files before clearing fence.
+
+        Synchronizing existing bytes creates no receipt. The caller must still
+        resolve the original operation and must not infer noncommit from unknown.
+        Current inquiry policy is checked before any detail or recovery is exposed.
+        """
+        with self._lock.raw:
+            if self._readonly_preflight:
+                raise ConversationRequestError("conversation_readonly_preflight", 503)
+            if self._closed or not self.matches_owner_context(issuer, subject):
+                raise ConversationRequestError("reconciliation_denied", 403)
+            if self._ruby_inquiry_policy is not None:
+                self._inquiry_policy(inquiry_context)
+            if not self._persistence_fenced:
+                return {"state": "not_fenced", "authority_effect": "none"}
+            live = ledger = None
+            try:
                 if self._provider_anchor_path is not None:
-                    self._verify_provider_anchor_locked()
-                self._purge_locked(int(time.time()))
-                self._live.connection.execute("UPDATE response_states SET state='failed',completed_at=?,error_code='provider_outcome_unknown' WHERE state='responding'", (int(time.time()),))
-                self._live.connection.execute("UPDATE provider_attempts SET state='unknown' WHERE state='in_flight'")
-                self._live.persist()
+                    # Provider anchor/snapshot reconciliation needs its existing
+                    # governed recovery procedure, not this synthetic boundary.
+                    raise ConversationConfigurationError("provider_reconciliation_required")
+                # Missing disk is NOT an empty valid store.
+                synchronize_snapshot(self._live.path)
+                synchronize_snapshot(self._ledger.path)
+                live = EncryptedSnapshot(self._live.path, self._live.key, _initialize_live, **self._snapshot_callbacks)
+                ledger = EncryptedSnapshot(self._ledger.path, self._ledger.key, _initialize_ledger, **self._snapshot_callbacks)
+                if live.connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok" or ledger.connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                    raise ConversationConfigurationError("conversation_snapshot_invalid")
+                if live.connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                    raise ConversationConfigurationError("conversation_snapshot_invalid")
+                if self._ruby_inquiry_policy is None and live.connection.execute("SELECT 1 FROM ruby_custom_inquiries LIMIT 1").fetchone():
+                    raise ConversationConfigurationError("inquiry_policy_required_for_custody")
+                # A ledger commit may precede a failed live deletion write.
+                # Replay durable suppression before ANY read or write is un-fenced.
+                markers = ledger.connection.execute("SELECT owner_digest,conversation_id FROM deletion_markers").fetchall()
+                if markers:
+                    live.connection.execute("BEGIN IMMEDIATE")
+                    try:
+                        live.connection.executemany("DELETE FROM conversations WHERE owner_digest=? AND conversation_id=?", markers)
+                        live.connection.executemany("DELETE FROM idempotency_results WHERE owner_digest=? AND resource_id=?", markers)
+                        live.connection.execute("COMMIT")
+                    except Exception:
+                        if live.connection.in_transaction:
+                            live.connection.execute("ROLLBACK")
+                        raise
+                    # This isolated candidate is the only permitted mutation
+                    # while the public store remains fenced under its raw lock.
+                    live.before_persist = None
+                    try:
+                        live.persist()
+                    finally:
+                        live.before_persist = self._snapshot_callbacks["before_persist"]
+            except Exception:
+                for snapshot in (live, ledger):
+                    if snapshot is not None:
+                        snapshot.connection.close()
+                raise ConversationRequestError("reconciliation_unavailable", 503) from None
+            self._live.connection.close()
+            self._ledger.connection.close()
+            self._live, self._ledger = live, ledger
+            self._persistence_fenced = False
+            return {"state": "reconciled", "authority_effect": "none"}
 
     def matches_owner_context(self, issuer: str, subject: str) -> bool:
         """Return only whether a caller matches this store's protected owner."""
@@ -1951,7 +2093,7 @@ class ConversationStore:
         in-flight claim is dead-lettered rather than retried, avoiding a
         duplicate message when a process stops after Telegram accepted it.
         """
-        if not self._notification_delivery_enabled:
+        if not self._notification_delivery_enabled or self._readonly_preflight:
             return False
         if retry_seconds != 15 * 60:
             raise ConversationConfigurationError("notification_retry_interval_invalid")
@@ -2006,7 +2148,6 @@ class ConversationStore:
             except Exception:
                 self._live.connection.deserialize(before)
                 raise
-
         try:
             deliver(notification)
         except Exception as exc:
