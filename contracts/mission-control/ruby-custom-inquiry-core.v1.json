@@ -1,0 +1,638 @@
+{
+  "resource": "ruby.custom-inquiry.v1",
+  "status": "source-only-synthetic-not-registered",
+  "storage": "existing encrypted Core snapshot, no parallel database",
+  "max_request_bytes": 131072,
+  "create_request_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema_version",
+      "source_request_ref",
+      "contact",
+      "customization",
+      "fulfillment",
+      "cart"
+    ],
+    "properties": {
+      "schema_version": {
+        "const": "ruby.custom-inquiry.v1"
+      },
+      "source_request_ref": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_.:-]{1,120}$"
+      },
+      "contact": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "destination"
+        ],
+        "properties": {
+          "kind": {
+            "const": "email"
+          },
+          "destination": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": "^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@example\\.invalid$"
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 120
+          }
+        }
+      },
+      "customization": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cake_type",
+          "custom_notes",
+          "photo_topper",
+          "edible_topper",
+          "addons",
+          "icing_requested"
+        ],
+        "properties": {
+          "cake_type": {
+            "enum": [
+              "basic",
+              "custom"
+            ]
+          },
+          "custom_notes": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 4000
+          },
+          "photo_topper": {
+            "type": "boolean"
+          },
+          "edible_topper": {
+            "type": "boolean"
+          },
+          "addons": {
+            "type": "array",
+            "maxItems": 3,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "candles",
+                "number-candle",
+                "message-plaque"
+              ]
+            }
+          },
+          "icing_requested": {
+            "type": "boolean"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "cake_type": {
+                  "const": "basic"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "custom_notes": {
+                  "const": ""
+                },
+                "photo_topper": {
+                  "const": false
+                },
+                "edible_topper": {
+                  "const": false
+                }
+              }
+            }
+          }
+        ]
+      },
+      "fulfillment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "method",
+          "requested_date",
+          "pickup_time",
+          "yamato_window"
+        ],
+        "properties": {
+          "method": {
+            "enum": [
+              "pickup",
+              "yamato",
+              "ruby-car"
+            ]
+          },
+          "requested_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "pickup_time": {
+            "type": "string",
+            "pattern": "^(|([01][0-9]|2[0-3]):[0-5][0-9])$"
+          },
+          "yamato_window": {
+            "enum": [
+              "none",
+              "08-12",
+              "14-16",
+              "16-18",
+              "18-20",
+              "19-21"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "method": {
+                  "enum": [
+                    "yamato",
+                    "ruby-car"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "pickup_time": {
+                  "const": ""
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "method": {
+                  "enum": [
+                    "pickup",
+                    "ruby-car"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "yamato_window": {
+                  "const": "none"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "cart": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "catalog_revision",
+              "items",
+              "subtotal_minor",
+              "unresolved_blockers"
+            ],
+            "properties": {
+              "catalog_revision": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,120}$"
+              },
+              "items": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "sku",
+                    "quantity",
+                    "unit_price_minor",
+                    "line_total_minor"
+                  ],
+                  "properties": {
+                    "sku": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "quantity": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "unit_price_minor": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "line_total_minor": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    }
+                  }
+                }
+              },
+              "subtotal_minor": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "unresolved_blockers": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 20,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "allOf": [
+                  {
+                    "contains": {
+                      "const": "physical_carton_fit_unverified"
+                    }
+                  },
+                  {
+                    "contains": {
+                      "const": "packed_weight_unverified"
+                    }
+                  },
+                  {
+                    "contains": {
+                      "const": "stock_or_production_capacity_unverified"
+                    }
+                  },
+                  {
+                    "contains": {
+                      "const": "fulfillment_date_and_fee_unconfirmed"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "revision_request_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "expected_revision_id",
+      "inquiry"
+    ],
+    "properties": {
+      "expected_revision_id": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{16,200}$"
+      },
+      "inquiry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "source_request_ref",
+          "contact",
+          "customization",
+          "fulfillment",
+          "cart"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": "ruby.custom-inquiry.v1"
+          },
+          "source_request_ref": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,120}$"
+          },
+          "contact": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "destination"
+            ],
+            "properties": {
+              "kind": {
+                "const": "email"
+              },
+              "destination": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@example\\.invalid$"
+              },
+              "display_name": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 120
+              }
+            }
+          },
+          "customization": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "cake_type",
+              "custom_notes",
+              "photo_topper",
+              "edible_topper",
+              "addons",
+              "icing_requested"
+            ],
+            "properties": {
+              "cake_type": {
+                "enum": [
+                  "basic",
+                  "custom"
+                ]
+              },
+              "custom_notes": {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 4000
+              },
+              "photo_topper": {
+                "type": "boolean"
+              },
+              "edible_topper": {
+                "type": "boolean"
+              },
+              "addons": {
+                "type": "array",
+                "maxItems": 3,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "candles",
+                    "number-candle",
+                    "message-plaque"
+                  ]
+                }
+              },
+              "icing_requested": {
+                "type": "boolean"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "cake_type": {
+                      "const": "basic"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "custom_notes": {
+                      "const": ""
+                    },
+                    "photo_topper": {
+                      "const": false
+                    },
+                    "edible_topper": {
+                      "const": false
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "fulfillment": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "method",
+              "requested_date",
+              "pickup_time",
+              "yamato_window"
+            ],
+            "properties": {
+              "method": {
+                "enum": [
+                  "pickup",
+                  "yamato",
+                  "ruby-car"
+                ]
+              },
+              "requested_date": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "pickup_time": {
+                "type": "string",
+                "pattern": "^(|([01][0-9]|2[0-3]):[0-5][0-9])$"
+              },
+              "yamato_window": {
+                "enum": [
+                  "none",
+                  "08-12",
+                  "14-16",
+                  "16-18",
+                  "18-20",
+                  "19-21"
+                ]
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "method": {
+                      "enum": [
+                        "yamato",
+                        "ruby-car"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "pickup_time": {
+                      "const": ""
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "method": {
+                      "enum": [
+                        "pickup",
+                        "ruby-car"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "yamato_window": {
+                      "const": "none"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "cart": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "catalog_revision",
+                  "items",
+                  "subtotal_minor",
+                  "unresolved_blockers"
+                ],
+                "properties": {
+                  "catalog_revision": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.:-]{1,120}$"
+                  },
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "sku",
+                        "quantity",
+                        "unit_price_minor",
+                        "line_total_minor"
+                      ],
+                      "properties": {
+                        "sku": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000
+                        },
+                        "unit_price_minor": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "line_total_minor": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        }
+                      }
+                    }
+                  },
+                  "subtotal_minor": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "unresolved_blockers": {
+                    "type": "array",
+                    "minItems": 4,
+                    "maxItems": 20,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    },
+                    "allOf": [
+                      {
+                        "contains": {
+                          "const": "physical_carton_fit_unverified"
+                        }
+                      },
+                      {
+                        "contains": {
+                          "const": "packed_weight_unverified"
+                        }
+                      },
+                      {
+                        "contains": {
+                          "const": "stock_or_production_capacity_unverified"
+                        }
+                      },
+                      {
+                        "contains": {
+                          "const": "fulfillment_date_and_fee_unconfirmed"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "trusted_context_fields": [
+    "issuer",
+    "subject",
+    "project_id",
+    "source_system",
+    "source_instance"
+  ],
+  "required_injected_policy": [
+    "project_id",
+    "source_system",
+    "source_instance",
+    "policy_version",
+    "synthetic_only=true",
+    "allowed_contact_channels=email for synthetic fixture only"
+  ],
+  "extra_semantic_checks": [
+    "strict UTF-8; reject duplicate JSON members and nonfinite values",
+    "reject control characters; notes permit newline/tab; preserve exact text",
+    "actual calendar validity, no availability implication",
+    "exact current trusted catalog on new writes; historical recovery never reprices",
+    "unique SKUs, exact quantity-times-unit-price line totals and exact subtotal",
+    "closed contact has no verification or authority claims",
+    "body channel policy and all caller owner/project/source bindings must remain authorized",
+    "all received results require immutable full revision, derived summary, audit and original receipt",
+    "ambiguous persistence fences all store writes until authoritative reconciliation",
+    "missing history means unknown, never proof of noncommit or retry authorization"
+  ],
+  "excluded": [
+    "HTTP routes",
+    "customer transport",
+    "images and image metadata",
+    "provider integration",
+    "real contacts",
+    "production policy/retention/deployment"
+  ]
+}
