@@ -39,6 +39,8 @@ jobs:
         env:
           PYTHONPATH: src
         run: python -m unittest discover -s tests -v
+      - name: Verify staging access proof with synthetic offline tests
+        run: python commerce/woocommerce/test_staging_access_proof.py
       - name: Validate catalog and tax intake gate
         working-directory: commerce/woocommerce
         env:
@@ -54,3 +56,4 @@ jobs:
         run: python tools_validate_owner_catalog_package.py fixtures/production-catalog-intake.template.json --expect-pending
       - name: Validate Tokushoho owner approval handoff boundary
         run: python scripts/validate_sprint7_tokushoho_owner_approval_handoff.py
+
