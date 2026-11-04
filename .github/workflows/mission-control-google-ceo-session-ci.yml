@@ -68,6 +68,8 @@ jobs:
           python3 ops/mission-control-identity/test_cto_deletion_recovery.py
           python3 ops/mission-control-identity/test_ruby_review_records.py
           python3 ops/mission-control-identity/test_ruby_inquiry.py
+          python3 ops/mission-control-identity/test_ruby_finalized_quote.py
+          python3 ops/mission-control-identity/test_ruby_quote_custody.py
           python3 ops/mission-control-identity/test_ruby_review_synthetic_harness.py
           python3 ops/mission-control-identity/test_ruby_review_synthetic_topology.py
           python3 ops/mission-control-identity/test_provider_runtime.py
