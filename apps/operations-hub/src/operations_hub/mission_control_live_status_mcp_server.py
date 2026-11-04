@@ -220,6 +220,10 @@ def mcp_tool_outcome(
     if isinstance(content, list) and content and isinstance(content[0], dict):
         text = content[0].get("text")
         if text == "authentication_required":
+            # Resource authorization can reject a context after verification,
+            # for example if its expiry is reached between the two checks.
+            if verification_outcome == "token_accepted":
+                return "token_rejected"
             # The verifier emits only fixed category labels.  It never records
             # a header, token, claim value, subject, or verifier error detail.
             if verification_outcome in VERIFICATION_OUTCOMES:

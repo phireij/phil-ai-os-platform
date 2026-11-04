@@ -428,6 +428,10 @@ class LiveStatusTests(unittest.TestCase):
         self.assertEqual(mcp_tool_outcome(authentication_required), "token_missing")
         self.assertEqual(mcp_tool_outcome(authentication_required, credential_present=True), "token_rejected")
         self.assertEqual(
+            mcp_tool_outcome(authentication_required, credential_present=True, verification_outcome="token_accepted"),
+            "token_rejected",
+        )
+        self.assertEqual(
             mcp_tool_outcome(authentication_required, verification_outcome="audience_mismatch"),
             "audience_mismatch",
         )
@@ -452,6 +456,48 @@ class LiveStatusTests(unittest.TestCase):
         _context, outcome = _verification_result("synthetic.jwt.value")
         self.assertEqual(outcome, "scope_missing")
         self.assertEqual(_verification_result(None), (None, "token_missing"))
+
+    @patch("operations_hub.mission_control_live_status_mcp_server.datetime")
+    @patch("operations_hub.mission_control_live_status_mcp_server.collect_live_status")
+    @patch("operations_hub.mission_control_live_status_mcp_server._manifest_loader")
+    @patch("operations_hub.mission_control_live_status_mcp_server._verify_owner_credential")
+    def test_context_expiring_after_verification_logs_rejection_without_reading_sources(
+        self, verifier, manifest_loader, collector, clock,
+    ):
+        # JWT verification can precede expiry while the resource check follows it.
+        # Inject that boundary without a real token, clock delay or network call.
+        verifier.return_value = VerifiedContext(
+            subject=CEO_SUBJECT, audience=CANONICAL_RESOURCE_URI,
+            scopes=frozenset({SCOPE}), expires_at=NOW,
+        )
+        clock.now.return_value = NOW
+        payload = json.dumps({
+            "jsonrpc": "2.0", "id": "synthetic-expiry-boundary", "method": "tools/call",
+            "params": {"name": TOOL_NAME, "arguments": {}},
+        }).encode("utf-8")
+        handler = object.__new__(Handler)
+        handler.path = "/mcp"
+        handler.headers = _headers(
+            ("Content-Type", "application/json"),
+            ("Content-Length", str(len(payload))),
+            ("Authorization", "Bearer synthetic-token-must-not-be-logged"),
+        )
+        handler.rfile = BytesIO(payload)
+        handler._send = Mock()
+        with patch.dict(os.environ, {"MCP_AUTHORIZATION_ISSUER": "https://issuer.example.test/"}), self.assertLogs(
+            "operations_hub.mission_control_live_status_mcp_server", level="WARNING",
+        ) as logs:
+            handler.do_POST()
+        handler._send.assert_called_once()
+        self.assertEqual(handler._send.call_args.args[0], 401)
+        self.assertIn('error="invalid_token"', handler._send.call_args.kwargs["headers"]["WWW-Authenticate"])
+        verifier.assert_called_once_with("synthetic-token-must-not-be-logged")
+        manifest_loader.assert_not_called()
+        collector.assert_not_called()
+        self.assertEqual(logs.output, [
+            "WARNING:operations_hub.mission_control_live_status_mcp_server:"
+            "mcp_request method=tools/call outcome=token_rejected http_status=401",
+        ])
 
 
 if __name__ == "__main__":
