@@ -519,6 +519,7 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
         ruby_inquiry_policy: PolicyResolver | None = None,
         ruby_finalized_quotes_enabled: bool = False,
         ruby_quote_custody_enabled: bool = False,
+        ruby_quote_consent_enabled: bool = False,
         ruby_quote_synthetic_verifier=None,
     ) -> None:
         readonly_preflight = os.environ.get("MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT", "")
@@ -537,6 +538,10 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
         self._ruby_inquiry_policy = ruby_inquiry_policy
         self._ruby_finalized_quotes_enabled = ruby_finalized_quotes_enabled
         self._ruby_quote_custody_enabled = ruby_quote_custody_enabled
+        self._ruby_quote_consent_enabled = ruby_quote_consent_enabled
+        if (type(ruby_quote_consent_enabled) is not bool or
+                (ruby_quote_consent_enabled and ruby_quote_custody_enabled is not True)):
+            raise ConversationConfigurationError("quote_consent_synthetic_mode_required")
         self._ruby_quote_synthetic_verifier = ruby_quote_synthetic_verifier
         if (type(ruby_quote_custody_enabled) is not bool or
                 (ruby_quote_custody_enabled and (ruby_finalized_quotes_enabled is not True or not callable(ruby_quote_synthetic_verifier))) or

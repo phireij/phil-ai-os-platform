@@ -106,6 +106,7 @@ class RubyInquiryPolicy:
     catalog_prices: tuple[tuple[str, int], ...] = ()
     finalized_quotes_enabled: bool = False
     quote_custody_enabled: bool = False
+    quote_consent_enabled: bool = False
 
 
 PolicyResolver = Callable[[RubyInquiryContext], RubyInquiryPolicy | None]
