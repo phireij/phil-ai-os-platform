@@ -23,6 +23,8 @@ from typing import Any
 
 from inquiry_persistence import StoreLease, FencedStoreLock, read_preflight_snapshots, synchronize_snapshot
 from ruby_inquiry import RubyInquiryMixin, PolicyResolver, initialize_inquiries
+from ruby_finalized_quote import RubyFinalizedQuoteMixin, initialize_finalized_quotes
+from ruby_quote_custody import RubyQuoteCustodyMixin, initialize_quote_custody, CUSTODY_TABLES
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from proposal_evidence import EvidenceReferenceVerifier, EvidenceVerificationError
@@ -325,6 +327,8 @@ def _initialize_live(connection: sqlite3.Connection) -> None:
     _initialize_notification_outbox(connection)
     _initialize_notification_audit_events(connection)
     initialize_inquiries(connection)
+    initialize_finalized_quotes(connection)
+    initialize_quote_custody(connection)
 
 
 def _create_notification_outbox(connection: sqlite3.Connection) -> None:
@@ -502,7 +506,7 @@ def _atomic_write_private(path: Path, encoded: bytes, *, overwrite: bool) -> Non
         temporary.unlink(missing_ok=True)
 
 
-class ConversationStore(RubyInquiryMixin):
+class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInquiryMixin):
     def __init__(
         self,
         config: ConversationConfig,
@@ -513,6 +517,9 @@ class ConversationStore(RubyInquiryMixin):
         provider_runtime: ProviderRuntime | None = None,
         ruby_review_projects: frozenset[str] = frozenset(),
         ruby_inquiry_policy: PolicyResolver | None = None,
+        ruby_finalized_quotes_enabled: bool = False,
+        ruby_quote_custody_enabled: bool = False,
+        ruby_quote_synthetic_verifier=None,
     ) -> None:
         readonly_preflight = os.environ.get("MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT", "")
         if readonly_preflight not in {"", "true"}:
@@ -528,6 +535,15 @@ class ConversationStore(RubyInquiryMixin):
         self._closed = False
         self._persistence_fenced = False
         self._ruby_inquiry_policy = ruby_inquiry_policy
+        self._ruby_finalized_quotes_enabled = ruby_finalized_quotes_enabled
+        self._ruby_quote_custody_enabled = ruby_quote_custody_enabled
+        self._ruby_quote_synthetic_verifier = ruby_quote_synthetic_verifier
+        if (type(ruby_quote_custody_enabled) is not bool or
+                (ruby_quote_custody_enabled and (ruby_finalized_quotes_enabled is not True or not callable(ruby_quote_synthetic_verifier))) or
+                (not ruby_quote_custody_enabled and ruby_quote_synthetic_verifier is not None)):
+            raise ConversationConfigurationError("quote_custody_synthetic_mode_required")
+        if type(ruby_finalized_quotes_enabled) is not bool or (ruby_finalized_quotes_enabled and ruby_inquiry_policy is None):
+            raise ConversationConfigurationError("quote_synthetic_mode_required")
         if ruby_inquiry_policy is not None and (not callable(ruby_inquiry_policy) or provider_runtime is not None or notification_delivery_enabled):
             raise ConversationConfigurationError("inquiry_synthetic_mode_required")
         self._lock = FencedStoreLock(self)
@@ -556,6 +572,10 @@ class ConversationStore(RubyInquiryMixin):
             # This check occurs before purge, response updates, or any snapshot write.
             if not self._readonly_preflight and ruby_inquiry_policy is None and self._live.connection.execute("SELECT 1 FROM ruby_custom_inquiries LIMIT 1").fetchone():
                 raise ConversationConfigurationError("inquiry_policy_required_for_custody")
+            if not self._readonly_preflight and not ruby_finalized_quotes_enabled and any(self._live.connection.execute("SELECT 1 FROM " + table + " LIMIT 1").fetchone() for table in ("ruby_finalized_quote_events", "ruby_finalized_quote_receipts", "ruby_finalized_quote_audit")):
+                raise ConversationConfigurationError("quote_opt_in_required_for_custody")
+            if not self._readonly_preflight and not ruby_quote_custody_enabled and any(self._live.connection.execute("SELECT 1 FROM " + table + " LIMIT 1").fetchone() for table in CUSTODY_TABLES):
+                raise ConversationConfigurationError("quote_custody_opt_in_required")
             self._last_purge = 0
             with self._lock:
                 if self._readonly_preflight:
@@ -617,6 +637,10 @@ class ConversationStore(RubyInquiryMixin):
                 raise ConversationRequestError("reconciliation_denied", 403)
             if self._ruby_inquiry_policy is not None:
                 self._inquiry_policy(inquiry_context)
+            if self._ruby_finalized_quotes_enabled:
+                self._quote_policy(inquiry_context)
+            if self._ruby_quote_custody_enabled:
+                self._custody_policy(inquiry_context)
             if not self._persistence_fenced:
                 return {"state": "not_fenced", "authority_effect": "none"}
             live = ledger = None
@@ -636,6 +660,10 @@ class ConversationStore(RubyInquiryMixin):
                     raise ConversationConfigurationError("conversation_snapshot_invalid")
                 if self._ruby_inquiry_policy is None and live.connection.execute("SELECT 1 FROM ruby_custom_inquiries LIMIT 1").fetchone():
                     raise ConversationConfigurationError("inquiry_policy_required_for_custody")
+                if not self._ruby_finalized_quotes_enabled and any(live.connection.execute("SELECT 1 FROM " + table + " LIMIT 1").fetchone() for table in ("ruby_finalized_quote_events", "ruby_finalized_quote_receipts", "ruby_finalized_quote_audit")):
+                    raise ConversationConfigurationError("quote_opt_in_required_for_custody")
+                if not self._ruby_quote_custody_enabled and any(live.connection.execute("SELECT 1 FROM " + table + " LIMIT 1").fetchone() for table in CUSTODY_TABLES):
+                    raise ConversationConfigurationError("quote_custody_opt_in_required")
                 # A ledger commit may precede a failed live deletion write.
                 # Replay durable suppression before ANY read or write is un-fenced.
                 markers = ledger.connection.execute("SELECT owner_digest,conversation_id FROM deletion_markers").fetchall()
