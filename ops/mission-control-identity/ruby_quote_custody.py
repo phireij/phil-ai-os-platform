@@ -16,6 +16,9 @@ from ruby_inquiry import canonical, decode, error, _object, _text, IDENTIFIER
 from ruby_finalized_quote import NO_QUOTE_AUTHORITY
 
 SCHEMA = "ruby.synthetic-quote-custody.v1"
+RESPONSE_CONTEXT_SCHEMA = "ruby.synthetic-quote-response-context.v1"
+SELECTION_BINDING_SCHEMA = "ruby.synthetic-quote-selection-binding.v1"
+BOUND_RESPONSE_SCHEMA = "ruby.synthetic-quote-bound-response.v1"
 FP = re.compile(r"sha256:[0-9a-f]{64}\Z")
 CUSTODY_TABLES = ("ruby_quote_custody_events", "ruby_quote_custody_receipts",
                   "ruby_quote_custody_audit", "ruby_quote_custody_heads")
@@ -76,11 +79,18 @@ def validate_custody(body):
         raise error("invalid_quote_custody")
     operation = value.get("operation")
     common = {"schema_version", "operation", "expected_event_id", "quote_id"}
+    bound_response = value.get("schema_version") == BOUND_RESPONSE_SCHEMA
+    if bound_response and operation != "respond":
+        raise error("invalid_quote_custody")
     if operation == "select":
         _object(value, common | {"quote_fingerprint", "consent_text"})
         _text(value["consent_text"], 2000, multiline=True)
     elif operation == "respond":
-        _object(value, common | {"quote_fingerprint", "consent_fingerprint", "decision"})
+        fields = common | {"quote_fingerprint", "consent_fingerprint", "decision"}
+        _object(value, fields | {"selection_fingerprint"} if bound_response else fields)
+        if bound_response and (type(value["selection_fingerprint"]) is not str or
+                not FP.fullmatch(value["selection_fingerprint"])):
+            raise error("invalid_quote_custody")
         if value["decision"] not in ("accept", "decline"):
             raise error("invalid_quote_custody")
         if type(value["consent_fingerprint"]) is not str or not FP.fullmatch(value["consent_fingerprint"]):
@@ -89,7 +99,7 @@ def validate_custody(body):
         _object(value, common)
     else:
         raise error("invalid_quote_custody")
-    if value["schema_version"] != SCHEMA:
+    if value["schema_version"] not in (SCHEMA, BOUND_RESPONSE_SCHEMA):
         raise error("invalid_quote_custody")
     _identifier(value["quote_id"])
     _identifier(value["expected_event_id"], nullable=True)
@@ -102,12 +112,53 @@ def fingerprint(value):
     return "sha256:" + hashlib.sha256(value).hexdigest()
 
 
+def selection_binding(selection):
+    """Bind only retained select fields; original quote hash includes revision.
+
+    This content fingerprint is not a credential, customer identity or proof of
+    rendering. Callers must first validate the retained custody history.
+    """
+    selected = decode(selection["request_json"].encode())
+    value = {"schema_version": SELECTION_BINDING_SCHEMA,
+             "inquiry_id": selection["inquiry_id"],
+             "quote_id": selection["quote_id"],
+             "selected_event_id": selection["event_id"],
+             "quote_fingerprint": selected["quote_fingerprint"],
+             "consent_fingerprint": fingerprint(selected["consent_text"].encode("utf-8"))}
+    return value, fingerprint(canonical(value))
+
+
+def validate_bound_selection(value, selection):
+    if selection is None or selection["operation"] != "select":
+        raise error("quote_custody_binding_mismatch", 409)
+    binding, hashed = selection_binding(selection)
+    if (value["expected_event_id"] != binding["selected_event_id"] or
+            value["quote_id"] != binding["quote_id"] or
+            value["quote_fingerprint"] != binding["quote_fingerprint"] or
+            value["consent_fingerprint"] != binding["consent_fingerprint"] or
+            value["selection_fingerprint"] != hashed):
+        raise error("quote_custody_binding_mismatch", 409)
+
+
 class RubyQuoteCustodyMixin:
     def _custody_policy(self, context):
         policy = self._quote_policy(context)
         if self._ruby_quote_custody_enabled is not True or policy.quote_custody_enabled is not True:
             raise error("quote_custody_policy_unavailable", 503)
         return policy
+
+    def _consent_policy(self, context):
+        policy = self._custody_policy(context)
+        if (self._ruby_quote_consent_enabled is not True or
+                policy.quote_consent_enabled is not True):
+            raise error("quote_consent_policy_unavailable", 503)
+        return policy
+
+    @staticmethod
+    def _response_context_unavailable(state):
+        return {"schema_version": RESPONSE_CONTEXT_SCHEMA, "state": state,
+                "cache_control": "no-store", "customer_identity_verified": False,
+                "current_quote_verified": False, **NO_QUOTE_AUTHORITY}
 
     @staticmethod
     def _custody_unknown():
@@ -136,6 +187,7 @@ class RubyQuoteCustodyMixin:
         if len(rows) != head["sequence"] or audit_count != len(rows) or receipt_count != len(rows) or not rows or rows[-1]["event_id"] != head["event_id"]:
             return None
         prior = None
+        previous = None
         for number, row in enumerate(rows, 1):
             if (row["owner_digest"], row["project_id"], row["source_system"], row["source_instance"]) != (self._owner, *self._inquiry_scope(context)):
                 raise error("quote_custody_binding_mismatch", 409)
@@ -143,6 +195,11 @@ class RubyQuoteCustodyMixin:
             if (row["sequence"] != number or row["prior_event_id"] != prior or value["expected_event_id"] != prior or
                     value["quote_id"] != row["quote_id"] or value["operation"] != row["operation"] or request_hash != row["request_hash"]):
                 raise error("quote_custody_binding_mismatch", 409)
+            if value["schema_version"] == BOUND_RESPONSE_SCHEMA:
+                # Recompute semantics from retained select evidence on reads and
+                # recovery too, not only on the first append. No current quote
+                # dependency is required for a superseded historical selection.
+                validate_bound_selection(value, previous)
             receipt = connection.execute("SELECT * FROM ruby_quote_custody_receipts WHERE event_id=?", (row["event_id"],)).fetchone()
             audit = connection.execute("SELECT * FROM ruby_quote_custody_audit WHERE event_id=?", (row["event_id"],)).fetchone()
             if receipt is None or audit is None:
@@ -152,6 +209,7 @@ class RubyQuoteCustodyMixin:
                     any(audit[key] != row[key] for key in ("inquiry_id", "quote_id", "operation", "request_hash", "policy_version", "recorded_at"))):
                 raise error("quote_custody_binding_mismatch", 409)
             prior = row["event_id"]
+            previous = row
         return rows
 
     def _custody_quote(self, context, inquiry_id, quote_id, policy):
@@ -182,6 +240,8 @@ class RubyQuoteCustodyMixin:
         with self._lock:
             policy = self._custody_policy(context)
             value, request_hash = validate_custody(request_body)
+            if value["schema_version"] == BOUND_RESPONSE_SCHEMA:
+                self._consent_policy(context)
             if type(idempotency_key) is not str:
                 raise error("invalid_idempotency_key")
             key_hash = self._idempotency(idempotency_key)
@@ -222,6 +282,8 @@ class RubyQuoteCustodyMixin:
                     if (value["quote_fingerprint"] != quote["request_fingerprint"] or
                             value["consent_fingerprint"] != fingerprint(selected["consent_text"].encode())):
                         raise error("quote_custody_binding_mismatch", 409)
+            if value["schema_version"] == BOUND_RESPONSE_SCHEMA:
+                validate_bound_selection(value, history[-1] if history else None)
             row = dict(event_id=self._identifier("ruby-quote-custody"), inquiry_id=inquiry_id,
                        sequence=len(history)+1, prior_event_id=head_id, quote_id=value["quote_id"],
                        operation=value["operation"], request_hash=request_hash, actor_ref=actor,
@@ -254,6 +316,8 @@ class RubyQuoteCustodyMixin:
         with self._lock:
             policy = self._custody_policy(context)
             value, request_hash = validate_custody(request_body)
+            if value["schema_version"] == BOUND_RESPONSE_SCHEMA:
+                self._consent_policy(context)
             if type(idempotency_key) is not str:
                 raise error("invalid_idempotency_key")
             key_hash = self._idempotency(idempotency_key)
@@ -292,5 +356,51 @@ class RubyQuoteCustodyMixin:
             return {"schema_version": SCHEMA, "state": state, "event_id": last["event_id"],
                     "quote_id": last["quote_id"], "quote_fingerprint": quote["request_fingerprint"],
                     "synthetic_decision": decision, "cache_control": "no-store",
+                    "customer_identity_verified": False, "current_quote_verified": False,
+                    **NO_QUOTE_AUTHORITY}
+
+
+    def get_ruby_quote_response_context(self, context, inquiry_id):
+        """Read exact selected consent and quote, for synthetic composition only.
+
+        This internal projection is not a customer API. The quote snapshot has
+        an unverified declared customer reference. Only the downstream safe view
+        may be rendered, as text. All authority remains false, and any later
+        response must still pass the atomic expected-event check on append.
+        """
+        with self._lock:
+            policy = self._consent_policy(context)
+            owned = self._inquiry_owned(context, inquiry_id)
+            if owned is None:
+                raise error("not_found", 404)
+            history = self._custody_history(context, inquiry_id)
+            if not history:
+                return self._response_context_unavailable("unknown")
+            selected = history[-1]
+            if selected["operation"] != "select":
+                state = "withdrawn" if selected["operation"] == "withdraw" else "already_responded"
+                return self._response_context_unavailable(state)
+            # Do not call the public getter under the non-reentrant store lock.
+            # Validate the exact source dependencies, then read their retained
+            # payload under the same lock without changing the custody contract.
+            receipt = self._custody_quote(context, inquiry_id, selected["quote_id"], policy)
+            if receipt is None:
+                return self._response_context_unavailable("unknown")
+            source = self._live.connection.execute(
+                "SELECT request_json FROM ruby_finalized_quote_events WHERE quote_id=? AND inquiry_id=?",
+                (selected["quote_id"], inquiry_id)).fetchone()
+            snapshot = {"receipt": receipt, "quote": decode(source["request_json"].encode()),
+                        "cache_control": "no-store", **NO_QUOTE_AUTHORITY}
+            if owned["current_revision_id"] != receipt["revision_id"]:
+                return self._response_context_unavailable("stale_inquiry_revision")
+            binding, hashed = selection_binding(selected)
+            if binding["quote_fingerprint"] != receipt["request_fingerprint"]:
+                raise error("quote_custody_binding_mismatch", 409)
+            consent = decode(selected["request_json"].encode())["consent_text"]
+            return {"schema_version": RESPONSE_CONTEXT_SCHEMA,
+                    "state": "synthetic_selected_quote_context", "cache_control": "no-store",
+                    "binding": binding, "selection_fingerprint": hashed,
+                    "inquiry_revision_id": receipt["revision_id"],
+                    "consent_text": consent, "quote_snapshot": snapshot,
                     "customer_identity_verified": False, "current_quote_verified": False,
                     **NO_QUOTE_AUTHORITY}
