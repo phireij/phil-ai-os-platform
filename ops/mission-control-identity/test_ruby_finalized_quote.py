@@ -217,4 +217,9 @@ s.close()
         self.assertEqual(self.counts(),(1,1,1))
 
 
+# Existing CI invokes this module directly. Keep the V2 declaration regression
+# cases in that invocation without adding a workflow or a separate test runner.
+from test_ruby_staff_quote_declarations import StaffQuoteDeclarationChecks
+
+
 if __name__=='__main__': unittest.main()

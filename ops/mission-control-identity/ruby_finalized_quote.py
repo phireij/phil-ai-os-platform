@@ -6,12 +6,17 @@ no route, identity authority, provider, catalog reprice, or payment capability.
 from __future__ import annotations
 import hashlib
 import hmac
+import re
 import time
 from datetime import date
 from ruby_inquiry import (canonical, decode, error, _object, _text, _opaque, _int,
                           IDENTIFIER, NO_AUTHORITY)
 
 SCHEMA = "ruby.finalized-quote-record.v1"
+# V2 versions the request body only. Both bodies use the original V1 receipt:
+# its fingerprint binds the exact retained body, not an approval or verification.
+STAFF_SCHEMA = "ruby.finalized-quote-record.v2"
+SOURCE_REVIEW_FINGERPRINT = re.compile(r"sha256:[0-9a-f]{64}\Z")
 NO_QUOTE_AUTHORITY = {**NO_AUTHORITY, "customer_accepted": False,
     "date_verified": False, "packing_verified": False, "shipping_verified": False,
     "payment_request_authorized": False, "payment_execution_authorized": False,
@@ -54,9 +59,28 @@ def initialize_finalized_quotes(connection):
 
 def validate_quote(body):
     value = decode(body)
-    _object(value, {"schema_version", "expected_revision_id", "source_quote_ref", "currency", "items", "shipping_yen", "total_yen", "fulfillment"})
-    if value["schema_version"] != SCHEMA or value["currency"] != "JPY":
+    fields = {"schema_version", "expected_revision_id", "source_quote_ref", "currency", "items", "shipping_yen", "total_yen", "fulfillment"}
+    staff_body = type(value) is dict and value.get("schema_version") == STAFF_SCHEMA
+    _object(value, fields | {"staff_declaration"} if staff_body else fields)
+    if value["schema_version"] not in (SCHEMA, STAFF_SCHEMA) or value["currency"] != "JPY":
         raise error("invalid_quote")
+    if staff_body:
+        declaration = value["staff_declaration"]
+        _object(declaration, {"operator_ref", "source_review_fingerprint",
+            "date_confirmed", "packing_confirmed", "shipping_confirmed",
+            "packing_description", "verification"})
+        _opaque(declaration["operator_ref"])
+        if (type(declaration["source_review_fingerprint"]) is not str or
+                not SOURCE_REVIEW_FINGERPRINT.fullmatch(declaration["source_review_fingerprint"]) or
+                declaration["verification"] != "unverified_operator_declaration" or
+                any(declaration[key] is not True for key in
+                    ("date_confirmed", "packing_confirmed", "shipping_confirmed"))):
+            raise error("invalid_quote")
+        _text(declaration["packing_description"], 200)
+        if declaration["packing_description"] != declaration["packing_description"].strip():
+            raise error("invalid_quote")
+        # These are explicitly unverified declarations, not staff authentication,
+        # source-review verification, capacity checks or execution authority.
     if type(value["expected_revision_id"]) is not str or not IDENTIFIER.fullmatch(value["expected_revision_id"]):
         raise error("invalid_quote")
     _opaque(value["source_quote_ref"])
