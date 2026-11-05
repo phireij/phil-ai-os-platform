@@ -10,6 +10,7 @@ ops/mission-control-identity/**
 !ops/mission-control-identity/ruby_staging_id_token.py
 !ops/mission-control-identity/ruby_staging_google_auth.py
 !ops/mission-control-identity/ruby_staging_app_factory.py
+!ops/mission-control-identity/ruby_staging_protected_files.py
 !ops/mission-control-identity/ruby_staging_http_app.py
 !ops/mission-control-identity/ruby_review_synthetic.py
 !Dockerfile.ruby-staging-review

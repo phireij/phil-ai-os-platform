@@ -3,8 +3,9 @@
 This source continuation adds a staging-only WSGI application, fixed synthetic
 review records, a bounded Google exchange backend, and three opt-in Gunicorn
 adapters. It does not enable a service. The module-level application returns 503;
-the script entrypoint reports inactivity and exits. There is no listener,
-credential loader, deployment command or production import change.
+the script entrypoint reports inactivity and exits. A separate default-off
+mounted-file loader is supplied as source below, without host wiring or actual
+credentials. There is no listener, deployment command or production import change.
 
 ## Application and authority boundary
 
@@ -47,7 +48,8 @@ app at shutdown. Do not preload an enabled instance in the master. One configure
 worker is not by itself a single-state-process guarantee: Gunicorn's SIGTTIN
 scaling and HUP reload can create additional or overlapping workers. The factory
 does not implement supervisor signals, reload policy, lifecycle hooks, a server
-entrypoint or protected configuration loading. Startup diagnostics outside the
+entrypoint or protected configuration loading; the optional mounted-file wrapper
+below supplies the latter source boundary. Startup diagnostics outside the
 reviewed logger still require a safe runtime boundary.
 
 ## Optional server boundary
@@ -113,10 +115,11 @@ expected lower-layer defect for an accepted composed configuration.
 ## Image source and CI effects
 
 `Dockerfile.ruby-staging-review` is an existing reviewed inactive source recipe,
-pinned to the Core Linux/amd64 Python/Alpine lineage. It copies six application
+pinned to the Core Linux/amd64 Python/Alpine lineage. It copies seven application
 modules plus requirements, runs as a non-root user and exits inactive. It omits
 Gunicorn and the adapters. It is not a runnable staging-server image. This
-continuation neither builds nor publishes that recipe. The requirements contain
+image is built temporarily by the separate packaging CI job and is not published
+by that job. The requirements contain
 version pins, not a complete hash-locked wheel supply chain.
 
 The CEO-session CI adds the three application/backend/runtime suites, a separate
@@ -132,18 +135,92 @@ factory-created signed-session case through the composed real HTTP handler. Its
 source is included in the inactive recipe, but the entrypoint still reports
 inactivity and exits. No serving path is selected by that inclusion.
 
+The packaging job checks out the exact event SHA and builds from ten allowlisted
+files: the recipe, its ignore file, requirements and seven application modules.
+It records source hashes and the runner-local image ID, then inspects metadata.
+It does not execute the staging app, push an image, upload an artifact or deploy.
+The recipe remains pinned to the same Linux/amd64 base; its serving omissions and
+host-architecture acceptance remain unchanged.
+
+## Proposed protected mounted-file boundary
+
+`ruby_staging_protected_files.create_staging_application_from_files` is a
+startup-only, default-off wrapper around the real factory. Importing it performs
+no configuration or credential loading. Disabled calls do not inspect inputs,
+read identity, or open files. No environment/CLI loader, actual host identity,
+secret installation, permission change or serving entrypoint is provided.
+
+The fixed paths are `/run/secrets/ruby-staging/config.json` and
+`/run/secrets/ruby-staging/secret.json`. A trusted final-worker launcher must pass
+all four `StagingFileOwnership` IDs and the expected generation explicitly:
+`reader_uid`, `reader_gid`, `directory_uid`, and `directory_gid` have no defaults.
+The reader UID must be nonzero. Effective UID/GID must match reader expectations;
+file ownership must match the same IDs. This does not prove namespace mapping,
+capabilities, ACL/MAC policy or trust in the mount provider.
+
+Both files must have exact mode 0400 and one hard link. Every opened directory
+must have the supplied directory UID/GID. The leaf directory must be exactly
+0555; `/`, `/run` and `/run/secrets` must be exactly 0755 or 0555, with no special
+permission bits. The leaf and both files must report ST_RDONLY through fstatvfs.
+A different provider layout needs a reviewed contract change, not permissive
+fallbacks. No code sets these modes, IDs or mount flags.
+
+The config JSON envelope has exactly `version`, `generation`, `config`, `limits`
+and `max_cache_seconds`. Version is integer 1. Generation is a 32-character
+lowercase hexadecimal string equal to the trusted launcher's expected generation.
+`config` has exactly the seven StagingHTTPConfig fields; `limits` has exactly the
+four StagingRequestLimits fields. Their existing types, identity exclusions and
+policy bounds still apply. The secret JSON envelope has exactly `version`,
+`generation`, and `client_secret`, with the same version/generation requirements
+and existing secret validation. No actual identities or deployment policy values
+are selected by this schema. Duplicate/unknown keys, nonfinite values, malformed
+UTF-8/JSON and wrong types fail closed. Config bytes are capped at 16384 and secret
+envelope bytes at 8192, before parsing.
+
+The loader walks individual components using retained O_DIRECTORY/O_NOFOLLOW/
+O_CLOEXEC descriptors. It opens final files with O_NOFOLLOW/O_NONBLOCK/O_CLOEXEC,
+validates both opened objects before reading either, bounds reads, requires EOF,
+and rechecks file identity/metadata plus directory and mount policy. All owned
+FDs close before factory allocation. Ordinary errors are fixed and unchained;
+control exceptions survive cleanup. Every close is attempted, but an uncertain
+close is not retried because its numeric FD could have been reused. No secret or
+file content is logged. Dropping Python references is not secure zeroization.
+
+These checks do not establish an atomic two-file transaction. Matching expected
+generations catch accidental mixing but cannot prevent a trusted host writer
+from reusing a generation or changing data through another writable mount.
+ST_RDONLY describes this process's view only. O_NONBLOCK avoids FIFO-open hangs;
+it does not bound regular-file I/O or make opening an unexpected device harmless.
+Protected ancestors and a trusted mount provider are prerequisites, with startup
+I/O deadlines and filesystem behavior still subject to runtime acceptance.
+
+Required lifecycle: publish a complete immutable generation before startup,
+mount it read-only, and prohibit writes, replacements, remounts or rotation while
+loading or serving. Construct only in the final worker after fork. Close and
+terminate the old app before activating a new generation; do not hot-reload or
+overlap independent session-state processes. These host guarantees are not
+activated or verified by the loader.
+
+The synthetic loader suite uses actual temporary file descriptors and kernel
+symlink/FIFO behavior while redirecting the root open to an owned test tree.
+Read-only mount flags are simulated; it never opens the real secret paths or
+changes a mount. A signed synthetic login/read/logout exercises the loader with
+the real factory. No test establishes real host permissions or secret delivery.
+
 ## Remaining hosted acceptance gates
 
 - Effective ingress/proxy/TLS configuration and exact request/header forwarding.
   A proxy can normalize raw bytes before this worker sees them. Forwarded scheme
   headers and ordinary Connection headers currently fail closed in the app;
   they require an explicit trusted transport contract, not a broad allowlist.
-- A protected configuration/secret loader and verified staging Google client,
-  exact owner binding, callback origin and secret delivery. None is supplied here.
+- Verified host wiring for the supplied default-off protected-file loader:
+  namespace identity, mount/provider trust, immutable generation and rotation
+  lifecycle, plus actual staging Google client, exact owner binding, callback
+  origin and secret delivery. No real credentials or host setup are supplied.
 - An approved single-worker supervisor with bounded termination, reaping and
   replacement, plus actual socket/TLS/read/write/request limits. Prior isolated
   signal tests do not establish end-to-end serving deadlines or host behavior.
-- Runtime artifact provenance, host architecture, any eventual image build,
+- Serving-runtime artifact provenance, host architecture, a serving-image build,
   actual Google/browser sign-in and hosted security/availability acceptance.
 
 No runnable server entrypoint is provided until those contracts are resolved.

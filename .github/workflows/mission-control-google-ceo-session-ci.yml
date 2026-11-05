@@ -86,6 +86,7 @@ jobs:
           python3 ops/mission-control-identity/test_ruby_staging_google_auth.py
           python3 ops/mission-control-identity/test_ruby_staging_http_app.py
           python3 ops/mission-control-identity/test_ruby_staging_app_factory.py
+          python3 ops/mission-control-identity/test_ruby_staging_protected_files.py
           python3 ops/mission-control-identity/test_ruby_staging_runtime_limits.py
           python3 ops/mission-control-identity/test_provider_runtime.py
           python3 ops/mission-control-identity/test_notification_delivery.py
@@ -184,6 +185,7 @@ jobs:
               "ops/mission-control-identity/ruby_staging_id_token.py",
               "ops/mission-control-identity/ruby_staging_google_auth.py",
               "ops/mission-control-identity/ruby_staging_app_factory.py",
+              "ops/mission-control-identity/ruby_staging_protected_files.py",
               "ops/mission-control-identity/ruby_staging_http_app.py",
               "ops/mission-control-identity/ruby_review_synthetic.py",
           )
