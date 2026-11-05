@@ -141,7 +141,7 @@ class RubyFinalizedQuoteMixin:
         request = decode(revision["request_json"].encode())
         if hashlib.sha256(canonical(request)).digest() != revision["request_hash"]:
             raise error("quote_binding_mismatch", 409)
-        inquiry = request if revision["revision_number"] == 1 else request["inquiry"]
+        inquiry, _, _ = self._inquiry_stored_request(revision)
         self._inquiry_payload(inquiry, policy, current_catalog=False)
         # A declared synthetic contact fingerprint, not verified customer identity.
         return "declared-synthetic-sha256:" + hashlib.sha256(canonical({"inquiry_id": revision["inquiry_id"], "contact": {key: inquiry["contact"][key] for key in ("kind", "destination")}})).hexdigest()

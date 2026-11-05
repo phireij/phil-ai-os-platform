@@ -517,6 +517,7 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
         provider_runtime: ProviderRuntime | None = None,
         ruby_review_projects: frozenset[str] = frozenset(),
         ruby_inquiry_policy: PolicyResolver | None = None,
+        ruby_inquiry_source_mapper=None,
         ruby_finalized_quotes_enabled: bool = False,
         ruby_quote_custody_enabled: bool = False,
         ruby_quote_consent_enabled: bool = False,
@@ -536,6 +537,9 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
         self._closed = False
         self._persistence_fenced = False
         self._ruby_inquiry_policy = ruby_inquiry_policy
+        self._ruby_inquiry_source_mapper = ruby_inquiry_source_mapper
+        if ruby_inquiry_source_mapper is not None and (ruby_inquiry_policy is None or not callable(ruby_inquiry_source_mapper)):
+            raise ConversationConfigurationError("inquiry_source_mapper_invalid")
         self._ruby_finalized_quotes_enabled = ruby_finalized_quotes_enabled
         self._ruby_quote_custody_enabled = ruby_quote_custody_enabled
         self._ruby_quote_consent_enabled = ruby_quote_consent_enabled
