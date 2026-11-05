@@ -59,8 +59,15 @@ reviewed logger still require a safe runtime boundary.
 launcher. It accepts the exact reviewed owned worker/provider/logger, one worker and
 thread, positive explicit timeouts, and default process hooks. It rejects
 preloading, reload, request-count recycling, daemonization, reuse-port, dirty
-pools, control sockets, cached applications and inherited reexec inputs. It
-does not choose timing, listener, UID, secret, or proxy settings.
+pools, control sockets, cached applications and inherited runtime inputs.
+`GUNICORN_PID`, `GUNICORN_FD`, `LISTEN_PID`, `LISTEN_FDS`, `LISTEN_FDNAMES`
+and `NOTIFY_SOCKET` are refused when present in either the process environment
+or configured environment, including empty values. Explicit `fd://` binds are
+also refused before upstream setup and rechecked before start/manage/spawn.
+The controller neither consumes those inputs nor closes inherited descriptors.
+This prevents implicit socket adoption and an upstream readiness notification
+before application loading; it does not implement readiness or general FD hygiene.
+It does not choose timing, listener, UID, secret, or proxy settings.
 
 The worker target cannot be changed from the literal integer one, including by
 the actual control handler's direct property assignment. HUP, USR2, TTIN, TTOU,
@@ -98,8 +105,9 @@ Arbiter. No such launcher is included. The host
 must enforce one master/replica and route to one generation, disallow overlapping
 rollouts/autoscaling, and verify the **entire old service process set/cgroup is
 empty** before replacement, including after master death. Master exit, readiness
-removal and a successful bind are not proof. Exclude or separately review socket
-activation, inherited descriptors, command overrides and dirty-runtime inputs.
+removal and a successful bind are not proof. Socket activation and the inherited
+runtime inputs listed above are unsupported. A launcher still needs a reviewed
+descriptor policy, command/environment boundary and dirty-runtime exclusions.
 Replacement loses sessions, pending flows and caches, and can involve downtime.
 
 The new offline suite uses the actual original controller methods with inert
