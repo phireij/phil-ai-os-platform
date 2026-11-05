@@ -195,7 +195,9 @@ class HTTPBoundaryTests(unittest.TestCase):
         client = MemorySocket(request, fragment=fragment)
         listener = MemorySocket()
         before = len(self.records.records)
-        with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", side_effect=lambda c, cfg: c) as simulated_tls:
+        with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", side_effect=lambda c, cfg: c) as simulated_tls, \
+                patch("ruby_staging_gunicorn_worker._tls_transport", side_effect=lambda c: type(c) is MemorySocket), \
+                patch("ruby_staging_gunicorn_worker._tls_ready", side_effect=lambda c: type(c) is MemorySocket):
             # Use the actual parser/handler with the explicitly selected opt-in adapters.
             worker.handle(listener, client, ("127.0.0.1", 12345))
             self.assertEqual(simulated_tls.call_count, int(tls))

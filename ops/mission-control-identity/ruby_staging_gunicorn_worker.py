@@ -1,17 +1,18 @@
 """Opt-in staging-only generic HTTP error responses for pinned Gunicorn.
 
 No server is started or configuration selected by import. The original parser,
-request handling, normal responses, abort method and worker lifecycle are inherited.
+request handling, normal responses, abort method and worker lifecycle are retained.
 Canonical raw-target/header policy and trusted ingress remain separate gates.
+TLS wrapping failures close without HTTP serialization or draining raw input.
 """
 from __future__ import annotations
 
 from datetime import timedelta
-from ssl import SSLError
+from ssl import SSLError, SSLSocket
 from types import SimpleNamespace
 
 import gunicorn
-from gunicorn import util
+from gunicorn import http, sock, util
 from gunicorn.http.errors import (
     ChunkMissingTerminator, ConfigurationProblem, ExpectationFailed,
     ForbiddenProxyRequest, InvalidChunkExtension, InvalidChunkSize,
@@ -78,6 +79,30 @@ def _status(exc):
     return 500
 
 
+def _tls_transport(client):
+    # A callback returning an arbitrary object is not a TLS transport. Reject
+    # subclasses that can replace the standard socket's encryption semantics.
+    return type(client) is SSLSocket
+
+
+def _tls_ready(client):
+    try:
+        return _tls_transport(client) and client.version() in {"TLSv1.2", "TLSv1.3"}
+    except Exception:
+        return False
+
+
+def _close_untrusted_transport(client):
+    # A failed callback can return None or a foreign object. Best-effort close
+    # must neither read it nor prevent the original raw socket being closed.
+    try:
+        close = getattr(client, "close", None)
+        if callable(close):
+            close()
+    except Exception:
+        pass
+
+
 class StagingSyncWorker(SyncWorker):
     """Generic errors only, with the separately reviewed opt-in logger required."""
 
@@ -85,6 +110,64 @@ class StagingSyncWorker(SyncWorker):
         if gunicorn.__version__ != "26.2.2" or type(log) is not StagingGunicornLogger:
             raise StagingWorkerConfigurationError("staging_worker_configuration_invalid")
         super().__init__(age, ppid, sockets, app, timeout, cfg, log)
+
+    def handle(self, listener, client, addr):
+        """Pinned sync request flow with an explicit pre-TLS error boundary.
+
+        No context, certificate, TLS policy or timeout is selected here. Wrapping
+        remains upstream; TLS failures never use its generic HTTP error path.
+        Successful parser/application responses retain the pinned request handler.
+        """
+        raw_client, req, wrapped_client = client, None, None
+        tls, wrapped, drift, transport_known = False, False, False, False
+        try:
+            tls = bool(self.cfg.is_ssl)
+            transport_known = True
+            if tls:
+                wrapped_client = sock.ssl_wrap_socket(client, self.cfg)
+                if not _tls_transport(wrapped_client):
+                    raise ConfigurationProblem("staging_tls_transport_invalid")
+                client, wrapped = wrapped_client, True
+                # An exact SSLSocket can fall back to raw socket operations after
+                # unwrap. It must already have completed reviewed-version TLS.
+                # Do not initiate a lazy handshake or invent its deadline here.
+                if not _tls_ready(client):
+                    raise ConfigurationProblem("staging_tls_transport_unready")
+            # A callback must not change the parser's transport-mode declaration.
+            if bool(self.cfg.is_ssl) != tls:
+                drift = True
+                raise ConfigurationProblem("staging_transport_configuration_invalid")
+            parser = http.get_parser(self.cfg, client, addr)
+            req = next(parser)
+            if tls and not _tls_ready(client):
+                raise ConfigurationProblem("staging_tls_transport_unready")
+            self.handle_request(listener, req, client, addr)
+        except (http.errors.NoMoreData, StopIteration):
+            self.log.debug("staging_connection_closed")
+        except SSLError:
+            # Even after a prior handshake, a TLS failure is not an HTTP error.
+            self.log.warning("staging_tls_transport_failed")
+        except OSError:
+            self.log.debug("staging_transport_closed")
+        except BaseException as exc:
+            if not isinstance(exc, (Exception, SystemExit)):
+                raise
+            if not transport_known or drift or (tls and (not wrapped or not _tls_ready(client))):
+                self.log.warning("staging_tls_transport_failed")
+            else:
+                self.handle_error(req, client, addr, exc)
+        finally:
+            # Never drain an unwrapped or unestablished TLS stream. Do not invent
+            # a handshake deadline here. Upstream graceful close remains only for
+            # an established transport; its limits are not hosted acceptance.
+            if not transport_known or drift or (tls and (not wrapped or not _tls_ready(client))):
+                try:
+                    if wrapped_client is not None and wrapped_client is not raw_client:
+                        _close_untrusted_transport(wrapped_client)
+                finally:
+                    _close_untrusted_transport(raw_client)
+            else:
+                util.close_graceful(client)
 
     def handle_error(self, req, client, addr, exc):
         # Unusual control-flow BaseExceptions may occur after a partial response.
