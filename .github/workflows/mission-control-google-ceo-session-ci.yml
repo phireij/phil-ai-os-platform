@@ -73,6 +73,12 @@ jobs:
           python3 ops/mission-control-identity/test_ruby_quote_consent.py
           python3 ops/mission-control-identity/test_ruby_review_synthetic_harness.py
           python3 ops/mission-control-identity/test_ruby_review_synthetic_topology.py
+          python3 ops/mission-control-identity/test_ruby_staging_rehearsal.py
+          python3 ops/mission-control-identity/test_ruby_staging_lifecycle.py
+          python3 ops/mission-control-identity/test_ruby_staging_review_harness.py
+          python3 ops/mission-control-identity/test_ruby_staging_id_token.py
+          python3 ops/mission-control-identity/test_ruby_staging_signed_review.py
+          python3 ops/mission-control-identity/test_ruby_staging_google_exchange.py
           python3 ops/mission-control-identity/test_provider_runtime.py
           python3 ops/mission-control-identity/test_notification_delivery.py
           python3 ops/mission-control-identity/test_diagnose_telegram_delivery.py
