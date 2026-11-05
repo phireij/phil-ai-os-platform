@@ -3,7 +3,9 @@
 No server is started or configuration selected by import. The original parser,
 request handling, normal responses, abort method and worker lifecycle are retained.
 Canonical raw-target/header policy and trusted ingress remain separate gates.
-TLS wrapping failures close without HTTP serialization or draining raw input.
+TLS wrapping/protocol failures close without HTTP serialization or draining input.
+This staging profile requires explicit HTTP/1.1 ALPN, even though absent ALPN
+can be legal TLS. It is not a general-purpose TLS compatibility policy.
 """
 from __future__ import annotations
 
@@ -87,7 +89,10 @@ def _tls_transport(client):
 
 def _tls_ready(client):
     try:
-        return _tls_transport(client) and client.version() in {"TLSv1.2", "TLSv1.3"}
+        if not _tls_transport(client) or client.version() not in {"TLSv1.2", "TLSv1.3"}:
+            return False
+        protocol = client.selected_alpn_protocol()
+        return type(protocol) is str and protocol == "http/1.1"
     except Exception:
         return False
 
@@ -114,12 +119,24 @@ class StagingSyncWorker(SyncWorker):
     def handle(self, listener, client, addr):
         """Pinned sync request flow with an explicit pre-TLS error boundary.
 
-        No context, certificate, TLS policy or timeout is selected here. Wrapping
-        remains upstream; TLS failures never use its generic HTTP error path.
+        No context, certificate or timeout is selected here. Wrapping remains
+        upstream; TLS must meet this staging profile before HTTP parsing.
         Successful parser/application responses retain the pinned request handler.
         """
         raw_client, req, wrapped_client = client, None, None
         tls, wrapped, drift, transport_known = False, False, False, False
+        tls_rejected = False
+
+        def tls_usable():
+            nonlocal tls_rejected
+            if tls_rejected or not wrapped:
+                return False
+            # Refusal is terminal, including an interrupted readiness probe.
+            # Later observations cannot turn a rejected stream into HTTP/drain.
+            tls_rejected = True
+            tls_rejected = not _tls_ready(client)
+            return not tls_rejected
+
         try:
             tls = bool(self.cfg.is_ssl)
             transport_known = True
@@ -129,9 +146,10 @@ class StagingSyncWorker(SyncWorker):
                     raise ConfigurationProblem("staging_tls_transport_invalid")
                 client, wrapped = wrapped_client, True
                 # An exact SSLSocket can fall back to raw socket operations after
-                # unwrap. It must already have completed reviewed-version TLS.
+                # unwrap. It must have completed reviewed-version TLS and
+                # explicitly negotiated HTTP/1.1 before this parser can run.
                 # Do not initiate a lazy handshake or invent its deadline here.
-                if not _tls_ready(client):
+                if not tls_usable():
                     raise ConfigurationProblem("staging_tls_transport_unready")
             # A callback must not change the parser's transport-mode declaration.
             if bool(self.cfg.is_ssl) != tls:
@@ -139,35 +157,41 @@ class StagingSyncWorker(SyncWorker):
                 raise ConfigurationProblem("staging_transport_configuration_invalid")
             parser = http.get_parser(self.cfg, client, addr)
             req = next(parser)
-            if tls and not _tls_ready(client):
+            if tls and not tls_usable():
                 raise ConfigurationProblem("staging_tls_transport_unready")
             self.handle_request(listener, req, client, addr)
         except (http.errors.NoMoreData, StopIteration):
             self.log.debug("staging_connection_closed")
         except SSLError:
             # Even after a prior handshake, a TLS failure is not an HTTP error.
+            tls_rejected = True
             self.log.warning("staging_tls_transport_failed")
         except OSError:
             self.log.debug("staging_transport_closed")
         except BaseException as exc:
             if not isinstance(exc, (Exception, SystemExit)):
                 raise
-            if not transport_known or drift or (tls and (not wrapped or not _tls_ready(client))):
+            if not transport_known or drift or (tls and not tls_usable()):
                 self.log.warning("staging_tls_transport_failed")
             else:
                 self.handle_error(req, client, addr, exc)
         finally:
-            # Never drain an unwrapped or unestablished TLS stream. Do not invent
+            # Never drain an unwrapped, unestablished or rejected TLS stream.
+            # Cleanup still closes if the final probe is interrupted. Do not invent
             # a handshake deadline here. Upstream graceful close remains only for
             # an established transport; its limits are not hosted acceptance.
-            if not transport_known or drift or (tls and (not wrapped or not _tls_ready(client))):
-                try:
-                    if wrapped_client is not None and wrapped_client is not raw_client:
-                        _close_untrusted_transport(wrapped_client)
-                finally:
-                    _close_untrusted_transport(raw_client)
-            else:
-                util.close_graceful(client)
+            graceful = False
+            try:
+                graceful = transport_known and not drift and (not tls or tls_usable())
+            finally:
+                if graceful:
+                    util.close_graceful(client)
+                else:
+                    try:
+                        if wrapped_client is not None and wrapped_client is not raw_client:
+                            _close_untrusted_transport(wrapped_client)
+                    finally:
+                        _close_untrusted_transport(raw_client)
 
     def handle_error(self, req, client, addr, exc):
         # Unusual control-flow BaseExceptions may occur after a partial response.
