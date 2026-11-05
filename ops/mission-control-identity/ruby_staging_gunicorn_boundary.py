@@ -2,7 +2,8 @@
 
 Enforces request-target identity before WSGI unquoting and requires the pinned
 parser's underscore refusal with no forwarding-header exceptions. It never
-selects proxy peers, rewrites scheme/Host, strips headers, or starts a server.
+selects proxy peers, rewrites scheme/Host, or starts a server. Only a validated
+single Connection close/keep-alive token is removed before WSGI conversion.
 """
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ import os
 
 from gunicorn import util
 from gunicorn.config import PostRequest, PreRequest
-from gunicorn.http.errors import ConfigurationProblem, InvalidRequestLine
+from gunicorn.http.errors import ConfigurationProblem, InvalidHeader, InvalidRequestLine
 from gunicorn.http.message import Request
 
 from ruby_staging_gunicorn_worker import StagingSyncWorker
@@ -66,6 +67,40 @@ def _target_is_canonical(req):
             and req.fragment == "")
 
 
+_FORBIDDEN_TRANSPORT_HEADERS = frozenset({
+    "EXPECT", "TRANSFER-ENCODING", "TE", "TRAILER", "UPGRADE",
+})
+
+
+def _validated_headers(req):
+    """Validate the intact parsed list before upstream can emit 100 Continue.
+
+    Never collapse duplicate evidence or strip nominated client fields. The one
+    compatibility exception cannot nominate any field and retains forced-close
+    responses. Framing content lengths remain governed by the pinned parser and
+    the application's existing method/body bounds.
+    """
+    if type(req.headers) is not list or req._expected_100_continue is not False:
+        raise InvalidHeader("staging_request_headers_invalid")
+    connection_seen = False
+    headers = []
+    for item in req.headers:
+        if (type(item) is not tuple or len(item) != 2
+                or type(item[0]) is not str or type(item[1]) is not str):
+            raise InvalidHeader("staging_request_headers_invalid")
+        name, value = item
+        if name in _FORBIDDEN_TRANSPORT_HEADERS:
+            raise InvalidHeader("staging_request_headers_invalid")
+        if name == "CONNECTION":
+            if (connection_seen or not value.isascii()
+                    or value.lower() not in {"close", "keep-alive"}):
+                raise InvalidHeader("staging_request_headers_invalid")
+            connection_seen = True
+        else:
+            headers.append(item)
+    return headers
+
+
 class StagingCanonicalWorker(StagingSyncWorker):
     """Reviewed Python HTTP/1 parser policy plus pre-WSGI target validation."""
 
@@ -96,4 +131,8 @@ class StagingCanonicalWorker(StagingSyncWorker):
         if not _target_is_canonical(req):
             # The safe inherited error handler never reflects this or raw input.
             raise InvalidRequestLine("staging_request_target_invalid")
+        headers = _validated_headers(req)
+        # Commit the only permitted removal after the entire list passed. All
+        # other headers, values, order and duplicate evidence are preserved.
+        req.headers = headers
         return super().handle_request(listener, req, client, addr)
