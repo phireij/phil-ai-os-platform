@@ -173,8 +173,111 @@ class ErrorResponseTests(base.HTTPBoundaryTests):
                 StagingSyncWorker(1, 1, [], None, 1, cfg, logger)
             init.assert_not_called()
 
-    def test_original_handler_parser_and_abort_methods_are_inherited(self):
-        self.assertIs(StagingSyncWorker.handle, SyncWorker.handle)
+    def test_tls_wrap_failures_close_without_http_or_drain(self):
+        from ssl import SSLError
+        marker = "SYNTHETIC_TLS_MUST_NOT_ESCAPE"
+        worker = self.worker(self.fx.make(auth=None))
+        for failure in (ValueError(marker), SSLError(marker), OSError(marker), SystemExit(marker)):
+            client = base.MemorySocket(self.request("/healthz"))
+            with self.subTest(failure=type(failure).__name__), \
+                    patch("gunicorn.workers.sync.sock.ssl_wrap_socket", side_effect=failure):
+                worker.handle(base.MemorySocket(), client, ("127.0.0.1", 1))
+            self.assertEqual(bytes(client.outgoing), b"")
+            self.assertTrue(client.closed)
+            self.assertEqual(client.shutdowns, [])
+            self.assertEqual(client.incoming.tell(), 0)
+        self.assertNotIn(marker, "\n".join(self.records.records))
+
+    def test_tls_wrap_control_flow_preserved_and_raw_closed(self):
+        worker = self.worker(self.fx.make(auth=None))
+        client = base.MemorySocket()
+        with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", side_effect=KeyboardInterrupt), \
+                self.assertRaises(KeyboardInterrupt):
+            worker.handle(base.MemorySocket(), client, None)
+        self.assertEqual(bytes(client.outgoing), b"")
+        self.assertTrue(client.closed)
+        self.assertEqual(client.shutdowns, [])
+
+    def test_non_tls_wrapper_result_cannot_reach_parser(self):
+        worker = self.worker(self.fx.make(auth=None))
+        for replacement in (None, object(), base.MemorySocket(self.request("/healthz"))):
+            raw = base.MemorySocket(self.request("/healthz"))
+            with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", return_value=replacement), \
+                    patch("gunicorn.http.get_parser") as parser:
+                worker.handle(base.MemorySocket(), raw, None)
+                parser.assert_not_called()
+            self.assertTrue(raw.closed)
+            self.assertEqual(bytes(raw.outgoing), b"")
+            self.assertEqual(raw.incoming.tell(), 0)
+            if type(replacement) is base.MemorySocket:
+                self.assertTrue(replacement.closed)
+
+    def test_unfinished_tls_handshake_never_serializes_http_error(self):
+        worker = self.worker(self.fx.make(auth=None))
+        raw, wrapped = base.MemorySocket(), base.MemorySocket()
+        with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", return_value=wrapped), \
+                patch("ruby_staging_gunicorn_worker._tls_transport", return_value=True), \
+                patch("ruby_staging_gunicorn_worker._tls_ready", return_value=False), \
+                patch("gunicorn.http.get_parser") as parser:
+            worker.handle(base.MemorySocket(), raw, None)
+            parser.assert_not_called()
+        self.assertTrue(raw.closed and wrapped.closed)
+        self.assertEqual(bytes(raw.outgoing) + bytes(wrapped.outgoing), b"")
+        self.assertEqual(raw.shutdowns + wrapped.shutdowns, [])
+        self.assertNotIn("SYNTHETIC_TLS_PRIVATE", "\n".join(self.records.records))
+
+    def test_tls_error_after_completed_handshake_is_not_http(self):
+        from ssl import SSLError
+        worker = self.worker(self.fx.make(auth=None))
+        raw, wrapped = base.MemorySocket(), base.MemorySocket()
+        with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", return_value=wrapped), \
+                patch("ruby_staging_gunicorn_worker._tls_transport", return_value=True), \
+                patch("ruby_staging_gunicorn_worker._tls_ready", return_value=True), \
+                patch("gunicorn.http.get_parser", side_effect=SSLError("SYNTHETIC_TLS_PRIVATE")):
+            worker.handle(base.MemorySocket(), raw, None)
+        self.assertTrue(wrapped.closed)
+        self.assertEqual(bytes(raw.outgoing) + bytes(wrapped.outgoing), b"")
+        self.assertNotIn("SYNTHETIC_TLS_PRIVATE", "\n".join(self.records.records))
+
+    def test_wrap_mode_mutation_refuses_before_parser(self):
+        worker = self.worker(self.fx.make(auth=None))
+        raw, wrapped = base.MemorySocket(), base.MemorySocket()
+        def wrap(client, cfg):
+            cfg.set("certfile", None)
+            return wrapped
+        with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", side_effect=wrap), \
+                patch("ruby_staging_gunicorn_worker._tls_transport", return_value=True), \
+                patch("ruby_staging_gunicorn_worker._tls_ready", return_value=True), \
+                patch("gunicorn.http.get_parser") as parser:
+            worker.handle(base.MemorySocket(), raw, None)
+            parser.assert_not_called()
+        self.assertTrue(raw.closed and wrapped.closed)
+        self.assertEqual(bytes(raw.outgoing) + bytes(wrapped.outgoing), b"")
+        self.assertEqual(raw.shutdowns + wrapped.shutdowns, [])
+
+    def test_rejected_wrapper_close_failure_still_closes_raw(self):
+        worker = self.worker(self.fx.make(auth=None))
+        raw = base.MemorySocket()
+        attempted = []
+        class Foreign:
+            def close(self):
+                attempted.append(True)
+                raise ValueError("SYNTHETIC_CLOSE_PRIVATE")
+        with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", return_value=Foreign()):
+            worker.handle(base.MemorySocket(), raw, None)
+        self.assertEqual(attempted, [True])
+        self.assertTrue(raw.closed)
+        self.assertEqual(bytes(raw.outgoing), b"")
+        self.assertNotIn("SYNTHETIC_CLOSE_PRIVATE", "\n".join(self.records.records))
+
+    def test_tls_readiness_does_not_accept_duck_typed_socket(self):
+        from ruby_staging_gunicorn_worker import _tls_transport, _tls_ready
+        fake = SimpleNamespace(version=lambda: "TLSv1.3")
+        self.assertFalse(_tls_transport(fake))
+        self.assertFalse(_tls_ready(fake))
+
+    def test_request_handler_and_abort_methods_remain_inherited(self):
+        self.assertIsNot(StagingSyncWorker.handle, SyncWorker.handle)
         self.assertIs(StagingSyncWorker.handle_request, SyncWorker.handle_request)
         self.assertIs(StagingSyncWorker.handle_abort, Worker.handle_abort)
         self.assertIs(StagingSyncWorker.init_process, Worker.init_process)
