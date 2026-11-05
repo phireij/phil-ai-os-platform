@@ -16,6 +16,7 @@ COPY ops/mission-control-identity/ruby_staging_lifecycle.py /srv/ruby_staging_li
 COPY ops/mission-control-identity/ruby_staging_id_token.py /srv/ruby_staging_id_token.py
 COPY ops/mission-control-identity/ruby_staging_google_auth.py /srv/ruby_staging_google_auth.py
 COPY ops/mission-control-identity/ruby_staging_app_factory.py /srv/ruby_staging_app_factory.py
+COPY ops/mission-control-identity/ruby_staging_protected_files.py /srv/ruby_staging_protected_files.py
 COPY ops/mission-control-identity/ruby_staging_http_app.py /srv/ruby_staging_http_app.py
 COPY ops/mission-control-identity/ruby_review_synthetic.py /srv/ruby_review_synthetic.py
 USER app
