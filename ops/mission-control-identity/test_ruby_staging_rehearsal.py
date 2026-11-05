@@ -213,6 +213,8 @@ class CompositionTests(unittest.TestCase):
             with DisposableStagingRehearsal(profile(), opt_in=FIXTURE_OPT_IN) as rehearsal:
                 directory = rehearsal.fixture_directory
                 binding = rehearsal.fixture_binding
+                lease = binding.store._lease
+                self.assertIsNotNone(lease.fd)
                 self.assertTrue(directory.is_relative_to("/tmp"))
                 self.assertIsNone(binding.store._provider_runtime)
                 self.assertFalse(binding.store._notification_delivery_enabled)
@@ -221,7 +223,8 @@ class CompositionTests(unittest.TestCase):
                 self.assertTrue(binding.list_records())
             self.assertFalse(directory.exists())
             self.assertTrue(binding.store._closed)
-            self.assertIsNone(binding.store._lease.fd)
+            self.assertIsNone(lease.fd)
+            self.assertIsNone(binding.store._lease)
             self.assertFalse(binding.is_available_for(profile().owner_subject))
             with self.assertRaises(ConversationRequestError):
                 binding.list_records()
@@ -245,6 +248,8 @@ class CompositionTests(unittest.TestCase):
             rehearsal = DisposableStagingRehearsal(profile(), opt_in=FIXTURE_OPT_IN)
             directory = rehearsal.fixture_directory
             store = rehearsal.fixture_binding.store
+            lease = store._lease
+            self.assertIsNotNone(lease.fd)
             original_close = store.close
             def close_then_raise():
                 original_close()
@@ -254,7 +259,8 @@ class CompositionTests(unittest.TestCase):
                     rehearsal.close()
             self.assertFalse(directory.exists())
             self.assertTrue(store._closed)
-            self.assertIsNone(store._lease.fd)
+            self.assertIsNone(lease.fd)
+            self.assertIsNone(store._lease)
 
     def test_ambient_configuration_denied_before_writes(self):
         for key in ("MISSION_CONTROL_CONVERSATION_STATE_FILE", "MISSION_CONTROL_GOOGLE_CLIENT_SECRET_FILE", "MISSION_CONTROL_OPENAI_ENABLED", "MISSION_CONTROL_TELEGRAM_DELIVERY_ENABLED", "OPENAI_API_KEY", "TWILIO_AUTH_TOKEN", "DATABASE_URL", "GOOGLE_APPLICATION_CREDENTIALS"):
