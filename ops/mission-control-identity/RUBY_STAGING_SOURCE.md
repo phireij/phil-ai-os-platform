@@ -1,0 +1,118 @@
+# Inactive Ruby staging application and server adapters
+
+This source continuation adds a staging-only WSGI application, fixed synthetic
+review records, a bounded Google exchange backend, and three opt-in Gunicorn
+adapters. It does not enable a service. The module-level application returns 503;
+the script entrypoint reports inactivity and exits. There is no listener,
+credential loader, deployment command or production import change.
+
+## Application and authority boundary
+
+Only explicit injected configuration can construct an enabled application. The
+backend checks real token signatures with the existing pinned Core libraries and
+requires exact issuer, audience, owner subject, nonce and time bounds. All tests
+use local synthetic signatures and mocked HTTP responses. No live Google identity
+or credential has been validated by these tests.
+
+The application uses opaque in-memory sessions, browser-bound one-time login
+flows, PKCE, bounded admission/rate budgets, bodyless same-origin CSRF logout,
+and fail-closed revocation. Synthetic review responses always retain authority
+none with execution and mutation disabled. The lifecycle changes preserve
+logout/close revocation while authentication is in flight.
+
+State requires a single persistent process. Restart loses all sessions and login
+flows. Application time budgets are cooperative and do not impose a hard DNS or
+whole-request deadline. A blocked synchronous worker cannot serve another request.
+
+## Optional server boundary
+
+All three components must be reviewed and selected together by a future serving
+configuration. No configuration in this change selects them:
+
+- `StagingGunicornLogger` emits fixed events and validated status only. It never
+  formats request targets, headers, exception text or tracebacks through its API.
+  It does not sanitize other loggers, stdout/stderr, or external proxy logs.
+- `StagingSyncWorker` emits fixed, bounded errors and security headers without
+  reflecting parser input. Early parser failures without a complete request have
+  no response body; known HEAD requests retain representation length without a body. Writes are a single
+  nonblocking attempt, not a proven wall-clock delivery deadline.
+- `StagingCanonicalWorker` requires the reviewed Python HTTP/1 parser policy,
+  underscore-header refusal without forwarding exceptions, and unmodified
+  request hooks/SCRIPT_NAME. It rejects noncanonical raw paths before WSGI
+  unquoting while preserving query encoding. It never repairs or rewrites input.
+
+A pre-WSGI rejection intentionally does not consume the pending application flow
+or clear its cookie. Its original short TTL remains; a canonical retry can still
+complete once. Incorrect parser configuration fails closed before parsing/TLS.
+
+The adapter guards recognize Gunicorn 26.2.2, but a version string is not a
+runtime provenance check. The artifact actually supplied to any future runtime
+must separately match the reviewed official commit. This change does not install
+Gunicorn or alter production requirements.
+
+## Offline source tests
+
+The pinned source is official Gunicorn 26.2.2, commit
+`8d98faa9a13d3399a7bea81b5169e5cd72225395`, Git tree
+`d7108b89eb73974543289b5178197c9998110286`:
+https://github.com/benoitc/gunicorn/tree/8d98faa9a13d3399a7bea81b5169e5cd72225395
+
+The new CI job checks out that exact source with persisted credentials disabled.
+It uses the existing Core requirements in a test-only environment and never
+installs/builds Gunicorn. The offline helper validates the full file set and all
+793 SHA-256 hashes before placing the source tree on the import path. `.git`
+metadata is excluded; added files, symlinks, missing or changed files fail closed.
+The checked-in manifest contains public source hashes, not upstream source code.
+
+Given an already verified local checkout and the existing approved dependencies:
+
+    export RUBY_STAGING_TEST_GUNICORN_SOURCE=/absolute/path/to/pinned/gunicorn
+    python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_logging.py
+    python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_errors.py
+    python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_boundary.py
+    python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_integrated.py
+
+Each command is a separate process. Their import-time audit guard rejects socket,
+DNS and process-launch actions. urllib3's import-time IPv6 capability probe is
+expected to be rejected before a socket is created. There are no test-phase
+network attempts. The guard is not an operating-system sandbox.
+
+The tests exercise the actual upstream parser/handler with in-memory byte
+transport. TLS metadata is explicitly mocked; no TLS handshake occurs. Layer
+tests retain negative-control observations of unmodified lower layers. Only the
+combined adapter suite represents the proposed composed boundary. Do not use
+unrestricted test discovery in place of the explicit suites or mistake an
+expected lower-layer defect for an accepted composed configuration.
+
+## Image source and CI effects
+
+`Dockerfile.ruby-staging-review` is an existing reviewed inactive source recipe,
+pinned to the Core Linux/amd64 Python/Alpine lineage. It copies five application
+modules plus requirements, runs as a non-root user and exits inactive. It omits
+Gunicorn and the adapters. It is not a runnable staging-server image. This
+continuation neither builds nor publishes that recipe. The requirements contain
+version pins, not a complete hash-locked wheel supply chain.
+
+The CEO-session CI adds the three application/backend/runtime suites, a separate
+four-suite handler job, and both recipe paths to its PR/main path filters. The
+existing production image smoke steps remain unchanged. A future PR can trigger
+those existing CI builds. A future merge touching the identity directory also
+triggers the two existing production image publishers with commit-SHA tags;
+neither image includes the staging adapters. There is no staging publisher and
+no automatic deployment in these workflows. External watchers are not verified.
+
+## Remaining hosted acceptance gates
+
+- Effective ingress/proxy/TLS configuration and exact request/header forwarding.
+  A proxy can normalize raw bytes before this worker sees them. Forwarded scheme
+  headers and ordinary Connection headers currently fail closed in the app;
+  they require an explicit trusted transport contract, not a broad allowlist.
+- A protected configuration/secret loader and verified staging Google client,
+  exact owner binding, callback origin and secret delivery. None is supplied here.
+- An approved single-worker supervisor with bounded termination, reaping and
+  replacement, plus actual socket/TLS/read/write/request limits. Prior isolated
+  signal tests do not establish end-to-end serving deadlines or host behavior.
+- Runtime artifact provenance, host architecture, any eventual image build,
+  actual Google/browser sign-in and hosted security/availability acceptance.
+
+No runnable server entrypoint is provided until those contracts are resolved.

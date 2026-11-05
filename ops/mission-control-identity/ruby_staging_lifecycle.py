@@ -173,6 +173,12 @@ class LoginFlowStore(_EphemeralStore):
                 return None
             return flow.exchange
 
+    def revoke_all(self) -> None:
+        """Invalidate pending logins, for example after an owner logs out."""
+        with self._lock:
+            self._now()
+            self._clear()
+
 
 @dataclass(frozen=True)
 class SessionReceipt:
@@ -275,6 +281,27 @@ class SessionStore(_EphemeralStore):
             digest = _digest(token)
             if digest is not None:
                 self._sessions.pop(digest, None)
+
+    def rotate_csrf(self, token: object) -> str | None:
+        """Return a new CSRF challenge for an EXISTING valid session only.
+
+        A same-origin, non-cacheable session/page response may deliver this value
+        after a login redirect. Only its hash is retained. It cannot create or
+        replace a session; older challenges stop working after a successful call.
+        The HTTP adapter must prohibit cross-origin reads and require exact Origin
+        plus the challenge for writes. Multiple tabs may need to reload a form.
+        """
+        with self._lock:
+            now = self._now()
+            self._expire(now)
+            digest = _digest(token)
+            session = self._sessions.get(digest) if digest is not None else None
+            if session is None:
+                return None
+            csrf = _new_token()
+            session.csrf_hash = _digest(csrf)  # type: ignore[assignment]
+            session.last_seen = now
+            return csrf
 
     def revoke_all(self) -> None:
         with self._lock:

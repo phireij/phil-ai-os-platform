@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'Dockerfile.mission-control-google-ceo-session'
+      - 'Dockerfile.ruby-staging-review'
+      - 'Dockerfile.ruby-staging-review.dockerignore'
       - 'ops/mission-control-identity/**'
       - '.github/workflows/mission-control-google-ceo-session-ci.yml'
       - '.github/workflows/mission-control-google-ceo-session-image.yml'
@@ -26,6 +28,8 @@ on:
     branches: [main]
     paths:
       - 'Dockerfile.mission-control-google-ceo-session'
+      - 'Dockerfile.ruby-staging-review'
+      - 'Dockerfile.ruby-staging-review.dockerignore'
       - 'ops/mission-control-identity/**'
       - '.github/workflows/mission-control-google-ceo-session-ci.yml'
       - '.github/workflows/mission-control-google-ceo-session-image.yml'
@@ -79,6 +83,9 @@ jobs:
           python3 ops/mission-control-identity/test_ruby_staging_id_token.py
           python3 ops/mission-control-identity/test_ruby_staging_signed_review.py
           python3 ops/mission-control-identity/test_ruby_staging_google_exchange.py
+          python3 ops/mission-control-identity/test_ruby_staging_google_auth.py
+          python3 ops/mission-control-identity/test_ruby_staging_http_app.py
+          python3 ops/mission-control-identity/test_ruby_staging_runtime_limits.py
           python3 ops/mission-control-identity/test_provider_runtime.py
           python3 ops/mission-control-identity/test_notification_delivery.py
           python3 ops/mission-control-identity/test_diagnose_telegram_delivery.py
@@ -113,3 +120,30 @@ jobs:
           set -euo pipefail
           docker run --rm --network none --entrypoint python3 mission-control-google-ceo-session:review \
             -c 'import runpy; runpy.run_path("/srv/google_ceo_session.py", run_name="__packaging_smoke__")'
+
+  verify-staging-server-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check out reviewed official Gunicorn test source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: benoitc/gunicorn
+          ref: 8d98faa9a13d3399a7bea81b5169e5cd72225395
+          path: .ruby-staging-gunicorn-source
+          persist-credentials: false
+      - name: Verify opt-in staging handler with inert transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/ruby-staging-server-test-venv
+          source /tmp/ruby-staging-server-test-venv/bin/activate
+          python3 -m pip install --disable-pip-version-check -r ops/mission-control-identity/requirements.txt
+          export RUBY_STAGING_TEST_GUNICORN_SOURCE="$GITHUB_WORKSPACE/.ruby-staging-gunicorn-source"
+          python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_logging.py
+          python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_errors.py
+          python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_boundary.py
+          python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_integrated.py

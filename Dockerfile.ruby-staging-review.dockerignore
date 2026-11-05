@@ -1,0 +1,15 @@
+# Staging-specific build-context allowlist. Re-open only required source paths.
+# An authorized future build must still inspect its actual context and image.
+**
+!ops/
+ops/**
+!ops/mission-control-identity/
+ops/mission-control-identity/**
+!ops/mission-control-identity/requirements.txt
+!ops/mission-control-identity/ruby_staging_lifecycle.py
+!ops/mission-control-identity/ruby_staging_id_token.py
+!ops/mission-control-identity/ruby_staging_google_auth.py
+!ops/mission-control-identity/ruby_staging_http_app.py
+!ops/mission-control-identity/ruby_review_synthetic.py
+!Dockerfile.ruby-staging-review
+!Dockerfile.ruby-staging-review.dockerignore

@@ -1,0 +1,21 @@
+# Staging application source-review image only. No listener, credentials, host
+# routes, proxy trust, ports, mounts, deployments or publication workflow.
+# The default entrypoint reports inactivity and exits. A separately reviewed
+# production-grade WSGI serving/configuration boundary is required for hosting.
+# Reviewed target is the linux/amd64 platform used by existing Core CI.
+# This does not establish the eventual staging host architecture.
+FROM --platform=linux/amd64 python:3.12-alpine@sha256:e6dae589c1c05976188fd3bd019afd091445fc533ed2ea29001beddc7368a9c8
+
+WORKDIR /srv
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY ops/mission-control-identity/requirements.txt /tmp/mission-control-requirements.txt
+RUN pip install --no-cache-dir --disable-pip-version-check -r /tmp/mission-control-requirements.txt \
+    && addgroup -S -g 10003 app \
+    && adduser -S -D -u 10003 -G app app
+COPY ops/mission-control-identity/ruby_staging_lifecycle.py /srv/ruby_staging_lifecycle.py
+COPY ops/mission-control-identity/ruby_staging_id_token.py /srv/ruby_staging_id_token.py
+COPY ops/mission-control-identity/ruby_staging_google_auth.py /srv/ruby_staging_google_auth.py
+COPY ops/mission-control-identity/ruby_staging_http_app.py /srv/ruby_staging_http_app.py
+COPY ops/mission-control-identity/ruby_review_synthetic.py /srv/ruby_review_synthetic.py
+USER app
+ENTRYPOINT ["python3", "/srv/ruby_staging_http_app.py"]
