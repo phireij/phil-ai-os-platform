@@ -881,9 +881,10 @@ function resetConversationView(message = "sample only · no live chat") {
 }
 
 async function conversationRequest(path, options = {}) {
+  const epoch = conversationEpoch;
   const response = await fetch(path, { cache: "no-store", credentials: "same-origin", ...options });
   if (response.status === 401) {
-    resetConversationView("session expired");
+    if (epoch === conversationEpoch) resetConversationView("session expired");
     throw new Error("session expired");
   }
   return response;
@@ -899,51 +900,60 @@ async function loadConversationMessages(conversationId, epoch = conversationEpoc
 
 async function loadConversationSession() {
   const epoch = ++conversationEpoch;
-  const response = await fetch("/auth/google/session", { cache: "no-store", credentials: "same-origin" });
-  if (epoch !== conversationEpoch) return;
-  if (!response.ok) {
-    resetConversationView(response.status === 401 ? "sign-in available" : "session unavailable");
-    return;
-  }
-  const session = await response.json();
-  if (epoch !== conversationEpoch) return;
-  if (session.authenticated !== true || typeof session.csrf_token !== "string") {
-    resetConversationView("session unavailable");
-    return;
-  }
-  conversationSession = session;
-  setConversationControls(false);
   try {
-    await loadRubySyntheticReview(epoch);
-  } catch (_error) {
+    const response = await fetch("/auth/google/session", { cache: "no-store", credentials: "same-origin" });
     if (epoch !== conversationEpoch) return;
-    resetRubySyntheticReview("unavailable · no authority");
-  }
-  if (epoch !== conversationEpoch) return;
-  if (session.conversation_authority !== true) {
-    setConversationState("signed in · storage inactive", true);
-    document.querySelector("#conversation-note").textContent = "CEO identity is verified. Conversation storage is not activated, and this sample cannot authorize actions.";
-    return;
-  }
-  setConversationState("signed in · conversation storage active", true);
-  document.querySelector("#conversation-message-label").textContent = "CEO message";
-  document.querySelector("#conversation-message").placeholder = "Write a message for the Chief of Staff record.";
-  document.querySelector("#conversation-note").textContent = "Messages are retained under the approved CEO data policy. Responses may remain unavailable while the provider runtime is disabled. Message text cannot authorize delegation or execution.";
-  const conversations = await conversationRequest("/api/conversations?limit=100");
-  if (!conversations.ok) throw new Error(`conversations HTTP ${conversations.status}`);
-  const payload = await conversations.json();
-  if (epoch !== conversationEpoch || !Array.isArray(payload.conversations)) return;
-  activeConversationId = payload.conversations.at(-1)?.conversation_id ?? null;
-  if (activeConversationId) {
-    setConversationControls(true);
-    await loadConversationMessages(activeConversationId, epoch);
-    await loadGovernedProposals(activeConversationId, epoch);
-    await loadConversationLifecycle(activeConversationId, epoch);
-    await loadCtoHandoffs(activeConversationId, epoch);
-    await loadCtoHandoffResults(activeConversationId, epoch);
-  } else {
-    renderConversationMessages([]);
+    if (!response.ok) {
+      resetConversationView(response.status === 401 ? "sign-in available" : "session unavailable");
+      return;
+    }
+    const session = await response.json();
+    if (epoch !== conversationEpoch) return;
+    if (session.authenticated !== true || typeof session.csrf_token !== "string") {
+      resetConversationView("session unavailable");
+      return;
+    }
+    conversationSession = session;
     setConversationControls(false);
+    try {
+      await loadRubySyntheticReview(epoch);
+    } catch (_error) {
+      if (epoch !== conversationEpoch) return;
+      resetRubySyntheticReview("unavailable · no authority");
+    }
+    if (epoch !== conversationEpoch) return;
+    if (session.conversation_authority !== true) {
+      setConversationState("signed in · storage inactive", true);
+      document.querySelector("#conversation-note").textContent = "CEO identity is verified. Conversation storage is not activated, and this sample cannot authorize actions.";
+      return;
+    }
+    setConversationState("signed in · conversation storage active", true);
+    document.querySelector("#conversation-message-label").textContent = "CEO message";
+    document.querySelector("#conversation-message").placeholder = "Write a message for the Chief of Staff record.";
+    document.querySelector("#conversation-note").textContent = "Messages are retained under the approved CEO data policy. Responses may remain unavailable while the provider runtime is disabled. Message text cannot authorize delegation or execution.";
+    const conversations = await conversationRequest("/api/conversations?limit=100");
+    if (!conversations.ok) throw new Error(`conversations HTTP ${conversations.status}`);
+    const payload = await conversations.json();
+    if (epoch !== conversationEpoch || !Array.isArray(payload.conversations)) return;
+    activeConversationId = payload.conversations.at(-1)?.conversation_id ?? null;
+    if (activeConversationId) {
+      setConversationControls(true);
+      await loadConversationMessages(activeConversationId, epoch);
+      if (epoch !== conversationEpoch) return;
+      await loadGovernedProposals(activeConversationId, epoch);
+      if (epoch !== conversationEpoch) return;
+      await loadConversationLifecycle(activeConversationId, epoch);
+      if (epoch !== conversationEpoch) return;
+      await loadCtoHandoffs(activeConversationId, epoch);
+      if (epoch !== conversationEpoch) return;
+      await loadCtoHandoffResults(activeConversationId, epoch);
+    } else {
+      renderConversationMessages([]);
+      setConversationControls(false);
+    }
+  } catch (error) {
+    if (epoch !== conversationEpoch) return;
+    throw error;
   }
 }
 
