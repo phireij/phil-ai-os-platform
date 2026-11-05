@@ -6,7 +6,7 @@ from pathlib import Path
 import signal
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parent
@@ -275,6 +275,188 @@ class ErrorResponseTests(base.HTTPBoundaryTests):
         fake = SimpleNamespace(version=lambda: "TLSv1.3")
         self.assertFalse(_tls_transport(fake))
         self.assertFalse(_tls_ready(fake))
+
+    def synthetic_ssl(self, *, protocol="http/1.1", version="TLSv1.3", request=b""):
+        # Exact standard-library type, allocated without __init__, descriptors,
+        # sockets or a handshake. Only the observed state and I/O are synthetic.
+        # Unlike the shared harness, these tests do not replace _tls_ready.
+        from ssl import SSLSocket
+        transport = SSLSocket.__new__(SSLSocket)
+        self.assertEqual(transport.fileno(), -1)
+        transport._io_refs, transport._closed = 0, True
+        memory = base.MemorySocket(request)
+        for name in ("recv", "sendall", "send", "shutdown", "settimeout",
+                     "gettimeout", "setblocking", "getsockname", "close"):
+            setattr(transport, name, getattr(memory, name))
+        transport.version = Mock(return_value=version)
+        transport.selected_alpn_protocol = Mock(return_value=protocol)
+        return transport, memory
+
+    def assert_close_only(self, raw, memory):
+        self.assertTrue(raw.closed and memory.closed)
+        self.assertEqual(bytes(raw.outgoing) + bytes(memory.outgoing), b"")
+        self.assertEqual(raw.shutdowns + memory.shutdowns, [])
+        self.assertEqual(raw.incoming.tell(), 0)
+        self.assertEqual(memory.incoming.tell(), 0)
+
+    def test_tls_ready_requires_exact_http11_alpn_and_retains_version_guard(self):
+        from ruby_staging_gunicorn_worker import _tls_ready
+        class EqualToHTTP11:
+            def __eq__(self, other):
+                return True
+        for version in ("TLSv1.2", "TLSv1.3", None, "TLSv1.1", "SSLv3"):
+            for protocol in ("http/1.1", None, "h2", "h3", "HTTP/1.1", "http/1.0",
+                             "http/1.1 ", b"http/1.1", EqualToHTTP11()):
+                with self.subTest(version=version, protocol=type(protocol).__name__):
+                    transport, _ = self.synthetic_ssl(version=version, protocol=protocol)
+                    self.assertIs(_tls_ready(transport),
+                                  version in ("TLSv1.2", "TLSv1.3") and
+                                  type(protocol) is str and protocol == "http/1.1")
+                    if version not in ("TLSv1.2", "TLSv1.3"):
+                        transport.selected_alpn_protocol.assert_not_called()
+
+    def test_tls_alpn_refusal_precedes_parser_serializer_and_drain(self):
+        from ssl import SSLError
+        for protocol in (None, "h2", "h3", "", "HTTP/1.1", b"http/1.1",
+                         ValueError("SYNTHETIC_ALPN_PRIVATE"),
+                         SSLError("SYNTHETIC_ALPN_PRIVATE"),
+                         AttributeError("SYNTHETIC_ALPN_PRIVATE")):
+            with self.subTest(protocol=type(protocol).__name__):
+                worker = self.worker(self.fx.make(auth=None))
+                raw = base.MemorySocket(self.request("/healthz"))
+                transport, memory = self.synthetic_ssl(request=self.request("/healthz"))
+                transport.selected_alpn_protocol.side_effect = [protocol, "http/1.1"]
+                with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", return_value=transport), \
+                        patch("gunicorn.http.get_parser") as parser, \
+                        patch("ruby_staging_gunicorn_worker._response") as response, \
+                        patch("gunicorn.util.close_graceful") as graceful, \
+                        patch.object(worker, "handle_request") as handler:
+                    worker.handle(base.MemorySocket(), raw, None)
+                    parser.assert_not_called()
+                    handler.assert_not_called()
+                    response.assert_not_called()
+                    graceful.assert_not_called()
+                self.assert_close_only(raw, memory)
+                self.assertEqual(transport.selected_alpn_protocol.call_count, 1)
+        self.assertNotIn("SYNTHETIC_ALPN_PRIVATE", "\n".join(self.records.records))
+
+    def test_tls_alpn_drift_after_parser_is_terminal(self):
+        for protocol in (None, "h2", "unexpected", ValueError("SYNTHETIC_ALPN_PRIVATE")):
+            with self.subTest(protocol=type(protocol).__name__):
+                worker = self.worker(self.fx.make(auth=None))
+                raw = base.MemorySocket(self.request("/healthz"))
+                transport, memory = self.synthetic_ssl(request=self.request("/healthz"))
+                transport.selected_alpn_protocol.side_effect = ["http/1.1", protocol, "http/1.1"]
+                with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", return_value=transport), \
+                        patch("gunicorn.http.get_parser", return_value=iter([object()])) as parser, \
+                        patch("ruby_staging_gunicorn_worker._response") as response, \
+                        patch("gunicorn.util.close_graceful") as graceful, \
+                        patch.object(worker, "handle_request") as handler:
+                    worker.handle(base.MemorySocket(), raw, None)
+                    parser.assert_called_once()
+                    handler.assert_not_called()
+                    response.assert_not_called()
+                    graceful.assert_not_called()
+                self.assert_close_only(raw, memory)
+                self.assertEqual(transport.selected_alpn_protocol.call_count, 2)
+
+    def test_tls_alpn_refusal_during_http_error_remains_close_only(self):
+        for protocol in (None, "h2", ValueError("SYNTHETIC_ALPN_PRIVATE")):
+            with self.subTest(protocol=type(protocol).__name__):
+                worker = self.worker(self.fx.make(auth=None))
+                raw = base.MemorySocket(self.request("/healthz"))
+                transport, memory = self.synthetic_ssl(request=self.request("/healthz"))
+                transport.selected_alpn_protocol.side_effect = ["http/1.1", protocol, "http/1.1"]
+                with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", return_value=transport), \
+                        patch("gunicorn.http.get_parser", side_effect=errors.InvalidRequestLine("private")), \
+                        patch("ruby_staging_gunicorn_worker._response") as response, \
+                        patch("gunicorn.util.close_graceful") as graceful:
+                    worker.handle(base.MemorySocket(), raw, None)
+                    response.assert_not_called()
+                    graceful.assert_not_called()
+                self.assert_close_only(raw, memory)
+                self.assertEqual(transport.selected_alpn_protocol.call_count, 2)
+
+    def test_tls_alpn_refusal_during_final_cleanup_never_drains(self):
+        for protocol in (None, "h2", ValueError("SYNTHETIC_ALPN_PRIVATE")):
+            with self.subTest(protocol=type(protocol).__name__):
+                worker = self.worker(self.fx.make(auth=None))
+                raw = base.MemorySocket(self.request("/healthz"))
+                transport, memory = self.synthetic_ssl(request=self.request("/healthz"))
+                transport.selected_alpn_protocol.side_effect = ["http/1.1", "http/1.1", protocol, "http/1.1"]
+                with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", return_value=transport), \
+                        patch("gunicorn.http.get_parser", return_value=iter([object()])), \
+                        patch("ruby_staging_gunicorn_worker._response") as response, \
+                        patch("gunicorn.util.close_graceful") as graceful, \
+                        patch.object(worker, "handle_request") as handler:
+                    worker.handle(base.MemorySocket(), raw, None)
+                    handler.assert_called_once()
+                    response.assert_not_called()
+                    graceful.assert_not_called()
+                self.assert_close_only(raw, memory)
+                self.assertEqual(transport.selected_alpn_protocol.call_count, 3)
+
+    def test_interrupted_alpn_probes_preserve_shutdown_and_close_only(self):
+        for stage in ("initial", "parsed", "error", "cleanup"):
+            with self.subTest(stage=stage):
+                worker = self.worker(self.fx.make(auth=None))
+                raw = base.MemorySocket(self.request("/healthz"))
+                transport, memory = self.synthetic_ssl(request=self.request("/healthz"))
+                prefix = {"initial": [], "parsed": ["http/1.1"],
+                          "error": ["http/1.1"], "cleanup": ["http/1.1", "http/1.1"]}[stage]
+                transport.selected_alpn_protocol.side_effect = [*prefix, KeyboardInterrupt(), "http/1.1"]
+                parser_error = errors.InvalidRequestLine("private") if stage == "error" else None
+                with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", return_value=transport), \
+                        patch("gunicorn.http.get_parser", return_value=iter([object()]), side_effect=parser_error), \
+                        patch("ruby_staging_gunicorn_worker._response") as response, \
+                        patch("gunicorn.util.close_graceful") as graceful, \
+                        patch.object(worker, "handle_request"), self.assertRaises(KeyboardInterrupt):
+                    worker.handle(base.MemorySocket(), raw, None)
+                response.assert_not_called()
+                graceful.assert_not_called()
+                self.assert_close_only(raw, memory)
+                self.assertEqual(transport.selected_alpn_protocol.call_count, len(prefix) + 1)
+
+    def test_valid_tls_http11_retains_actual_parser_and_generic_errors(self):
+        for version in ("TLSv1.2", "TLSv1.3"):
+            for request, status in ((self.request("/healthz"), 200),
+                                    (b"GET /private\r\n\r\n", 400)):
+                with self.subTest(version=version, status=status):
+                    worker = self.worker(self.fx.make(auth=None))
+                    raw = base.MemorySocket()
+                    transport, memory = self.synthetic_ssl(version=version, request=request)
+                    with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", return_value=transport):
+                        worker.handle(base.MemorySocket(), raw, ("127.0.0.1", 1))
+                    self.assertEqual(self.decode(bytes(memory.outgoing))[0], status)
+                    self.assertTrue(memory.closed)
+                    self.assertGreaterEqual(transport.selected_alpn_protocol.call_count, 3)
+                    self.assertEqual(bytes(raw.outgoing), b"")
+
+    def test_tls_exception_after_http11_negotiation_never_gracefully_drains(self):
+        from ssl import SSLError
+        worker = self.worker(self.fx.make(auth=None))
+        raw = base.MemorySocket(self.request("/healthz"))
+        transport, memory = self.synthetic_ssl(request=self.request("/healthz"))
+        with patch("gunicorn.workers.sync.sock.ssl_wrap_socket", return_value=transport), \
+                patch("gunicorn.http.get_parser", side_effect=SSLError("SYNTHETIC_ALPN_PRIVATE")), \
+                patch("ruby_staging_gunicorn_worker._response") as response, \
+                patch("gunicorn.util.close_graceful") as graceful:
+            worker.handle(base.MemorySocket(), raw, None)
+            response.assert_not_called()
+            graceful.assert_not_called()
+        self.assert_close_only(raw, memory)
+        self.assertEqual(transport.selected_alpn_protocol.call_count, 1)
+
+    def test_non_tls_parser_errors_do_not_probe_tls(self):
+        worker = self.worker(self.fx.make(auth=None), tls=False)
+        client = base.MemorySocket(b"GET /private\r\n\r\n")
+        with patch("gunicorn.workers.sync.sock.ssl_wrap_socket") as wrap, \
+                patch("ruby_staging_gunicorn_worker._tls_ready") as ready:
+            worker.handle(base.MemorySocket(), client, ("127.0.0.1", 1))
+            wrap.assert_not_called()
+            ready.assert_not_called()
+        self.assertTrue(client.closed)
+        self.assertEqual(self.decode(bytes(client.outgoing))[0], 400)
 
     def test_request_handler_and_abort_methods_remain_inherited(self):
         self.assertIsNot(StagingSyncWorker.handle, SyncWorker.handle)
