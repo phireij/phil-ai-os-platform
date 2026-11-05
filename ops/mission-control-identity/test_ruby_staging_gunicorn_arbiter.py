@@ -148,6 +148,97 @@ class SingleWorkerTests(unittest.TestCase):
             with self.assertRaises(StagingArbiterConfigurationError):
                 StagingSingleWorkerArbiter(self.app(raw_env=[name + "=SYNTHETIC_PRIVATE"]))
 
+    def test_socket_activation_and_notify_environment_refused_before_setup(self):
+        names = ("LISTEN_PID", "LISTEN_FDS", "LISTEN_FDNAMES", "NOTIFY_SOCKET")
+        for name, value in itertools.product(names, ("", "0", str(os.getpid()), "SYNTHETIC_PRIVATE")):
+            for configured in (False, True):
+                app = self.app(raw_env=[name + "=" + value] if configured else [])
+                ambient = {} if configured else {name: value}
+                with self.subTest(name=name, configured=configured, value=value), \
+                        patch.dict(os.environ, ambient), patch.object(Arbiter, "__init__") as init:
+                    before = dict(os.environ)
+                    with self.assertRaises(StagingArbiterConfigurationError) as caught:
+                        StagingSingleWorkerArbiter(app)
+                    self.assertEqual(str(caught.exception), "staging_arbiter_configuration_invalid")
+                    self.assertEqual(dict(os.environ), before)
+                    self.assertEqual(app.cfg.env.get(name), value if configured else None)
+                    init.assert_not_called()
+
+    def test_descriptor_binds_refused_before_upstream_setup(self):
+        for binding in ("fd://3", "fd://0", "fd://-1", "fd:// 3", "fd://", "fd://SYNTHETIC_PRIVATE"):
+            for binds in ([binding], ["127.0.0.1:8000", binding]):
+                app = self.app(bind=binds)
+                with self.subTest(binds=binds), patch.object(Arbiter, "__init__") as init:
+                    with self.assertRaises(StagingArbiterConfigurationError) as caught:
+                        StagingSingleWorkerArbiter(app)
+                    self.assertEqual(str(caught.exception), "staging_arbiter_configuration_invalid")
+                    init.assert_not_called()
+
+    def test_malformed_raw_bind_types_refused_without_rendering(self):
+        class Poison:
+            def __str__(self):
+                raise AssertionError("raw_bind_must_not_render")
+            __repr__ = __str__
+        for binds in (None, "fd://3", ("fd://3",), [3], [b"fd://3"], [Poison()]):
+            app = self.app()
+            app.cfg.settings["bind"].value = binds
+            with patch.object(Arbiter, "__init__") as init, \
+                    self.assertRaises(StagingArbiterConfigurationError):
+                StagingSingleWorkerArbiter(app)
+            init.assert_not_called()
+
+    def test_new_runtime_environment_refused_before_start_manage_or_spawn(self):
+        names = ("LISTEN_PID", "LISTEN_FDS", "LISTEN_FDNAMES", "NOTIFY_SOCKET")
+        for name, operation, configured in itertools.product(names,
+                ("start", "manage_workers", "spawn_worker"), (False, True)):
+            arb = self.arbiter()
+            if configured:
+                arb.cfg.set("raw_env", [name + "="])
+            with self.subTest(name=name, operation=operation, configured=configured), \
+                    patch.dict(os.environ, {} if configured else {name: ""}), \
+                    patch.object(Arbiter, operation) as upstream:
+                with self.assertRaises(HaltServer) as caught:
+                    getattr(arb, operation)()
+                self.assertEqual(caught.exception.reason, "staging_worker_lifecycle_invalid")
+                self.assertTrue(arb._shutdown_started)
+                upstream.assert_not_called()
+
+    def test_new_descriptor_bind_refused_before_start_manage_or_spawn(self):
+        for operation in ("start", "manage_workers", "spawn_worker"):
+            arb = self.arbiter()
+            arb.cfg.set("bind", ["fd://3"])
+            with self.subTest(operation=operation), patch.object(Arbiter, operation) as upstream:
+                with self.assertRaises(HaltServer):
+                    getattr(arb, operation)()
+                self.assertTrue(arb._shutdown_started)
+                upstream.assert_not_called()
+
+    def test_non_descriptor_bind_configuration_is_not_activated_by_constructor(self):
+        # These are illustrative parser inputs, not selected host endpoints.
+        for binds in ([], ["127.0.0.1:8000"], ["unix:/synthetic/staging.sock"]):
+            app = self.app(bind=binds)
+            arb = StagingSingleWorkerArbiter(app)
+            self.assertEqual(arb.LISTENERS, [])
+            self.assertFalse(arb._start_called)
+            app.wsgi.assert_not_called()
+
+    def test_negative_control_upstream_activation_consumes_environment(self):
+        from gunicorn import systemd
+        with patch.dict(os.environ, {"LISTEN_PID": str(os.getpid()), "LISTEN_FDS": "2"}):
+            self.assertEqual(systemd.listen_fds(), 2)
+            self.assertNotIn("LISTEN_PID", os.environ)
+            self.assertNotIn("LISTEN_FDS", os.environ)
+
+    def test_negative_control_upstream_notify_sends_without_application_loading(self):
+        from gunicorn import systemd
+        fake_socket = SimpleNamespace(connect=Mock(), sendall=Mock(), close=Mock())
+        with patch.dict(os.environ, {"NOTIFY_SOCKET": "/synthetic/notify.sock"}), \
+                patch.object(systemd.socket, "socket", return_value=fake_socket):
+            systemd.sd_notify("READY=1", Mock())
+        fake_socket.connect.assert_called_once_with("/synthetic/notify.sock")
+        fake_socket.sendall.assert_called_once_with(b"READY=1")
+        fake_socket.close.assert_called_once_with()
+
     def test_registries_are_per_instance(self):
         first, second = self.arbiter(), self.arbiter()
         first.WORKERS[12345] = self.fake_worker()

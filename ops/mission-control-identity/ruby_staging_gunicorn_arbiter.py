@@ -36,7 +36,10 @@ _HOOKS = {
     "worker_exit": WorkerExit.worker_exit,
     "nworkers_changed": NumWorkersChanged.nworkers_changed, "on_exit": OnExit.on_exit,
 }
-_INHERITED_MASTER_ENV = {"GUNICORN_PID", "GUNICORN_FD"}
+_INHERITED_MASTER_ENV = {
+    "GUNICORN_PID", "GUNICORN_FD", "LISTEN_PID", "LISTEN_FDS",
+    "LISTEN_FDNAMES", "NOTIFY_SOCKET",
+}
 
 
 def _policy_valid(cfg):
@@ -58,8 +61,15 @@ def _policy_valid(cfg):
             and all(type(getattr(cfg, name)) is int and getattr(cfg, name) > 0
                     for name in ("timeout", "graceful_timeout"))
             and all(getattr(cfg, name) is callback for name, callback in _HOOKS.items())
+            # Upstream can adopt descriptors instead of creating the configured
+            # listener, or notify readiness before a worker loads. Neither path
+            # has a reviewed staging contract. Refuse presence, even empty or
+            # malformed values, before setup/start; never clear or consume them.
             and not _INHERITED_MASTER_ENV.intersection(os.environ)
             and not _INHERITED_MASTER_ENV.intersection(cfg.env)
+            and type(cfg.bind) is list
+            and all(type(binding) is str and not binding.startswith("fd://")
+                    for binding in cfg.bind)
             and _parser_policy_valid(cfg)
         )
     except Exception:
