@@ -149,6 +149,8 @@ jobs:
           python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_errors.py
           python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_boundary.py
           python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_integrated.py
+          python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_arbiter.py
+          python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_application.py
 
   verify-staging-review-image:
     # Packaging only: no application execution, registry push or deployment.
