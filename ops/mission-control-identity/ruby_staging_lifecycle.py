@@ -38,6 +38,22 @@ def _positive_int(value: object, name: str, maximum: int) -> int:
     return value
 
 
+def validate_flow_policy(ttl_seconds: object, capacity: object) -> tuple[int, int]:
+    """Validate existing flow bounds without allocating state or reading time."""
+    return (_positive_int(ttl_seconds, "flow_ttl_invalid", 3600),
+            _positive_int(capacity, "flow_capacity_invalid", 1024))
+
+
+def validate_session_policy(idle_seconds: object, absolute_seconds: object,
+                            capacity: object) -> tuple[int, int, int]:
+    """Validate existing session bounds without allocating state or authority."""
+    idle = _positive_int(idle_seconds, "idle_timeout_invalid", 86400)
+    absolute = _positive_int(absolute_seconds, "absolute_timeout_invalid", 86400)
+    if idle > absolute:
+        raise LifecycleError("timeout_order_invalid")
+    return idle, absolute, _positive_int(capacity, "session_capacity_invalid", 1024)
+
+
 def _digest(token: object) -> bytes | None:
     if not isinstance(token, str) or _TOKEN.fullmatch(token) is None:
         return None
@@ -128,8 +144,7 @@ class LoginFlowStore(_EphemeralStore):
     def __init__(self, *, ttl_seconds: int, capacity: int,
                  enabled: bool = False, clock: Callable[[], float] = time.monotonic) -> None:
         super().__init__(enabled=enabled, clock=clock)
-        self._ttl = _positive_int(ttl_seconds, "flow_ttl_invalid", 3600)
-        self._capacity = _positive_int(capacity, "flow_capacity_invalid", 1024)
+        self._ttl, self._capacity = validate_flow_policy(ttl_seconds, capacity)
         self._flows: dict[bytes, _PendingFlow] = {}
 
     def _clear(self) -> None:
@@ -211,11 +226,8 @@ class SessionStore(_EphemeralStore):
     def __init__(self, *, idle_seconds: int, absolute_seconds: int, capacity: int,
                  enabled: bool = False, clock: Callable[[], float] = time.monotonic) -> None:
         super().__init__(enabled=enabled, clock=clock)
-        self._idle = _positive_int(idle_seconds, "idle_timeout_invalid", 86400)
-        self._absolute = _positive_int(absolute_seconds, "absolute_timeout_invalid", 86400)
-        if self._idle > self._absolute:
-            raise LifecycleError("timeout_order_invalid")
-        self._capacity = _positive_int(capacity, "session_capacity_invalid", 1024)
+        self._idle, self._absolute, self._capacity = validate_session_policy(
+            idle_seconds, absolute_seconds, capacity)
         self._sessions: dict[bytes, _Session] = {}
 
     def _clear(self) -> None:
