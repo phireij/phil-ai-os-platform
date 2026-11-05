@@ -4,7 +4,10 @@ Real descriptor traversal is redirected from '/' into an owned temporary tree.
 ST_RDONLY, PID/PPID, and historical time are SIMULATED; this is not evidence of
 real mount immutability, a real fork lifecycle, or production certificate trust.
 Public expired Gunicorn fixtures are hash checked before copying. SSL key pairing
-uses real OpenSSL via /proc/self/fd, without making a connection or listener.
+uses real OpenSSL via /proc/self/fd, without making a connection or listener. MemoryBIO protocol checks use the same
+expired public fixture: CERT_NONE is restricted to explicitly synthetic clients.
+A separate verified client checks expiry with real OpenSSL time, not the mocked
+loader clock. These are not evidence of browser trust or serving readiness.
 """
 import contextlib
 import dataclasses
@@ -59,6 +62,79 @@ class FakeContext:
         self.original_offset_after_reopen = os.lseek(cert_fd, 0, os.SEEK_CUR)
         for path in self.paths:
             os.fstat(int(path.rsplit('/', 1)[1]))
+
+
+class BoundedMemoryTLS:
+    """Two SSLObjects only: no sockets, sleeps, external I/O, or unbounded pump."""
+    MAX_STEPS = 64
+    MAX_BYTES = 256 * 1024
+
+    def __init__(self, server_context, client_context, hostname='localhost'):
+        self.client_in, self.client_out = ssl.MemoryBIO(), ssl.MemoryBIO()
+        self.server_in, self.server_out = ssl.MemoryBIO(), ssl.MemoryBIO()
+        self.client = client_context.wrap_bio(
+            self.client_in, self.client_out, server_hostname=hostname)
+        self.server = server_context.wrap_bio(
+            self.server_in, self.server_out, server_side=True)
+        self.transferred = 0
+        self.wire = bytearray()
+        self.complete = set()
+        self.errors = {}
+
+    def pump(self):
+        count = 0
+        for source, destination in [(self.client_out, self.server_in),
+                                    (self.server_out, self.client_in)]:
+            pending = source.pending
+            if self.transferred + pending > self.MAX_BYTES:
+                raise AssertionError('MemoryBIO byte budget exhausted')
+            if pending:
+                encrypted = source.read(pending)
+                self.wire.extend(encrypted)
+                self.transferred += len(encrypted)
+                count += len(encrypted)
+                destination.write(encrypted)
+        return count
+
+    def handshake(self):
+        for _ in range(self.MAX_STEPS):
+            for name in ['client', 'server']:
+                if name in self.complete or name in self.errors:
+                    continue
+                try:
+                    getattr(self, name).do_handshake()
+                    self.complete.add(name)
+                except (ssl.SSLWantReadError, ssl.SSLWantWriteError):
+                    pass
+                except ssl.SSLError as error:
+                    self.errors[name] = error
+            moved = self.pump()
+            if len(self.complete) == 2:
+                return
+            if self.errors and not moved:
+                return
+            if not moved and not self.errors:
+                raise AssertionError('MemoryBIO handshake stalled')
+        raise AssertionError('MemoryBIO handshake step budget exhausted')
+
+    def exchange(self, sender, receiver, payload):
+        written = 0
+        received = bytearray()
+        for _ in range(self.MAX_STEPS):
+            if written < len(payload):
+                try:
+                    written += sender.write(payload[written:])
+                except (ssl.SSLWantReadError, ssl.SSLWantWriteError):
+                    pass
+            self.pump()
+            try:
+                received.extend(receiver.read(len(payload) - len(received)))
+            except (ssl.SSLWantReadError, ssl.SSLWantWriteError):
+                pass
+            if len(received) == len(payload):
+                return bytes(received)
+        raise AssertionError('MemoryBIO application step budget exhausted')
+
 
 class LoaderTests(unittest.TestCase):
     def setUp(self):
@@ -312,5 +388,140 @@ class LoaderTests(unittest.TestCase):
                 else: m.os.getppid=lambda:999
             with self.subTest(kind=kind),self.harness(fake=True),patch.object(FakeContext,'load_cert_chain',mutate): self.rejected(prep,env)
             self.cleaned();self.opened.clear();self.closed.clear()
+
+    def protocol_server_context(self):
+        prep = self.preparation()
+        with self.harness():
+            context = prep.load(configured_environment={})
+        self.cleaned()
+        self.opened.clear()
+        self.closed.clear()
+        self.assertIsNone(context.keylog_filename)
+        return context
+
+    def synthetic_unverified_protocol_client(self, version, alpn=('http/1.1',)):
+        # ONLY this local synthetic client bypasses peer verification: the pinned
+        # public fixture is expired. No loader/server policy is altered.
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        context.minimum_version = context.maximum_version = version
+        if alpn is not None:
+            context.set_alpn_protocols(list(alpn))
+        self.assertIsNone(context.keylog_filename)
+        return context
+
+    def test_memorybio_synthetic_tls12_tls13_exact_sni_and_encrypted_roundtrip(self):
+        for version, expected in [(ssl.TLSVersion.TLSv1_2, 'TLSv1.2'),
+                                  (ssl.TLSVersion.TLSv1_3, 'TLSv1.3')]:
+            with self.subTest(version=expected):
+                server = self.protocol_server_context()
+                client = self.synthetic_unverified_protocol_client(version)
+                pair = BoundedMemoryTLS(server, client)
+                pair.handshake()
+                self.assertEqual(pair.errors, {})
+                self.assertEqual(pair.complete, {'client', 'server'})
+                for endpoint in [pair.client, pair.server]:
+                    self.assertEqual(endpoint.version(), expected)
+                    self.assertEqual(endpoint.selected_alpn_protocol(), 'http/1.1')
+                    self.assertFalse(endpoint.session_reused)
+                self.assertEqual(hashlib.sha256(pair.client.getpeercert(binary_form=True)).hexdigest(), self.policy.certificate_sha256)
+                for sender, receiver, payload in [
+                    (pair.client, pair.server, b'GET /synthetic-memorybio-only HTTP/1.1\r\nHost: localhost\r\n\r\n'),
+                    (pair.server, pair.client, b'HTTP/1.1 200 OK\r\nContent-Length: 18\r\n\r\nsynthetic-response')]:
+                    pair.wire.clear()
+                    self.assertEqual(pair.exchange(sender, receiver, payload), payload)
+                    self.assertTrue(pair.wire)
+                    self.assertNotIn(payload, bytes(pair.wire))
+                self.assertIsNone(server.keylog_filename)
+                self.assertIsNone(client.keylog_filename)
+                self.assertFalse(pair.client.session.has_ticket)
+
+    def test_memorybio_synthetic_wrong_missing_and_nonexact_sni_rejected(self):
+        for version in [ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_3]:
+            for hostname in [None, 'wrong.example', 'LOCALHOST', 'localhost.']:
+                with self.subTest(version=version, hostname=hostname):
+                    pair = BoundedMemoryTLS(self.protocol_server_context(),
+                        self.synthetic_unverified_protocol_client(version), hostname)
+                    pair.handshake()
+                    self.assertEqual(pair.complete, set())
+                    self.assertEqual(set(pair.errors), {'client', 'server'})
+                    self.assertEqual(pair.errors['client'].reason, 'TLSV1_UNRECOGNIZED_NAME')
+
+    def test_memorybio_synthetic_no_alpn_and_h2_only_negotiate_no_protocol(self):
+        # Existing server policy advertises HTTP/1.1 but does not require ALPN.
+        # Lack of overlap currently permits TLS with no selected application
+        # protocol; this test records behavior, not an approval for HTTP/2.
+        for version in [ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_3]:
+            for alpn in [None, ('h2',)]:
+                with self.subTest(version=version, alpn=alpn):
+                    pair = BoundedMemoryTLS(self.protocol_server_context(),
+                        self.synthetic_unverified_protocol_client(version, alpn))
+                    pair.handshake()
+                    self.assertEqual(pair.errors, {})
+                    self.assertEqual(pair.complete, {'client', 'server'})
+                    self.assertIsNone(pair.client.selected_alpn_protocol())
+                    self.assertIsNone(pair.server.selected_alpn_protocol())
+
+    def test_memorybio_normal_verification_rejects_expired_public_fixture(self):
+        for version in [ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_3]:
+            with self.subTest(version=version):
+                client = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                client.minimum_version = client.maximum_version = version
+                # Explicit local trust anchor isolates expiry from unknown CA.
+                client.load_verify_locations(cafile=str(self.leaf/'certificate.pem'))
+                self.assertEqual(client.verify_mode, ssl.CERT_REQUIRED)
+                self.assertTrue(client.check_hostname)
+                pair = BoundedMemoryTLS(self.protocol_server_context(), client)
+                pair.handshake()
+                error = pair.errors.get('client')
+                self.assertIsInstance(error, ssl.SSLCertVerificationError)
+                self.assertEqual(error.verify_code, 10)
+                self.assertIn('expired', error.verify_message.lower())
+                self.assertNotIn('client', pair.complete)
+
+    def test_memorybio_synthetic_malformed_and_truncated_clienthello_rejected(self):
+        pair = BoundedMemoryTLS(self.protocol_server_context(),
+            self.synthetic_unverified_protocol_client(ssl.TLSVersion.TLSv1_2))
+        pair.server_in.write(b'not a TLS record')
+        with self.assertRaises(ssl.SSLError):
+            pair.server.do_handshake()
+        pair = BoundedMemoryTLS(self.protocol_server_context(),
+            self.synthetic_unverified_protocol_client(ssl.TLSVersion.TLSv1_3))
+        with self.assertRaises(ssl.SSLWantReadError):
+            pair.client.do_handshake()
+        hello = pair.client_out.read()
+        self.assertGreater(len(hello), 10)
+        pair.server_in.write(hello[:10])
+        with self.assertRaises(ssl.SSLWantReadError):
+            pair.server.do_handshake()
+        pair.server_in.write_eof()
+        with self.assertRaises(ssl.SSLEOFError):
+            pair.server.do_handshake()
+
+    def test_memorybio_contexts_are_fresh_but_loaded_context_has_no_deadline_enforcement(self):
+        first = self.protocol_server_context()
+        second = self.protocol_server_context()
+        self.assertIsNot(first, second)
+        # Loader window is checked at load, not at handshake. This is a lifetime
+        # limitation, not authorization to keep serving after review expiry.
+        with patch.object(m.time, 'time', return_value=self.policy.review_end + 1):
+            pair = BoundedMemoryTLS(first,
+                self.synthetic_unverified_protocol_client(ssl.TLSVersion.TLSv1_3))
+            pair.handshake()
+        self.assertEqual(pair.errors, {})
+        self.assertEqual(pair.complete, {'client', 'server'})
+
+    def test_memorybio_pump_budget_guards(self):
+        pair = BoundedMemoryTLS(self.protocol_server_context(),
+            self.synthetic_unverified_protocol_client(ssl.TLSVersion.TLSv1_3))
+        pair.MAX_BYTES = 1
+        with self.assertRaisesRegex(AssertionError, 'byte budget'):
+            pair.handshake()
+        pair = BoundedMemoryTLS(self.protocol_server_context(),
+            self.synthetic_unverified_protocol_client(ssl.TLSVersion.TLSv1_3))
+        pair.MAX_STEPS = 1
+        with self.assertRaisesRegex(AssertionError, 'step budget'):
+            pair.handshake()
 
 if __name__=='__main__': unittest.main(verbosity=2)
