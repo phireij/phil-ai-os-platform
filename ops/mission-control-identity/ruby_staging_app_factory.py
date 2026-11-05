@@ -13,7 +13,7 @@ import time
 from typing import Callable
 
 from ruby_staging_google_auth import StagingGoogleOwnerAuthenticator
-from ruby_staging_http_app import StagingHTTPApplication, StagingHTTPConfig, StagingRequestLimits
+from ruby_staging_http_app import StagingHTTPApplication, StagingHTTPConfig, StagingRequestLimits, StagingOwnerQuoteBinding, StagingOwnerWorkbenchAssets, StagingOwnerIntakeAssets
 
 
 class StagingFactoryConfigurationError(ValueError):
@@ -25,6 +25,9 @@ def create_staging_application(*, enabled: bool = False,
         limits: StagingRequestLimits | None = None,
         client_secret: str | None = None,
         max_cache_seconds: int | None = None,
+        owner_quote_binding: StagingOwnerQuoteBinding | None = None,
+        owner_workbench_assets: StagingOwnerWorkbenchAssets | None = None,
+        owner_intake_assets: StagingOwnerIntakeAssets | None = None,
         wall_clock: Callable[[], float] = time.time,
         monotonic_clock: Callable[[], float] = time.monotonic) -> StagingHTTPApplication:
     """Build one owned backend and app, or return the default inactive app.
@@ -50,6 +53,21 @@ The returned app owns the backend and must be closed by its future runtime.
             raise ValueError
         config.validate()
         limits.validate()
+        if owner_quote_binding is not None:
+            from ruby_staging_id_token import ISSUER
+            if (type(owner_quote_binding) is not StagingOwnerQuoteBinding or
+                    not owner_quote_binding.matches_policy(issuer=ISSUER, owner_subject=config.owner_subject)):
+                raise ValueError
+        if owner_workbench_assets is not None:
+            if (type(owner_workbench_assets) is not StagingOwnerWorkbenchAssets or
+                    owner_workbench_assets.binding is not owner_quote_binding):
+                raise ValueError
+            owner_workbench_assets.__post_init__()
+        if owner_intake_assets is not None:
+            if (type(owner_intake_assets) is not StagingOwnerIntakeAssets or
+                    owner_intake_assets.binding is not owner_quote_binding):
+                raise ValueError
+            owner_intake_assets.__post_init__()
         now = monotonic_clock()
         if type(now) not in (int, float) or not math.isfinite(now) or now < 0:
             raise ValueError
@@ -65,13 +83,16 @@ The returned app owns the backend and must be closed by its future runtime.
         # This public constructor revalidates the policy match and transfers
         # exclusive ownership only after successful enabled construction.
         return StagingHTTPApplication(config=config, enabled=True,
-            authenticator=backend, limits=limits, clock=monotonic_clock)
+            authenticator=backend, limits=limits, clock=monotonic_clock,
+            owner_quote_binding=owner_quote_binding, owner_workbench_assets=owner_workbench_assets,
+            owner_intake_assets=owner_intake_assets)
     except BaseException as failure:
         if backend is not None:
             try:
                 backend.close()
-            except BaseException:
-                pass
+            except BaseException as cleanup:
+                if isinstance(failure, Exception) and not isinstance(cleanup, Exception):
+                    raise cleanup
         if isinstance(failure, Exception):
             raise StagingFactoryConfigurationError("staging_factory_configuration_invalid") from None
         raise

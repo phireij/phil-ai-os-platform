@@ -423,7 +423,7 @@ class HTTPApplicationTests(unittest.TestCase):
         source=inspect.getsource(app_module)
         self.assertNotIn("serve_forever",source);self.assertNotIn("make_server",source)
         self.assertNotIn("os.environ",source);self.assertNotIn("complete_login_fixture",source)
-        self.assertEqual(set(inspect.signature(StagingHTTPApplication).parameters),{"config","enabled","authenticator","limits","clock","owner_quote_binding"})
+        self.assertEqual(set(inspect.signature(StagingHTTPApplication).parameters),{"config","enabled","authenticator","limits","clock","owner_quote_binding","owner_workbench_assets","owner_intake_assets"})
 
     def test_staging_image_has_only_real_application_dependencies_and_inactive_entrypoint(self):
         path=Path(__file__).resolve().parents[2]/"Dockerfile.ruby-staging-review"
@@ -454,6 +454,128 @@ class HTTPApplicationTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):a.close()
         self.assertTrue(a._sessions._closed)
         self.assertFalse(a._authenticator.matches_policy(ORIGIN,CLIENT,OWNER))
+
+
+    def test_constructor_control_closes_acquired_sessions_and_flows_once(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        for failure in (RuntimeError('private'), KeyboardInterrupt('private'), SystemExit(41)):
+            flows=SimpleNamespace(close=Mock())
+            sessions=SimpleNamespace(close=Mock())
+            with patch.object(app_module,'LoginFlowStore',return_value=flows), \
+                 patch.object(app_module,'SessionStore',return_value=sessions), \
+                 patch.object(app_module.threading,'BoundedSemaphore',side_effect=failure):
+                expected=StagingHTTPConfigurationError if isinstance(failure,Exception) else type(failure)
+                with self.assertRaises(expected):
+                    StagingHTTPApplication(config=CONFIG,limits=LIMITS,enabled=True,clock=lambda:self.mono)
+            self.assertEqual(flows.close.call_count,1);self.assertEqual(sessions.close.call_count,1)
+
+    def test_session_constructor_failure_does_not_double_close_flows(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        for failure in (RuntimeError('private'), KeyboardInterrupt('private'), SystemExit(41)):
+            flows=SimpleNamespace(close=Mock())
+            with patch.object(app_module,'LoginFlowStore',return_value=flows), \
+                 patch.object(app_module,'SessionStore',side_effect=failure):
+                expected=StagingHTTPConfigurationError if isinstance(failure,Exception) else type(failure)
+                with self.assertRaises(expected):
+                    StagingHTTPApplication(config=CONFIG,limits=LIMITS,enabled=True,clock=lambda:self.mono)
+            self.assertEqual(flows.close.call_count,1)
+
+    def test_source_intake_routes_default_off_without_explicit_private_capability(self):
+        app=self.make();cookie,*_=self.login(app)
+        csrf=json.loads(self.call(app,"/api/session",cookie=cookie)[2])["csrf_token"]
+        for operation in ("prepare","submit","resolve"):
+            path="/api/ruby-owner-source-intake/"+operation
+            self.assertEqual(self.call(app,path,cookie=cookie)[0],404)
+            self.assertEqual(self.call(app,path,method="POST",cookie=cookie,body=b"{}",
+                CONTENT_TYPE="application/json",HTTP_ORIGIN=ORIGIN,HTTP_X_CSRF_TOKEN=csrf)[0],405)
+        self.assertIsNone(app._owner_quote_binding)
+
+    def test_source_intake_fixed_contract_auth_csrf_bounds_and_shared_work_slot(self):
+        calls=[]
+        def source(argument,session,now):
+            calls.append((argument,session,now))
+            raise app_module.StagingOwnerSourceIntakeError("source_outcome_unknown")
+        binding=app_module.StagingOwnerQuoteBinding(issuer=app_module.ISSUER,owner_subject=OWNER,
+            list_inquiries=lambda:{},get_inquiry=lambda _: {},prepare_quote=lambda _: {},close=lambda:None,
+            prepare_source=source,submit_source=source,resolve_source=source,clear_source=lambda:None)
+        app=self.make(owner_quote_binding=binding);cookie,*_=self.login(app)
+        csrf=json.loads(self.call(app,"/api/session",cookie=cookie)[2])["csrf_token"]
+        path="/api/ruby-owner-source-intake/submit"
+        body=json.dumps({"handle":"H"*64}).encode()
+        def send(**changes):
+            options=dict(method="POST",cookie=cookie,body=body,CONTENT_TYPE="application/json",
+                HTTP_ORIGIN=ORIGIN,HTTP_X_CSRF_TOKEN=csrf)
+            options.update(changes);return self.call(app,path,**options)
+        for changes,expected in (({"cookie":""},401),({"HTTP_X_CSRF_TOKEN":"X"*64},401),
+                ({"HTTP_ORIGIN":"https://wrong.example.test"},400),({"body":b"x"*1025},413),
+                ({"body":b'{"handle":"x","handle":"y"}'},400),({"body":b'{"attempt":{}}'},400)):
+            self.assertEqual(send(**changes)[0],expected)
+        self.assertEqual(calls,[])
+        app._owner_quote_slot.acquire()
+        try:self.assertEqual(send()[0],503)
+        finally:app._owner_quote_slot.release()
+        self.assertEqual(calls,[])
+        status,_,result=send();self.assertEqual(status,409)
+        self.assertEqual(json.loads(result)["error"],"source_outcome_unknown")
+        self.assertEqual(len(calls),1);self.assertEqual(calls[0][0],{"handle":"H"*64})
+        self.assertEqual(calls[0][1][2],csrf)
+
+    def test_source_intake_clear_failure_still_retires_sole_binding_cleanup(self):
+        closed=[]
+        def clear():raise RuntimeError("private source clear failure")
+        binding=app_module.StagingOwnerQuoteBinding(issuer=app_module.ISSUER,owner_subject=OWNER,
+            list_inquiries=lambda:{},get_inquiry=lambda _: {},prepare_quote=lambda _: {},close=lambda:closed.append(True),
+            prepare_source=lambda *_: {},submit_source=lambda *_: {},resolve_source=lambda *_: {},clear_source=clear)
+        app=self.make(owner_quote_binding=binding)
+        app.close();app.close();binding.close()
+        self.assertEqual(closed,[True]);self.assertTrue(app._sessions._closed)
+        self.assertFalse(app._authenticator.matches_policy(ORIGIN,CLIENT,OWNER))
+
+
+    def test_private_asset_capability_is_absent_and_inactive_input_uninspected(self):
+        class Poison:
+            def __getattribute__(self, name): raise AssertionError("inactive_asset_inspected")
+        inactive=StagingHTTPApplication(owner_workbench_assets=Poison())
+        self.assertEqual(self.call(inactive,"/owner-quote-workbench/index.html")[0],503)
+        app=self.make();cookie,*_=self.login(app)
+        self.assertEqual(self.call(app,"/owner-quote-workbench/index.html",cookie=cookie)[0],404)
+
+    def test_private_asset_closed_contract_and_binding_identity(self):
+        import hashlib
+        binding=app_module.StagingOwnerQuoteBinding(issuer=app_module.ISSUER,owner_subject=OWNER,
+            list_inquiries=lambda:{},get_inquiry=lambda _: {},prepare_quote=lambda _: {},close=lambda:None)
+        bodies=(b"synthetic reviewed fixture",)*5
+        assets=app_module.StagingOwnerWorkbenchAssets(binding=binding,bodies=bodies,
+            sha256=tuple(hashlib.sha256(b).hexdigest() for b in bodies),synthetic_only=True)
+        with self.assertRaises(StagingHTTPConfigurationError): self.make(owner_workbench_assets=assets)
+        with self.assertRaises(StagingHTTPConfigurationError): replace(assets,synthetic_only=1)
+        with self.assertRaises(StagingHTTPConfigurationError): replace(assets,bodies=bodies[:-1])
+        with self.assertRaises(StagingHTTPConfigurationError): replace(assets,sha256=("0"*64,)*5)
+        app=self.make(owner_quote_binding=binding,owner_workbench_assets=assets)
+        self.assertEqual(type(app),StagingHTTPApplication)
+        self.assertEqual(self.call(app,"/owner-quote-workbench/index.html")[0],401)
+        cookie,*_=self.login(app)
+        self.assertEqual(self.call(app,"/owner-quote-workbench/index.html",cookie=cookie)[2],bodies[0])
+
+    def test_private_asset_policy_does_not_change_logout_policy(self):
+        import hashlib
+        binding=app_module.StagingOwnerQuoteBinding(issuer=app_module.ISSUER,owner_subject=OWNER,
+            list_inquiries=lambda:{},get_inquiry=lambda _: {},prepare_quote=lambda _: {},close=lambda:None)
+        bodies=(b"synthetic fixture",)*5
+        assets=app_module.StagingOwnerWorkbenchAssets(binding,bodies,
+            tuple(hashlib.sha256(b).hexdigest() for b in bodies),True)
+        app=self.make(owner_quote_binding=binding,owner_workbench_assets=assets)
+        cookie,*_=self.login(app)
+        old=dict(self.call(app,"/",cookie=cookie)[1])["Content-Security-Policy"]
+        private=dict(self.call(app,"/owner-quote-workbench/index.html",cookie=cookie)[1])["Content-Security-Policy"]
+        self.assertIn("'sha256-"+app_module._SCRIPT_HASH+"'",old)
+        self.assertNotIn("owner-quote-workbench",old)
+        self.assertIn("worker-src 'none'",private)
+        self.assertNotIn("'self'",private)
+        for name in ("enabled.mjs","view.mjs","controller.mjs"):
+            self.assertIn(ORIGIN+"/owner-quote-workbench/"+name,private)
 
 
 if __name__=="__main__":unittest.main(verbosity=2)

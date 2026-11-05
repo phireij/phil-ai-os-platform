@@ -1,5 +1,6 @@
 """Actual post-fork loader/factory ownership with inert process/HTTP boundaries."""
 from contextlib import contextmanager
+from dataclasses import replace
 import importlib.util
 import json
 import os
@@ -97,6 +98,20 @@ class OwnedApplicationTests(unittest.TestCase):
         self.assertIsNone(worker.app._ownership)
         self.assertIsNone(worker.app._generation)
 
+    def test_explicit_owner_policy_is_static_and_disabled_policy_ignored(self):
+        policy=protected.static_owner_policy(self.fx.ownership)
+        with patch.object(owned,'create_staging_application_from_files') as load, \
+             patch('os.open',side_effect=AssertionError('master file read')):
+            for enabled in (False, True):
+                candidate=replace(policy,source_intake_enabled=enabled)
+                provider=self.provider(enabled=True,owner_policy=candidate)
+                self.assertIs(provider._owner_policy,candidate)
+                worker=self.worker(provider)
+                self.assertFalse(worker._init_attempted)
+            inactive=self.provider(owner_policy=object())
+            self.assertIsNone(inactive._owner_policy)
+        load.assert_not_called()
+
     def test_provider_and_worker_constructor_never_load(self):
         with patch.object(owned, "create_staging_application_from_files") as load:
             provider = self.provider(enabled=True)
@@ -106,11 +121,28 @@ class OwnedApplicationTests(unittest.TestCase):
         self.assertIsNone(provider._application)
         self.assertFalse(worker._init_attempted)
 
+    def test_master_rejects_nonboolean_intake_without_consuming_it(self):
+        class Poison:
+            def __getattribute__(self, name):raise AssertionError('intake_input_inspected')
+            def __bool__(self):raise AssertionError('intake_input_coerced')
+            def __eq__(self, other):raise AssertionError('intake_input_compared')
+            def __repr__(self):raise AssertionError('intake_input_rendered')
+        policy = protected.static_owner_policy(self.fx.ownership)
+        with patch.object(owned, 'create_staging_application_from_files') as load, \
+                patch('os.open') as opened, patch.object(base.requests, 'Session') as session:
+            for index, value in enumerate((None, 0, 1, 'true', Poison())):
+                candidate = replace(policy, source_intake_enabled=value)
+                with self.subTest(index=index), self.assertRaisesRegex(StagingWorkerApplicationError, '^' + ERROR + '$'):
+                    self.provider(enabled=True, owner_policy=candidate)
+                inactive = self.provider(owner_policy=candidate)
+                self.assertIsNone(inactive._owner_policy)
+            for call in (load, opened, session):call.assert_not_called()
+
     def test_disabled_provider_ignores_poison_policy_and_opens_nothing(self):
         class Poison:
             def __getattribute__(self, name):
                 raise AssertionError("unused_input_inspected")
-        provider = self.provider(ownership=Poison(), expected_generation=Poison())
+        provider = self.provider(ownership=Poison(), expected_generation=Poison(), owner_policy=Poison())
         worker = self.worker(provider)
         with patch.object(loader.os, "open") as opened, \
                 patch.object(base.requests, "Session") as session, self.child_context(worker):

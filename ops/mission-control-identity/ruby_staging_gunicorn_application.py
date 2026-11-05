@@ -14,6 +14,7 @@ from gunicorn.config import Config, PostWorkerInit, WorkerInt, WorkerAbort
 
 from ruby_staging_gunicorn_boundary import StagingCanonicalWorker
 from ruby_staging_http_app import StagingHTTPApplication
+from ruby_staging_isolated_store import StagingOwnerStartupPolicy
 from ruby_staging_protected_files import (StagingFileOwnership,
     create_staging_application_from_files)
 
@@ -37,7 +38,7 @@ The parent retains no enabled application or credential. Child loading does not
 establish a global singleton, actual mount trust, or a hard startup deadline.
 """
 
-    def __init__(self, cfg, *, enabled=False, ownership=None, expected_generation=None):
+    def __init__(self, cfg, *, enabled=False, ownership=None, expected_generation=None, owner_policy=None):
         try:
             if type(cfg) is not Config or type(enabled) is not bool:
                 raise ValueError
@@ -47,6 +48,14 @@ establish a global singleton, actual mount trust, or a hard startup deadline.
                         or re.fullmatch(r"[0-9a-f]{32}", expected_generation, re.ASCII) is None):
                     raise ValueError
                 ownership.validate()
+                if owner_policy is not None:
+                    if type(owner_policy) is not StagingOwnerStartupPolicy:
+                        raise ValueError
+                    owner_policy.validate()
+                    if (owner_policy.generation != expected_generation or
+                            (owner_policy.files.reader_uid, owner_policy.files.reader_gid) !=
+                            (ownership.reader_uid, ownership.reader_gid)):
+                        raise ValueError
                 if (cfg.uid, cfg.gid) != (ownership.reader_uid, ownership.reader_gid):
                     raise ValueError
         except Exception:
@@ -58,6 +67,7 @@ establish a global singleton, actual mount trust, or a hard startup deadline.
         self._ownership = ownership if enabled else None
         self._reader_identity = (ownership.reader_uid, ownership.reader_gid) if enabled else None
         self._generation = expected_generation if enabled else None
+        self._owner_policy = owner_policy if enabled else None
         self._worker_pid = None
         self._worker_identity = None
         self._attempted = False
@@ -98,9 +108,11 @@ establish a global singleton, actual mount trust, or a hard startup deadline.
         # Failed construction is terminal; no reload/second read of a generation.
         self._attempted = True
         try:
-            self._application = create_staging_application_from_files(
-                enabled=self._enabled, ownership=self._ownership,
-                expected_generation=self._generation)
+            options = dict(enabled=self._enabled, ownership=self._ownership,
+                           expected_generation=self._generation)
+            if self._owner_policy is not None:
+                options["owner_policy"] = self._owner_policy
+            self._application = create_staging_application_from_files(**options)
             if type(self._application) is not StagingHTTPApplication:
                 self._application = None
                 _refuse()
@@ -110,6 +122,7 @@ establish a global singleton, actual mount trust, or a hard startup deadline.
         finally:
             self._ownership = None
             self._generation = None
+            self._owner_policy = None
 
     def _close_for_worker(self, worker):
         # Parent death must not prevent cleanup in the already-bound worker.
@@ -121,6 +134,7 @@ establish a global singleton, actual mount trust, or a hard startup deadline.
         application, self._application = self._application, None
         self._ownership = None
         self._generation = None
+        self._owner_policy = None
         if application is not None:
             application.close()
 

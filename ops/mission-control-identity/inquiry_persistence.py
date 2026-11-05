@@ -17,6 +17,30 @@ def _error(code):
     return ConversationConfigurationError(code)
 
 
+def _cleanup_resources(actions, *, primary=None, error_code=None):
+    """Attempt every retired resource once without replacing a primary control.
+
+    Callers retain and re-raise their primary exception. Otherwise the first
+    cleanup control wins over ordinary failures, which expose only a fixed
+    code (or are best-effort when no code is supplied).
+    """
+    control = None
+    failed = False
+    for action in actions:
+        try:
+            action()
+        except BaseException as exc:
+            failed = True
+            if not isinstance(exc, Exception) and control is None:
+                control = exc
+    if primary is not None and not isinstance(primary, Exception):
+        return
+    if control is not None:
+        raise control from None
+    if primary is None and failed and error_code is not None:
+        raise _error(error_code) from None
+
+
 class StoreLease:
     """Legacy-only readers/writers share; inquiry custody has one exclusive owner.
 
@@ -43,17 +67,25 @@ class StoreLease:
             named = path.lstat()
             if named.st_ino != info.st_ino or named.st_dev != info.st_dev:
                 raise _error("conversation_writer_lock_invalid")
-        except Exception:
-            self.close()
+        except BaseException as primary:
+            _cleanup_resources((self.close,), primary=primary)
+            if not isinstance(primary, Exception):
+                raise
             raise _error("conversation_writer_unavailable") from None
 
     def close(self):
         if self.fd is not None:
-            os.close(self.fd)
+            fd = self.fd
+            # close(2) may already have retired the descriptor when it fails.
+            # Never retry an uncertain close against a possibly reused number.
             self.fd = None
+            _cleanup_resources((lambda: os.close(fd),), error_code="conversation_writer_unavailable")
 
     def __del__(self):
-        self.close()
+        try:
+            self.close()
+        except BaseException:
+            pass
 
 
 class FencedStoreLock:

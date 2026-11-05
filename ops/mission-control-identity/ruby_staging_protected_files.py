@@ -193,8 +193,12 @@ def _load(ownership: StagingFileOwnership, generation: str):
             raise ValueError
         result = (StagingHTTPConfig(**config["config"]), StagingRequestLimits(**config["limits"]),
                   secret["client_secret"], config["max_cache_seconds"])
-    except BaseException:
-        _close_all(fds, suppress=True)
+    except BaseException as primary:
+        try:
+            _close_all(fds, suppress=False)
+        except BaseException as cleanup:
+            if isinstance(primary, Exception) and not isinstance(cleanup, Exception):
+                raise cleanup
         raise
     else:
         _close_all(fds, suppress=False)
@@ -203,6 +207,7 @@ def _load(ownership: StagingFileOwnership, generation: str):
 
 def create_staging_application_from_files(*, enabled: bool = False,
         ownership: StagingFileOwnership | None = None, expected_generation: str | None = None,
+        owner_policy=None,
         wall_clock: Callable[[], float] = time.time,
         monotonic_clock: Callable[[], float] = time.monotonic):
     """Read one immutable startup generation, close FDs, then call the factory.
@@ -220,7 +225,25 @@ by the separately approved final-worker lifecycle.
                 or not callable(wall_clock) or not callable(monotonic_clock)):
             raise ValueError
         ownership.validate()
+        if owner_policy is not None:
+            from ruby_staging_isolated_store import StagingOwnerStartupPolicy
+            if type(owner_policy) is not StagingOwnerStartupPolicy:
+                raise ValueError
+            owner_policy.validate()
+            if (owner_policy.generation != expected_generation or
+                    (owner_policy.files.reader_uid, owner_policy.files.reader_gid) !=
+                    (ownership.reader_uid, ownership.reader_gid)):
+                raise ValueError
+        if owner_policy is not None:
+            from operations_hub.ruby_owner_owned_startup import preflight_owner_policy
+            preflight_owner_policy(owner_policy)
         config, limits, secret, cache = _load(ownership, expected_generation)
+        if owner_policy is not None:
+            # Closed bundled selection, never a configured import/callback/class.
+            from operations_hub.ruby_owner_owned_startup import create_owner_application
+            return create_owner_application(policy=owner_policy, config=config, limits=limits,
+                client_secret=secret, max_cache_seconds=cache, wall_clock=wall_clock,
+                monotonic_clock=monotonic_clock)
         return create_staging_application(enabled=True, config=config, limits=limits,
             client_secret=secret, max_cache_seconds=cache, wall_clock=wall_clock,
             monotonic_clock=monotonic_clock)

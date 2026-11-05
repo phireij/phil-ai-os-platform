@@ -565,5 +565,323 @@ class ConversationStoreChecks(unittest.TestCase):
             )
 
 
+# Held-reference cleanup regressions are in the existing CI-invoked suite.
+import itertools
+import os
+import tempfile
+import threading
+import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
+
+import conversation_store as storage
+import inquiry_persistence as persistence
+
+
+def failures():
+    return (None, RuntimeError("synthetic-private"), KeyboardInterrupt("synthetic-stop"), SystemExit(97))
+
+
+class Resource:
+    def __init__(self, failure=None):
+        self.calls = 0
+        self.failure = failure
+
+    def close(self):
+        self.calls += 1
+        if self.failure is not None:
+            raise self.failure
+
+
+class CleanupChecks(unittest.TestCase):
+    def capture(self, action):
+        try:
+            action()
+        except BaseException as exc:
+            return exc
+        self.fail("failure was not raised")
+
+    def expected(self, primary, cleanups):
+        if primary is not None and not isinstance(primary, Exception):
+            return primary
+        return next((value for value in cleanups if value is not None and not isinstance(value, Exception)), primary)
+
+    def test_connect_setup_and_cleanup_matrix(self):
+        for primary, cleanup in itertools.product(failures()[1:], failures()):
+            resource = Resource(cleanup)
+            def execute(*_):
+                raise primary
+            resource.execute = execute
+            with self.subTest(primary=type(primary).__name__, cleanup=type(cleanup).__name__), patch.object(storage.sqlite3, "connect", return_value=resource):
+                observed = self.capture(storage._connect)
+                self.assertIs(observed, self.expected(primary, (cleanup,)))
+                self.assertEqual(resource.calls, 1)
+
+    def test_snapshot_constructor_retirement_and_cleanup_matrix(self):
+        for primary, cleanup in itertools.product(failures()[1:], failures()):
+            resource = Resource(cleanup)
+            held = storage.EncryptedSnapshot.__new__(storage.EncryptedSnapshot)
+            def initialize(_):
+                raise primary
+            with self.subTest(primary=type(primary).__name__, cleanup=type(cleanup).__name__), patch.object(storage, "_connect", return_value=resource):
+                observed = self.capture(lambda: held.__init__(Path(__file__).resolve().parent / "absent-synthetic-state", b"k" * 32, initialize))
+                self.assertIs(observed, self.expected(primary, (cleanup,)))
+                self.assertEqual(resource.calls, 1)
+                self.assertIsNone(held.connection)
+
+    def test_snapshot_source_cleanup_matrix_and_redaction(self):
+        for primary, cleanup in itertools.product(failures(), failures()):
+            if primary is None and cleanup is None:
+                continue
+            source = Resource(cleanup)
+            source.deserialize = lambda _: None
+            def backup(_):
+                if primary is not None:
+                    raise primary
+            source.backup = backup
+            held = storage.EncryptedSnapshot.__new__(storage.EncryptedSnapshot)
+            held.connection = object()
+            held.key = b"k" * 32
+            crypto = SimpleNamespace(decrypt=lambda *_: b"synthetic")
+            with self.subTest(primary=type(primary).__name__, cleanup=type(cleanup).__name__), patch.object(storage, "AESGCM", return_value=crypto), patch.object(storage.sqlite3, "connect", return_value=source):
+                observed = self.capture(lambda: held._load(storage.MAGIC + b"n" * 12 + b"c" * 16))
+                expected = self.expected(primary, (cleanup,))
+                if expected is not None and not isinstance(expected, Exception):
+                    self.assertIs(observed, expected)
+                else:
+                    self.assertIsInstance(observed, storage.ConversationConfigurationError)
+                    self.assertEqual(str(observed), "conversation_snapshot_unavailable")
+                    self.assertTrue(observed.__suppress_context__)
+                self.assertEqual(source.calls, 1)
+
+    def make_store(self, cleanup=(None, None, None)):
+        held = storage.ConversationStore.__new__(storage.ConversationStore)
+        held._lock = SimpleNamespace(raw=threading.Lock())
+        held._closed = False
+        resources = [Resource(value) for value in cleanup]
+        held._live = SimpleNamespace(connection=resources[0])
+        held._ledger = SimpleNamespace(connection=resources[1])
+        held._lease = resources[2]
+        return held, resources
+
+    def test_store_close_all_resources_once_full_matrix(self):
+        for cleanup in itertools.product(failures(), repeat=3):
+            held, resources = self.make_store(cleanup)
+            with self.subTest(kinds=[type(value).__name__ for value in cleanup]):
+                if any(value is not None for value in cleanup):
+                    observed = self.capture(held.close)
+                    expected = self.expected(None, cleanup)
+                    if expected is not None:
+                        self.assertIs(observed, expected)
+                    else:
+                        self.assertIsInstance(observed, storage.ConversationConfigurationError)
+                        self.assertEqual(str(observed), "conversation_store_close_unavailable")
+                else:
+                    held.close()
+                self.assertEqual([resource.calls for resource in resources], [1, 1, 1])
+                self.assertTrue(held._closed)
+                self.assertIsNone(held._live)
+                self.assertIsNone(held._ledger)
+                self.assertIsNone(held._lease)
+                held.close()
+                self.assertEqual([resource.calls for resource in resources], [1, 1, 1])
+
+    def test_store_constructor_failure_at_every_owned_stage(self):
+        for stage, primary, cleanup in itertools.product(range(3), failures()[1:], failures()):
+            lease = Resource(cleanup)
+            connections = [Resource(cleanup), Resource(cleanup)]
+            for connection in connections:
+                connection.execute = lambda *_: SimpleNamespace(fetchone=lambda: None)
+            snapshots = [SimpleNamespace(connection=connection) for connection in connections]
+            outputs = iter(snapshots[:stage] + [primary])
+            def snapshot(*_, **__):
+                value = next(outputs)
+                if isinstance(value, BaseException):
+                    raise value
+                return value
+            held = storage.ConversationStore.__new__(storage.ConversationStore)
+            config = storage.ConversationConfig(Path(__file__).resolve().parent / "live", Path(__file__).resolve().parent / "ledger", Path(__file__).resolve().parent / "key")
+            with self.subTest(stage=stage, primary=type(primary).__name__, cleanup=type(cleanup).__name__), patch.object(storage, "load_key", return_value=b"k" * 32), patch.object(storage, "StoreLease", return_value=lease), patch.object(storage, "EncryptedSnapshot", side_effect=snapshot), patch.object(storage.ConversationStore, "_purge_locked", side_effect=primary):
+                observed = self.capture(lambda: held.__init__(config, "https://accounts.google.com", "synthetic-owner"))
+                self.assertIs(observed, self.expected(primary, (cleanup,)))
+                self.assertEqual(lease.calls, 1)
+                self.assertEqual([connection.calls for connection in connections], [int(stage >= 1), int(stage >= 2)])
+                self.assertTrue(held._closed)
+                held.close()
+                self.assertEqual(lease.calls, 1)
+
+    def test_lease_constructor_control_and_cleanup_matrix(self):
+        for primary, cleanup in itertools.product(failures()[1:], failures()):
+            held = persistence.StoreLease.__new__(persistence.StoreLease)
+            with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as temporary:
+                opened = []
+                closed = []
+                real_open, real_close = os.open, os.close
+                def acquire(*args, **kwargs):
+                    descriptor = real_open(*args, **kwargs)
+                    opened.append(descriptor)
+                    return descriptor
+                def release(descriptor):
+                    closed.append(descriptor)
+                    real_close(descriptor)
+                    if cleanup is not None:
+                        raise cleanup
+                with self.subTest(primary=type(primary).__name__, cleanup=type(cleanup).__name__), patch.object(persistence.os, "open", side_effect=acquire), patch.object(persistence.os, "close", side_effect=release), patch.object(persistence.os, "fstat", side_effect=primary):
+                    observed = self.capture(lambda: held.__init__(Path(temporary) / "state", exclusive=True))
+                    expected = self.expected(primary, (cleanup,))
+                    if not isinstance(expected, Exception):
+                        self.assertIs(observed, expected)
+                    else:
+                        self.assertEqual(str(observed), "conversation_writer_unavailable")
+                    self.assertEqual(closed, opened)
+                    self.assertIsNone(held.fd)
+                    held.close()
+                    held.__del__()
+                    self.assertEqual(closed, opened)
+
+    def test_lease_uncertain_close_is_retired_without_retry(self):
+        for cleanup in failures()[1:]:
+            held = persistence.StoreLease.__new__(persistence.StoreLease)
+            held.fd = 123456
+            with patch.object(persistence.os, "close", side_effect=cleanup) as close:
+                observed = self.capture(held.close)
+                if isinstance(cleanup, Exception):
+                    self.assertEqual(str(observed), "conversation_writer_unavailable")
+                else:
+                    self.assertIs(observed, cleanup)
+                self.assertIsNone(held.fd)
+                held.close()
+                held.__del__()
+                self.assertEqual(close.call_count, 1)
+
+    def test_atomic_fdopen_failure_closes_descriptor_and_removes_temp(self):
+        for primary, cleanup in itertools.product(failures()[1:], failures()):
+            with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as temporary:
+                target = Path(temporary) / "state"
+                closed = []
+                real_close = os.close
+                def close(descriptor):
+                    closed.append(descriptor)
+                    real_close(descriptor)
+                    if cleanup is not None:
+                        raise cleanup
+                with self.subTest(primary=type(primary).__name__, cleanup=type(cleanup).__name__), patch.object(storage.os, "fdopen", side_effect=primary), patch.object(storage.os, "close", side_effect=close):
+                    observed = self.capture(lambda: storage._atomic_write_private(target, b"synthetic", overwrite=True))
+                    self.assertIs(observed, self.expected(primary, (cleanup,)))
+                    self.assertEqual(len(closed), 1)
+                self.assertEqual(list(target.parent.iterdir()), [])
+
+    def test_atomic_unlink_cleanup_cannot_mask_primary_control(self):
+        for primary, cleanup in itertools.product(failures()[1:], failures()[1:]):
+            with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as temporary:
+                target = Path(temporary) / "state"
+                with self.subTest(primary=type(primary).__name__, cleanup=type(cleanup).__name__), patch.object(storage.os, "fdopen", side_effect=primary), patch.object(Path, "unlink", side_effect=cleanup):
+                    observed = self.capture(lambda: storage._atomic_write_private(target, b"synthetic", overwrite=True))
+                    self.assertIs(observed, self.expected(primary, (cleanup,)))
+
+    def test_real_store_round_trip_and_explicit_close_releases_lease(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as temporary:
+            root = Path(temporary)
+            key = root / "key"
+            key.write_text("22" * 32, encoding="ascii")
+            os.chmod(key, 0o600)
+            config = storage.ConversationConfig(root / "state", root / "ledger", key)
+            held = storage.ConversationStore(config, "synthetic-issuer", "synthetic-owner")
+            held.create_conversation("synthetic-roundtrip-key", b"{}")
+            held.close()
+            held.close()
+            reopened = storage.ConversationStore(config, "synthetic-issuer", "synthetic-owner")
+            self.assertEqual(reopened._live.connection.execute("SELECT COUNT(*) FROM conversations").fetchone()[0], 1)
+            reopened.close()
+            lease = persistence.StoreLease(config.state_file, exclusive=True)
+            lease.close()
+
+
+
+class IsolatedStorageChecks(unittest.TestCase):
+    """Real FD contracts in the existing CI-invoked public storage suite."""
+    def setUp(self):
+        from dataclasses import replace
+        import ruby_staging_isolated_store as isolated
+        self.isolated=isolated
+        self.temp=tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent)
+        self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name);self.root.chmod(0o755)
+        self.state=self.root/'state';self.state.mkdir(mode=0o700)
+        self.keys=self.root/'keys';self.keys.mkdir()
+        self.key=self.keys/'key.hex';self.key.write_text('73'*32);self.key.chmod(0o400)
+        self.keys.chmod(0o555);self.addCleanup(lambda:self.keys.chmod(0o755))
+        i=self.key.stat();d=self.state.stat();uid=os.geteuid();gid=os.getegid()
+        self.policy=isolated.IsolatedStorePolicy('/state','/keys/key.hex',uid,gid,
+            (('/',uid,gid,0o755),('/keys',uid,gid,0o555),('/state',uid,gid,0o700)),
+            (d.st_dev,d.st_ino),(i.st_dev,i.st_ino,i.st_size,i.st_mtime_ns,i.st_ctime_ns),
+            ('/production-excluded',),'synthetic-public-tests',True,True)
+        self.real_open,self.real_close=os.open,os.close
+        self.fds=set()
+        protected={(p.stat().st_dev,p.stat().st_ino) for p in (self.key,self.keys)}
+        def opening(path,flags,mode=0o777,*,dir_fd=None):
+            actual=self.root if path=='/' and dir_fd is None else path
+            fd=self.real_open(actual,flags,mode,**({} if dir_fd is None else {'dir_fd':dir_fd}))
+            self.fds.add(fd);return fd
+        def closing(fd):self.fds.discard(fd);return self.real_close(fd)
+        def vfs(fd):
+            details=os.fstat(fd)
+            return SimpleNamespace(f_flag=os.ST_RDONLY if (details.st_dev,details.st_ino) in protected else 0)
+        for guard in (patch('os.open',side_effect=opening),patch('os.close',side_effect=closing),patch('os.fstatvfs',side_effect=vfs)):
+            guard.start();self.addCleanup(guard.stop)
+
+    def test_static_policy_rejects_shared_overlap_or_incomplete_metadata_before_io(self):
+        from dataclasses import replace
+        for changes in ({'reader_uid':0},{'state_directory':'/keys/state'}, {'key_file':'/keys/../key.hex'},
+                {'isolation_acknowledged':False},{'excluded_roots':()}, {'excluded_roots':('/state',)},
+                {'directories':self.policy.directories[:-1]}, {'initialize_empty':'true'}):
+            with patch('os.open',side_effect=AssertionError('policy touched path')):
+                with self.assertRaises(self.isolated.IsolatedStoreConfigurationError):replace(self.policy,**changes).validate()
+        self.assertEqual(self.fds,set())
+
+    def test_actual_fd_key_lease_pair_write_read_close_and_restart(self):
+        from dataclasses import replace
+        files=self.isolated.IsolatedStoreFiles(self.policy)
+        self.assertNotEqual(files.key,bytes.fromhex('73'*32))
+        lease=files.acquire_lease();self.assertEqual(files.initial_pair(),(None,None))
+        files.write(self.isolated.LEDGER,b'synthetic-ledger',overwrite=False)
+        files.write(self.isolated.LIVE,b'synthetic-live',overwrite=False)
+        self.assertEqual(files.read(self.isolated.LIVE,sync=True),b'synthetic-live')
+        files.claim();files.close();files.close();self.assertIsNone(lease.fd);self.assertEqual(self.fds,set())
+        files=self.isolated.IsolatedStoreFiles(replace(self.policy,initialize_empty=False))
+        try:
+            files.acquire_lease();self.assertEqual(files.initial_pair(),(b'synthetic-live',b'synthetic-ledger'))
+        finally:files.close()
+        self.assertEqual(self.fds,set())
+
+    def test_bad_key_metadata_symlinks_and_missing_pair_fail_closed(self):
+        from dataclasses import replace
+        for changes in ({'key_identity':(0,)*5},{'state_identity':(0,0)}):
+            with self.assertRaises(self.isolated.IsolatedStoreConfigurationError):self.isolated.IsolatedStoreFiles(replace(self.policy,**changes))
+            self.assertEqual(self.fds,set())
+        files=self.isolated.IsolatedStoreFiles(replace(self.policy,initialize_empty=False))
+        try:
+            files.acquire_lease()
+            with self.assertRaises(self.isolated.IsolatedStoreConfigurationError):files.initial_pair()
+            (self.state/self.isolated.LIVE).symlink_to(self.key)
+            with self.assertRaises(self.isolated.IsolatedStoreConfigurationError):files.read(self.isolated.LIVE)
+        finally:files.close()
+        self.assertEqual(self.fds,set())
+
+    def test_replaced_lock_and_uncertain_snapshot_write_fail_closed(self):
+        files=self.isolated.IsolatedStoreFiles(self.policy);files.acquire_lease()
+        try:
+            for failure in (RuntimeError('private'),KeyboardInterrupt('private'),SystemExit(32)):
+                with patch('os.replace',side_effect=failure):
+                    expected=self.isolated.IsolatedStoreConfigurationError if isinstance(failure,Exception) else type(failure)
+                    with self.assertRaises(expected):files.write(self.isolated.LIVE,b'synthetic')
+                self.assertEqual(list(self.state.glob('.*.tmp')),[])
+            (self.state/self.isolated.LOCK).unlink()
+            (self.state/self.isolated.LOCK).touch(mode=0o600)
+            with self.assertRaises(self.isolated.IsolatedStoreConfigurationError):files.read(self.isolated.LIVE,missing=True)
+        finally:files.close()
+        self.assertEqual(self.fds,set())
+
+
 if __name__ == "__main__":
     unittest.main()
