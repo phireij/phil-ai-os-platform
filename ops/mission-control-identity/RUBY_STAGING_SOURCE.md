@@ -43,14 +43,119 @@ control exceptions. Backend initialization also cleans a Session that has alread
 been returned if later setup is interrupted. Cleanup is best effort during Python
 unwinding, not a guarantee under SIGKILL or a constructor that never returns.
 
-The future runtime must call this only after worker fork and close the resulting
-app at shutdown. Do not preload an enabled instance in the master. One configured
+The optional provider/owned-worker pair below calls this only after worker fork
+and closes the resulting app on shutdown unwinding. Do not preload an enabled
+instance in the master. One configured
 worker is not by itself a single-state-process guarantee: Gunicorn's SIGTTIN
 scaling and HUP reload can create additional or overlapping workers. The factory
 does not implement supervisor signals, reload policy, lifecycle hooks, a server
 entrypoint or protected configuration loading; the optional mounted-file wrapper
 below supplies the latter source boundary. Startup diagnostics outside the
 reviewed logger still require a safe runtime boundary.
+
+## Optional single-worker controller
+
+`StagingSingleWorkerArbiter` is a separately selected source component, not a
+launcher. It accepts the exact reviewed owned worker/provider/logger, one worker and
+thread, positive explicit timeouts, and default process hooks. It rejects
+preloading, reload, request-count recycling, daemonization, reuse-port, dirty
+pools, control sockets, cached applications and inherited reexec inputs. It
+does not choose timing, listener, UID, secret, or proxy settings.
+
+The worker target cannot be changed from the literal integer one, including by
+the actual control handler's direct property assignment. HUP, USR2, TTIN, TTOU,
+WINCH, direct reload/reexec and dirty-pool requests fail with a fixed HaltServer.
+In the normal upstream master loop this intentionally shuts down the service;
+it does not implement a rolling restart or silently ignore configuration changes.
+Repeated setup cannot preload a replacement, and stopping permanently closes
+that controller to new workers.
+
+The claim is **at most one registered HTTP worker per guarded arbiter**, not
+one state owner across hosts or containers. Instance-local worker/listener
+registries are used. A replacement cannot be spawned while any old worker is
+registered. Unlike upstream, kill ESRCH retains that entry until the original
+waitpid-based reaper observes its exit. An unresolved ECHILD remains closed to
+replacement. After ESRCH, no further signal is sent to that numeric PID until
+confirmed retirement, avoiding a later signal to an unrelated reused PID.
+Changed cleanup hooks are suppressed and the original validated graceful timeout
+is used for shutdown even when live configuration is invalid. Detecting such a
+change permanently closes that controller to new workers; it does not repair
+configuration and resume serving. Raw worker/logger class identities are checked
+before Gunicorn's resolving properties can import or run class hooks.
+This is a contract for trusted code, not an in-process sandbox
+against arbitrary code that edits registries or bypasses methods.
+
+The original heartbeat timeout, abort escalation and reaper are retained. Tests
+explicitly retain their limitations: unreadable heartbeat errors are skipped;
+master/scheduler/filesystem stalls can defeat a promised deadline; shutdown ends
+with SIGKILL attempts and one nonblocking reap, which may leave children alive.
+SIGKILL does not execute Python cleanup. The controller must not be described as
+a hard request deadline or a complete process supervisor.
+
+Before serving, a trusted launcher must select this controller and the exact
+provider/owned-worker pair below. Ordinary Gunicorn CLI selects the original
+Arbiter. No such launcher is included. The host
+must enforce one master/replica and route to one generation, disallow overlapping
+rollouts/autoscaling, and verify the **entire old service process set/cgroup is
+empty** before replacement, including after master death. Master exit, readiness
+removal and a successful bind are not proof. Exclude or separately review socket
+activation, inherited descriptors, command overrides and dirty-runtime inputs.
+Replacement loses sessions, pending flows and caches, and can involve downtime.
+
+The new offline suite uses the actual original controller methods with inert
+fork/kill/wait/start boundaries and synthetic PIDs. It exercises refusal, control
+scaling, ESRCH/ECHILD, timeout escalation and shutdown; negative controls reproduce
+the original TTIN and overlapping reload behavior. The original spawn parent
+branch and one-event master-loop signal dispatch also run with inert process and
+startup boundaries. No live master, worker, socket or server is started. Real
+process lifecycle and hosted acceptance remain
+separate tests, along with trusted ingress/TLS, protected mounts and credentials.
+
+## Post-fork application ownership
+
+`StagingPostForkApplication` is a default-off, one-use provider, deliberately not
+Gunicorn's cached BaseApplication or a CLI. It holds explicit nonsecret startup
+policy and a master PID, never a master-side enabled app or credential. Disabled
+construction ignores ownership and generation. Enabled construction requires the
+exact immutable file-ownership type, a generation, and matching configured worker
+UID/GID; it does not choose those values or inspect actual mounts. Public `load`
+and `wsgi` always refuse, including master-side check/print-config loading.
+
+`StagingOwnedWorker` extends the complete canonical parser/error boundary. Its
+constructor does not load the app. Its one-use initialization requires the exact
+provider, a different child PID, matching worker PID and direct parent, and the
+reviewed worker hooks. It delegates the original init ordering, so the protected
+loader runs after Gunicorn's identity step. The actual merged file loader/factory
+is called at most once. Stale providers, duplicate initialization/loading/run,
+wrong-process access and startup callback drift fail closed. Parent loss during
+loading prevents starting the serving loop, but does not prevent cleanup of an
+already-owned app.
+
+The provider retains ownership until cleanup. On normal return or any failure
+during original init/load/run, the worker becomes terminal and detaches its WSGI
+callable before one close attempt; the provider first detaches its app and input
+references and marks itself closed. Failed cleanup is not retried and cannot
+trigger a second load. Ordinary failures are fixed and unchained because upstream
+also prints worker errors directly to stderr. Primary control exceptions are
+preserved; otherwise a cleanup control exception outranks an ordinary failure.
+The code does not render control-exception text. Safe handling of arbitrary
+control payloads and unrelated stdout/stderr remains a runtime responsibility.
+
+Abort/signal handlers remain inherited. Cleanup occurs after request/loop
+unwinding, including normal return when the existing handler consumes an abort's
+SystemExit before or after response headers. Cleanup is never run from inside
+the abort signal handler. This does not guarantee cleanup under SIGKILL, process
+death, interruption during a resource constructor, blocked cleanup, or secret
+erasure. Parent checks do not continuously enforce parent liveness; whole-service
+retirement and host supervisor guarantees remain separate.
+
+The offline suite uses actual synthetic protected-file descriptors and the
+merged factory for signed-owner review/session revocation, with mocked read-only
+mount flags and clocks. Original worker initialization ordering is exercised
+with identity changes, pipes, signal installation and the serving loop made inert.
+Actual parser/handler abort paths use in-memory HTTP bytes. No real secret path,
+worker process, listener, identity change, TLS handshake or Google connection is
+used. The image still excludes these runtime modules and remains inactive.
 
 ## Optional server boundary
 
@@ -99,6 +204,8 @@ Given an already verified local checkout and the existing approved dependencies:
     python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_errors.py
     python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_boundary.py
     python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_integrated.py
+    python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_arbiter.py
+    python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_application.py
 
 Each command is a separate process. Their import-time audit guard rejects socket,
 DNS and process-launch actions. urllib3's import-time IPv6 capability probe is
