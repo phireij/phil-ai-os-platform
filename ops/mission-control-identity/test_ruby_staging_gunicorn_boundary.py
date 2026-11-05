@@ -33,6 +33,79 @@ class CanonicalBoundaryTests(base.HTTPBoundaryTests):
         strict.update(options or {})
         return super().worker(app, tls=tls, options=strict)
 
+    def test_connection_header_compatibility_requires_transport_contract(self):
+        # This canonical transport now owns the narrow exception; the app alone
+        # still rejects Connection and the generic worker remains unchanged.
+        app = self.fx.make(auth=None)
+        for token in ("close", "keep-alive", "Close", "Keep-Alive"):
+            result = self.raw(app, self.request("/healthz", headers=(("Connection", token),)))
+            status, headers, _ = self.decode(result["wire"])
+            self.assertEqual(status, 200)
+            self.assertIn(("Connection", "close"), headers)
+
+    def test_unsafe_transport_headers_never_reach_wsgi_or_continue(self):
+        called = []
+        def app(environ, start_response):
+            called.append(environ)
+            start_response("200 OK", [("Content-Length", "0")])
+            return []
+        cases = (
+            (("Expect", "100-continue"),), (("Expect", "other"),),
+            (("Transfer-Encoding", "chunked"),), (("TE", "trailers"),),
+            (("Trailer", "X-Secret"),), (("Upgrade", "websocket"),),
+            (("Connection", "Host"),), (("Connection", "Origin"),),
+            (("Connection", "close, keep-alive"),), (("Connection", ""),),
+            (("Connection", "keep-alive"), ("Connection", "close")),
+            (("Connection", "close"), ("Expect", "100-continue")),
+            (("Connection", "X-CSRF-Token"),), (("Connection", "Cookie"),),
+        )
+        for headers in cases:
+            with self.subTest(headers=headers):
+                result = self.raw(app, self.request("/", headers=headers), fragment=1)
+                self.assertIn(self.decode(result["wire"])[0], (400, 417))
+                self.assertNotIn(b"100 Continue", result["wire"])
+                self.assertEqual(called, [])
+
+    def test_connection_removal_preserves_other_header_evidence(self):
+        seen = []
+        def app(environ, start_response):
+            seen.append(environ)
+            start_response("200 OK", [("Content-Length", "0")])
+            return []
+        result = self.raw(app, self.request("/", headers=(
+            ("Connection", "keep-alive"), ("Origin", "first"), ("Origin", "second"),
+            ("X-Forwarded-Proto", "https"))))
+        self.assertEqual(self.decode(result["wire"])[0], 200)
+        self.assertNotIn("HTTP_CONNECTION", seen[0])
+        self.assertEqual(seen[0]["HTTP_ORIGIN"], "first,second")
+        self.assertEqual(seen[0]["HTTP_X_FORWARDED_PROTO"], "https")
+
+    def test_header_validation_is_atomic_and_rejects_invalid_shapes(self):
+        from types import SimpleNamespace
+        from gunicorn.http.errors import InvalidHeader
+        from ruby_staging_gunicorn_boundary import _validated_headers
+        bad = (
+            None, (), [["CONNECTION", "close"]], [("CONNECTION",)],
+            [("CONNECTION", 1)], [(1, "close")],
+            [("CONNECTION", "close"), ("TE", "trailers")],
+            [("CONNECTION", "close"), ("CONNECTION", "close")],
+            [("CONNECTION", "cloſe")], [("CONNECTION", "keep-alive ")],
+        )
+        for headers in bad:
+            req = SimpleNamespace(headers=headers, _expected_100_continue=False)
+            with self.subTest(headers=headers), self.assertRaises(InvalidHeader):
+                _validated_headers(req)
+            self.assertIs(req.headers, headers)
+        for flag in (True, None, 0, 1):
+            req = SimpleNamespace(headers=[], _expected_100_continue=flag)
+            with self.assertRaises(InvalidHeader):
+                _validated_headers(req)
+        original = [("HOST", "example.invalid"), ("CONNECTION", "close"),
+                    ("ORIGIN", "one"), ("ORIGIN", "two")]
+        req = SimpleNamespace(headers=original, _expected_100_continue=False)
+        self.assertEqual(_validated_headers(req), [original[0], original[2], original[3]])
+        self.assertIs(req.headers, original)
+
     def test_aliases_and_non_origin_targets_rejected_before_wsgi(self):
         app = self.fx.make()
         targets = (
@@ -171,7 +244,6 @@ POSITIVE_BASE = (
     "test_expired_and_fresh_instance_session_rejected", "test_request_fragmentation_preserves_parser_and_session",
     "test_plain_http_and_forwarded_header_fail_closed", "test_duplicate_host_and_origin_and_framing_rejected",
     "test_transport_failure_is_app_redacted", "test_abort_after_headers_does_not_append_second_response",
-    "test_connection_header_compatibility_requires_transport_contract",
     "test_trusted_forwarded_scheme_still_needs_approved_app_boundary",
 )
 NEW_TESTS = tuple(name for name in CanonicalBoundaryTests.__dict__ if name.startswith("test_"))
