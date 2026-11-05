@@ -16,6 +16,7 @@ from datetime import date
 from typing import Callable
 
 SCHEMA = "ruby.custom-inquiry.v1"
+SOURCE_ENVELOPE = "ruby.inquiry-source-custody.v1"
 MAX_BODY = 128 * 1024
 MAX_SAFE_INTEGER = 2**53 - 1
 REQUIRED_CART_BLOCKERS = frozenset({
@@ -107,6 +108,7 @@ class RubyInquiryPolicy:
     finalized_quotes_enabled: bool = False
     quote_custody_enabled: bool = False
     quote_consent_enabled: bool = False
+    source_handoff_retention_enabled: bool = False
 
 
 PolicyResolver = Callable[[RubyInquiryContext], RubyInquiryPolicy | None]
@@ -287,18 +289,106 @@ class RubyInquiryMixin:
     def _inquiry_scope(context):
         return (context.project_id, context.source_system, context.source_instance)
 
-    def _inquiry_request(self, body, policy, *, revision, current_catalog=False):
-        value = decode(body)
+    def _inquiry_source_policy(self, policy):
+        if (policy.source_handoff_retention_enabled is not True or
+                not callable(self._ruby_inquiry_source_mapper)):
+            raise error("inquiry_source_policy_unavailable", 503)
+
+    @staticmethod
+    def _inquiry_source(value):
+        """Bound the opaque source before invoking the trusted private mapper."""
+        if type(value) is not dict:
+            raise error("inquiry_source_invalid")
+        pending, count = [(value, 0)], 0
+        while pending:
+            item, depth = pending.pop()
+            count += 1
+            if depth > 16 or count > 8192:
+                raise error("inquiry_source_invalid")
+            if type(item) is dict:
+                if any(type(key) is not str for key in item):
+                    raise error("inquiry_source_invalid")
+                pending.extend((child, depth + 1) for child in item.values())
+            elif type(item) is list:
+                pending.extend((child, depth + 1) for child in item)
+            elif item is not None and type(item) not in (str, bool, int):
+                raise error("inquiry_source_invalid")
+            elif type(item) is int and not -MAX_SAFE_INTEGER <= item <= MAX_SAFE_INTEGER:
+                raise error("inquiry_source_invalid")
+        try:
+            encoded = canonical(value)
+        except (ValueError, UnicodeError, RecursionError):
+            raise error("inquiry_source_invalid") from None
+        if len(encoded) > MAX_BODY:
+            raise error("inquiry_source_invalid")
+        return encoded
+
+    @staticmethod
+    def _inquiry_split_request(value, *, revision):
+        source = None
+        if type(value) is dict and value.get("schema_version") == SOURCE_ENVELOPE:
+            _object(value, {"schema_version", "request", "source_handoff"})
+            source = value["source_handoff"]
+            RubyInquiryMixin._inquiry_source(source)
+            value = value["request"]
         if revision:
             _object(value, {"expected_revision_id", "inquiry"})
-            if type(value["expected_revision_id"]) is not str or not IDENTIFIER.fullmatch(value["expected_revision_id"]):
+            prior = value["expected_revision_id"]
+            if type(prior) is not str or not IDENTIFIER.fullmatch(prior):
                 raise error()
             inquiry = value["inquiry"]
-            prior = value["expected_revision_id"]
         else:
             inquiry, prior = value, None
+        # A reserved envelope can never be nested or supplied as an inquiry.
+        _object(inquiry, {"schema_version", "source_request_ref", "contact", "customization", "fulfillment", "cart"})
+        if inquiry["schema_version"] != SCHEMA:
+            raise error()
+        return inquiry, prior, source
+
+    def _inquiry_stored_request(self, revision):
+        """Verify the complete accepted request, including any retained source."""
+        try:
+            value = decode(revision["request_json"].encode("utf-8"))
+            if hashlib.sha256(canonical(value)).digest() != revision["request_hash"]:
+                raise ValueError()
+            inquiry, prior, source = self._inquiry_split_request(value, revision=revision["revision_number"] != 1)
+            if prior != revision["prior_revision_id"]:
+                raise ValueError()
+            return inquiry, prior, source
+        except Exception:
+            raise error("inquiry_history_unavailable", 503) from None
+
+    def _inquiry_request(self, body, policy, *, revision, current_catalog=False, source_handoff_body=None):
+        value = decode(body)
+        inquiry, prior, embedded_source = self._inquiry_split_request(value, revision=revision)
+        # The envelope is internal custody representation, not a new wire format.
+        if embedded_source is not None:
+            raise error("inquiry_source_invalid")
         self._inquiry_payload(inquiry, policy, current_catalog=current_catalog)
-        return value, inquiry, prior, hashlib.sha256(canonical(value)).digest()
+        if source_handoff_body is not None:
+            self._inquiry_source_policy(policy)
+            source = decode(source_handoff_body)
+            self._inquiry_source(source)
+            value = {"schema_version": SOURCE_ENVELOPE, "request": value, "source_handoff": source}
+        encoded = canonical(value)
+        if len(encoded) > MAX_BODY:
+            raise error("inquiry_body_invalid")
+        return value, inquiry, prior, hashlib.sha256(encoded).digest()
+
+    def _inquiry_validate_source(self, value, inquiry, policy):
+        if value.get("schema_version") != SOURCE_ENVELOPE:
+            return
+        self._inquiry_source_policy(policy)
+        try:
+            # The callback receives detached data. It cannot mutate custody bytes,
+            # normalized inquiry, contact, or the exact idempotency identity.
+            source = decode(canonical(value["source_handoff"]))
+            contact = decode(canonical(inquiry["contact"]))
+            mapped = self._ruby_inquiry_source_mapper(source, contact)
+            if type(mapped) is not dict or canonical(mapped) != canonical(inquiry):
+                raise ValueError()
+        except Exception:
+            raise error("inquiry_source_mismatch") from None
 
     @staticmethod
     def _inquiry_unknown(operation):
@@ -363,18 +453,18 @@ class RubyInquiryMixin:
     def _inquiry_stage(self, stage):
         """Private fault-injection seam; no production callback or external effect."""
 
-    def create_ruby_inquiry(self, context, idempotency_key, request_body):
-        return self._write_ruby_inquiry(context, None, idempotency_key, request_body)
+    def create_ruby_inquiry(self, context, idempotency_key, request_body, *, source_handoff_body=None):
+        return self._write_ruby_inquiry(context, None, idempotency_key, request_body, source_handoff_body=source_handoff_body)
 
-    def revise_ruby_inquiry(self, context, inquiry_id, idempotency_key, request_body):
-        return self._write_ruby_inquiry(context, inquiry_id, idempotency_key, request_body)
+    def revise_ruby_inquiry(self, context, inquiry_id, idempotency_key, request_body, *, source_handoff_body=None):
+        return self._write_ruby_inquiry(context, inquiry_id, idempotency_key, request_body, source_handoff_body=source_handoff_body)
 
-    def _write_ruby_inquiry(self, context, inquiry_id, idempotency_key, request_body):
+    def _write_ruby_inquiry(self, context, inquiry_id, idempotency_key, request_body, *, source_handoff_body=None):
         with self._lock:
             policy = self._inquiry_policy(context)
             if self._readonly_preflight:
                 raise error("inquiry_readonly", 503)
-            value, inquiry, prior, request_hash = self._inquiry_request(request_body, policy, revision=inquiry_id is not None)
+            value, inquiry, prior, request_hash = self._inquiry_request(request_body, policy, revision=inquiry_id is not None, source_handoff_body=source_handoff_body)
             if type(idempotency_key) is not str:
                 raise error("invalid_idempotency_key")
             key_hash = self._idempotency(idempotency_key)
@@ -397,13 +487,17 @@ class RubyInquiryMixin:
                     raise error("idempotency_conflict", 409)
                 return self._inquiry_unknown(operation)
             self._inquiry_payload(inquiry, policy, current_catalog=True)
+            self._inquiry_validate_source(value, inquiry, policy)
             connection = self._live.connection
             if owned is not None:
                 if owned["current_revision_id"] != prior:
                     raise error("stale_revision", 409)
-                current = connection.execute("SELECT revision_number FROM ruby_custom_inquiry_revisions WHERE revision_id=?", (prior,)).fetchone()
+                current = connection.execute("SELECT * FROM ruby_custom_inquiry_revisions WHERE revision_id=? AND inquiry_id=?", (prior, inquiry_id)).fetchone()
                 if current is None:
                     return self._inquiry_unknown(operation)
+                _, _, prior_source = self._inquiry_stored_request(current)
+                if prior_source is not None and source_handoff_body is None:
+                    raise error("inquiry_source_required", 409)
                 number = current["revision_number"] + 1
             else:
                 inquiry_id, number = self._identifier("ruby-inquiry"), 1
@@ -437,12 +531,12 @@ class RubyInquiryMixin:
                 raise error("inquiry_outcome_unknown", 503) from None
             return result
 
-    def resolve_ruby_inquiry_receipt(self, context, operation, idempotency_key, request_body, *, inquiry_id=None):
+    def resolve_ruby_inquiry_receipt(self, context, operation, idempotency_key, request_body, *, inquiry_id=None, source_handoff_body=None):
         with self._lock:
             policy = self._inquiry_policy(context)
             if operation not in ("create", "revise") or (operation == "create") != (inquiry_id is None):
                 raise error()
-            value, inquiry, prior, request_hash = self._inquiry_request(request_body, policy, revision=operation == "revise")
+            value, inquiry, prior, request_hash = self._inquiry_request(request_body, policy, revision=operation == "revise", source_handoff_body=source_handoff_body)
             if type(idempotency_key) is not str:
                 raise error("invalid_idempotency_key")
             if inquiry_id is not None and self._inquiry_owned(context, inquiry_id) is None:
@@ -462,9 +556,46 @@ class RubyInquiryMixin:
             revision = self._live.connection.execute("SELECT * FROM ruby_custom_inquiry_revisions WHERE revision_id=? AND inquiry_id=?", (owned["current_revision_id"], inquiry_id)).fetchone()
             if revision is None:
                 raise error("inquiry_history_unavailable", 503)
-            value = decode(revision["request_json"].encode("utf-8"))
-            inquiry = value if revision["revision_number"] == 1 else value["inquiry"]
+            inquiry, _, _ = self._inquiry_stored_request(revision)
             return {"inquiry_id": inquiry_id, "revision_id": revision["revision_id"], "revision_number": revision["revision_number"], "state": "pending_review", "inquiry": inquiry, "contact_verification": {"state": "declared_unverified"}, "policy_version": revision["policy_version"], "cache_control": "no-store", **NO_AUTHORITY}
+
+    def get_ruby_inquiry_source(self, context, inquiry_id, expected_revision_id):
+        """Explicit owner-scoped current-source read; never a public HTTP route.
+
+        No reconstruction, historical fallback, repricing, or repair occurs here.
+        Existing reads/receipts do not expose the source or its fingerprint.
+        """
+        with self._lock:
+            policy = self._inquiry_policy(context)
+            self._inquiry_source_policy(policy)
+            owned = self._inquiry_owned(context, inquiry_id)
+            if owned is None:
+                raise error("not_found", 404)
+            if (type(expected_revision_id) is not str or
+                    not IDENTIFIER.fullmatch(expected_revision_id) or
+                    owned["current_revision_id"] != expected_revision_id):
+                raise error("stale_revision", 409)
+            revision = self._live.connection.execute(
+                "SELECT * FROM ruby_custom_inquiry_revisions WHERE revision_id=? AND inquiry_id=?",
+                (expected_revision_id, inquiry_id)).fetchone()
+            if revision is None:
+                raise error("inquiry_history_unavailable", 503)
+            inquiry, prior, source = self._inquiry_stored_request(revision)
+            self._inquiry_payload(inquiry, policy, current_catalog=False)
+            if source is None:
+                raise error("inquiry_source_unavailable", 404)
+            stored = self._inquiry_existing(context, revision["operation"], revision["idempotency_hash"])
+            if (stored is None or stored["revision_id"] != expected_revision_id or
+                    stored["inquiry_id"] != inquiry_id):
+                raise error("inquiry_history_unavailable", 503)
+            result = self._inquiry_receipt(context, stored, revision["request_hash"],
+                "create" if revision["revision_number"] == 1 else "revise", prior, inquiry_id)
+            if result["state"] != "complete_received":
+                raise error("inquiry_history_unavailable", 503)
+            return {"inquiry_id": inquiry_id, "revision_id": expected_revision_id,
+                    "source_handoff": source,
+                    "source_fingerprint": "sha256:" + hashlib.sha256(canonical(source)).hexdigest(),
+                    "cache_control": "no-store", **NO_AUTHORITY}
 
     def list_ruby_inquiries(self, context, limit=50):
         if type(limit) is not int or not 1 <= limit <= 100:

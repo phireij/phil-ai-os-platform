@@ -53,7 +53,7 @@ _ALLOWED_HTTP = frozenset({"HTTP_HOST", "HTTP_ORIGIN", "HTTP_COOKIE", "HTTP_ACCE
 _CALLBACK_FIELDS = frozenset({"state", "code", "iss", "scope", "authuser", "prompt",
                               "error", "error_description", "error_uri"})
 _STATUS = {200: "OK", 303: "See Other", 400: "Bad Request", 401: "Unauthorized",
-           403: "Forbidden", 404: "Not Found", 405: "Method Not Allowed",
+           403: "Forbidden", 404: "Not Found", 405: "Method Not Allowed", 409: "Conflict",
            413: "Content Too Large", 429: "Too Many Requests", 503: "Service Unavailable"}
 _LOGOUT_SCRIPT = """document.getElementById('sign-out').addEventListener('click',async function(){this.disabled=true;const status=document.getElementById('sign-out-status');try{const response=await fetch('/auth/logout',{method:'POST',credentials:'same-origin',redirect:'error',headers:{'X-CSRF-Token':document.getElementById('logout-csrf').value}});if(response.status===200){window.location.replace('/');return;}status.textContent='Sign out failed. Reload this page and try again.';}catch(error){status.textContent='Sign out failed. Reload this page and try again.';}this.disabled=false;});"""
 _SCRIPT_HASH = base64.b64encode(hashlib.sha256(_LOGOUT_SCRIPT.encode("utf-8")).digest()).decode("ascii")
@@ -166,6 +166,144 @@ def _query(raw: object, *, maximum: int = 8192) -> dict[str, str]:
     return result
 
 
+_OWNER_LIST = "/api/ruby-owner-inquiries"
+_OWNER_PREPARE = "/api/ruby-owner-quotes/prepare"
+_OWNER_ID = re.compile(r"[A-Za-z0-9_-]{16,200}\Z", re.ASCII)
+_OWNER_KEY = re.compile(r"[A-Za-z0-9._~-]{16,128}\Z", re.ASCII)
+_OWNER_MAX_BODY = 64 * 1024
+_OWNER_ERRORS = {"inquiry_source_unavailable": 404, "inquiry_not_found": 404,
+    "inquiry_stale": 409, "quote_input_invalid": 400, "quote_unavailable": 503}
+_OWNER_PRIVATE_KEYS = frozenset({"source_handoff", "catalog_snapshot", "scope_fingerprint",
+    "request_body", "idempotency_key", "original_source"})
+
+
+class StagingOwnerQuoteError(ValueError):
+    """Closed transport outcomes. Arbitrary exception text is never returned."""
+    def __init__(self, code):
+        self.code = code if type(code) is str and code in _OWNER_ERRORS else "quote_unavailable"
+        super().__init__(self.code)
+
+
+class StagingOwnerQuoteBinding:
+    """Trusted private composition, never constructed from browser data.
+
+    Callbacks are fixed list/current-detail/prepare-only operations, not a router.
+    The private factory validates its actual owner-bound store/context/service.
+    A successful application construction claims exclusive ownership once; before
+    then the caller owns cleanup, including a failed application construction.
+    """
+    def __init__(self, *, issuer, owner_subject, list_inquiries, get_inquiry, prepare_quote, close):
+        if (type(issuer) is not str or issuer != ISSUER or type(owner_subject) is not str or not owner_subject
+                or not owner_subject.isascii() or len(owner_subject) > 200
+                or any(not callable(fn) for fn in (list_inquiries, get_inquiry, prepare_quote, close))):
+            raise StagingHTTPConfigurationError("staging_owner_quote_binding_invalid")
+        self._issuer, self._subject = issuer, owner_subject
+        self._operations = {"list": list_inquiries, "detail": get_inquiry, "prepare": prepare_quote}
+        self._cleanup = close
+        self._binding_lock = threading.Lock()
+        self._owner = None
+        self._closed = False
+
+    def matches_policy(self, *, issuer, owner_subject):
+        with self._binding_lock:
+            return (not self._closed and self._owner is None and type(issuer) is str
+                and type(owner_subject) is str and issuer == self._issuer
+                and hmac.compare_digest(owner_subject, self._subject))
+
+    def _claim(self, owner):
+        with self._binding_lock:
+            if self._closed or self._owner is not None:
+                raise StagingHTTPConfigurationError("staging_owner_quote_binding_invalid")
+            self._owner = owner
+
+    def _run(self, owner, operation, argument):
+        with self._binding_lock:
+            if self._closed or self._owner is not owner or operation not in self._operations:
+                raise StagingOwnerQuoteError("quote_unavailable")
+            callback = self._operations[operation]
+        return callback() if operation == "list" else callback(argument)
+
+    def close(self):
+        with self._binding_lock:
+            if self._closed:
+                return
+            self._closed = True
+            callback, self._cleanup = self._cleanup, None
+            self._operations.clear()
+            self._owner = None
+        callback()
+
+
+@dataclass(frozen=True)
+class _OwnerQuoteWork:
+    operation: str
+    argument: object = field(repr=False)
+    token: str = field(repr=False)
+    csrf: str | None = field(repr=False)
+    generation: int
+    binding: StagingOwnerQuoteBinding = field(repr=False)
+    body_length: int = 0
+
+
+def _owner_json_tree(value, *, response=False):
+    pending, count = [(value, 0)], 0
+    while pending:
+        item, depth = pending.pop(); count += 1
+        if depth > 16 or count > 8192:
+            raise _RequestRejected
+        if type(item) is dict:
+            if any(type(key) is not str for key in item):
+                raise _RequestRejected
+            if response and _OWNER_PRIVATE_KEYS.intersection(item):
+                raise _RequestRejected
+            pending.extend((child, depth + 1) for child in item.values())
+        elif type(item) is list:
+            pending.extend((child, depth + 1) for child in item)
+        elif item is not None and type(item) not in (str, bool, int):
+            raise _RequestRejected
+        elif type(item) is int and not -(2**53-1) <= item <= 2**53-1:
+            raise _RequestRejected
+    try:
+        data = json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
+    except (ValueError, UnicodeError, RecursionError):
+        raise _RequestRejected from None
+    if len(data) > (128 * 1024 if response else _OWNER_MAX_BODY):
+        raise _RequestRejected
+
+
+def _owner_read_json(stream, length):
+    # Read only the declared body, never drain another request. Wire framing and
+    # hard read deadlines remain trusted server/ingress responsibilities.
+    chunks, remaining = [], length
+    while remaining:
+        chunk = stream.read(remaining)
+        if type(chunk) is not bytes or not chunk or len(chunk) > remaining:
+            raise _RequestRejected
+        chunks.append(chunk); remaining -= len(chunk)
+    def pairs(entries):
+        value = {}
+        for key, item in entries:
+            if key in value: raise _RequestRejected
+            value[key] = item
+        return value
+    def invalid(_): raise _RequestRejected
+    try:
+        value = json.loads(b"".join(chunks).decode("utf-8", "strict"),
+            object_pairs_hook=pairs, parse_constant=invalid)
+        if type(value) is not dict or set(value) != {"inquiry_id", "expected_revision_id", "idempotency_key", "authored_quote"}:
+            raise _RequestRejected
+        _owner_json_tree(value)
+        for key in ("inquiry_id", "expected_revision_id", "idempotency_key"):
+            pattern = _OWNER_KEY if key == "idempotency_key" else _OWNER_ID
+            if type(value[key]) is not str or not pattern.fullmatch(value[key]):
+                raise _RequestRejected
+        if type(value["authored_quote"]) is not dict:
+            raise _RequestRejected
+        return value
+    except (ValueError, UnicodeError, RecursionError):
+        raise _RequestRejected from None
+
+
 class StagingHTTPApplication:
     """Single-process, in-memory application; default construction is inactive.
 
@@ -173,14 +311,16 @@ class StagingHTTPApplication:
     to this application. Short state operations use a lock, but upstream HTTPS
     never holds it. Admission bounds concurrent application work; one nonblocking
     authentication slot avoids queuing for HTTPS. Admitted state operations still
-    briefly serialize, with no owner-priority reservation. No body stream is read.
+    briefly serialize, with no owner-priority reservation. Only an explicitly bound
+    owner prepare operation reads a strictly bounded JSON body outside that lock.
     Multiprocess/distributed state is not implemented.
     """
 
     def __init__(self, config: StagingHTTPConfig | None = None, *, enabled: bool = False,
                  authenticator: StagingGoogleOwnerAuthenticator | None = None,
                  limits: StagingRequestLimits | None = None,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic,
+                 owner_quote_binding: StagingOwnerQuoteBinding | None = None) -> None:
         self._lock = threading.RLock()
         self._enabled = False
         self._closed = False
@@ -197,14 +337,20 @@ class StagingHTTPApplication:
         self._login_starts: deque[float] = deque()
         self._callback_attempts: deque[float] = deque()
         self._auth_generation = 0
+        self._owner_quote_binding = None
+        self._owner_quote_slot = threading.Lock()
         if enabled is False:
             return
+        flows = sessions = None
         try:
             if (enabled is not True or type(config) is not StagingHTTPConfig
                     or type(limits) is not StagingRequestLimits):
                 raise ValueError
             config.validate()
             limits.validate()
+            if owner_quote_binding is not None and (type(owner_quote_binding) is not StagingOwnerQuoteBinding
+                    or not owner_quote_binding.matches_policy(issuer=ISSUER, owner_subject=config.owner_subject)):
+                raise ValueError
             self._now()
             if authenticator is not None and (type(authenticator) is not StagingGoogleOwnerAuthenticator
                     or not authenticator.matches_policy(origin=config.origin, client_id=config.client_id,
@@ -222,8 +368,14 @@ class StagingHTTPApplication:
             self._flows, self._sessions = flows, sessions
             self._limits = limits
             self._admission = threading.BoundedSemaphore(limits.max_inflight_requests)
+            if owner_quote_binding is not None:
+                owner_quote_binding._claim(self)
+                self._owner_quote_binding = owner_quote_binding
             self._enabled = True
         except Exception:
+            for resource in (sessions, flows):
+                if resource is not None:
+                    resource.close()
             raise StagingHTTPConfigurationError("staging_http_configuration_invalid") from None
 
     def _now(self) -> float:
@@ -368,6 +520,7 @@ class StagingHTTPApplication:
                 # Fresh verified sign-in can recover from an expired old cookie.
                 live_previous = work.previous if work.previous is not None and self._sessions.lookup(work.previous) is not None else None
                 receipt = self._sessions.issue(previous_token=live_previous)
+                self._auth_generation += 1
                 return _reply(303, {"authenticated": True}, location="/",
                               cookies=clear + (serialize_cookie(SESSION_COOKIE, receipt.token),))
         except (AuthenticationRejected, LifecycleError):
@@ -380,6 +533,83 @@ class StagingHTTPApplication:
                 # close() revokes app state immediately without waiting for I/O;
                 # the sole in-flight operation cleans backend resources on return.
                 authenticator.close()
+
+    def _owner_dispatch(self, environ, method, path, cookie):
+        binding = self._owner_quote_binding
+        if binding is None:
+            return None
+        operation, argument, length = None, None, 0
+        if path == _OWNER_LIST:
+            if method != "GET": return _reply(405, {"error": "method_not_allowed"})
+            operation = "list"
+        elif path.startswith(_OWNER_LIST + "/"):
+            if method != "GET": return _reply(405, {"error": "method_not_allowed"})
+            argument = path[len(_OWNER_LIST)+1:]
+            if not _OWNER_ID.fullmatch(argument): return _reply(400, {"error": "request_invalid"})
+            operation = "detail"
+        elif path == _OWNER_PREPARE:
+            if method != "POST": return _reply(405, {"error": "method_not_allowed"})
+            operation = "prepare"
+        else:
+            return None
+        token, bad_cookie = self._session_cookie(cookie)
+        csrf = environ.get("HTTP_X_CSRF_TOKEN") if operation == "prepare" else None
+        if operation == "prepare" and environ.get("HTTP_ORIGIN") != self._config.origin:
+            return _reply(403, {"error": "request_denied"})
+        if bad_cookie or self._sessions.lookup(token, require_csrf=operation == "prepare", csrf_token=csrf) is None:
+            return _reply(401, {"error": "session_required"})
+        if operation == "prepare":
+            raw_length = environ.get("CONTENT_LENGTH")
+            if (environ.get("CONTENT_TYPE") != "application/json" or type(raw_length) is not str
+                    or not re.fullmatch(r"[1-9][0-9]{0,5}", raw_length, re.ASCII)):
+                return _reply(400, {"error": "request_invalid"})
+            length = int(raw_length)
+            if length > _OWNER_MAX_BODY: return _reply(413, {"error": "request_too_large"})
+            argument = environ.get("wsgi.input")
+            if not callable(getattr(argument, "read", None)): return _reply(400, {"error": "request_invalid"})
+        if not self._owner_quote_slot.acquire(blocking=False):
+            return _reply(503, {"error": "quote_busy"})
+        return _OwnerQuoteWork(operation, argument, token, csrf, self._auth_generation, binding, length)
+
+    def _owner_work_live(self, work):
+        return (not self._closed and not self._clock_failed
+            and work.generation == self._auth_generation and self._owner_quote_binding is work.binding
+            and self._sessions.lookup(work.token, require_csrf=work.operation == "prepare", csrf_token=work.csrf) is not None)
+
+    def _complete_owner_quote(self, work):
+        try:
+            with self._lock:
+                if not self._owner_work_live(work): return _reply(401, {"error": "session_required"})
+            argument = _owner_read_json(work.argument, work.body_length) if work.operation == "prepare" else work.argument
+            # Logout/expiry during body reading must prevent service invocation.
+            with self._lock:
+                if not self._owner_work_live(work): return _reply(401, {"error": "session_required"})
+            try:
+                data = work.binding._run(self, work.operation, argument)
+                if type(data) is not dict: raise _RequestRejected
+                _owner_json_tree(data, response=True)
+                result = _reply(200, data)
+                if len(result.body) > 128 * 1024:
+                    raise _RequestRejected
+            except StagingOwnerQuoteError as failure:
+                result = _reply(_OWNER_ERRORS[failure.code], {"error": failure.code})
+            except Exception:
+                result = _reply(503, {"error": "quote_unavailable"})
+            with self._lock:
+                if not self._owner_work_live(work): return _reply(401, {"error": "session_required"})
+            return result
+        except _RequestRejected:
+            with self._lock:
+                if not self._owner_work_live(work): return _reply(401, {"error": "session_required"})
+            return _reply(400, {"error": "request_invalid"})
+        finally:
+            with self._lock:
+                self._owner_quote_slot.release()
+                cleanup = self._owner_quote_binding if self._closed else None
+                if cleanup is not None: self._owner_quote_binding = None
+            if cleanup is not None:
+                try: cleanup.close()
+                except Exception: pass
 
     def _dispatch(self, environ: dict) -> _Reply | _AuthenticationWork:
         if not self._enabled or self._closed:
@@ -407,6 +637,9 @@ class StagingHTTPApplication:
             return self._callback(raw, cookie)
         if raw:
             return _reply(400, {"error": "request_invalid"})
+        owner_work = self._owner_dispatch(environ, method, path, cookie)
+        if owner_work is not None:
+            return owner_work
         if method == "POST" and path != "/auth/logout":
             return _reply(405, {"error": "method_not_allowed"})
         if path == "/healthz" and method == "GET":
@@ -473,6 +706,8 @@ class StagingHTTPApplication:
                         result = self._dispatch(environ)
                     if type(result) is _AuthenticationWork:
                         result = self._complete_authentication(result)
+                    elif type(result) is _OwnerQuoteWork:
+                        result = self._complete_owner_quote(result)
                 except Exception:
                     # No request, authorization code, token, owner or upstream
                     # exception is written to wsgi.errors or any logger.
@@ -490,11 +725,15 @@ class StagingHTTPApplication:
                 admission.release()
 
     def close(self) -> None:
+        cleanup = None
         try:
             with self._lock:
                 if self._closed:
                     return
                 self._closed = True
+                if self._owner_quote_binding is not None and self._owner_quote_slot.acquire(blocking=False):
+                    cleanup, self._owner_quote_binding = self._owner_quote_binding, None
+                    self._owner_quote_slot.release()
                 self._auth_generation += 1
                 self._login_starts.clear()
                 self._callback_attempts.clear()
@@ -505,14 +744,25 @@ class StagingHTTPApplication:
                     if self._sessions is not None:
                         self._sessions.close()
         finally:
-            # Never wait for an upstream operation while closing app state.
-            # An active authentication observes the generation change and closes
-            # its backend when it returns. That cleanup is not a hard deadline.
-            if self._authenticator is not None and self._auth_slot.acquire(blocking=False):
+            control_failure = None
+            if cleanup is not None:
                 try:
-                    self._authenticator.close()
-                finally:
-                    self._auth_slot.release()
+                    cleanup.close()
+                except BaseException as failure:
+                    if not isinstance(failure, Exception):
+                        control_failure = failure
+            try:
+                # Never wait for upstream work while closing app state. An active
+                # authentication closes its backend on return, without a hard
+                # deadline. Still attempt backend cleanup after binding failures.
+                if self._authenticator is not None and self._auth_slot.acquire(blocking=False):
+                    try:
+                        self._authenticator.close()
+                    finally:
+                        self._auth_slot.release()
+            finally:
+                if control_failure is not None:
+                    raise control_failure
 
 
 # Importing or executing the module never creates an enabled app, credential

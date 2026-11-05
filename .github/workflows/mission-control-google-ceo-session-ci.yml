@@ -72,6 +72,7 @@ jobs:
           python3 ops/mission-control-identity/test_cto_deletion_recovery.py
           python3 ops/mission-control-identity/test_ruby_review_records.py
           python3 ops/mission-control-identity/test_ruby_inquiry.py
+          python3 ops/mission-control-identity/test_ruby_inquiry_source.py
           python3 ops/mission-control-identity/test_ruby_finalized_quote.py
           python3 ops/mission-control-identity/test_ruby_quote_custody.py
           python3 ops/mission-control-identity/test_ruby_quote_consent.py
@@ -85,6 +86,7 @@ jobs:
           python3 ops/mission-control-identity/test_ruby_staging_google_exchange.py
           python3 ops/mission-control-identity/test_ruby_staging_google_auth.py
           python3 ops/mission-control-identity/test_ruby_staging_http_app.py
+          python3 ops/mission-control-identity/test_ruby_staging_owner_quote.py
           python3 ops/mission-control-identity/test_ruby_staging_app_factory.py
           python3 ops/mission-control-identity/test_ruby_staging_protected_files.py
           python3 ops/mission-control-identity/test_ruby_staging_runtime_limits.py

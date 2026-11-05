@@ -423,7 +423,7 @@ class HTTPApplicationTests(unittest.TestCase):
         source=inspect.getsource(app_module)
         self.assertNotIn("serve_forever",source);self.assertNotIn("make_server",source)
         self.assertNotIn("os.environ",source);self.assertNotIn("complete_login_fixture",source)
-        self.assertEqual(set(inspect.signature(StagingHTTPApplication).parameters),{"config","enabled","authenticator","limits","clock"})
+        self.assertEqual(set(inspect.signature(StagingHTTPApplication).parameters),{"config","enabled","authenticator","limits","clock","owner_quote_binding"})
 
     def test_staging_image_has_only_real_application_dependencies_and_inactive_entrypoint(self):
         path=Path(__file__).resolve().parents[2]/"Dockerfile.ruby-staging-review"
