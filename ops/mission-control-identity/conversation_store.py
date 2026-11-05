@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from inquiry_persistence import StoreLease, FencedStoreLock, read_preflight_snapshots, synchronize_snapshot
+from inquiry_persistence import StoreLease, FencedStoreLock, read_preflight_snapshots, synchronize_snapshot, _cleanup_resources
 from ruby_inquiry import RubyInquiryMixin, PolicyResolver, initialize_inquiries
 from ruby_finalized_quote import RubyFinalizedQuoteMixin, initialize_finalized_quotes
 from ruby_quote_custody import RubyQuoteCustodyMixin, initialize_quote_custody, CUSTODY_TABLES
@@ -154,8 +154,12 @@ def _iso(timestamp: int) -> str:
 
 def _connect() -> sqlite3.Connection:
     connection = sqlite3.connect(":memory:", check_same_thread=False, isolation_level=None)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys=ON")
+    try:
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys=ON")
+    except BaseException as primary:
+        _cleanup_resources((connection.close,), primary=primary)
+        raise
     return connection
 
 
@@ -432,23 +436,25 @@ def _initialize_ledger(connection: sqlite3.Connection) -> None:
 
 
 class EncryptedSnapshot:
-    def __init__(self, path: Path, key: bytes, initializer: Any, *, on_failure: Any = None, before_persist: Any = None, encoded: bytes | None = None) -> None:
+    def __init__(self, path: Path, key: bytes, initializer: Any, *, on_failure: Any = None, before_persist: Any = None, encoded: bytes | None = None, isolated_files=None) -> None:
+        self.isolated_files = isolated_files
         self.on_failure = on_failure
         self.before_persist = before_persist
         self.path = path
         self.key = key
         self.connection = _connect()
         try:
-            if encoded is not None or path.exists():
+            if encoded is not None or (isolated_files is None and path.exists()):
                 self._load(encoded)
             initializer(self.connection)
-        except Exception:
-            self.connection.close()
+        except BaseException as primary:
+            connection, self.connection = self.connection, None
+            _cleanup_resources((connection.close,), primary=primary)
             raise
 
     def _load(self, encoded: bytes | None = None) -> None:
         if encoded is None:
-            encoded = self.path.read_bytes()
+            encoded = self.path.read_bytes() if self.isolated_files is None else self.isolated_files.read(self.path.name)
         if not encoded.startswith(MAGIC) or len(encoded) < len(MAGIC) + 12 + 16:
             raise ConversationConfigurationError("conversation_snapshot_invalid")
         nonce = encoded[len(MAGIC):len(MAGIC) + 12]
@@ -458,10 +464,13 @@ class EncryptedSnapshot:
             try:
                 source.deserialize(plaintext)
                 source.backup(self.connection)
-            finally:
-                source.close()
-        except Exception as exc:
-            raise ConversationConfigurationError("conversation_snapshot_unavailable") from exc
+            except BaseException as primary:
+                _cleanup_resources((source.close,), primary=primary)
+                raise
+            else:
+                _cleanup_resources((source.close,), error_code="conversation_snapshot_unavailable")
+        except Exception:
+            raise ConversationConfigurationError("conversation_snapshot_unavailable") from None
 
     def persist(self, *, overwrite: bool = True) -> None:
         if self.before_persist is not None:
@@ -470,8 +479,11 @@ class EncryptedSnapshot:
             plaintext = self.connection.serialize()
             nonce = secrets.token_bytes(12)
             encoded = MAGIC + nonce + AESGCM(self.key).encrypt(nonce, plaintext, MAGIC)
-            _atomic_write_private(self.path, encoded, overwrite=overwrite)
-        except Exception:
+            if self.isolated_files is None:
+                _atomic_write_private(self.path, encoded, overwrite=overwrite)
+            else:
+                self.isolated_files.write(self.path.name, encoded, overwrite=overwrite)
+        except BaseException:
             if self.on_failure is not None:
                 self.on_failure()
             raise
@@ -483,10 +495,22 @@ def _atomic_write_private(path: Path, encoded: bytes, *, overwrite: bool) -> Non
     temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
     descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
-        with os.fdopen(descriptor, "wb", closefd=True) as handle:
+        try:
+            handle = os.fdopen(descriptor, "wb", closefd=True)
+        except BaseException as primary:
+            fd, descriptor = descriptor, None
+            _cleanup_resources((lambda: os.close(fd),), primary=primary)
+            raise
+        descriptor = None  # Ownership transferred to the file object.
+        try:
             handle.write(encoded)
             handle.flush()
             os.fsync(handle.fileno())
+        except BaseException as primary:
+            _cleanup_resources((handle.close,), primary=primary)
+            raise
+        else:
+            _cleanup_resources((handle.close,), error_code="conversation_snapshot_unavailable")
         if overwrite:
             os.replace(temporary, path)
         else:
@@ -500,10 +524,16 @@ def _atomic_write_private(path: Path, encoded: bytes, *, overwrite: bool) -> Non
             directory = os.open(path.parent, os.O_RDONLY)
             try:
                 os.fsync(directory)
-            finally:
-                os.close(directory)
-    finally:
-        temporary.unlink(missing_ok=True)
+            except BaseException as primary:
+                _cleanup_resources((lambda: os.close(directory),), primary=primary)
+                raise
+            else:
+                _cleanup_resources((lambda: os.close(directory),), error_code="conversation_snapshot_unavailable")
+    except BaseException as primary:
+        _cleanup_resources((lambda: temporary.unlink(missing_ok=True),), primary=primary)
+        raise
+    else:
+        _cleanup_resources((lambda: temporary.unlink(missing_ok=True),))
 
 
 class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInquiryMixin):
@@ -522,14 +552,35 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
         ruby_quote_custody_enabled: bool = False,
         ruby_quote_consent_enabled: bool = False,
         ruby_quote_synthetic_verifier=None,
+        isolated_files=None,
     ) -> None:
-        readonly_preflight = os.environ.get("MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT", "")
-        if readonly_preflight not in {"", "true"}:
-            raise ConversationConfigurationError("conversation_readonly_preflight_invalid")
-        self._readonly_preflight = readonly_preflight == "true"
-        self._key = load_key(config.key_file)
+        self._isolated_files = None  # Caller owns it until successful construction.
+        if isolated_files is not None:
+            from ruby_staging_isolated_store import IsolatedStoreFiles, LIVE, LEDGER
+            if (type(isolated_files) is not IsolatedStoreFiles or type(config) is not ConversationConfig
+                    or isolated_files._claimed or isolated_files.fd is None
+                    or type(isolated_files.key) is not bytes or len(isolated_files.key) != 32
+                    or config != ConversationConfig(Path(isolated_files.policy.state_directory) / LIVE,
+                        Path(isolated_files.policy.state_directory) / LEDGER, Path(isolated_files.policy.key_file))
+                    or ruby_inquiry_policy is None or ruby_inquiry_source_mapper is None
+                    or provider_runtime is not None or notification_delivery_enabled is not False
+                    or ruby_finalized_quotes_enabled is not False or ruby_quote_custody_enabled is not False
+                    or ruby_quote_consent_enabled is not False or ruby_quote_synthetic_verifier is not None
+                    or ruby_review_projects != frozenset()
+                    or any(os.environ.get(name, '') for name in
+                        ('MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT', 'MISSION_CONTROL_EVIDENCE_MANIFEST_FILE'))):
+                raise ConversationConfigurationError("conversation_isolated_configuration_invalid")
+            self._readonly_preflight = False
+            self._key = isolated_files.key
+            manifest = None
+        else:
+            readonly_preflight = os.environ.get("MISSION_CONTROL_CONVERSATION_READONLY_PREFLIGHT", "")
+            if readonly_preflight not in {"", "true"}:
+                raise ConversationConfigurationError("conversation_readonly_preflight_invalid")
+            self._readonly_preflight = readonly_preflight == "true"
+            self._key = load_key(config.key_file)
+            manifest = config.evidence_manifest_file
         self._owner = owner_digest(_derived_key(self._key, b"owner"), issuer, subject)
-        manifest = config.evidence_manifest_file
         try:
             self._evidence_verifier = EvidenceReferenceVerifier.from_file(manifest, _derived_key(self._key, b"evidence-manifest")) if manifest else None
         except EvidenceVerificationError as exc:
@@ -560,7 +611,7 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
         self._provider_runtime = provider_runtime
         self._ruby_review_projects = ruby_review_projects
         self._provider_anchor_path = config.state_file.with_name("provider-budget.anchor") if provider_runtime is not None and not self._readonly_preflight else None
-        self._lease = None if self._readonly_preflight else StoreLease(config.state_file, exclusive=ruby_inquiry_policy is not None)
+        self._lease = None
         ref = weakref.ref(self)
         def on_failure():
             store = ref()
@@ -573,8 +624,15 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
             if store._readonly_preflight:
                 raise ConversationRequestError("conversation_readonly_preflight", 503)
         self._snapshot_callbacks = {"on_failure": on_failure, "before_persist": before_persist}
+        if isolated_files is not None:
+            self._snapshot_callbacks["isolated_files"] = isolated_files
         try:
-            encoded_live, encoded_ledger = read_preflight_snapshots(config.state_file, config.deletion_ledger_file) if self._readonly_preflight else (None, None)
+            if isolated_files is not None:
+                self._lease = isolated_files.acquire_lease()
+                encoded_live, encoded_ledger = isolated_files.initial_pair()
+            else:
+                self._lease = None if self._readonly_preflight else StoreLease(config.state_file, exclusive=ruby_inquiry_policy is not None)
+                encoded_live, encoded_ledger = read_preflight_snapshots(config.state_file, config.deletion_ledger_file) if self._readonly_preflight else (None, None)
             self._live = EncryptedSnapshot(config.state_file, _derived_key(self._key, b"live"), _initialize_live, encoded=encoded_live, **self._snapshot_callbacks)
             self._ledger = EncryptedSnapshot(config.deletion_ledger_file, _derived_key(self._key, b"ledger"), _initialize_ledger, encoded=encoded_ledger, **self._snapshot_callbacks)
             # An unconfigured legacy store must never rewrite retained inquiries.
@@ -585,6 +643,11 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
                 raise ConversationConfigurationError("quote_opt_in_required_for_custody")
             if not self._readonly_preflight and not ruby_quote_custody_enabled and any(self._live.connection.execute("SELECT 1 FROM " + table + " LIMIT 1").fetchone() for table in CUSTODY_TABLES):
                 raise ConversationConfigurationError("quote_custody_opt_in_required")
+            if isolated_files is not None:
+                for snapshot in (self._live, self._ledger):
+                    if (snapshot.connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok" or
+                            snapshot.connection.execute("PRAGMA foreign_key_check").fetchone() is not None):
+                        raise ConversationConfigurationError("conversation_snapshot_invalid")
             self._last_purge = 0
             with self._lock:
                 if self._readonly_preflight:
@@ -592,12 +655,19 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
                 else:
                     if self._provider_anchor_path is not None:
                         self._verify_provider_anchor_locked()
+                    if isolated_files is not None and isolated_files.policy.initialize_empty:
+                        # Publish an authoritative empty ledger first. Interrupted
+                        # initialization cannot reopen a missing ledger as empty.
+                        self._ledger.persist(overwrite=False)
                     self._purge_locked(int(time.time()))
                     self._live.connection.execute("UPDATE response_states SET state='failed',completed_at=?,error_code='provider_outcome_unknown' WHERE state='responding'", (int(time.time()),))
                     self._live.connection.execute("UPDATE provider_attempts SET state='unknown' WHERE state='in_flight'")
                     self._live.persist()
-        except Exception:
-            self.close()
+            if isolated_files is not None:
+                isolated_files.claim()
+                self._isolated_files = isolated_files
+        except BaseException as primary:
+            _cleanup_resources((self.close,), primary=primary)
             raise
 
     def close(self) -> None:
@@ -606,12 +676,21 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
             if self._closed:
                 return
             self._closed = True
+            actions = []
             for name in ("_live", "_ledger"):
                 snapshot = getattr(self, name, None)
+                setattr(self, name, None)
                 if snapshot is not None:
-                    snapshot.connection.close()
+                    connection, snapshot.connection = snapshot.connection, None
+                    if connection is not None:
+                        actions.append(connection.close)
             if self._lease is not None:
-                self._lease.close()
+                lease, self._lease = self._lease, None
+                actions.append(lease.close)
+            files, self._isolated_files = getattr(self, "_isolated_files", None), None
+            if files is not None:
+                actions.append(files.close)
+            _cleanup_resources(actions, error_code="conversation_store_close_unavailable")
 
     def _prepare_readonly_preflight(self) -> None:
         """Validate an ephemeral view, replay durable suppression, then seal it.
@@ -659,10 +738,15 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
                     # governed recovery procedure, not this synthetic boundary.
                     raise ConversationConfigurationError("provider_reconciliation_required")
                 # Missing disk is NOT an empty valid store.
-                synchronize_snapshot(self._live.path)
-                synchronize_snapshot(self._ledger.path)
-                live = EncryptedSnapshot(self._live.path, self._live.key, _initialize_live, **self._snapshot_callbacks)
-                ledger = EncryptedSnapshot(self._ledger.path, self._ledger.key, _initialize_ledger, **self._snapshot_callbacks)
+                live_bytes = ledger_bytes = None
+                if self._isolated_files is None:
+                    synchronize_snapshot(self._live.path)
+                    synchronize_snapshot(self._ledger.path)
+                else:
+                    live_bytes = self._isolated_files.read(self._live.path.name, sync=True)
+                    ledger_bytes = self._isolated_files.read(self._ledger.path.name, sync=True)
+                live = EncryptedSnapshot(self._live.path, self._live.key, _initialize_live, encoded=live_bytes, **self._snapshot_callbacks)
+                ledger = EncryptedSnapshot(self._ledger.path, self._ledger.key, _initialize_ledger, encoded=ledger_bytes, **self._snapshot_callbacks)
                 if live.connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok" or ledger.connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                     raise ConversationConfigurationError("conversation_snapshot_invalid")
                 if live.connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
@@ -693,14 +777,25 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
                         live.persist()
                     finally:
                         live.before_persist = self._snapshot_callbacks["before_persist"]
-            except Exception:
+            except BaseException as primary:
+                actions = []
                 for snapshot in (live, ledger):
                     if snapshot is not None:
-                        snapshot.connection.close()
+                        connection, snapshot.connection = snapshot.connection, None
+                        actions.append(connection.close)
+                _cleanup_resources(actions, primary=primary)
+                if not isinstance(primary, Exception): raise
                 raise ConversationRequestError("reconciliation_unavailable", 503) from None
-            self._live.connection.close()
-            self._ledger.connection.close()
+            old = (self._live, self._ledger)
             self._live, self._ledger = live, ledger
+            actions = []
+            for snapshot in old:
+                connection, snapshot.connection = snapshot.connection, None
+                actions.append(connection.close)
+            try:
+                _cleanup_resources(actions, error_code="reconciliation_unavailable")
+            except Exception:
+                raise ConversationRequestError("reconciliation_unavailable", 503) from None
             self._persistence_fenced = False
             return {"state": "reconciled", "authority_effect": "none"}
 

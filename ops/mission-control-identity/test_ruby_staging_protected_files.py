@@ -6,7 +6,7 @@ Read-only mount flags are deliberately simulated: no mount or host change is
 performed, and these tests do not prove runtime mount or namespace protection.
 """
 from contextlib import contextmanager
-from dataclasses import asdict, replace
+from dataclasses import FrozenInstanceError, asdict, replace
 import inspect
 import json
 import os
@@ -43,6 +43,19 @@ _REAL_OPEN, _REAL_CLOSE, _REAL_READ, _REAL_STAT = os.open, os.close, os.read, os
 _REAL_INHERITABLE = os.get_inheritable
 GENERATION = "a1" * 16
 ERROR = "staging_protected_configuration_invalid"
+
+
+def static_owner_policy(ownership):
+    from hashlib import sha256
+    from ruby_staging_isolated_store import IsolatedStorePolicy, StagingOwnerStartupPolicy
+    from ruby_staging_id_token import ISSUER
+    uid,gid=ownership.reader_uid,ownership.reader_gid
+    files=IsolatedStorePolicy('/isolated-state','/isolated-key/key.hex',uid,gid,
+        (('/',uid,gid,0o755),('/isolated-key',uid,gid,0o555),('/isolated-state',uid,gid,0o700)),
+        (1,2),(1,3,64,0,0),('/excluded-production',),'synthetic-public-policy',True,False)
+    raw='{}'
+    return StagingOwnerStartupPolicy(GENERATION,files,ISSUER,support.OWNER,
+        'project','source','instance','version',raw,sha256(raw.encode()).hexdigest(),True,True)
 
 
 class ProtectedFilesTests(support.HTTPApplicationTests):
@@ -180,7 +193,7 @@ class ProtectedFilesTests(support.HTTPApplicationTests):
         with patch.object(loader.os, "open") as opened, patch.object(loader.os, "geteuid") as uid, \
              patch.object(loader.os, "getegid") as gid, patch.object(requests, "Session") as session:
             app = create_staging_application_from_files(ownership=poison, expected_generation=poison,
-                wall_clock=poison, monotonic_clock=poison)
+                owner_policy=poison, wall_clock=poison, monotonic_clock=poison)
             self.apps.append(app)
             self.assertEqual(self.call(app)[0], 503)
             for call in (opened, uid, gid, session):call.assert_not_called()
@@ -366,6 +379,58 @@ class ProtectedFilesTests(support.HTTPApplicationTests):
                 self.assertEqual(str(exc),ERROR)
                 self.assertNotIn(support.fixtures.SECRET,"".join(traceback.format_exception(exc)))
             else:self.fail("expected fixed error")
+
+    def test_owner_policy_mismatch_rejected_before_credentials_or_private_import(self):
+        policy=static_owner_policy(self.ownership)
+        for value in (object(),replace(policy,generation='b2'*16),
+                replace(policy,files=replace(policy.files,reader_uid=policy.files.reader_uid+1)),
+                replace(policy,source_retention_enabled=False)):
+            with patch.object(loader,'_load',side_effect=AssertionError('credentials read')) as load:
+                with self.assertRaises(StagingProtectedConfigurationError):
+                    create_staging_application_from_files(enabled=True,ownership=self.ownership,
+                        expected_generation=GENERATION,owner_policy=value)
+                load.assert_not_called()
+
+    def test_owner_source_intake_policy_defaults_off_and_is_immutable(self):
+        policy = static_owner_policy(self.ownership)
+        self.assertIs(policy.source_intake_enabled, False)
+        with patch.object(loader.os, 'open') as opened, patch.object(requests, 'Session') as session:
+            for value in (False, True):
+                candidate = replace(policy, source_intake_enabled=value)
+                candidate.validate()
+                self.assertIs(candidate.source_intake_enabled, value)
+            opened.assert_not_called()
+            session.assert_not_called()
+        with self.assertRaises(FrozenInstanceError):
+            policy.source_intake_enabled = True
+
+    def test_nonboolean_source_intake_policy_rejected_before_resources(self):
+        from ruby_staging_isolated_store import IsolatedStoreConfigurationError
+        class Poison:
+            def __getattribute__(self, name):raise AssertionError('intake_input_inspected')
+            def __bool__(self):raise AssertionError('intake_input_coerced')
+            def __eq__(self, other):raise AssertionError('intake_input_compared')
+            def __repr__(self):raise AssertionError('intake_input_rendered')
+        policy = static_owner_policy(self.ownership)
+        for index, value in enumerate((None, 0, 1, '', 'false', 'true', [], {}, object(), Poison())):
+            candidate = replace(policy, source_intake_enabled=value)
+            with self.subTest(index=index), \
+                    patch.object(loader, '_load') as load, \
+                    patch.object(loader.os, 'open') as opened, \
+                    patch.object(requests, 'Session') as session:
+                with self.assertRaisesRegex(IsolatedStoreConfigurationError, '^staging_isolated_store_invalid$'):
+                    candidate.validate()
+                with self.assertRaisesRegex(StagingProtectedConfigurationError, '^' + ERROR + '$'):
+                    create_staging_application_from_files(**self.options(owner_policy=candidate))
+                for call in (load, opened, session):call.assert_not_called()
+
+    def test_ordinary_read_failure_cleanup_control_precedence(self):
+        failure=KeyboardInterrupt('synthetic-cleanup')
+        self.read_hook=lambda *args:(_ for _ in ()).throw(OSError('synthetic-read'))
+        self.close_hook=lambda role:(_ for _ in ()).throw(failure) if role=='secret.json' else None
+        with self.filesystem(),self.assertRaises(KeyboardInterrupt) as caught:
+            create_staging_application_from_files(enabled=True,ownership=self.ownership,expected_generation=GENERATION)
+        self.assertIs(caught.exception,failure);self.assertEqual(self.live,{})
 
     def test_control_failure_preserved_after_all_closes(self):
         failure=KeyboardInterrupt("synthetic-control")

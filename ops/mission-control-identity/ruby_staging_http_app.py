@@ -2,8 +2,9 @@
 
 This is the HTTP application boundary, not an externally exposed fixture driver.
 Only the real, server-configured Google authenticator may complete a login. The
-read-only payload is Core's fixed synthetic review surface; no customer store,
-providers, notifications, exports or mutation routes are connected.
+default payload is Core's fixed synthetic review surface. Explicit private
+synthetic-only binding can add owner preparation and source inquiry custody;
+no customer/live store, notifications, quote recording or execution is enabled.
 
 Deployment MUST supply a reviewed WSGI server that rejects duplicate Host/Origin,
 ambiguous framing and noncanonical raw paths before normalization. Plain WSGI
@@ -171,6 +172,11 @@ _OWNER_PREPARE = "/api/ruby-owner-quotes/prepare"
 _OWNER_ID = re.compile(r"[A-Za-z0-9_-]{16,200}\Z", re.ASCII)
 _OWNER_KEY = re.compile(r"[A-Za-z0-9._~-]{16,128}\Z", re.ASCII)
 _OWNER_MAX_BODY = 64 * 1024
+_SOURCE_PREFIX = "/api/ruby-owner-source-intake/"
+_SOURCE_MAX_BODY = 512 * 1024
+_SOURCE_OPERATIONS = frozenset({"source_prepare", "source_submit", "source_resolve"})
+_SOURCE_ERRORS = {"source_input_invalid": 400, "source_handle_unavailable": 409,
+    "source_outcome_unknown": 409, "source_intake_unavailable": 503}
 _OWNER_ERRORS = {"inquiry_source_unavailable": 404, "inquiry_not_found": 404,
     "inquiry_stale": 409, "quote_input_invalid": 400, "quote_unavailable": 503}
 _OWNER_PRIVATE_KEYS = frozenset({"source_handoff", "catalog_snapshot", "scope_fingerprint",
@@ -184,6 +190,13 @@ class StagingOwnerQuoteError(ValueError):
         super().__init__(self.code)
 
 
+class StagingOwnerSourceIntakeError(ValueError):
+    """Closed synthetic intake outcome, never application exception text."""
+    def __init__(self, code):
+        self.code = code if type(code) is str and code in _SOURCE_ERRORS else "source_intake_unavailable"
+        super().__init__(self.code)
+
+
 class StagingOwnerQuoteBinding:
     """Trusted private composition, never constructed from browser data.
 
@@ -192,11 +205,18 @@ class StagingOwnerQuoteBinding:
     A successful application construction claims exclusive ownership once; before
     then the caller owns cleanup, including a failed application construction.
     """
-    def __init__(self, *, issuer, owner_subject, list_inquiries, get_inquiry, prepare_quote, close):
+    def __init__(self, *, issuer, owner_subject, list_inquiries, get_inquiry, prepare_quote, close,
+                 prepare_source=None, submit_source=None, resolve_source=None, clear_source=None):
         if (type(issuer) is not str or issuer != ISSUER or type(owner_subject) is not str or not owner_subject
                 or not owner_subject.isascii() or len(owner_subject) > 200
                 or any(not callable(fn) for fn in (list_inquiries, get_inquiry, prepare_quote, close))):
             raise StagingHTTPConfigurationError("staging_owner_quote_binding_invalid")
+        source_callbacks = (prepare_source, submit_source, resolve_source, clear_source)
+        if any(fn is not None for fn in source_callbacks) and not all(callable(fn) for fn in source_callbacks):
+            raise StagingHTTPConfigurationError("staging_owner_quote_binding_invalid")
+        self._source_operations = ({"source_prepare": prepare_source, "source_submit": submit_source,
+            "source_resolve": resolve_source} if prepare_source is not None else {})
+        self._source_cleanup = clear_source
         self._issuer, self._subject = issuer, owner_subject
         self._operations = {"list": list_inquiries, "detail": get_inquiry, "prepare": prepare_quote}
         self._cleanup = close
@@ -223,15 +243,162 @@ class StagingOwnerQuoteBinding:
             callback = self._operations[operation]
         return callback() if operation == "list" else callback(argument)
 
+    def _run_source(self, owner, operation, argument, session, now):
+        with self._binding_lock:
+            if self._closed or self._owner is not owner or operation not in self._source_operations:
+                raise StagingOwnerSourceIntakeError("source_intake_unavailable")
+            callback = self._source_operations[operation]
+        return callback(argument, session, now)
+
+    def _clear_source(self):
+        with self._binding_lock:
+            callback = self._source_cleanup
+        if callback is not None:
+            callback()
+
     def close(self):
         with self._binding_lock:
             if self._closed:
                 return
             self._closed = True
             callback, self._cleanup = self._cleanup, None
+            clear, self._source_cleanup = self._source_cleanup, None
             self._operations.clear()
+            self._source_operations.clear()
             self._owner = None
-        callback()
+        control_failure = None
+        try:
+            if clear is not None: clear()
+        except BaseException as failure:
+            if not isinstance(failure, Exception): control_failure = failure
+        try:
+            callback()
+        finally:
+            if control_failure is not None: raise control_failure
+
+
+_OWNER_ASSET_PREFIX = "/owner-quote-workbench/"
+_OWNER_ASSET_CONTRACT = (
+    ("index.html", "text/html; charset=utf-8", 4096),
+    ("enabled.mjs", "text/javascript; charset=utf-8", 4096),
+    ("view.mjs", "text/javascript; charset=utf-8", 64 * 1024),
+    ("controller.mjs", "text/javascript; charset=utf-8", 64 * 1024),
+    ("workbench.css", "text/css; charset=utf-8", 16 * 1024),
+)
+
+
+@dataclass(frozen=True)
+class StagingOwnerWorkbenchAssets:
+    """Closed private package bytes, never paths or a filesystem/router callback.
+
+    Trusted private composition supplies its reviewed exact SHA-256 pins. Core
+    fixes all five URLs, MIME types and bounds; the private loader verifies the
+    deployed source against its own immutable review pins before constructing
+    this value. This object confers no authentication or store authority.
+    """
+    binding: StagingOwnerQuoteBinding = field(repr=False)
+    bodies: tuple[bytes, ...] = field(repr=False)
+    sha256: tuple[str, ...] = field(repr=False)
+    synthetic_only: bool = False
+
+    def __post_init__(self):
+        if (type(self.binding) is not StagingOwnerQuoteBinding or self.synthetic_only is not True
+                or type(self.bodies) is not tuple or type(self.sha256) is not tuple
+                or len(self.bodies) != len(_OWNER_ASSET_CONTRACT)
+                or len(self.sha256) != len(_OWNER_ASSET_CONTRACT)):
+            raise StagingHTTPConfigurationError("staging_owner_assets_invalid")
+        for body, digest, (_, _, maximum) in zip(self.bodies, self.sha256, _OWNER_ASSET_CONTRACT):
+            if (type(body) is not bytes or not 0 < len(body) <= maximum
+                    or type(digest) is not str or not re.fullmatch(r"[0-9a-f]{64}", digest, re.ASCII)
+                    or hashlib.sha256(body).hexdigest() != digest):
+                raise StagingHTTPConfigurationError("staging_owner_assets_invalid")
+
+
+def _owner_asset_replies(assets, origin):
+    # Called only after the app validates its existing exact HTTPS origin. No
+    # Host, proxy, browser URL or asset-supplied origin participates in this CSP.
+    scripts = " ".join(origin + _OWNER_ASSET_PREFIX + name
+        for name, mime, _ in _OWNER_ASSET_CONTRACT if mime.startswith("text/javascript"))
+    policy = ("default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; "
+        "object-src 'none'; worker-src 'none'; script-src " + scripts + "; script-src-attr 'none'; "
+        "style-src " + origin + _OWNER_ASSET_PREFIX + "workbench.css; style-src-attr 'none'; "
+        "connect-src " + " ".join(origin + route for route in
+            ("/api/session", _OWNER_LIST, _OWNER_LIST + "/", _OWNER_PREPARE, "/auth/logout")))
+    return tuple((_OWNER_ASSET_PREFIX + name, _Reply(200, body, (
+        ("Content-Type", mime), ("Content-Length", str(len(body))),
+        ("Cache-Control", "no-store"), ("Pragma", "no-cache"),
+        ("Referrer-Policy", "no-referrer"), ("X-Content-Type-Options", "nosniff"),
+        ("Content-Security-Policy", policy), ("X-Frame-Options", "DENY"))))
+        for (name, mime, _), body in zip(_OWNER_ASSET_CONTRACT, assets.bodies))
+
+
+_INTAKE_ASSET_PREFIX = "/owner-synthetic-intake/"
+_INTAKE_ASSET_CONTRACT = (
+    ("form/index.html", "text/html; charset=utf-8", 4096),
+    ("form/enabled.mjs", "text/javascript; charset=utf-8", 4096),
+    ("form/view.mjs", "text/javascript; charset=utf-8", 64 * 1024),
+    ("form/intake.css", "text/css; charset=utf-8", 16 * 1024),
+    ("src/order-intake-source-http.mjs", "text/javascript; charset=utf-8", 32 * 1024),
+    ("src/order-intake-source-submission.mjs", "text/javascript; charset=utf-8", 32 * 1024),
+    ("src/order-intake-synthetic-submission.mjs", "text/javascript; charset=utf-8", 32 * 1024),
+    ("src/order-intake-review-handoff.mjs", "text/javascript; charset=utf-8", 32 * 1024),
+    ("src/order-intake-request-envelope.mjs", "text/javascript; charset=utf-8", 32 * 1024),
+    ("src/order-intake-draft-state.mjs", "text/javascript; charset=utf-8", 32 * 1024),
+    ("src/order-intake-review-state.mjs", "text/javascript; charset=utf-8", 32 * 1024),
+    ("src/design-notes-limit.mjs", "text/javascript; charset=utf-8", 32 * 1024),
+ )
+
+
+@dataclass(frozen=True)
+class StagingOwnerIntakeAssets:
+    """Exact synthetic intake bytes. No generic static serving or public source.
+
+    This independent closed bundle requires an actual source-enabled binding.
+    It confers no session, source mutation or quote-recording authority.
+    """
+    binding: StagingOwnerQuoteBinding = field(repr=False)
+    bodies: tuple[bytes, ...] = field(repr=False)
+    sha256: tuple[str, ...] = field(repr=False)
+    synthetic_only: bool = False
+
+    def __post_init__(self):
+        if (type(self.binding) is not StagingOwnerQuoteBinding or self.synthetic_only is not True
+                or type(self.bodies) is not tuple or type(self.sha256) is not tuple
+                or len(self.bodies) != len(_INTAKE_ASSET_CONTRACT)
+                or len(self.sha256) != len(_INTAKE_ASSET_CONTRACT)):
+            raise StagingHTTPConfigurationError("staging_owner_intake_assets_invalid")
+        with self.binding._binding_lock:
+            if self.binding._closed or set(self.binding._source_operations) != set(_SOURCE_OPERATIONS):
+                raise StagingHTTPConfigurationError("staging_owner_intake_assets_invalid")
+        for body, digest, (_, _, maximum) in zip(self.bodies, self.sha256, _INTAKE_ASSET_CONTRACT):
+            if (type(body) is not bytes or not 0 < len(body) <= maximum
+                    or type(digest) is not str or not re.fullmatch(r"[0-9a-f]{64}", digest, re.ASCII)
+                    or hashlib.sha256(body).hexdigest() != digest):
+                raise StagingHTTPConfigurationError("staging_owner_intake_assets_invalid")
+
+
+def _intake_asset_replies(assets, origin):
+    scripts = " ".join(origin + _INTAKE_ASSET_PREFIX + name
+        for name, mime, _ in _INTAKE_ASSET_CONTRACT if mime.startswith("text/javascript"))
+    policy = ("default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; "
+        "object-src 'none'; worker-src 'none'; script-src " + scripts + "; script-src-attr 'none'; "
+        "style-src " + origin + _INTAKE_ASSET_PREFIX + "form/intake.css; style-src-attr 'none'; "
+        "connect-src " + " ".join(origin + route for route in
+            ("/api/session", "/api/ruby-owner-source-intake/prepare", "/api/ruby-owner-source-intake/submit",
+             "/api/ruby-owner-source-intake/resolve")))
+    return tuple((_INTAKE_ASSET_PREFIX + name, _Reply(200, body, (
+        ("Content-Type", mime), ("Content-Length", str(len(body))),
+        ("Cache-Control", "no-store"), ("Pragma", "no-cache"),
+        ("Referrer-Policy", "no-referrer"), ("X-Content-Type-Options", "nosniff"),
+        ("Content-Security-Policy", policy), ("X-Frame-Options", "DENY"))))
+        for (name, mime, _), body in zip(_INTAKE_ASSET_CONTRACT, assets.bodies))
+
+
+@dataclass(frozen=True)
+class _OwnerAssetWork:
+    reply: _Reply = field(repr=False)
+    token: str = field(repr=False)
+    generation: int
 
 
 @dataclass(frozen=True)
@@ -245,7 +412,7 @@ class _OwnerQuoteWork:
     body_length: int = 0
 
 
-def _owner_json_tree(value, *, response=False):
+def _owner_json_tree(value, *, response=False, maximum=None):
     pending, count = [(value, 0)], 0
     while pending:
         item, depth = pending.pop(); count += 1
@@ -267,7 +434,7 @@ def _owner_json_tree(value, *, response=False):
         data = json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
     except (ValueError, UnicodeError, RecursionError):
         raise _RequestRejected from None
-    if len(data) > (128 * 1024 if response else _OWNER_MAX_BODY):
+    if len(data) > (maximum if maximum is not None else (128 * 1024 if response else _OWNER_MAX_BODY)):
         raise _RequestRejected
 
 
@@ -304,6 +471,97 @@ def _owner_read_json(stream, length):
         raise _RequestRejected from None
 
 
+def _source_read_json(stream, length, operation):
+    chunks, remaining = [], length
+    while remaining:
+        chunk = stream.read(remaining)
+        if type(chunk) is not bytes or not chunk or len(chunk) > remaining:
+            raise _RequestRejected
+        chunks.append(chunk); remaining -= len(chunk)
+    def pairs(entries):
+        value = {}
+        for key, item in entries:
+            if key in value: raise _RequestRejected
+            value[key] = item
+        return value
+    def invalid(_): raise _RequestRejected
+    try:
+        value = json.loads(b"".join(chunks).decode("utf-8", "strict"),
+            object_pairs_hook=pairs, parse_constant=invalid)
+        fields = {"source_prepare": {"idempotency_key", "source_handoff_body"},
+                  "source_submit": {"handle"}, "source_resolve": {"attempt"}}[operation]
+        if type(value) is not dict or set(value) != fields:
+            raise _RequestRejected
+        _owner_json_tree(value, maximum=_SOURCE_MAX_BODY)
+        if operation == "source_prepare":
+            if (type(value["idempotency_key"]) is not str or not _OWNER_KEY.fullmatch(value["idempotency_key"])
+                    or type(value["source_handoff_body"]) is not str): raise _RequestRejected
+        elif operation == "source_submit":
+            if type(value["handle"]) is not str or not _TOKEN.fullmatch(value["handle"]): raise _RequestRejected
+        else:
+            attempt = value["attempt"]
+            if (type(attempt) is not dict or set(attempt) != {"idempotencyKey", "requestBody", "sourceHandoffBody"}
+                    or any(type(v) is not str for v in attempt.values())): raise _RequestRejected
+        return value
+    except (ValueError, UnicodeError, RecursionError):
+        raise _RequestRejected from None
+
+
+def _source_response(data, operation, argument):
+    # Only prepare may return the exact caller-owned original attempt, never
+    # owner identity or retained source selected from an existing inquiry.
+    if type(data) is not dict: raise _RequestRejected
+    if operation == "source_prepare":
+        if (set(data) != {"state", "handle", "attempt"} or data["state"] != "prepared_not_submitted"
+                or type(data["handle"]) is not str or not _TOKEN.fullmatch(data["handle"])): raise _RequestRejected
+        attempt = data["attempt"]
+        if (type(attempt) is not dict or set(attempt) != {"idempotencyKey", "requestBody", "sourceHandoffBody"}
+                or any(type(v) is not str for v in attempt.values())): raise _RequestRejected
+        if (attempt['idempotencyKey'] != argument['idempotency_key']
+                or attempt['sourceHandoffBody'] != argument['source_handoff_body']): raise _RequestRejected
+        if (len(attempt['requestBody']) > 128 * 1024
+                or len(attempt['sourceHandoffBody']) > 128 * 1024): raise _RequestRejected
+        _owner_json_tree(data, maximum=_SOURCE_MAX_BODY)
+        # Reuse the closed Core structural schema without creating a usable
+        # custody policy or exposing any server owner/scope. No catalog remap.
+        from ruby_inquiry import decode, canonical, RubyInquiryMixin, RubyInquiryPolicy, MAX_BODY
+        request = decode(attempt['requestBody'].encode('utf-8'))
+        source = decode(attempt['sourceHandoffBody'].encode('utf-8'))
+        structural_policy = RubyInquiryPolicy('', '', '', '', allowed_contact_channels=frozenset({'email'}))
+        RubyInquiryMixin._inquiry_payload(request, structural_policy, current_catalog=False)
+        RubyInquiryMixin._inquiry_source(source)
+        if (canonical(request).decode('utf-8') != attempt['requestBody']
+                or canonical(source).decode('utf-8') != attempt['sourceHandoffBody']
+                or request['contact'] != {'kind': 'email', 'destination': 'synthetic-customer@example.invalid',
+                                          'display_name': 'Synthetic Customer'}
+                or len(canonical(dict(schema_version='ruby.inquiry-source-custody.v1',
+                    request=request, source_handoff=source))) > MAX_BODY): raise _RequestRejected
+        _owner_json_tree(data, maximum=_SOURCE_MAX_BODY)
+    else:
+        _owner_json_tree(data, response=True)
+        from ruby_inquiry import RubyInquiryMixin, canonical, decode, MAX_SAFE_INTEGER
+        receipt = data.get('receipt')
+        if (type(receipt) is not dict or type(receipt.get('inquiry_id')) is not str
+                or not _OWNER_ID.fullmatch(receipt['inquiry_id'])
+                or type(receipt.get('revision_id')) is not str or not _OWNER_ID.fullmatch(receipt['revision_id'])
+                or type(receipt.get('received_at')) is not int or not 0 < receipt['received_at'] <= MAX_SAFE_INTEGER
+                or type(receipt.get('request_fingerprint')) is not str
+                or not re.fullmatch(r'sha256:[0-9a-f]{64}', receipt['request_fingerprint'])): raise _RequestRejected
+        digest = receipt['request_fingerprint']
+        if operation == 'source_resolve':
+            original = argument['attempt']
+            envelope = dict(schema_version='ruby.inquiry-source-custody.v1',
+                request=decode(original['requestBody'].encode('utf-8')),
+                source_handoff=decode(original['sourceHandoffBody'].encode('utf-8')))
+            if digest != 'sha256:' + hashlib.sha256(canonical(envelope)).hexdigest(): raise _RequestRejected
+        expected = RubyInquiryMixin._inquiry_make_receipt('create', receipt['inquiry_id'],
+            receipt['revision_id'], 1, bytes.fromhex(digest[7:]), receipt['received_at'])
+        if canonical(data) != canonical(expected): raise _RequestRejected
+    result = _reply(200, data)
+    if len(result.body) > _SOURCE_MAX_BODY: raise _RequestRejected
+    return result
+
+
 class StagingHTTPApplication:
     """Single-process, in-memory application; default construction is inactive.
 
@@ -311,8 +569,9 @@ class StagingHTTPApplication:
     to this application. Short state operations use a lock, but upstream HTTPS
     never holds it. Admission bounds concurrent application work; one nonblocking
     authentication slot avoids queuing for HTTPS. Admitted state operations still
-    briefly serialize, with no owner-priority reservation. Only an explicitly bound
-    owner prepare operation reads a strictly bounded JSON body outside that lock.
+    briefly serialize, with no owner-priority reservation. Explicitly bound
+    owner preparation and synthetic source operations share one work slot and
+    read strictly bounded JSON outside that lock.
     Multiprocess/distributed state is not implemented.
     """
 
@@ -320,7 +579,9 @@ class StagingHTTPApplication:
                  authenticator: StagingGoogleOwnerAuthenticator | None = None,
                  limits: StagingRequestLimits | None = None,
                  clock: Callable[[], float] = time.monotonic,
-                 owner_quote_binding: StagingOwnerQuoteBinding | None = None) -> None:
+                 owner_quote_binding: StagingOwnerQuoteBinding | None = None,
+                 owner_workbench_assets: StagingOwnerWorkbenchAssets | None = None,
+                 owner_intake_assets: StagingOwnerIntakeAssets | None = None) -> None:
         self._lock = threading.RLock()
         self._enabled = False
         self._closed = False
@@ -336,8 +597,11 @@ class StagingHTTPApplication:
         self._auth_slot = threading.Lock()
         self._login_starts: deque[float] = deque()
         self._callback_attempts: deque[float] = deque()
+        self._source_write_attempts: deque[float] = deque()
         self._auth_generation = 0
         self._owner_quote_binding = None
+        self._owner_asset_replies = ()
+        self._intake_asset_replies = ()
         self._owner_quote_slot = threading.Lock()
         if enabled is False:
             return
@@ -351,6 +615,22 @@ class StagingHTTPApplication:
             if owner_quote_binding is not None and (type(owner_quote_binding) is not StagingOwnerQuoteBinding
                     or not owner_quote_binding.matches_policy(issuer=ISSUER, owner_subject=config.owner_subject)):
                 raise ValueError
+            asset_replies = ()
+            if owner_workbench_assets is not None:
+                if (type(owner_workbench_assets) is not StagingOwnerWorkbenchAssets
+                        or owner_quote_binding is None
+                        or owner_workbench_assets.binding is not owner_quote_binding):
+                    raise ValueError
+                owner_workbench_assets.__post_init__()
+                asset_replies = _owner_asset_replies(owner_workbench_assets, config.origin)
+            intake_replies = ()
+            if owner_intake_assets is not None:
+                if (type(owner_intake_assets) is not StagingOwnerIntakeAssets
+                        or owner_quote_binding is None
+                        or owner_intake_assets.binding is not owner_quote_binding):
+                    raise ValueError
+                owner_intake_assets.__post_init__()
+                intake_replies = _intake_asset_replies(owner_intake_assets, config.origin)
             self._now()
             if authenticator is not None and (type(authenticator) is not StagingGoogleOwnerAuthenticator
                     or not authenticator.matches_policy(origin=config.origin, client_id=config.client_id,
@@ -358,12 +638,8 @@ class StagingHTTPApplication:
                 raise ValueError
             flows = LoginFlowStore(enabled=True, ttl_seconds=config.flow_seconds,
                                    capacity=config.capacity, clock=self._now)
-            try:
-                sessions = SessionStore(enabled=True, idle_seconds=config.idle_seconds,
-                    absolute_seconds=config.absolute_seconds, capacity=config.capacity, clock=self._now)
-            except Exception:
-                flows.close()
-                raise
+            sessions = SessionStore(enabled=True, idle_seconds=config.idle_seconds,
+                absolute_seconds=config.absolute_seconds, capacity=config.capacity, clock=self._now)
             self._config, self._authenticator = config, authenticator
             self._flows, self._sessions = flows, sessions
             self._limits = limits
@@ -371,11 +647,24 @@ class StagingHTTPApplication:
             if owner_quote_binding is not None:
                 owner_quote_binding._claim(self)
                 self._owner_quote_binding = owner_quote_binding
+            self._owner_asset_replies = asset_replies
+            self._intake_asset_replies = intake_replies
             self._enabled = True
-        except Exception:
+        except BaseException as failure:
+            # The caller still owns authenticator and binding on failed
+            # construction. Retire all locally acquired stores exactly once.
+            self._enabled = False
+            self._closed = True
+            self._sessions = self._flows = None
             for resource in (sessions, flows):
                 if resource is not None:
-                    resource.close()
+                    try:
+                        resource.close()
+                    except BaseException as cleanup:
+                        if isinstance(failure, Exception) and not isinstance(cleanup, Exception):
+                            failure = cleanup
+            if not isinstance(failure, Exception):
+                raise failure
             raise StagingHTTPConfigurationError("staging_http_configuration_invalid") from None
 
     def _now(self) -> float:
@@ -521,6 +810,7 @@ class StagingHTTPApplication:
                 live_previous = work.previous if work.previous is not None and self._sessions.lookup(work.previous) is not None else None
                 receipt = self._sessions.issue(previous_token=live_previous)
                 self._auth_generation += 1
+                if self._owner_quote_binding is not None: self._owner_quote_binding._clear_source()
                 return _reply(303, {"authenticated": True}, location="/",
                               cookies=clear + (serialize_cookie(SESSION_COOKIE, receipt.token),))
         except (AuthenticationRejected, LifecycleError):
@@ -539,7 +829,11 @@ class StagingHTTPApplication:
         if binding is None:
             return None
         operation, argument, length = None, None, 0
-        if path == _OWNER_LIST:
+        if path.startswith(_SOURCE_PREFIX) and binding._source_operations:
+            operation = "source_" + path[len(_SOURCE_PREFIX):]
+            if operation not in _SOURCE_OPERATIONS: return _reply(404, {"error": "not_found"})
+            if method != "POST": return _reply(405, {"error": "method_not_allowed"})
+        elif path == _OWNER_LIST:
             if method != "GET": return _reply(405, {"error": "method_not_allowed"})
             operation = "list"
         elif path.startswith(_OWNER_LIST + "/"):
@@ -553,20 +847,25 @@ class StagingHTTPApplication:
         else:
             return None
         token, bad_cookie = self._session_cookie(cookie)
-        csrf = environ.get("HTTP_X_CSRF_TOKEN") if operation == "prepare" else None
-        if operation == "prepare" and environ.get("HTTP_ORIGIN") != self._config.origin:
+        needs_csrf = operation == "prepare" or operation in _SOURCE_OPERATIONS
+        csrf = environ.get("HTTP_X_CSRF_TOKEN") if needs_csrf else None
+        if needs_csrf and environ.get("HTTP_ORIGIN") != self._config.origin:
             return _reply(403, {"error": "request_denied"})
-        if bad_cookie or self._sessions.lookup(token, require_csrf=operation == "prepare", csrf_token=csrf) is None:
+        if bad_cookie or self._sessions.lookup(token, require_csrf=needs_csrf, csrf_token=csrf) is None:
             return _reply(401, {"error": "session_required"})
-        if operation == "prepare":
+        if needs_csrf:
             raw_length = environ.get("CONTENT_LENGTH")
             if (environ.get("CONTENT_TYPE") != "application/json" or type(raw_length) is not str
                     or not re.fullmatch(r"[1-9][0-9]{0,5}", raw_length, re.ASCII)):
                 return _reply(400, {"error": "request_invalid"})
             length = int(raw_length)
-            if length > _OWNER_MAX_BODY: return _reply(413, {"error": "request_too_large"})
+            maximum = (1024 if operation == "source_submit" else _SOURCE_MAX_BODY) if operation in _SOURCE_OPERATIONS else _OWNER_MAX_BODY
+            if length > maximum: return _reply(413, {"error": "request_too_large"})
             argument = environ.get("wsgi.input")
             if not callable(getattr(argument, "read", None)): return _reply(400, {"error": "request_invalid"})
+        if (operation in {"source_prepare", "source_submit"}
+                and not self._rate_allowed(self._source_write_attempts, 16)):
+            return _reply(429, {"error": "source_rate_limited"})
         if not self._owner_quote_slot.acquire(blocking=False):
             return _reply(503, {"error": "quote_busy"})
         return _OwnerQuoteWork(operation, argument, token, csrf, self._auth_generation, binding, length)
@@ -574,29 +873,44 @@ class StagingHTTPApplication:
     def _owner_work_live(self, work):
         return (not self._closed and not self._clock_failed
             and work.generation == self._auth_generation and self._owner_quote_binding is work.binding
-            and self._sessions.lookup(work.token, require_csrf=work.operation == "prepare", csrf_token=work.csrf) is not None)
+            and self._sessions.lookup(work.token, require_csrf=work.operation == "prepare" or work.operation in _SOURCE_OPERATIONS, csrf_token=work.csrf) is not None)
 
     def _complete_owner_quote(self, work):
         try:
             with self._lock:
                 if not self._owner_work_live(work): return _reply(401, {"error": "session_required"})
-            argument = _owner_read_json(work.argument, work.body_length) if work.operation == "prepare" else work.argument
+            argument = (_source_read_json(work.argument, work.body_length, work.operation)
+                if work.operation in _SOURCE_OPERATIONS else
+                (_owner_read_json(work.argument, work.body_length) if work.operation == "prepare" else work.argument))
             # Logout/expiry during body reading must prevent service invocation.
             with self._lock:
                 if not self._owner_work_live(work): return _reply(401, {"error": "session_required"})
+                work_now = self._now() if work.operation in _SOURCE_OPERATIONS else None
             try:
-                data = work.binding._run(self, work.operation, argument)
-                if type(data) is not dict: raise _RequestRejected
-                _owner_json_tree(data, response=True)
-                result = _reply(200, data)
-                if len(result.body) > 128 * 1024:
-                    raise _RequestRejected
+                if work.operation in _SOURCE_OPERATIONS:
+                    data = work.binding._run_source(self, work.operation, argument,
+                        (work.token, work.generation, work.csrf), work_now)
+                    result = _source_response(data, work.operation, argument)
+                else:
+                    data = work.binding._run(self, work.operation, argument)
+                    if type(data) is not dict: raise _RequestRejected
+                    _owner_json_tree(data, response=True)
+                    result = _reply(200, data)
+                    if len(result.body) > 128 * 1024: raise _RequestRejected
+            except StagingOwnerSourceIntakeError as failure:
+                result = _reply(_SOURCE_ERRORS[failure.code], {"error": failure.code})
             except StagingOwnerQuoteError as failure:
                 result = _reply(_OWNER_ERRORS[failure.code], {"error": failure.code})
             except Exception:
-                result = _reply(503, {"error": "quote_unavailable"})
+                if work.operation in _SOURCE_OPERATIONS:
+                    if work.operation == "source_prepare": work.binding._clear_source()
+                    result = _reply(503, {"error": "source_intake_unavailable"})
+                else:
+                    result = _reply(503, {"error": "quote_unavailable"})
             with self._lock:
-                if not self._owner_work_live(work): return _reply(401, {"error": "session_required"})
+                if not self._owner_work_live(work):
+                    work.binding._clear_source()
+                    return _reply(401, {"error": "session_required"})
             return result
         except _RequestRejected:
             with self._lock:
@@ -637,6 +951,16 @@ class StagingHTTPApplication:
             return self._callback(raw, cookie)
         if raw:
             return _reply(400, {"error": "request_invalid"})
+        if ((self._owner_asset_replies and path.startswith(_OWNER_ASSET_PREFIX))
+                or (self._intake_asset_replies and path.startswith(_INTAKE_ASSET_PREFIX))):
+            if method != "GET": return _reply(405, {"error": "method_not_allowed"})
+            token, bad_cookie = self._session_cookie(cookie)
+            if bad_cookie or self._sessions.lookup(token) is None:
+                return _reply(401, {"error": "session_required"})
+            for asset_path, result in self._owner_asset_replies + self._intake_asset_replies:
+                if path == asset_path:
+                    return _OwnerAssetWork(result, token, self._auth_generation)
+            return _reply(404, {"error": "not_found"})
         owner_work = self._owner_dispatch(environ, method, path, cookie)
         if owner_work is not None:
             return owner_work
@@ -673,6 +997,7 @@ class StagingHTTPApplication:
             self._sessions.revoke(token)
             self._auth_generation += 1
             self._flows.revoke_all()
+            if self._owner_quote_binding is not None: self._owner_quote_binding._clear_source()
             return _reply(200, {"authenticated": False}, cookies=(serialize_cookie(SESSION_COOKIE),))
         if path not in {"/", "/api/session", "/api/ruby-review-synthetic"}:
             return _reply(404, {"error": "not_found"})
@@ -683,16 +1008,25 @@ class StagingHTTPApplication:
             return _reply(401, {"error": "session_required"})
         if path == "/api/ruby-review-synthetic":
             return _reply(200, ruby_review_synthetic_surface())
+        if self._owner_quote_binding is not None: self._owner_quote_binding._clear_source()
         csrf = self._sessions.rotate_csrf(token)
         if csrf is None:
             return _reply(401, {"error": "session_required"})
         if path == "/api/session":
             return _reply(200, {"authenticated": True, "csrf_token": csrf})
-        return _reply(200, markup="<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Ruby staging</title><h1>Ruby staging</h1><p>Signed-in, read-only synthetic review. No customer data or execution authority.</p><a href=\"/api/ruby-review-synthetic\">View synthetic review</a><input type=\"hidden\" id=\"logout-csrf\" name=\"csrf_token\" value=\"" + html.escape(csrf, quote=True) + "\"><button id=\"sign-out\" type=\"button\">Sign out</button><p id=\"sign-out-status\" role=\"status\"></p><noscript>Sign out requires JavaScript in this staging preview.</noscript><script>" + _LOGOUT_SCRIPT + "</script></html>")
+        workbench_link = ('<a href="/owner-quote-workbench/index.html">Owner quote workbench</a>'
+                          if self._owner_asset_replies else "")
+        root_description = ('Signed-in synthetic intake and review. Synthetic inquiries and original source may be retained. No real customer data or quote recording, sending or execution authority.'
+                            if self._intake_asset_replies else
+                            'Signed-in, read-only synthetic review. No customer data or execution authority.')
+        intake_link = ('<a href="/owner-synthetic-intake/form/index.html">Synthetic inquiry intake</a>'
+                       if self._intake_asset_replies else "")
+        return _reply(200, markup="<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Ruby staging</title><h1>Ruby staging</h1><p>" + root_description + "</p><a href=\"/api/ruby-review-synthetic\">View synthetic review</a>" + workbench_link + intake_link + "<input type=\"hidden\" id=\"logout-csrf\" name=\"csrf_token\" value=\"" + html.escape(csrf, quote=True) + "\"><button id=\"sign-out\" type=\"button\">Sign out</button><p id=\"sign-out-status\" role=\"status\"></p><noscript>Sign out requires JavaScript in this staging preview.</noscript><script>" + _LOGOUT_SCRIPT + "</script></html>")
 
     def __call__(self, environ, start_response):
         callback = type(environ) is dict and environ.get("PATH_INFO") == "/auth/google/callback"
         cookies = (serialize_cookie(FLOW_COOKIE),) if callback else ()
+        asset_work = None
         admission = self._admission
         acquired = admission is not None and admission.acquire(blocking=False)
         try:
@@ -704,6 +1038,8 @@ class StagingHTTPApplication:
                 try:
                     with self._lock:
                         result = self._dispatch(environ)
+                    if type(result) is _OwnerAssetWork:
+                        asset_work, result = result, result.reply
                     if type(result) is _AuthenticationWork:
                         result = self._complete_authentication(result)
                     elif type(result) is _OwnerQuoteWork:
@@ -717,6 +1053,24 @@ class StagingHTTPApplication:
                 if clock_failed:
                     self.close()
                     result = _reply(503, {"error": "staging_unavailable"}, cookies=cookies)
+            if asset_work is not None:
+                # Final known-revocation check after dispatch. No Python guard
+                # can retract bytes after admission to a server response hook.
+                # Never hold this lock across that potentially blocking hook.
+                with self._lock:
+                    if self._closed or self._clock_failed:
+                        result = _reply(503, {"error": "staging_inactive"})
+                    else:
+                        try:
+                            live = (asset_work.generation == self._auth_generation
+                                and self._sessions.lookup(asset_work.token) is not None)
+                        except LifecycleError:
+                            live = False
+                        if not live: result = _reply(401, {"error": "session_required"})
+                        if self._clock_failed:
+                            result = _reply(503, {"error": "staging_unavailable"})
+                if self._clock_failed:
+                    self.close()
             # Server response hooks may block/raise; never hold the state lock.
             start_response(f"{result.status} {_STATUS[result.status]}", list(result.headers))
             return [result.body]
@@ -725,44 +1079,44 @@ class StagingHTTPApplication:
                 admission.release()
 
     def close(self) -> None:
-        cleanup = None
-        try:
-            with self._lock:
-                if self._closed:
-                    return
-                self._closed = True
-                if self._owner_quote_binding is not None and self._owner_quote_slot.acquire(blocking=False):
-                    cleanup, self._owner_quote_binding = self._owner_quote_binding, None
-                    self._owner_quote_slot.release()
-                self._auth_generation += 1
-                self._login_starts.clear()
-                self._callback_attempts.clear()
-                try:
-                    if self._flows is not None:
-                        self._flows.close()
-                finally:
-                    if self._sessions is not None:
-                        self._sessions.close()
-        finally:
-            control_failure = None
-            if cleanup is not None:
-                try:
-                    cleanup.close()
-                except BaseException as failure:
-                    if not isinstance(failure, Exception):
-                        control_failure = failure
+        cleanup = source_cleanup = None
+        failure = None
+        def attempt(action, *, ignore_ordinary=False):
+            nonlocal failure
             try:
-                # Never wait for upstream work while closing app state. An active
-                # authentication closes its backend on return, without a hard
-                # deadline. Still attempt backend cleanup after binding failures.
-                if self._authenticator is not None and self._auth_slot.acquire(blocking=False):
-                    try:
-                        self._authenticator.close()
-                    finally:
-                        self._auth_slot.release()
+                action()
+            except BaseException as exc:
+                if not isinstance(exc, Exception):
+                    if failure is None or isinstance(failure, Exception): failure = exc
+                elif not ignore_ordinary and failure is None:
+                    failure = exc
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            self._owner_asset_replies = ()
+            self._intake_asset_replies = ()
+            source_cleanup = self._owner_quote_binding
+            if self._owner_quote_binding is not None and self._owner_quote_slot.acquire(blocking=False):
+                cleanup, self._owner_quote_binding = self._owner_quote_binding, None
+                self._owner_quote_slot.release()
+            self._auth_generation += 1
+            self._login_starts.clear()
+            self._callback_attempts.clear()
+            self._source_write_attempts.clear()
+            for resource in (self._flows, self._sessions):
+                if resource is not None: attempt(resource.close)
+        if source_cleanup is not None: attempt(source_cleanup._clear_source, ignore_ordinary=True)
+        if cleanup is not None: attempt(cleanup.close, ignore_ordinary=True)
+        # Do not wait for active authentication; its existing completion path
+        # closes the backend. This does not impose a hard shutdown deadline.
+        if self._authenticator is not None and self._auth_slot.acquire(blocking=False):
+            try:
+                attempt(self._authenticator.close)
             finally:
-                if control_failure is not None:
-                    raise control_failure
+                self._auth_slot.release()
+        if failure is not None:
+            raise failure
 
 
 # Importing or executing the module never creates an enabled app, credential

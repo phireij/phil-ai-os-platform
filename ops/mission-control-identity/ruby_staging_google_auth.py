@@ -173,8 +173,9 @@ class StagingGoogleOwnerAuthenticator:
             # Preserve shutdown/control exceptions, even if cleanup also fails.
             try:
                 self._close_unlocked()
-            except BaseException:
-                pass
+            except BaseException as cleanup:
+                if isinstance(failure, Exception) and not isinstance(cleanup, Exception):
+                    raise cleanup
             if isinstance(failure, Exception):
                 raise AuthenticationConfigurationError("authentication_configuration_invalid") from None
             raise
@@ -192,13 +193,15 @@ class StagingGoogleOwnerAuthenticator:
         self._client_secret = ""
         session, self._session = self._session, None
         if session is not None:
-            try:
+            control = None
+            for action in (session.cookies.clear, session.close):
                 try:
-                    session.cookies.clear()
-                finally:
-                    session.close()
-            except Exception:
-                pass
+                    action()
+                except BaseException as failure:
+                    if not isinstance(failure, Exception) and control is None:
+                        control = failure
+            if control is not None:
+                raise control
 
     def _now(self) -> float:
         try:
