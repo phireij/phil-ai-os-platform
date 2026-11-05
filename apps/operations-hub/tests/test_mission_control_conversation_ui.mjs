@@ -1,3 +1,4 @@
+import "./test_mission_control_session_errors.mjs";
 import "./test_mission_control_session_races.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
