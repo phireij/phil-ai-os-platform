@@ -20,6 +20,7 @@ sys.modules[spec.name] = canonical
 spec.loader.exec_module(canonical)
 base = canonical.base
 from ruby_staging_gunicorn_worker import _BODY, _response
+from ruby_staging_app_factory import create_staging_application
 from gunicorn.http import errors
 
 
@@ -139,7 +140,8 @@ class IntegratedStagingServerTests(canonical.CanonicalBoundaryTests):
 
     def test_composed_imports_use_this_checkout_and_exact_official_source(self):
         for name in ("ruby_staging_http_app", "ruby_staging_google_auth", "ruby_staging_lifecycle",
-                     "ruby_staging_gunicorn_logging", "ruby_staging_gunicorn_worker", "ruby_staging_gunicorn_boundary"):
+                     "ruby_staging_gunicorn_logging", "ruby_staging_gunicorn_worker", "ruby_staging_gunicorn_boundary",
+                     "ruby_staging_app_factory"):
             self.assertEqual(Path(sys.modules[name].__file__).resolve(), ROOT / (name + ".py"))
         self.assertEqual(Path(base.gunicorn.__file__).resolve(), base.SOURCE / "gunicorn/__init__.py")
         self.assertEqual(base.gunicorn.__version__, "26.2.2")
@@ -147,6 +149,27 @@ class IntegratedStagingServerTests(canonical.CanonicalBoundaryTests):
         self.assertEqual(status, 503)
         self.assertEqual(json.loads(body)["authority"], "none")
         self.assertEqual(self.fx.sent, [])
+
+
+    def test_real_factory_signed_session_and_logout_through_composed_handler(self):
+        app = create_staging_application(enabled=True, config=base.fixtures.CONFIG,
+            limits=base.fixtures.LIMITS, client_secret=base.fixtures.fixtures.SECRET,
+            max_cache_seconds=300, wall_clock=lambda: self.fx.wall,
+            monotonic_clock=lambda: self.fx.mono)
+        self.fx.apps.append(app)
+        session, _, _, _ = self.fx.login(app)
+        status, _, body = self.call(app, "/api/ruby-review-synthetic", cookie=session)
+        self.assertEqual(status, 200)
+        result = json.loads(body)
+        self.assertEqual(result["authority"], "none")
+        self.assertFalse(result["execution_authorized"])
+        self.assertFalse(result["mutation_authorized"])
+        status, _, body = self.call(app, "/api/session", cookie=session)
+        self.assertEqual(status, 200)
+        csrf = json.loads(body)["csrf_token"]
+        self.assertEqual(self.call(app, "/auth/logout", method="POST", cookie=session,
+            HTTP_ORIGIN=base.fixtures.ORIGIN, HTTP_X_CSRF_TOKEN=csrf)[0], 200)
+        self.assertEqual(self.call(app, "/api/session", cookie=session)[0], 401)
 
 
 if __name__ == "__main__":

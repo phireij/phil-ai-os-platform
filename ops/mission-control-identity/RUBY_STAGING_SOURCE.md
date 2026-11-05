@@ -24,6 +24,32 @@ State requires a single persistent process. Restart loses all sessions and login
 flows. Application time budgets are cooperative and do not impose a hard DNS or
 whole-request deadline. A blocked synchronous worker cannot serve another request.
 
+## Explicit application factory
+
+`create_staging_application` composes the real backend and application without
+using test helpers. It is disabled by default and reads no files, environment
+variables or command-line inputs. Enabled construction requires explicit config,
+request limits, client secret and key-cache lifetime. It does not select their
+values or load credentials.
+
+Shared pure lifecycle validators retain the existing bounds. All static app
+policy and the initial monotonic clock are checked before backend allocation;
+the backend checks its secret, cache lifetime and initial wall clock before
+allocating its Session. Later clock failure still fails closed in the components.
+The factory owns the backend until successful app construction transfers it.
+Failure closes owned resources, redacts ordinary startup exceptions and preserves
+control exceptions. Backend initialization also cleans a Session that has already
+been returned if later setup is interrupted. Cleanup is best effort during Python
+unwinding, not a guarantee under SIGKILL or a constructor that never returns.
+
+The future runtime must call this only after worker fork and close the resulting
+app at shutdown. Do not preload an enabled instance in the master. One configured
+worker is not by itself a single-state-process guarantee: Gunicorn's SIGTTIN
+scaling and HUP reload can create additional or overlapping workers. The factory
+does not implement supervisor signals, reload policy, lifecycle hooks, a server
+entrypoint or protected configuration loading. Startup diagnostics outside the
+reviewed logger still require a safe runtime boundary.
+
 ## Optional server boundary
 
 All three components must be reviewed and selected together by a future serving
@@ -87,7 +113,7 @@ expected lower-layer defect for an accepted composed configuration.
 ## Image source and CI effects
 
 `Dockerfile.ruby-staging-review` is an existing reviewed inactive source recipe,
-pinned to the Core Linux/amd64 Python/Alpine lineage. It copies five application
+pinned to the Core Linux/amd64 Python/Alpine lineage. It copies six application
 modules plus requirements, runs as a non-root user and exits inactive. It omits
 Gunicorn and the adapters. It is not a runnable staging-server image. This
 continuation neither builds nor publishes that recipe. The requirements contain
@@ -100,6 +126,11 @@ those existing CI builds. A future merge touching the identity directory also
 triggers the two existing production image publishers with commit-SHA tags;
 neither image includes the staging adapters. There is no staging publisher and
 no automatic deployment in these workflows. External watchers are not verified.
+
+The factory increment adds its offline ownership/initialization suite and a
+factory-created signed-session case through the composed real HTTP handler. Its
+source is included in the inactive recipe, but the entrypoint still reports
+inactivity and exits. No serving path is selected by that inclusion.
 
 ## Remaining hosted acceptance gates
 

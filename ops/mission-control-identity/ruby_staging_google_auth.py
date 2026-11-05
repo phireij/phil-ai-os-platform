@@ -168,9 +168,16 @@ class StagingGoogleOwnerAuthenticator:
             # requests' zero-retry adapter also disables read/status retries.
             session.mount("https://", requests.adapters.HTTPAdapter(max_retries=0))
             self._closed = False
-        except Exception:
-            self._close_unlocked()
-            raise AuthenticationConfigurationError("authentication_configuration_invalid") from None
+        except BaseException as failure:
+            # This instance owns any Session that has already been returned.
+            # Preserve shutdown/control exceptions, even if cleanup also fails.
+            try:
+                self._close_unlocked()
+            except BaseException:
+                pass
+            if isinstance(failure, Exception):
+                raise AuthenticationConfigurationError("authentication_configuration_invalid") from None
+            raise
 
     def matches_policy(self, origin: str, client_id: str, owner_subject: str) -> bool:
         with self._lock:

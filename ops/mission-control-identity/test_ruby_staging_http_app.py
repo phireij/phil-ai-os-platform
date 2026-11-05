@@ -430,7 +430,7 @@ class HTTPApplicationTests(unittest.TestCase):
         source=path.read_text();copies=[line.split()[1] for line in source.splitlines() if line.startswith("COPY ")]
         self.assertEqual(set(copies),{"ops/mission-control-identity/"+name for name in (
             "requirements.txt","ruby_staging_lifecycle.py","ruby_staging_id_token.py",
-            "ruby_staging_google_auth.py","ruby_staging_http_app.py","ruby_review_synthetic.py")})
+            "ruby_staging_google_auth.py","ruby_staging_app_factory.py","ruby_staging_http_app.py","ruby_review_synthetic.py")})
         self.assertIn('ENTRYPOINT ["python3", "/srv/ruby_staging_http_app.py"]',source)
         self.assertIn("USER app",source)
         self.assertNotIn("EXPOSE ",source);self.assertNotIn("VOLUME ",source)

@@ -37,6 +37,7 @@ from ruby_staging_id_token import ISSUER, PRODUCTION_CLIENT_ID, VerifiedOwnerCla
 from ruby_staging_lifecycle import (
     FLOW_COOKIE, SESSION_COOKIE, CodeExchangeInputs, LifecycleError, LoginFlowStore, SessionStore,
     read_cookie, serialize_cookie,
+    validate_flow_policy, validate_session_policy,
 )
 
 
@@ -103,6 +104,11 @@ class StagingHTTPConfig:
     def validate(self) -> None:
         if not valid_staging_policy(self.origin, self.client_id, self.owner_subject):
             raise StagingHTTPConfigurationError("staging_http_configuration_invalid")
+        try:
+            validate_flow_policy(self.flow_seconds, self.capacity)
+            validate_session_policy(self.idle_seconds, self.absolute_seconds, self.capacity)
+        except LifecycleError:
+            raise StagingHTTPConfigurationError("staging_http_configuration_invalid") from None
 
 
 @dataclass(frozen=True)

@@ -85,6 +85,7 @@ jobs:
           python3 ops/mission-control-identity/test_ruby_staging_google_exchange.py
           python3 ops/mission-control-identity/test_ruby_staging_google_auth.py
           python3 ops/mission-control-identity/test_ruby_staging_http_app.py
+          python3 ops/mission-control-identity/test_ruby_staging_app_factory.py
           python3 ops/mission-control-identity/test_ruby_staging_runtime_limits.py
           python3 ops/mission-control-identity/test_provider_runtime.py
           python3 ops/mission-control-identity/test_notification_delivery.py
@@ -147,3 +148,91 @@ jobs:
           python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_errors.py
           python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_boundary.py
           python3 -I -B ops/mission-control-identity/test_ruby_staging_gunicorn_integrated.py
+
+  verify-staging-review-image:
+    # Packaging only: no application execution, registry push or deployment.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      BUILD_SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Build and inspect inactive Ruby review image without publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BUILD_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$(git rev-parse HEAD)" == "$BUILD_SOURCE_SHA" ]]
+          echo "source_revision=$BUILD_SOURCE_SHA"
+          context="$(mktemp -d "$RUNNER_TEMP/ruby-staging-build.XXXXXX")"
+          python3 -I -B - "$context" <<'PY'
+          import hashlib
+          from pathlib import Path
+          import sys
+
+          root, context = Path.cwd(), Path(sys.argv[1])
+          sources = (
+              "Dockerfile.ruby-staging-review",
+              "Dockerfile.ruby-staging-review.dockerignore",
+              "ops/mission-control-identity/requirements.txt",
+              "ops/mission-control-identity/ruby_staging_lifecycle.py",
+              "ops/mission-control-identity/ruby_staging_id_token.py",
+              "ops/mission-control-identity/ruby_staging_google_auth.py",
+              "ops/mission-control-identity/ruby_staging_app_factory.py",
+              "ops/mission-control-identity/ruby_staging_http_app.py",
+              "ops/mission-control-identity/ruby_review_synthetic.py",
+          )
+          for name in sources:
+              source = root
+              for part in Path(name).parts:
+                  source = source / part
+                  if source.is_symlink():
+                      raise SystemExit("staging_build_context_symlink_rejected")
+              if not source.is_file():
+                  raise SystemExit("staging_build_context_file_required")
+              data = source.read_bytes()
+              target = context / name
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_bytes(data)
+              print(f"source_sha256={hashlib.sha256(data).hexdigest()} path={name}")
+          PY
+          # Fail rather than selecting any remote or user-managed Docker host.
+          [[ "$(docker context inspect default --format '{{.Endpoints.docker.Host}}')" == 'unix:///var/run/docker.sock' ]]
+          docker --context default version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          image_id_file="$RUNNER_TEMP/ruby-staging-review-image-id"
+          docker --context default build --builder default --platform linux/amd64 \
+            --file "$context/Dockerfile.ruby-staging-review" \
+            --tag "ruby-staging-review:ci-$BUILD_SOURCE_SHA" \
+            --iidfile "$image_id_file" "$context"
+          image_id="$(cat "$image_id_file")"
+          [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
+          inspect_file="$RUNNER_TEMP/ruby-staging-review-image-inspect.json"
+          docker --context default image inspect "$image_id" > "$inspect_file"
+          python3 -I -B - "$inspect_file" "$image_id" <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+
+          images = json.loads(Path(sys.argv[1]).read_text())
+          if not isinstance(images, list) or len(images) != 1:
+              raise SystemExit("staging_image_inspection_invalid")
+          image = images[0]
+          config = image.get("Config", {})
+          if not (image.get("Id") == sys.argv[2]
+                  and image.get("Os") == "linux"
+                  and image.get("Architecture") == "amd64"
+                  and config.get("User") == "app"
+                  and config.get("WorkingDir") == "/srv"
+                  and config.get("Entrypoint") == ["python3", "/srv/ruby_staging_http_app.py"]
+                  and not config.get("Cmd")
+                  and not config.get("ExposedPorts")
+                  and not config.get("Volumes")
+                  and not config.get("Healthcheck")):
+              raise SystemExit("staging_image_configuration_invalid")
+          print(f"runner_local_image_id={sys.argv[2]} application_executed=false image_pushed=false")
+          PY
