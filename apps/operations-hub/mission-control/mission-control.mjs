@@ -843,14 +843,16 @@ function resetRubySyntheticReview(message = "disabled · no authority") {
   }));
 }
 
-async function loadRubySyntheticReview() {
+async function loadRubySyntheticReview(epoch = conversationEpoch) {
   if (conversationSession?.ruby_review_synthetic !== true) {
     resetRubySyntheticReview();
     return;
   }
   const response = await conversationRequest("/api/ruby-review-synthetic");
   if (!response.ok) throw new Error(`Ruby synthetic review HTTP ${response.status}`);
-  renderRubySyntheticReview(await response.json());
+  const payload = await response.json();
+  if (epoch !== conversationEpoch || conversationSession?.ruby_review_synthetic !== true) return;
+  renderRubySyntheticReview(payload);
 }
 
 function resetConversationView(message = "sample only · no live chat") {
@@ -904,6 +906,7 @@ async function loadConversationSession() {
     return;
   }
   const session = await response.json();
+  if (epoch !== conversationEpoch) return;
   if (session.authenticated !== true || typeof session.csrf_token !== "string") {
     resetConversationView("session unavailable");
     return;
@@ -911,10 +914,12 @@ async function loadConversationSession() {
   conversationSession = session;
   setConversationControls(false);
   try {
-    await loadRubySyntheticReview();
+    await loadRubySyntheticReview(epoch);
   } catch (_error) {
+    if (epoch !== conversationEpoch) return;
     resetRubySyntheticReview("unavailable · no authority");
   }
+  if (epoch !== conversationEpoch) return;
   if (session.conversation_authority !== true) {
     setConversationState("signed in · storage inactive", true);
     document.querySelector("#conversation-note").textContent = "CEO identity is verified. Conversation storage is not activated, and this sample cannot authorize actions.";
@@ -1539,3 +1544,4 @@ boot();
 installLiveControlConnection();
 installLiveRecordsRefresh();
 installConversationConnection();
+
