@@ -1,3 +1,4 @@
+import "./test_mission_control_refresh_order.mjs";
 import "./test_mission_control_record_refresh.mjs";
 import "./test_mission_control_governed_callbacks.mjs";
 import "./test_mission_control_write_callbacks.mjs";
