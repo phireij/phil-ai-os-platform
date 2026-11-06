@@ -32,6 +32,7 @@ const controlPlaneFields = [
 let liveSessionToken = null;
 let liveRefreshTimer = null;
 let liveSessionEpoch = 0;
+let liveRecordsRequestSequence = 0;
 let conversationSession = null;
 let activeConversationId = null;
 let sampleGovernedProposals = null;
@@ -1413,12 +1414,13 @@ function renderLiveRecords(payload, listSelector, stateSelector, kind) {
 }
 
 async function loadLiveRecords(token, epoch = liveSessionEpoch) {
+  const requestSequence = ++liveRecordsRequestSequence;
   const headers = { Authorization: `Bearer ${token}` };
   const results = await Promise.allSettled([
     fetch("/api/approvals", { cache: "no-store", headers }),
     fetch("/api/executions", { cache: "no-store", headers }),
   ]);
-  if (epoch !== liveSessionEpoch || !liveSessionToken) return;
+  if (epoch !== liveSessionEpoch || !liveSessionToken || requestSequence !== liveRecordsRequestSequence) return;
   if (results.some((result) => result.status === "fulfilled" && result.value.status === 401)) {
     document.querySelector("#live-control-disconnect").click();
     document.querySelector("#live-control-state").textContent = "session expired";
@@ -1431,10 +1433,10 @@ async function loadLiveRecords(token, epoch = liveSessionEpoch) {
     try {
       if (result.status !== "fulfilled" || !result.value.ok) throw new Error("records unavailable");
       const payload = await result.value.json();
-      if (epoch !== liveSessionEpoch || !liveSessionToken) return;
+      if (epoch !== liveSessionEpoch || !liveSessionToken || requestSequence !== liveRecordsRequestSequence) return;
       renderLiveRecords(payload, listSelector, stateSelector, kind);
     } catch (_error) {
-      if (epoch !== liveSessionEpoch || !liveSessionToken) return;
+      if (epoch !== liveSessionEpoch || !liveSessionToken || requestSequence !== liveRecordsRequestSequence) return;
       const state = document.querySelector(stateSelector);
       state.textContent = "unavailable";
       state.className = "state-chip";

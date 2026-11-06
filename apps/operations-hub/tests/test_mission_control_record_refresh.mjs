@@ -17,7 +17,7 @@ function harness(responses) {
   const rendered = [];
   const calls = [];
   const context = vm.createContext({
-    liveSessionEpoch: 1, liveSessionToken: 'test-token',
+    liveSessionEpoch: 1, liveSessionToken: 'test-token', liveRecordsRequestSequence: 0,
     document: { querySelector(selector) {
       if (!nodes.has(selector)) nodes.set(selector, { textContent: 'original', className: 'state-chip safe', disabled: false, listeners: {}, addEventListener(name, cb) { this.listeners[name] = cb; }, click() { this.clicked = true; context.liveSessionEpoch++; context.liveSessionToken = null; } });
       return nodes.get(selector);
