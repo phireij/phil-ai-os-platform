@@ -1012,6 +1012,8 @@ function installConversationConnection() {
 
   create.addEventListener("click", async () => {
     if (!conversationSession?.conversation_authority) return;
+    const epoch = conversationEpoch;
+    let expectedConversationId = activeConversationId;
     create.disabled = true;
     try {
       const response = await conversationRequest("/api/conversations", {
@@ -1024,19 +1026,26 @@ function installConversationConnection() {
         body: "{}",
       });
       if (!response.ok) throw new Error(`create HTTP ${response.status}`);
-      activeConversationId = (await response.json()).conversation_id;
+      const payload = await response.json();
+      if (epoch !== conversationEpoch || expectedConversationId !== activeConversationId) return;
+      activeConversationId = payload.conversation_id;
+      expectedConversationId = activeConversationId;
       renderConversationMessages([]);
       setConversationControls(true);
       textarea.focus();
     } catch (error) {
+      if (epoch !== conversationEpoch || expectedConversationId !== activeConversationId) return;
       setConversationState(`create unavailable · ${error.message}`);
       setConversationControls(Boolean(activeConversationId));
     }
   });
 
   send.addEventListener("click", async () => {
-    const body = textarea.value.trim();
+    const submittedText = textarea.value;
+    const body = submittedText.trim();
     if (!body || !activeConversationId || !conversationSession?.conversation_authority) return;
+    const epoch = conversationEpoch;
+    const conversationId = activeConversationId;
     send.disabled = true;
     try {
       const response = await conversationRequest(`/api/conversations/${encodeURIComponent(activeConversationId)}/messages`, {
@@ -1049,12 +1058,16 @@ function installConversationConnection() {
         body: JSON.stringify({ body }),
       });
       if (!response.ok) throw new Error(`message HTTP ${response.status}`);
-      textarea.value = "";
-      await loadConversationMessages(activeConversationId);
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
+      if (textarea.value === submittedText) textarea.value = "";
+      await loadConversationMessages(conversationId, epoch);
     } catch (error) {
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
       setConversationState(`message unavailable · ${error.message}`);
     } finally {
-      setConversationControls(Boolean(activeConversationId));
+      if (epoch === conversationEpoch && conversationId === activeConversationId) {
+        setConversationControls(Boolean(activeConversationId));
+      }
     }
   });
 
@@ -1554,4 +1567,5 @@ boot();
 installLiveControlConnection();
 installLiveRecordsRefresh();
 installConversationConnection();
+
 
