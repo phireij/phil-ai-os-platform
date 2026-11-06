@@ -52,10 +52,10 @@ jobs:
           sleep 1
       - name: HTTP smoke preview shell and bounded projections
         run: |
-          curl --fail --silent --show-error http://127.0.0.1:8765/ >/dev/null
-          curl --fail --silent --show-error http://127.0.0.1:8765/fixture.json >/dev/null
-          curl --fail --silent --show-error http://127.0.0.1:8765/channel-readiness.json >/dev/null
-          curl --fail --silent --show-error http://127.0.0.1:8765/mission-control.mjs >/dev/null
+          set -euo pipefail
+          for asset in index.html mission-control.css mission-control.mjs fixture.json channel-readiness.json conversation.json project-readiness.json notification-read-model.json governed-proposals.json operator-read-model.json; do
+            curl --fail --silent --show-error "http://127.0.0.1:8765/$asset" >/dev/null
+          done
       - name: Stop local preview
         if: always()
         run: |
@@ -98,10 +98,9 @@ jobs:
           repository=${GITHUB_REPOSITORY}
           authority_effect=none
           EOF
-          test -f "$out/preview/index.html"
-          test -f "$out/preview/fixture.json"
-          test -f "$out/preview/channel-readiness.json"
-          test -f "$out/preview/mission-control.mjs"
+          for asset in index.html mission-control.css mission-control.mjs fixture.json channel-readiness.json conversation.json project-readiness.json notification-read-model.json governed-proposals.json operator-read-model.json; do
+            test -s "$out/preview/$asset"
+          done
           test -f "$out/contracts/mission-control-lifecycle-projection.schema.json"
           grep -q 'mode=read_only' "$out/BOUNDARY.txt"
           grep -q 'live_channel_connectivity=false' "$out/BOUNDARY.txt"
@@ -109,15 +108,9 @@ jobs:
           grep -q "source_commit=${GITHUB_SHA}" "$out/PROVENANCE.txt"
           (
             cd "$out"
-            sha256sum \
-              BOUNDARY.txt \
-              PROVENANCE.txt \
-              preview/index.html \
-              preview/fixture.json \
-              preview/channel-readiness.json \
-              preview/mission-control.mjs \
-              contracts/mission-control-lifecycle-projection.schema.json \
-              > MANIFEST.sha256
+            find BOUNDARY.txt PROVENANCE.txt preview contracts -type f -print0 \
+              | LC_ALL=C sort -z \
+              | xargs -0 sha256sum > MANIFEST.sha256
             sha256sum --check MANIFEST.sha256
           )
           test -s "$out/MANIFEST.sha256"
