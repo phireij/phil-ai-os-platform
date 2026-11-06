@@ -756,10 +756,14 @@ function syncGovernedControls() {
   handoffForm.hidden = !enabled || conversationSession?.cto_handoff_recording !== true;
   const proposalSource = document.querySelector("#proposal-source-message");
   const ceoMessages = activeConversationMessages.filter((message) => message.sender === "ceo");
+  const previousProposalSource = proposalSource.value;
   proposalSource.replaceChildren(...ceoMessages.map((message) => new Option(`CEO message · ${new Date(message.created_at).toLocaleString()}`, message.message_id)));
+  if (Array.from(proposalSource.options).some((option) => option.value === previousProposalSource)) proposalSource.value = previousProposalSource;
   const undecided = activeGovernedProposals.filter((proposal) => !recordedDecisionProposalIds.has(proposal.proposal_id));
   const decisionProposal = document.querySelector("#decision-proposal");
+  const previousDecisionProposal = decisionProposal.value;
   decisionProposal.replaceChildren(...undecided.map((proposal) => new Option(`${proposal.proposal_id} · ${proposal.scope.slice(0, 160)}`, proposal.proposal_id)));
+  if (Array.from(decisionProposal.options).some((option) => option.value === previousDecisionProposal)) decisionProposal.value = previousDecisionProposal;
   for (const selector of ["#proposal-source-message", "#proposal-project", "#proposal-scope", "#proposal-result", "#proposal-authority"]) {
     document.querySelector(selector).disabled = !enabled;
   }
@@ -771,7 +775,9 @@ function syncGovernedControls() {
   const handoffProposal = document.querySelector("#cto-handoff-proposal");
   const requested = new Set(activeCtoHandoffs.map((handoff) => handoff.proposal_id));
   const handoffCandidates = activeGovernedProposals.filter((proposal) => approvedDecisionProposalIds.has(proposal.proposal_id) && !requested.has(proposal.proposal_id));
+  const previousHandoffProposal = handoffProposal.value;
   handoffProposal.replaceChildren(...handoffCandidates.map((proposal) => new Option(`${proposal.proposal_id} · ${proposal.scope.slice(0, 160)}`, proposal.proposal_id)));
+  if (Array.from(handoffProposal.options).some((option) => option.value === previousHandoffProposal)) handoffProposal.value = previousHandoffProposal;
   handoffProposal.disabled = !enabled || conversationSession?.cto_handoff_recording !== true;
   document.querySelector("#cto-handoff-record").disabled = !enabled || conversationSession?.cto_handoff_recording !== true || handoffCandidates.length === 0;
 }
@@ -996,6 +1002,7 @@ function installConversationConnection() {
 
   signOut.addEventListener("click", async () => {
     if (!conversationSession?.csrf_token) return;
+    const epoch = conversationEpoch;
     signOut.disabled = true;
     try {
       const response = await conversationRequest("/auth/google/logout", {
@@ -1003,8 +1010,10 @@ function installConversationConnection() {
         headers: { "X-MC-CSRF": conversationSession.csrf_token },
       });
       if (!response.ok) throw new Error(`logout HTTP ${response.status}`);
+      if (epoch !== conversationEpoch) return;
       resetConversationView("signed out");
     } catch (error) {
+      if (epoch !== conversationEpoch) return;
       setConversationState(`sign-out failed · ${error.message}`);
       setConversationControls(Boolean(activeConversationId));
     }
@@ -1075,9 +1084,15 @@ function installConversationConnection() {
     event.preventDefault();
     if (!activeConversationId || !conversationSession?.conversation_authority) return;
     const sourceMessageId = document.querySelector("#proposal-source-message").value;
-    const scope = document.querySelector("#proposal-scope").value.trim();
-    const expectedResult = document.querySelector("#proposal-result").value.trim();
+    const projectId = document.querySelector("#proposal-project").value;
+    const requiredAuthority = document.querySelector("#proposal-authority").value;
+    const submittedScope = document.querySelector("#proposal-scope").value;
+    const submittedResult = document.querySelector("#proposal-result").value;
+    const scope = submittedScope.trim();
+    const expectedResult = submittedResult.trim();
     if (!sourceMessageId || !scope || !expectedResult) return;
+    const epoch = conversationEpoch;
+    const conversationId = activeConversationId;
     const button = document.querySelector("#proposal-create");
     button.disabled = true;
     try {
@@ -1090,24 +1105,31 @@ function installConversationConnection() {
         },
         body: JSON.stringify({
           source_message_id: sourceMessageId,
-          project_id: document.querySelector("#proposal-project").value,
+          project_id: projectId,
           task_class: "general",
           scope,
           expected_result: expectedResult,
-          required_authority: document.querySelector("#proposal-authority").value,
+          required_authority: requiredAuthority,
           source_evidence_refs: [],
         }),
       });
       if (!response.ok) throw new Error(`proposal HTTP ${response.status}`);
-      document.querySelector("#proposal-scope").value = "";
-      document.querySelector("#proposal-result").value = "";
-      await loadGovernedProposals(activeConversationId);
-      await loadConversationLifecycle(activeConversationId);
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
+      const sameProposalDraft = document.querySelector("#proposal-source-message").value === sourceMessageId
+        && document.querySelector("#proposal-project").value === projectId
+        && document.querySelector("#proposal-authority").value === requiredAuthority;
+      if (sameProposalDraft && document.querySelector("#proposal-scope").value === submittedScope) document.querySelector("#proposal-scope").value = "";
+      if (sameProposalDraft && document.querySelector("#proposal-result").value === submittedResult) document.querySelector("#proposal-result").value = "";
+      await loadGovernedProposals(conversationId, epoch);
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
+      await loadConversationLifecycle(conversationId, epoch);
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
       setConversationState("proposal draft recorded · no authority", true);
     } catch (error) {
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
       setConversationState(`proposal unavailable · ${error.message}`);
     } finally {
-      syncGovernedControls();
+      if (epoch === conversationEpoch && conversationId === activeConversationId) syncGovernedControls();
     }
   });
 
@@ -1115,10 +1137,14 @@ function installConversationConnection() {
     event.preventDefault();
     if (!conversationSession?.conversation_authority) return;
     const proposalId = document.querySelector("#decision-proposal").value;
-    const rationale = document.querySelector("#decision-rationale").value.trim();
+    const decision = document.querySelector("#decision-value").value;
+    const submittedRationale = document.querySelector("#decision-rationale").value;
+    const rationale = submittedRationale.trim();
     const expiryValue = document.querySelector("#decision-expiry").value;
     const expiry = new Date(expiryValue);
     if (!proposalId || !rationale || !expiryValue || Number.isNaN(expiry.valueOf()) || expiry <= new Date()) return;
+    const epoch = conversationEpoch;
+    const conversationId = activeConversationId;
     const button = document.querySelector("#decision-record");
     button.disabled = true;
     try {
@@ -1130,21 +1156,27 @@ function installConversationConnection() {
           "X-MC-CSRF": conversationSession.csrf_token,
         },
         body: JSON.stringify({
-          decision: document.querySelector("#decision-value").value,
+          decision,
           rationale,
           expires_at: expiry.toISOString(),
         }),
       });
       if (!response.ok) throw new Error(`decision HTTP ${response.status}`);
-      document.querySelector("#decision-rationale").value = "";
-      document.querySelector("#decision-expiry").value = "";
-      await loadGovernedProposals(activeConversationId);
-      await loadConversationLifecycle(activeConversationId);
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
+      const sameDecisionDraft = document.querySelector("#decision-proposal").value === proposalId
+        && document.querySelector("#decision-value").value === decision;
+      if (sameDecisionDraft && document.querySelector("#decision-rationale").value === submittedRationale) document.querySelector("#decision-rationale").value = "";
+      if (sameDecisionDraft && document.querySelector("#decision-expiry").value === expiryValue) document.querySelector("#decision-expiry").value = "";
+      await loadGovernedProposals(conversationId, epoch);
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
+      await loadConversationLifecycle(conversationId, epoch);
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
       setConversationState("CEO decision recorded · no authority", true);
     } catch (error) {
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
       setConversationState(`decision unavailable · ${error.message}`);
     } finally {
-      syncGovernedControls();
+      if (epoch === conversationEpoch && conversationId === activeConversationId) syncGovernedControls();
     }
   });
 
@@ -1153,6 +1185,8 @@ function installConversationConnection() {
     if (!conversationSession?.conversation_authority || conversationSession?.cto_handoff_recording !== true) return;
     const proposalId = document.querySelector("#cto-handoff-proposal").value;
     if (!proposalId) return;
+    const epoch = conversationEpoch;
+    const conversationId = activeConversationId;
     const button = document.querySelector("#cto-handoff-record");
     button.disabled = true;
     try {
@@ -1166,13 +1200,17 @@ function installConversationConnection() {
         body: "{}",
       });
       if (!response.ok) throw new Error(`CTO handoff HTTP ${response.status}`);
-      await loadCtoHandoffs(activeConversationId);
-      await loadConversationLifecycle(activeConversationId);
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
+      await loadCtoHandoffs(conversationId, epoch);
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
+      await loadConversationLifecycle(conversationId, epoch);
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
       setConversationState("CTO handoff recorded · connector pending · no authority", true);
     } catch (error) {
+      if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
       setConversationState(`CTO handoff unavailable · ${error.message}`);
     } finally {
-      syncGovernedControls();
+      if (epoch === conversationEpoch && conversationId === activeConversationId) syncGovernedControls();
     }
   });
 

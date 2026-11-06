@@ -1,3 +1,4 @@
+import "./test_mission_control_governed_callbacks.mjs";
 import "./test_mission_control_write_callbacks.mjs";
 import "./test_mission_control_session_errors.mjs";
 import "./test_mission_control_session_races.mjs";
