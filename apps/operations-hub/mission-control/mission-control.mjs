@@ -1428,11 +1428,13 @@ async function loadLiveRecords(token, epoch = liveSessionEpoch) {
     const listSelector = index === 0 ? "#live-approvals-list" : "#live-executions-list";
     const stateSelector = index === 0 ? "#live-approvals-state" : "#live-executions-state";
     const kind = index === 0 ? "approval" : "execution";
-    if (result.status === "fulfilled" && result.value.ok) {
+    try {
+      if (result.status !== "fulfilled" || !result.value.ok) throw new Error("records unavailable");
       const payload = await result.value.json();
       if (epoch !== liveSessionEpoch || !liveSessionToken) return;
       renderLiveRecords(payload, listSelector, stateSelector, kind);
-    } else {
+    } catch (_error) {
+      if (epoch !== liveSessionEpoch || !liveSessionToken) return;
       const state = document.querySelector(stateSelector);
       state.textContent = "unavailable";
       state.className = "state-chip";
@@ -1448,10 +1450,13 @@ function installLiveRecordsRefresh() {
     const epoch = liveSessionEpoch;
     button.disabled = true;
     button.textContent = "Refreshing live records";
-    await loadLiveRecords(liveSessionToken, epoch);
-    if (epoch === liveSessionEpoch) {
-      button.textContent = "Refresh live records";
-      button.disabled = !liveSessionToken;
+    try {
+      await loadLiveRecords(liveSessionToken, epoch);
+    } finally {
+      if (epoch === liveSessionEpoch) {
+        button.textContent = "Refresh live records";
+        button.disabled = !liveSessionToken;
+      }
     }
   });
 }
