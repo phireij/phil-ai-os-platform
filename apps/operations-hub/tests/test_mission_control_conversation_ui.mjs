@@ -1,3 +1,4 @@
+import "./test_mission_control_write_callbacks.mjs";
 import "./test_mission_control_session_errors.mjs";
 import "./test_mission_control_session_races.mjs";
 import assert from "node:assert/strict";
@@ -178,4 +179,5 @@ assert.equal(state.textContent, "synthetic fixture · no authority");
 assert.ok(created.some((node) => node.textContent === unsafe), "fixture data must be assigned as text, not markup");
 
 console.log("Mission Control conversation UI security contract: GREEN");
+
 
