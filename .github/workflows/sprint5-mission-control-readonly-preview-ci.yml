@@ -155,7 +155,7 @@ jobs:
       - name: Check out frozen reviewed product bytes
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 5a1a11a5d7f39beaa689b136bb3698e039778a3f
+          ref: 7ecb36e88118400e1bc5e9b054f3caf8af1cceec
           path: frozen
           persist-credentials: false
       - name: Verify tested and PR-head product content
