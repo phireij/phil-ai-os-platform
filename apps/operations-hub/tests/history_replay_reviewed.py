@@ -1,5 +1,6 @@
 """Playwright acceptance against exact static frontend; synthetic API only."""
 import argparse
+import traceback
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from playwright.sync_api import sync_playwright, expect
@@ -131,6 +132,8 @@ def replay(browser, mode, frontend=www):
         expect(control).to_have_text("Refresh latest messages")
         control.press("Enter")
         expect(control).to_have_text("Load earlier messages")
+        expect(status).to_have_text("Latest messages refreshed.")
+        expect(control).to_have_attribute("aria-disabled", "false")
         expect(rows).to_have_count(100)
         control.press("Enter")
     anchor_top = None
@@ -166,10 +169,23 @@ def replay(browser, mode, frontend=www):
 
 with sync_playwright() as p:
     browser = p.chromium.launch(executable_path=config.browser, headless=True)
-    for mode in ("desktop", "mobile", "retry", "expiry", "scroll", "signedout", "inactive", "legacy_api"):
-        replay(browser, mode)
-        print(f"PASS {mode}")
+    modes = [(mode, www) for mode in
+             ("desktop", "mobile", "retry", "expiry", "scroll", "signedout", "inactive", "legacy_api")]
     if config.legacy_frontend:
-        replay(browser, "legacy_ui", config.legacy_frontend.resolve())
-        print("PASS legacy_ui")
+        modes.append(("legacy_ui", config.legacy_frontend.resolve()))
+    failures = []
+    for mode, frontend in modes:
+        try:
+            replay(browser, mode, frontend)
+        except Exception:
+            failures.append(mode)
+            print(f"FAIL {mode}", flush=True)
+            traceback.print_exc()
+        else:
+            print(f"PASS {mode}", flush=True)
+        finally:
+            for context in browser.contexts:
+                context.close()
     browser.close()
+    if failures:
+        raise SystemExit("Browser replay failures: " + ", ".join(failures))
