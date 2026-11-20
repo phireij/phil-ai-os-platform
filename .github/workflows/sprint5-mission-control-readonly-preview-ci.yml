@@ -198,3 +198,9 @@ jobs:
           set -euo pipefail
           python -m pip --isolated install --only-binary=:all: -r tested/ops/mission-control-identity/requirements.txt
           python -B tested/apps/operations-hub/tests/integrated_message_history.py tested
+      - name: Check the same candidate browser tab during exact baseline rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B tested/apps/operations-hub/tests/message_history_rollback_wire.py tested/ops/mission-control-identity legacy/ops/mission-control-identity
+          python -B tested/apps/operations-hub/tests/message_history_rollback_browser.py tested legacy/ops/mission-control-identity
