@@ -39,7 +39,7 @@ MAX_BODY = 4 * 1024 * 1024
 FROZEN_BLOBS = {
     "apps/operations-hub/mission-control/index.html": "d708c09de0f3ff60a26e1999d81f9de9d7b65714",
     "apps/operations-hub/mission-control/mission-control.css": "344f3285eab5ecce27424eb7d0b4e1c916e8c4d6",
-    "apps/operations-hub/mission-control/mission-control.mjs": "1a7c556c4f7c8303c778862163b92e345c48339e",
+    "apps/operations-hub/mission-control/mission-control.mjs": "90096c39514ccb91a00d56db4a2b64557b68c59c",
     "ops/mission-control-identity/conversation_store.py": "e212a037059c8e50c763e5a93a80219f16c0c032",
     "ops/mission-control-identity/google_ceo_session.py": "ce219aaec1d4f3fa20d383494c38ee22ce88cfcc",
 }
@@ -307,6 +307,10 @@ def browser_check(port, token, name, events, pause, entered, release):
                 expect(rows).to_have_count(100)
                 expect(rows.first).to_contain_text("Synthetic row 105")
                 expect(rows.last).to_contain_text("Synthetic row 204")
+                source = page.locator("#proposal-source-message")
+                expect(source.locator("option")).to_have_count(100)
+                source.select_option(value=IDS[180])
+                expect(source).to_have_value(IDS[180])
                 expect(control).to_have_attribute("aria-disabled", "false")
                 pause.set()
                 control.focus()
@@ -328,6 +332,9 @@ def browser_check(port, token, name, events, pause, entered, release):
                 expect(control).to_be_focused()
                 control.press("Enter")
                 expect(rows).to_have_count(205)
+                expect(source.locator("option")).to_have_count(205)
+                assert source.locator("option").evaluate_all("options => options.map(option => option.value)") == IDS
+                expect(source).to_have_value(IDS[180])
                 expect(status).to_contain_text("No earlier messages remain")
                 expect(control).to_be_focused()
                 expect(control).to_have_attribute("aria-disabled", "true")
@@ -343,7 +350,7 @@ def browser_check(port, token, name, events, pause, entered, release):
         finally:
             release.set()
             browser.close()
-    print("PASS Chromium integrated synthetic session, 100→200→205 records, no gaps, focus and scroll", flush=True)
+    print("PASS Chromium integrated synthetic session, 100→200→205 records, no gaps, focus, scroll and proposal-source selection", flush=True)
 
 
 def main():
