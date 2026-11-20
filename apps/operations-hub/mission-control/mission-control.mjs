@@ -39,6 +39,7 @@ let sampleGovernedProposals = null;
 let sampleConversation = null;
 let conversationEpoch = 0;
 let activeConversationMessages = [];
+const pendingProposalSubmissions = new Set();
 let messageHistory = null;
 let activeGovernedProposals = [];
 let recordedDecisionProposalIds = new Set();
@@ -750,6 +751,21 @@ function setConversationControls(enabled) {
   syncGovernedControls();
 }
 
+function proposalSubmissionPending() {
+  return Array.from(pendingProposalSubmissions).some(({ epoch, conversationId }) =>
+    epoch === conversationEpoch && conversationId === activeConversationId);
+}
+
+function syncProposalSource() {
+  const enabled = Boolean(conversationSession?.conversation_authority && activeConversationId);
+  const proposalSource = document.querySelector("#proposal-source-message");
+  const ceoMessages = activeConversationMessages.filter((message) => message.sender === "ceo");
+  const previousProposalSource = proposalSource.value;
+  proposalSource.replaceChildren(...ceoMessages.map((message) => new Option(`CEO message · ${new Date(message.created_at).toLocaleString()}`, message.message_id)));
+  if (Array.from(proposalSource.options).some((option) => option.value === previousProposalSource)) proposalSource.value = previousProposalSource;
+  document.querySelector("#proposal-create").disabled = !enabled || ceoMessages.length === 0 || proposalSubmissionPending();
+}
+
 function syncGovernedControls() {
   const enabled = Boolean(conversationSession?.conversation_authority && activeConversationId);
   const proposalForm = document.querySelector("#governed-proposal-form");
@@ -758,11 +774,7 @@ function syncGovernedControls() {
   proposalForm.hidden = !enabled;
   decisionForm.hidden = !enabled;
   handoffForm.hidden = !enabled || conversationSession?.cto_handoff_recording !== true;
-  const proposalSource = document.querySelector("#proposal-source-message");
-  const ceoMessages = activeConversationMessages.filter((message) => message.sender === "ceo");
-  const previousProposalSource = proposalSource.value;
-  proposalSource.replaceChildren(...ceoMessages.map((message) => new Option(`CEO message · ${new Date(message.created_at).toLocaleString()}`, message.message_id)));
-  if (Array.from(proposalSource.options).some((option) => option.value === previousProposalSource)) proposalSource.value = previousProposalSource;
+  syncProposalSource();
   const undecided = activeGovernedProposals.filter((proposal) => !recordedDecisionProposalIds.has(proposal.proposal_id));
   const decisionProposal = document.querySelector("#decision-proposal");
   const previousDecisionProposal = decisionProposal.value;
@@ -771,7 +783,6 @@ function syncGovernedControls() {
   for (const selector of ["#proposal-source-message", "#proposal-project", "#proposal-scope", "#proposal-result", "#proposal-authority"]) {
     document.querySelector(selector).disabled = !enabled;
   }
-  document.querySelector("#proposal-create").disabled = !enabled || ceoMessages.length === 0;
   for (const selector of ["#decision-proposal", "#decision-value", "#decision-rationale", "#decision-expiry"]) {
     document.querySelector(selector).disabled = !enabled;
   }
@@ -954,6 +965,8 @@ async function loadEarlierMessages() {
       thread.prepend(...unseen.map(renderConversationMessage));
       const after = anchor?.getBoundingClientRect().top;
       if (before !== undefined && after !== before) window.scrollBy(0, after - before);
+      activeConversationMessages = [...unseen, ...activeConversationMessages];
+      if (unseen.some((message) => message.sender === "ceo")) syncProposalSource();
     }
     unseen.forEach((message) => history.ids.add(message.message_id));
     history.cursor = data.next_cursor;
@@ -1239,7 +1252,7 @@ function installConversationConnection() {
 
   document.querySelector("#governed-proposal-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!activeConversationId || !conversationSession?.conversation_authority) return;
+    if (!activeConversationId || !conversationSession?.conversation_authority || proposalSubmissionPending()) return;
     const sourceMessageId = document.querySelector("#proposal-source-message").value;
     const projectId = document.querySelector("#proposal-project").value;
     const requiredAuthority = document.querySelector("#proposal-authority").value;
@@ -1251,6 +1264,8 @@ function installConversationConnection() {
     const epoch = conversationEpoch;
     const conversationId = activeConversationId;
     const button = document.querySelector("#proposal-create");
+    const submission = { epoch, conversationId };
+    pendingProposalSubmissions.add(submission);
     button.disabled = true;
     try {
       const response = await conversationRequest(`/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals`, {
@@ -1286,6 +1301,7 @@ function installConversationConnection() {
       if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
       setConversationState(`proposal unavailable · ${error.message}`);
     } finally {
+      pendingProposalSubmissions.delete(submission);
       if (epoch === conversationEpoch && conversationId === activeConversationId) syncGovernedControls();
     }
   });
