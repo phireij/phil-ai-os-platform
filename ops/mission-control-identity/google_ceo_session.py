@@ -267,6 +267,7 @@ class SessionHandler(ProbeHandler):
             "idle_seconds": IDLE_SECONDS,
             "absolute_seconds": ABSOLUTE_SECONDS,
             "csrf_token": item.csrf_token,
+            **({"message_history_pagination": "keyset-v1"} if self.server.conversations is not None else {}),  # type: ignore[attr-defined]
         }, separators=(",", ":"))
         self._send(HTTPStatus.OK, body, content_type="application/json; charset=utf-8")
 
@@ -308,6 +309,29 @@ class SessionHandler(ProbeHandler):
             raise ConversationRequestError("invalid_query", 400)
         return limit, cursor
 
+    def _history_query(self, query: str) -> tuple[int, str | None, bool]:
+        # Existing limit-only requests retain their response envelope. Older
+        # traversal is explicitly opt-in and does not reuse offset cursors.
+        if len(query) > 2048:
+            raise ConversationRequestError("invalid_query", 400)
+        try:
+            values = parse_qs(query, keep_blank_values=True, strict_parsing=True, max_num_fields=3)
+        except ValueError as exc:
+            raise ConversationRequestError("invalid_query", 400) from exc
+        if "pagination" not in values:
+            return self._query_limit(query), None, False
+        if (not set(values) <= {"pagination", "limit", "cursor"}
+                or any(len(value) != 1 for value in values.values())
+                or values["pagination"] != ["keyset-v1"]):
+            raise ConversationRequestError("invalid_query", 400)
+        raw_limit = values.get("limit", ["50"])[0]
+        if not re.fullmatch(r"[0-9]{1,3}", raw_limit) or not 1 <= int(raw_limit) <= 100:
+            raise ConversationRequestError("invalid_limit", 400)
+        cursor = values.get("cursor", [None])[0]
+        if cursor is not None and (not cursor or len(cursor) > 1024):
+            raise ConversationRequestError("invalid_cursor", 400)
+        return int(raw_limit), cursor, True
+
     def _conversation_error(self, error: ConversationRequestError) -> None:
         self._send(
             HTTPStatus(error.status),
@@ -323,11 +347,13 @@ class SessionHandler(ProbeHandler):
             self._send(HTTPStatus.UNAUTHORIZED, '{"error":"unauthorized"}', content_type="application/json; charset=utf-8")
             return
         try:
-            conversations = self.server.conversations.list_conversations(self._query_limit(query))  # type: ignore[attr-defined]
+            limit, cursor, paginated = self._history_query(query)
+            result = self.server.conversations.list_conversations_page(limit, cursor) if paginated else {  # type: ignore[attr-defined]
+                "conversations": self.server.conversations.list_conversations(limit), "next_cursor": None}  # type: ignore[attr-defined]
         except ConversationRequestError as error:
             self._conversation_error(error)
             return
-        body = json.dumps({"conversations": conversations, "next_cursor": None}, separators=(",", ":"))
+        body = json.dumps(result, separators=(",", ":"))
         self._send(HTTPStatus.OK, body, content_type="application/json; charset=utf-8")
 
     def _list_messages(self, conversation_id: str, query: str) -> None:
@@ -338,11 +364,13 @@ class SessionHandler(ProbeHandler):
             self._send(HTTPStatus.UNAUTHORIZED, '{"error":"unauthorized"}', content_type="application/json; charset=utf-8")
             return
         try:
-            messages = self.server.conversations.list_messages(conversation_id, self._query_limit(query))  # type: ignore[attr-defined]
+            limit, cursor, paginated = self._history_query(query)
+            result = self.server.conversations.list_messages_page(conversation_id, limit, cursor) if paginated else {  # type: ignore[attr-defined]
+                "conversation_id": conversation_id, "messages": self.server.conversations.list_messages(conversation_id, limit), "next_cursor": None}  # type: ignore[attr-defined]
         except ConversationRequestError as error:
             self._conversation_error(error)
             return
-        body = json.dumps({"conversation_id": conversation_id, "messages": messages, "next_cursor": None}, separators=(",", ":"))
+        body = json.dumps(result, separators=(",", ":"))
         self._send(HTTPStatus.OK, body, content_type="application/json; charset=utf-8")
 
     def _response_state(self, conversation_id: str, message_id: str) -> None:

@@ -14,6 +14,7 @@ from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlsplit
 
 from conversation_store import ConversationConfig, ConversationStore
+from test_message_history_http import MessageHistoryHttpTests
 from google_ceo_session import (
     ABSOLUTE_SECONDS,
     IDLE_SECONDS,

@@ -38,6 +38,10 @@
         <button id="conversation-new" type="button" disabled>New conversation</button>
         <button id="conversation-sign-out" type="button" disabled>Sign out</button>
       </div>
+      <div id="conversation-history" class="conversation-session-actions" hidden>
+        <button id="conversation-history-more" type="button" aria-controls="conversation-thread" aria-disabled="true">Load earlier messages</button>
+        <p id="conversation-history-status" class="load-state" role="status"></p>
+      </div>
       <div id="conversation-thread" class="conversation-thread" aria-live="polite"></div>
       <div class="conversation-composer">
         <label id="conversation-message-label" for="conversation-message">CEO message (storage inactive)</label>

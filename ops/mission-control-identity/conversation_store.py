@@ -6,6 +6,7 @@ snapshot. It has no provider integration and grants no task authority.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -26,6 +27,7 @@ from ruby_inquiry import RubyInquiryMixin, PolicyResolver, initialize_inquiries
 from ruby_finalized_quote import RubyFinalizedQuoteMixin, initialize_finalized_quotes
 from ruby_quote_custody import RubyQuoteCustodyMixin, initialize_quote_custody, CUSTODY_TABLES
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from proposal_evidence import EvidenceReferenceVerifier, EvidenceVerificationError
 from provider_runtime import ProviderRuntime, ProviderFailure, DAILY_MICRO_USD, budget_day
@@ -36,6 +38,8 @@ RETENTION_SECONDS = 90 * 24 * 60 * 60
 DELETION_MARKER_SECONDS = 90 * 24 * 60 * 60
 MAX_MESSAGE_CHARACTERS = 20_000
 MAX_PAGE_SIZE = 100
+HISTORY_CURSOR_SECONDS = 15 * 60
+MAX_HISTORY_CURSOR_LENGTH = 1024
 MAX_PROPOSAL_SCOPE = 20_000
 MAX_EXPECTED_RESULT = 5_000
 MAX_CTO_RESULT_SUMMARY = 5_000
@@ -929,25 +933,89 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
                 raise
             return result
 
-    def list_conversations(self, limit: int = 50) -> list[dict[str, Any]]:
-        if limit < 1 or limit > MAX_PAGE_SIZE:
+    def _history_cursor_aad(self, kind: str, conversation_id: str) -> bytes:
+        # A cursor is navigation, never authority. Bind it to this owner and
+        # endpoint, as well as the exact parent for message history.
+        return b"hc1\x00" + self._owner + b"\x00" + kind.encode("ascii") + b"\x00" + conversation_id.encode("ascii")
+
+    def _decode_history_cursor(self, cursor: str | None, kind: str,
+                               conversation_id: str, now: int) -> dict[str, Any]:
+        if cursor is None:
+            return {"issued_at": now, "expires_at": now + HISTORY_CURSOR_SECONDS,
+                    "evaluated_at": now, "anchor": None}
+        try:
+            if (type(cursor) is not str or not 4 < len(cursor) <= MAX_HISTORY_CURSOR_LENGTH
+                    or not cursor.startswith("hc1.") or not re.fullmatch(r"[A-Za-z0-9_-]+", cursor[4:])):
+                raise ValueError
+            encoded = cursor[4:]
+            raw = base64.b64decode(encoded + "=" * (-len(encoded) % 4), altchars=b"-_", validate=True)
+            if len(raw) < 29 or base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii") != encoded:
+                raise ValueError
+            body = AESGCM(_derived_key(self._key, b"history-cursor")).decrypt(
+                raw[:12], raw[12:], self._history_cursor_aad(kind, conversation_id))
+            value = json.loads(body)
+            if type(value) is not dict or set(value) != {"issued_at", "expires_at", "evaluated_at", "anchor"}:
+                raise ValueError
+            issued, expires, evaluated = (value[k] for k in ("issued_at", "expires_at", "evaluated_at"))
+            anchor = value["anchor"]
+            if (any(type(x) is not int for x in (issued, expires, evaluated))
+                    or not 0 <= issued <= evaluated <= now < expires
+                    or expires - issued != HISTORY_CURSOR_SECONDS
+                    or type(anchor) is not list or len(anchor) != 2
+                    or type(anchor[0]) is not int or not -(2**63) <= anchor[0] < 2**63
+                    or type(anchor[1]) is not str or not ID_PATTERN.fullmatch(anchor[1])):
+                raise ValueError
+            return value
+        except (ValueError, UnicodeError, RecursionError, InvalidTag) as exc:
+            raise ConversationRequestError("invalid_cursor", 400) from exc
+
+    def _encode_history_cursor(self, context: dict[str, Any], anchor: tuple[int, str],
+                               kind: str, conversation_id: str, now: int) -> str:
+        # Created timestamps are integer SQLite epochs. Do not silently round
+        # malformed retained state into an anchor that could skip records.
+        if type(anchor[0]) is not int or not -(2**63) <= anchor[0] < 2**63:
+            raise ConversationRequestError("history_state_invalid", 503)
+        value = {"issued_at": context["issued_at"], "expires_at": context["expires_at"],
+                 "evaluated_at": now, "anchor": list(anchor)}
+        nonce = secrets.token_bytes(12)
+        raw = nonce + AESGCM(_derived_key(self._key, b"history-cursor")).encrypt(
+            nonce, json.dumps(value, separators=(",", ":")).encode("utf-8"),
+            self._history_cursor_aad(kind, conversation_id))
+        return "hc1." + base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+    def _conversation_history(self, limit: int, cursor: str | None, *, paginated: bool) -> dict[str, Any]:
+        if type(limit) is not int or not 1 <= limit <= MAX_PAGE_SIZE:
             raise ConversationRequestError("invalid_limit", 400)
         with self._lock:
             self._purge_if_due_locked(int(time.time()))
+            now = int(time.time())
+            context = self._decode_history_cursor(cursor, "conversations", "", now) if paginated else None
+            boundary, parameters = "", [self._owner, now - RETENTION_SECONDS]
+            if context is not None and context["anchor"] is not None:
+                stamp, identifier = context["anchor"]
+                boundary = " AND (created_at < ? OR (created_at = ? AND conversation_id < ?))"
+                parameters.extend((stamp, stamp, identifier))
+            parameters.append(limit + int(paginated))
             rows = self._live.connection.execute(
                 "SELECT conversation_id,created_at,last_activity_at FROM conversations "
-                "WHERE owner_digest=? ORDER BY created_at,conversation_id LIMIT ?",
-                (self._owner, limit),
+                "WHERE owner_digest=? AND last_activity_at>?" + boundary +
+                " ORDER BY created_at DESC,conversation_id DESC LIMIT ?", parameters,
             ).fetchall()
-        return [
-            {
-                "conversation_id": row["conversation_id"],
-                "created_at": _iso(row["created_at"]),
-                "last_activity_at": _iso(row["last_activity_at"]),
-                "authority_effect": "none",
-            }
-            for row in rows
-        ]
+            more, rows = len(rows) > limit, rows[:limit]
+            next_cursor = self._encode_history_cursor(context, (rows[-1]["created_at"], rows[-1]["conversation_id"]),
+                "conversations", "", now) if paginated and more else None
+            return {"conversations": [
+                {"conversation_id": row["conversation_id"], "created_at": _iso(row["created_at"]),
+                 "last_activity_at": _iso(row["last_activity_at"]), "authority_effect": "none"}
+                for row in reversed(rows)], "next_cursor": next_cursor}
+
+    def list_conversations(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Return the newest bounded window in chronological display order."""
+        return self._conversation_history(limit, None, paginated=False)["conversations"]
+
+    def list_conversations_page(self, limit: int = 50, cursor: str | None = None) -> dict[str, Any]:
+        """Opt-in live keyset traversal toward older history, not a snapshot."""
+        return self._conversation_history(limit, cursor, paginated=True)
 
     def submit_message(self, conversation_id: str, idempotency_key: str, request_body: bytes) -> dict[str, Any]:
         if not ID_PATTERN.fullmatch(conversation_id):
@@ -1020,38 +1088,49 @@ class ConversationStore(RubyQuoteCustodyMixin, RubyFinalizedQuoteMixin, RubyInqu
                 raise
             return result
 
-    def list_messages(self, conversation_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    def _message_history(self, conversation_id: str, limit: int, cursor: str | None,
+                         *, paginated: bool) -> dict[str, Any]:
         if not ID_PATTERN.fullmatch(conversation_id):
             raise ConversationRequestError("not_found", 404)
-        if limit < 1 or limit > MAX_PAGE_SIZE:
+        if type(limit) is not int or not 1 <= limit <= MAX_PAGE_SIZE:
             raise ConversationRequestError("invalid_limit", 400)
         with self._lock:
             self._purge_if_due_locked(int(time.time()))
             owned = self._live.connection.execute(
-                "SELECT 1 FROM conversations WHERE conversation_id=? AND owner_digest=?",
+                "SELECT last_activity_at FROM conversations WHERE conversation_id=? AND owner_digest=?",
                 (conversation_id, self._owner),
             ).fetchone()
-            if not owned:
+            now = int(time.time())
+            if not owned or owned["last_activity_at"] <= now - RETENTION_SECONDS:
                 raise ConversationRequestError("not_found", 404)
+            context = self._decode_history_cursor(cursor, "messages", conversation_id, now) if paginated else None
+            boundary, parameters = "", [conversation_id, now - RETENTION_SECONDS]
+            if context is not None and context["anchor"] is not None:
+                stamp, identifier = context["anchor"]
+                boundary = " AND (m.created_at < ? OR (m.created_at = ? AND m.message_id < ?))"
+                parameters.extend((stamp, stamp, identifier))
+            parameters.append(limit + int(paginated))
             rows = self._live.connection.execute(
                 "SELECT m.message_id,m.sender,m.body,m.created_at,r.state AS response_state,r.error_code "
-                "FROM messages m LEFT JOIN response_states r ON r.message_id=m.message_id "
-                "WHERE m.conversation_id=? ORDER BY m.created_at,m.message_id LIMIT ?",
-                (conversation_id, limit),
+                "FROM messages m LEFT JOIN response_states r ON r.message_id=m.message_id AND r.conversation_id=m.conversation_id "
+                "WHERE m.conversation_id=? AND m.created_at>?" + boundary +
+                " ORDER BY m.created_at DESC,m.message_id DESC LIMIT ?", parameters,
             ).fetchall()
-        return [
-            {
-                "conversation_id": conversation_id,
-                "message_id": row["message_id"],
-                "sender": row["sender"],
-                "body": row["body"],
-                "created_at": _iso(row["created_at"]),
-                "response_state": row["response_state"],
-                "error_code": row["error_code"],
-                "authority_effect": "none",
-            }
-            for row in rows
-        ]
+            more, rows = len(rows) > limit, rows[:limit]
+            next_cursor = self._encode_history_cursor(context, (rows[-1]["created_at"], rows[-1]["message_id"]),
+                "messages", conversation_id, now) if paginated and more else None
+            return {"conversation_id": conversation_id, "messages": [
+                {"conversation_id": conversation_id, "message_id": row["message_id"],
+                 "sender": row["sender"], "body": row["body"], "created_at": _iso(row["created_at"]),
+                 "response_state": row["response_state"], "error_code": row["error_code"], "authority_effect": "none"}
+                for row in reversed(rows)], "next_cursor": next_cursor}
+
+    def list_messages(self, conversation_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        return self._message_history(conversation_id, limit, None, paginated=False)["messages"]
+
+    def list_messages_page(self, conversation_id: str, limit: int = 50,
+                           cursor: str | None = None) -> dict[str, Any]:
+        return self._message_history(conversation_id, limit, cursor, paginated=True)
 
     def get_response_state(self, conversation_id: str, message_id: str) -> dict[str, Any]:
         if not ID_PATTERN.fullmatch(conversation_id) or not ID_PATTERN.fullmatch(message_id):
