@@ -122,3 +122,85 @@ jobs:
           path: /tmp/philaios-mission-control-readonly-preview/
           if-no-files-found: error
           retention-days: 7
+
+  mission-control-pr834-browser-replay:
+    # Temporary acceptance job for the repository-owned review branch; never on push or dispatch.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.number == 834 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'review/mc-message-history-v1-20261120'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the PR test-merge
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: tested
+          persist-credentials: false
+      - name: Check out the actual PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: review-head
+          persist-credentials: false
+      - name: Check out the exact previous-release base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 7aa9c3948bf9c920705cff6004ee00d325fba905
+          path: legacy
+          persist-credentials: false
+      - name: Check out frozen reviewed product bytes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 7ecb36e88118400e1bc5e9b054f3caf8af1cceec
+          path: frozen
+          persist-credentials: false
+      - name: Verify tested and PR-head product content
+        shell: bash
+        run: |
+          set -euo pipefail
+          for checkout in tested review-head frozen legacy; do
+            printf '%s commit=%s tree=%s\n' "$checkout" \
+              "$(git -C "$checkout" rev-parse HEAD)" \
+              "$(git -C "$checkout" rev-parse 'HEAD^{tree}')"
+          done
+          for checkout in tested review-head; do
+            diff -r frozen/apps/operations-hub/mission-control "$checkout/apps/operations-hub/mission-control"
+            for file in conversation_store.py google_ceo_session.py; do
+              cmp "frozen/ops/mission-control-identity/$file" "$checkout/ops/mission-control-identity/$file"
+            done
+          done
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install pinned Playwright and Chromium
+        shell: bash
+        working-directory: tested
+        run: |
+          set -euo pipefail
+          python -m pip --isolated install --require-hashes --only-binary=:all: -r apps/operations-hub/tests/mission-control-browser-requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Verify synthetic history, focus, scroll and compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m playwright --version
+          python tested/apps/operations-hub/tests/history_replay_reviewed.py \
+            tested/apps/operations-hub/mission-control \
+            --legacy-frontend legacy/apps/operations-hub/mission-control
+      - name: Exercise the exact browser and real backend on loopback only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip --isolated install --only-binary=:all: -r tested/ops/mission-control-identity/requirements.txt
+          python -B tested/apps/operations-hub/tests/integrated_message_history.py tested
+      - name: Check the same candidate browser tab during exact baseline rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B tested/apps/operations-hub/tests/message_history_rollback_wire.py tested/ops/mission-control-identity legacy/ops/mission-control-identity
+          python -B tested/apps/operations-hub/tests/message_history_rollback_browser.py tested legacy/ops/mission-control-identity

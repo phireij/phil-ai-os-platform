@@ -39,6 +39,8 @@ let sampleGovernedProposals = null;
 let sampleConversation = null;
 let conversationEpoch = 0;
 let activeConversationMessages = [];
+const pendingProposalSubmissions = new Set();
+let messageHistory = null;
 let activeGovernedProposals = [];
 let recordedDecisionProposalIds = new Set();
 let approvedDecisionProposalIds = new Set();
@@ -522,21 +524,23 @@ function assertConversation(data) {
 
 function renderConversation(data) {
   const thread = document.querySelector("#conversation-thread");
-  thread.replaceChildren(...data.messages.map((message) => {
-    const article = document.createElement("article");
-    article.className = `conversation-message ${message.sender}`;
-    const top = document.createElement("div");
-    top.className = "conversation-message-top";
-    const sender = document.createElement("strong");
-    sender.textContent = message.sender === "chief_of_staff" ? "Chief of Staff" : message.sender === "ceo" ? "CEO" : "Agent";
-    const timestamp = document.createElement("span");
-    timestamp.textContent = new Date(message.created_at).toLocaleString();
-    top.append(sender, timestamp);
-    const body = document.createElement("p");
-    body.textContent = message.body;
-    article.append(top, body);
-    return article;
-  }));
+  thread.replaceChildren(...data.messages.map(renderConversationMessage));
+}
+
+function renderConversationMessage(message) {
+  const article = document.createElement("article");
+  article.className = `conversation-message ${message.sender}`;
+  const top = document.createElement("div");
+  top.className = "conversation-message-top";
+  const sender = document.createElement("strong");
+  sender.textContent = message.sender === "chief_of_staff" ? "Chief of Staff" : message.sender === "ceo" ? "CEO" : "Agent";
+  const timestamp = document.createElement("span");
+  timestamp.textContent = new Date(message.created_at).toLocaleString();
+  top.append(sender, timestamp);
+  const body = document.createElement("p");
+  body.textContent = message.body;
+  article.append(top, body);
+  return article;
 }
 
 function assertGovernedProposals(data) {
@@ -747,6 +751,21 @@ function setConversationControls(enabled) {
   syncGovernedControls();
 }
 
+function proposalSubmissionPending() {
+  return Array.from(pendingProposalSubmissions).some(({ epoch, conversationId }) =>
+    epoch === conversationEpoch && conversationId === activeConversationId);
+}
+
+function syncProposalSource() {
+  const enabled = Boolean(conversationSession?.conversation_authority && activeConversationId);
+  const proposalSource = document.querySelector("#proposal-source-message");
+  const ceoMessages = activeConversationMessages.filter((message) => message.sender === "ceo");
+  const previousProposalSource = proposalSource.value;
+  proposalSource.replaceChildren(...ceoMessages.map((message) => new Option(`CEO message · ${new Date(message.created_at).toLocaleString()}`, message.message_id)));
+  if (Array.from(proposalSource.options).some((option) => option.value === previousProposalSource)) proposalSource.value = previousProposalSource;
+  document.querySelector("#proposal-create").disabled = !enabled || ceoMessages.length === 0 || proposalSubmissionPending();
+}
+
 function syncGovernedControls() {
   const enabled = Boolean(conversationSession?.conversation_authority && activeConversationId);
   const proposalForm = document.querySelector("#governed-proposal-form");
@@ -755,11 +774,7 @@ function syncGovernedControls() {
   proposalForm.hidden = !enabled;
   decisionForm.hidden = !enabled;
   handoffForm.hidden = !enabled || conversationSession?.cto_handoff_recording !== true;
-  const proposalSource = document.querySelector("#proposal-source-message");
-  const ceoMessages = activeConversationMessages.filter((message) => message.sender === "ceo");
-  const previousProposalSource = proposalSource.value;
-  proposalSource.replaceChildren(...ceoMessages.map((message) => new Option(`CEO message · ${new Date(message.created_at).toLocaleString()}`, message.message_id)));
-  if (Array.from(proposalSource.options).some((option) => option.value === previousProposalSource)) proposalSource.value = previousProposalSource;
+  syncProposalSource();
   const undecided = activeGovernedProposals.filter((proposal) => !recordedDecisionProposalIds.has(proposal.proposal_id));
   const decisionProposal = document.querySelector("#decision-proposal");
   const previousDecisionProposal = decisionProposal.value;
@@ -768,7 +783,6 @@ function syncGovernedControls() {
   for (const selector of ["#proposal-source-message", "#proposal-project", "#proposal-scope", "#proposal-result", "#proposal-authority"]) {
     document.querySelector(selector).disabled = !enabled;
   }
-  document.querySelector("#proposal-create").disabled = !enabled || ceoMessages.length === 0;
   for (const selector of ["#decision-proposal", "#decision-value", "#decision-rationale", "#decision-expiry"]) {
     document.querySelector(selector).disabled = !enabled;
   }
@@ -862,7 +876,120 @@ async function loadRubySyntheticReview(epoch = conversationEpoch) {
   renderRubySyntheticReview(payload);
 }
 
+function showMessageHistory(history, status = "") {
+  const panel = document.querySelector("#conversation-history");
+  const button = document.querySelector("#conversation-history-more");
+  const available = Boolean(history?.cursor || history?.restart);
+  // Keep a previously exposed control in the tab order on the final page so
+  // keyboard focus is not lost and the live status can announce exhaustion.
+  panel.hidden = !available && !history?.hasPaged;
+  const canLoad = available && !history.busy;
+  button.type = "button";
+  button.setAttribute("aria-disabled", canLoad ? "false" : "true");
+  button.textContent = history?.restart ? "Refresh latest messages" : "Load earlier messages";
+  document.querySelector("#conversation-history-status").textContent = status;
+}
+
+function messageHistoryCurrent(history) {
+  return messageHistory === history && history.epoch === conversationEpoch
+    && history.conversationId === activeConversationId
+    && conversationSession?.message_history_pagination === "keyset-v1";
+}
+
+function validateMessagePage(data, conversationId) {
+  const seen = new Set();
+  if (data?.conversation_id !== conversationId || !Array.isArray(data.messages)
+      || data.messages.length > 100 || (data.next_cursor !== null
+        && (typeof data.next_cursor !== "string" || !data.next_cursor || data.next_cursor.length > 1024
+          || data.messages.length === 0))) throw new Error("Invalid history page");
+  for (const message of data.messages) {
+    if (message?.conversation_id !== conversationId || typeof message.message_id !== "string"
+        || !message.message_id || seen.has(message.message_id)
+        || !["ceo", "chief_of_staff", "agent"].includes(message.sender)
+        || typeof message.body !== "string" || typeof message.created_at !== "string"
+        || !Number.isFinite(Date.parse(message.created_at)) || message.authority_effect !== "none") {
+      throw new Error("Invalid history row");
+    }
+    seen.add(message.message_id);
+  }
+}
+
+async function fetchMessageHistory(history, cursor = null) {
+  const query = new URLSearchParams({ limit: "100", pagination: "keyset-v1" });
+  if (cursor !== null) query.set("cursor", cursor);
+  return conversationRequest(
+    `/api/conversations/${encodeURIComponent(history.conversationId)}/messages?${query}`,
+    {}, () => messageHistoryCurrent(history),
+  );
+}
+
+async function loadEarlierMessages() {
+  const history = messageHistory;
+  if (!history || !messageHistoryCurrent(history) || history.busy || !(history.cursor || history.restart)) return;
+  if (history.restart) {
+    try {
+      await loadConversationMessages(history.conversationId, history.epoch, true);
+    } catch (_error) {
+      // The refresh owns its error state; a late error may not change another thread.
+    }
+    return;
+  }
+  history.busy = true;
+  showMessageHistory(history, "Loading earlier messages…");
+  try {
+    const response = await fetchMessageHistory(history, history.cursor);
+    if (!messageHistoryCurrent(history)) return;
+    if (response.status === 400) {
+      const error = await response.json();
+      if (!messageHistoryCurrent(history)) return;
+      if (error?.error === "invalid_cursor") {
+        history.restart = true;
+        return;
+      }
+    }
+    if (!response.ok) throw new Error("History unavailable");
+    const data = await response.json();
+    if (!messageHistoryCurrent(history)) return;
+    validateMessagePage(data, history.conversationId);
+    if (data.next_cursor !== null && history.cursors.has(data.next_cursor)) throw new Error("Repeated history cursor");
+    const unseen = data.messages.filter((message) => !history.ids.has(message.message_id));
+    const thread = document.querySelector("#conversation-thread");
+    if (unseen.length) {
+      // Keep existing nodes (and their focus); align a visible, existing node
+      // only when the user is in the transcript rather than at the control.
+      const anchor = Array.from(thread.children).find((row) => {
+        const rect = row.getBoundingClientRect();
+        return rect.bottom > 0 && rect.top < window.innerHeight;
+      });
+      const before = anchor?.getBoundingClientRect().top;
+      thread.prepend(...unseen.map(renderConversationMessage));
+      const after = anchor?.getBoundingClientRect().top;
+      if (before !== undefined && after !== before) window.scrollBy(0, after - before);
+      activeConversationMessages = [...unseen, ...activeConversationMessages];
+      if (unseen.some((message) => message.sender === "ceo")) syncProposalSource();
+    }
+    unseen.forEach((message) => history.ids.add(message.message_id));
+    history.cursor = data.next_cursor;
+    if (history.cursor !== null) history.cursors.add(history.cursor);
+    history.notice = history.cursor === null
+      ? `Loaded ${unseen.length} earlier messages. No earlier messages remain.`
+      : `Loaded ${unseen.length} earlier messages.`;
+  } catch (_error) {
+    if (messageHistoryCurrent(history)) history.notice = "Could not load earlier messages. Try again.";
+  } finally {
+    if (messageHistoryCurrent(history)) {
+      history.busy = false;
+      history.hasPaged = true;
+      showMessageHistory(history, history.restart ? "The history cursor expired. Refresh the latest messages to start again." : history.notice);
+    }
+  }
+}
+
 function resetConversationView(message = "sample only · no live chat") {
+  if (conversationSession?.message_history_pagination === "keyset-v1") {
+    messageHistory = null;
+    showMessageHistory(null);
+  }
   conversationSession = null;
   activeConversationId = null;
   conversationEpoch += 1;
@@ -887,17 +1014,49 @@ function resetConversationView(message = "sample only · no live chat") {
   document.querySelector("#conversation-note").textContent = "The transcript above is a local sample. Google sign-in can verify your CEO session, but message storage remains unavailable until its separately reviewed service is activated. Conversation text can never authorize delegation or execution.";
 }
 
-async function conversationRequest(path, options = {}) {
+async function conversationRequest(path, options = {}, isCurrent = () => true) {
   const epoch = conversationEpoch;
   const response = await fetch(path, { cache: "no-store", credentials: "same-origin", ...options });
   if (response.status === 401) {
-    if (epoch === conversationEpoch) resetConversationView("session expired");
+    if (epoch === conversationEpoch && isCurrent()) resetConversationView("session expired");
     throw new Error("session expired");
   }
   return response;
 }
 
-async function loadConversationMessages(conversationId, epoch = conversationEpoch) {
+async function loadConversationMessages(conversationId, epoch = conversationEpoch, keepControl = false) {
+  if (conversationSession?.message_history_pagination === "keyset-v1") {
+    if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
+    const history = { conversationId, epoch, cursor: null, ids: new Set(), cursors: new Set(),
+      hasPaged: keepControl, busy: true, restart: false, notice: "" };
+    messageHistory = history;
+    showMessageHistory(history, keepControl ? "Refreshing latest messages…" : "");
+    try {
+      const response = await fetchMessageHistory(history);
+      if (!messageHistoryCurrent(history)) return;
+      if (!response.ok) throw new Error("History unavailable");
+      const data = await response.json();
+      if (!messageHistoryCurrent(history)) return;
+      validateMessagePage(data, conversationId);
+      renderConversationMessages(data.messages);
+      history.ids = new Set(data.messages.map((message) => message.message_id));
+      history.cursor = data.next_cursor;
+      if (history.cursor !== null) history.cursors.add(history.cursor);
+      history.notice = keepControl ? (history.cursor ? "Latest messages refreshed." : "Latest messages refreshed. No earlier messages remain.") : "";
+    } catch (error) {
+      if (!messageHistoryCurrent(history)) return;
+      history.hasPaged = true;
+      history.restart = true;
+      history.notice = "Could not load the latest messages. Try again.";
+      if (!keepControl) throw error;
+    } finally {
+      if (messageHistoryCurrent(history)) {
+        history.busy = false;
+        showMessageHistory(history, history.notice);
+      }
+    }
+    return;
+  }
   const response = await conversationRequest(`/api/conversations/${encodeURIComponent(conversationId)}/messages?limit=100`);
   if (!response.ok) throw new Error(`messages HTTP ${response.status}`);
   const payload = await response.json();
@@ -919,6 +1078,10 @@ async function loadConversationSession() {
     if (session.authenticated !== true || typeof session.csrf_token !== "string") {
       resetConversationView("session unavailable");
       return;
+    }
+    if (conversationSession?.message_history_pagination === "keyset-v1") {
+      messageHistory = null;
+      showMessageHistory(null);
     }
     conversationSession = session;
     setConversationControls(false);
@@ -970,6 +1133,8 @@ function installConversationConnection() {
   const create = document.querySelector("#conversation-new");
   const send = document.querySelector("#decision-request-button");
   const textarea = document.querySelector("#conversation-message");
+
+  document.querySelector("#conversation-history-more")?.addEventListener?.("click", () => loadEarlierMessages());
 
   signIn.addEventListener("click", () => {
     const popup = window.open("/auth/google/start", "mission-control-google-sign-in", "popup,width=520,height=720");
@@ -1038,6 +1203,10 @@ function installConversationConnection() {
       if (!response.ok) throw new Error(`create HTTP ${response.status}`);
       const payload = await response.json();
       if (epoch !== conversationEpoch || expectedConversationId !== activeConversationId) return;
+      if (conversationSession?.message_history_pagination === "keyset-v1") {
+        messageHistory = null;
+        showMessageHistory(null);
+      }
       activeConversationId = payload.conversation_id;
       expectedConversationId = activeConversationId;
       renderConversationMessages([]);
@@ -1083,7 +1252,7 @@ function installConversationConnection() {
 
   document.querySelector("#governed-proposal-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!activeConversationId || !conversationSession?.conversation_authority) return;
+    if (!activeConversationId || !conversationSession?.conversation_authority || proposalSubmissionPending()) return;
     const sourceMessageId = document.querySelector("#proposal-source-message").value;
     const projectId = document.querySelector("#proposal-project").value;
     const requiredAuthority = document.querySelector("#proposal-authority").value;
@@ -1095,6 +1264,8 @@ function installConversationConnection() {
     const epoch = conversationEpoch;
     const conversationId = activeConversationId;
     const button = document.querySelector("#proposal-create");
+    const submission = { epoch, conversationId };
+    pendingProposalSubmissions.add(submission);
     button.disabled = true;
     try {
       const response = await conversationRequest(`/api/conversations/${encodeURIComponent(activeConversationId)}/task-proposals`, {
@@ -1130,6 +1301,7 @@ function installConversationConnection() {
       if (epoch !== conversationEpoch || conversationId !== activeConversationId) return;
       setConversationState(`proposal unavailable · ${error.message}`);
     } finally {
+      pendingProposalSubmissions.delete(submission);
       if (epoch === conversationEpoch && conversationId === activeConversationId) syncGovernedControls();
     }
   });

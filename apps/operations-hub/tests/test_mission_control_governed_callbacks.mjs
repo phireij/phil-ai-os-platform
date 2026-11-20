@@ -25,7 +25,7 @@ function harness(kind, delayedLoader = -1) {
     loadGovernedProposals: load('proposals'), loadConversationLifecycle: load('lifecycle'), loadCtoHandoffs: load('handoffs'),
     resetConversationView: label => { resets++; labels.push(label); c.replace('reset'); },
   });
-  vm.runInContext(`let conversationEpoch = 1; let activeConversationId = 'original'; let conversationSession = { authenticated:true, conversation_authority:true, cto_handoff_recording:true, csrf_token:'synthetic' }; ${installation}
+  vm.runInContext(`let conversationEpoch = 1; const pendingProposalSubmissions = new Set(); let activeConversationId = 'original'; let conversationSession = { authenticated:true, conversation_authority:true, cto_handoff_recording:true, csrf_token:'synthetic' }; ${source.slice(source.indexOf('function proposalSubmissionPending()'), source.indexOf('\nfunction syncProposalSource()'))} ${installation}
     this.replace = mode => { if(mode !== 'conversation') conversationEpoch++; activeConversationId = mode === 'reset' ? null : 'replacement'; };
     this.id = () => activeConversationId; this.install = installConversationConnection;`, c);
   c.install();
@@ -92,10 +92,10 @@ for(const kind of ['proposal','decision']) await test(`${kind} preserve fields a
 for(const mode of ['preserve','removed','empty']) await test(`real sync selection ${mode}`,async()=>{
   const nodes=new Map();
   const node=selector=>{if(!nodes.has(selector))nodes.set(selector,{value:'second',options:[],replaceChildren(...options){this.options=options;this.value=options[0]?.value??'';}});return nodes.get(selector);};
-  const a=source.indexOf('function syncGovernedControls() {'),b=source.indexOf('\nfunction renderConversationMessages',a);assert.ok(a>=0&&b>a);
+  const a=source.indexOf('function proposalSubmissionPending() {'),b=source.indexOf('\nfunction renderConversationMessages',a);assert.ok(a>=0&&b>a);
   const ids=mode==='empty'?[]:mode==='removed'?['first']:['first','second'];
   const c=vm.createContext({document:{querySelector:node},Option:function(label,value){this.text=label;this.value=value;},ids});
-  vm.runInContext(`let conversationSession={conversation_authority:true,cto_handoff_recording:true};let activeConversationId='original';
+  vm.runInContext(`let conversationSession={conversation_authority:true,cto_handoff_recording:true};let activeConversationId='original';let conversationEpoch=1;const pendingProposalSubmissions=new Set();
     let activeConversationMessages=ids.map(id=>({sender:'ceo',message_id:id,created_at:'2026-01-01'}));
     let activeGovernedProposals=ids.map(id=>({proposal_id:id,scope:'synthetic'}));let recordedDecisionProposalIds=new Set();let approvedDecisionProposalIds=new Set(ids);let activeCtoHandoffs=[];
     ${source.slice(a,b)};syncGovernedControls();`,c);

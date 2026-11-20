@@ -9,8 +9,9 @@ function harness(response,failRender=false){
  const nodes=new Map(),loads=[],labels=[];
  const node=s=>{if(!nodes.has(s))nodes.set(s,{value:'',disabled:false,handlers:{},addEventListener(k,f){this.handlers[k]=f;},focus(){}});return nodes.get(s);};
  const c=vm.createContext({document:{querySelector:node},conversationRequest:()=>response.promise,loadConversationSession:async()=>{},conversationIdempotencyKey:()=> 'synthetic',renderConversationMessages(){if(failRender)throw Error('render failure');},syncGovernedControls(){},setConversationState:l=>labels.push(l),loadConversationMessages:async(id,epoch)=>loads.push({id,epoch})});
- vm.runInContext(`let conversationEpoch=1;let conversationSession={authenticated:true,conversation_authority:true,csrf_token:'synthetic'};let activeConversationId='original';
- ${part('function setConversationControls(enabled) {','\nfunction syncGovernedControls')}
+ vm.runInContext(`let conversationEpoch=1;let conversationSession={authenticated:true,conversation_authority:true,csrf_token:'synthetic'};let activeConversationId='original';const pendingProposalSubmissions=new Set();
+ ${part('function proposalSubmissionPending() {','\nfunction syncProposalSource')}
+ ${part('function setConversationControls(enabled) {','\nfunction proposalSubmissionPending')}
  ${part('function installConversationConnection() {','\nfunction renderLiveSummary')}
  this.install=installConversationConnection;this.replace=(id,advance=true)=>{if(advance)conversationEpoch++;conversationSession=id?{authenticated:true,conversation_authority:true,csrf_token:'new'}:null;activeConversationId=id;setConversationControls(Boolean(id));};this.id=()=>activeConversationId;`,c);
  c.install();return {c,node,loads,labels};
