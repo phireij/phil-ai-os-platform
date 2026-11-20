@@ -192,3 +192,9 @@ jobs:
           python tested/apps/operations-hub/tests/history_replay_reviewed.py \
             tested/apps/operations-hub/mission-control \
             --legacy-frontend legacy/apps/operations-hub/mission-control
+      - name: Exercise the exact browser and real backend on loopback only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip --isolated install --only-binary=:all: -r tested/ops/mission-control-identity/requirements.txt
+          python -B tested/apps/operations-hub/tests/integrated_message_history.py tested
