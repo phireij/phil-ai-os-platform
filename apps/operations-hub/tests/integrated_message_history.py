@@ -286,9 +286,14 @@ def browser_check(port, token, name, events, pause, entered, release):
             before = len(events)
             with browser.new_context(service_workers="block", viewport={"width": 1280, "height": 840}) as ctx:
                 ctx.route("**/*", intercept)
-                ctx.add_cookies([dict(name=name, value=token, url=origin, secure=True,
-                                      httpOnly=True, sameSite="Lax")])
+                # This HTTPS URL is cookie metadata only. Playwright derives the
+                # Secure attribute from it; no HTTPS request is sent. Chromium
+                # permits Secure cookies on the actual loopback localhost origin.
+                cookie_descriptor = f"https://{BROWSER_HOST}:{port}/"
+                ctx.add_cookies([dict(name=name, value=token, url=cookie_descriptor,
+                                      secure=True, httpOnly=True, sameSite="Lax")])
                 assert any(c["name"] == name and c["secure"] and c["httpOnly"]
+                           and c["path"] == "/" and c["domain"] == BROWSER_HOST
                            for c in ctx.cookies([origin])), "loopback browser did not accept the synthetic cookie"
                 page = ctx.new_page()
                 page.on("pageerror", lambda _: errors.append("page-error"))
